@@ -1,0 +1,112 @@
+.hero {
+  padding: 6rem 0 5rem;
+  background: linear-gradient(180deg, var(--ifm-background-surface-color) 0%, var(--ifm-background-color) 100%);
+  text-align: center;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.title {
+  font-size: clamp(2.4rem, 5vw, 3.6rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+}
+
+.tagline {
+  font-size: 1.2rem;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0 auto 2.5rem;
+  max-width: 36rem;
+}
+
+.cta {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ctaSecondary {
+  background: transparent;
+  border: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.section {
+  padding: 4.5rem 0;
+}
+
+.highlights {
+  background: var(--ifm-background-surface-color);
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.sectionTitle {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0 0 2rem;
+  text-align: center;
+}
+
+.highlightGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 2rem;
+}
+
+.highlightGrid h3 {
+  font-size: 1.15rem;
+  margin: 0 0 0.5rem;
+}
+
+.highlightGrid p {
+  color: var(--ifm-color-emphasis-700);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1.25rem;
+}
+
+.card {
+  display: block;
+  padding: 1.75rem;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 12px;
+  background: var(--ifm-background-color);
+  text-decoration: none !important;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+  position: relative;
+}
+
+.card:hover {
+  border-color: var(--ifm-color-primary);
+  transform: translateY(-2px);
+}
+
+.cardTitle {
+  font-size: 1.25rem;
+  margin: 0 0 0.5rem;
+}
+
+.cardDesc {
+  color: var(--ifm-color-emphasis-700);
+  margin: 0;
+  line-height: 1.55;
+}
+
+.cardArrow {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  color: var(--ifm-color-emphasis-500);
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.card:hover .cardArrow {
+  color: var(--ifm-color-primary);
+  transform: translateX(4px);
+}

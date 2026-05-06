@@ -1,6 +1,5 @@
 ---
 sidebar_position: 1
-slug: /
 title: Sound Tracing이란?
 ---
 
