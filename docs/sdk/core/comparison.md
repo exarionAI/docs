@@ -28,22 +28,23 @@ title: STCore vs STCoreV2
 
 | 구분 | STCore | STCoreV2 |
 |---|---|---|
-| 핵심 모듈 | `SoundTracer` (Core/) | `Propagator` + `IRUpdater` (propagation/) |
-| 기반 접근 | 결정론적 광선 추적 | 광선 추적 + **통계적 음향 전파(SSP)** |
+| 핵심 모듈 | `SoundTracer` (Core/) | `Propagator` + **`IPathModule` 시스템** (propagation/module/) |
+| 알고리즘 분리 | 단일 파이프라인 | **모듈식**: Specular / UTDDiffraction / DiffuseOffset / StaticReverb 4종 (각 청취자별 알고리즘 선택·교체 가능) |
 | Ray Generation | `RGC` (Ray Generation Cluster) | `RGC` + 청취자별 ray count/depth API |
 | 회절 모델 | `UTDDiffraction` (Uniform Theory of Diffraction) | `UTDDiffraction` (Uniform Theory of Diffraction) |
-| 잔향 영역 | `ReverberationZoneManager` | (해당 분리 모듈 없음 — Propagator에 통합) |
+| 잔향 처리 | `ReverberationZoneManager` | **`StaticReverbModule`** (분리 모듈, ReverbHitCollector + ReverbCoefficients) |
+| Max Path Depth | (프로젝트 설정) | **64** (`EXA_MAX_DEPTH_LIMIT`) |
 | 결과 자료구조 | `PathPPV`, `PropagationPath` | `PathPPV`, `Primitive`, sorted IR data |
 
 ## 음향 처리 (Auralization)
 
 | 구분 | STCore | STCoreV2 |
 |---|---|---|
-| 모듈 | `Auralization/` (Attenuation, FrequencyPartition, FrequencyResponse, PropagationPath, HRTF) | `auralization/` (core, frequence, filter, HRTF, request, states) |
+| 모듈 | `Auralization/` (Attenuation, FrequencyPartition, FrequencyResponse, PropagationPath, HRTF) | **`auralizator/`** (core, frequence, filter, HRTF, states) |
 | HRTF | `HRTF.h` + MIT HRTF library | `HRTF.h` + 외부 HRTF 파일/메모리 로드 API |
-| HRTF 로딩 API | (직접 라이브러리 호출) | `exaListenerSetHRTFFromFile/Memory` |
-| 주파수 분할 | `FrequencyPartition` | frequence/ 모듈 |
-| 컨볼루션 | `Auralizator` | filter/ 모듈 (FilterChain, IRConvolver) |
+| HRTF 로딩 API | (직접 라이브러리 호출) | `exaListenerSetHRTFFromFile/Memory` + `exaListenerClearHRTF` |
+| 주파수 분할 | `FrequencyPartition` | `frequence/` (FrequencyBandResponse 등) |
+| 컨볼루션 | `Auralizator` | `filter/` (FilterChain, IRConvolver) |
 
 ## 재질 (Material) 모델
 
@@ -57,10 +58,12 @@ title: STCore vs STCoreV2
 
 | 구분 | STCore | STCoreV2 |
 |---|---|---|
-| API 노출 | C++ 직접 라이브러리 링크 | **C 함수 110+개** (`exasoundC.h`) |
+| API 노출 | C++ 직접 라이브러리 링크 | **C 함수 120+개** (`exasoundC.h`) |
 | Web 빌드 | — | **Emscripten** (`EMSCRIPTEN_KEEPALIVE`) |
 | 바인딩 호환성 | C++ 타깃 한정 | Web/Python/Unity/Unreal 통합 가능 |
-| 진단·통계 | (사내 사용 위주) | `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot` |
+| 알고리즘 선택 | (단일 구현) | `exaListenerSet{Reflection,Diffraction,Diffuse,Reverb}Algorithm`, `exaListenerSetModularPropagation` |
+| 알고리즘 비교 | — | `exaListenerEnable/Disable/GetComparisonResult` (수치 검증) |
+| 진단·통계 | (사내 사용 위주) | `exaPropagatorGetProfile/SortPlaneNodes`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot` |
 | 에러 보고 | (반환값 위주) | `exaGetLastError()` 단일 진입점 |
 
 ## 플랫폼·빌드
@@ -74,15 +77,30 @@ title: STCore vs STCoreV2
 | 빌드 시스템 | Visual Studio `.sln` + CMake | CMake 3.22+ |
 | C++ 표준 | (프로젝트 설정 의존) | C++17 빌드 / C++20 코딩 가이드 |
 
-## HW 가속
+## 가속기·외부 통합
 
 | 구분 | STCore | STCoreV2 |
 |---|---|---|
 | FPGA 인터페이스 | ✅ (`HW/` — bfm_api, fpga_interface, libusb) | — |
 | Bus Functional Model | ✅ | — |
 | USB 디바이스 통신 | ✅ (libusb) | — |
+| 내장 BVH/TLAS | (자체) | ✅ (Native BVH/TLAS) |
+| **외부 BVH 콜백** | — | ✅ **`ExternalAccelerator`** — 호스트(게임 엔진 등)의 BVH로 ray intersection 위임 |
+| 가속기 추상 | — | `IAccelerator` 인터페이스 |
 
-> 동일 음향 알고리즘을 SW(범용 CPU)와 HW(FPGA 가속) 양쪽에서 실행하는 것이 STCore의 차별점입니다. STCoreV2는 현재 SW only이며 향후 HW 백엔드 합류는 별도 계획입니다.
+> STCore의 차별점은 동일 음향 알고리즘을 SW(범용 CPU)와 HW(FPGA 가속) 양쪽에서
+> 실행 가능하다는 점입니다. STCoreV2는 현재 SW only이지만, **외부 가속기 콜백**을
+> 통해 호스트가 보유한 BVH(예: 게임 엔진 자체 BVH)에 ray intersection을 위임할 수
+> 있어 통합 비용이 낮습니다.
+
+## 동시성·데이터 전달
+
+| 구분 | STCore | STCoreV2 |
+|---|---|---|
+| Scene 데이터 전달 | (직접 참조·mutex 기반으로 추정) | **`SceneSnapshot`** — immutable per-tick POD 스냅샷 |
+| 다중 슬롯 버퍼 | — | **`TripleBuffer`** (lock-free) |
+| 스레드 친화도 | — | `ThreadAffinity` 모듈 |
+| 진단 텔레메트리 | (사내) | `Telemetry` 모듈 |
 
 ## 테스트·문서
 

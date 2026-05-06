@@ -4,8 +4,7 @@ title: STCoreV2
 
 # STCoreV2
 
-**통계적 음향 전파(Statistical Sound Propagation, SSP) 기반의 차세대 Sound Tracing
-코어.**
+**모듈식 음향 경로 탐색과 lock-free 데이터 전달을 채택한 차세대 Sound Tracing 코어.**
 
 STCoreV2는 [STCore](./stcore.md)의 후속 라인으로, 메시·재질·청취자·음원으로부터
 임펄스 응답(IR)과 공간 오디오를 실시간 합성하는 C++ 라이브러리입니다.
@@ -19,56 +18,110 @@ STCoreV2는 [STCore](./stcore.md)의 후속 라인으로, 메시·재질·청취
 | 빌드 시스템 | CMake 3.22+ |
 | 플랫폼 | macOS · Windows · Linux |
 | Web 빌드 | Emscripten 지원 (`EMSCRIPTEN_KEEPALIVE` export) |
-| 테스트 | Google Test |
+| 가속기 | 내장 BVH **또는** External callback (게임 엔진 BVH 등) |
+| Max Path Depth | **64** (`EXA_MAX_DEPTH_LIMIT`) |
+| 테스트 | Google Test (unit + benchmark) |
 | 상태 | 활성 개발 |
 
 ## 아키텍처
 
-엔진은 세 개의 큰 모듈로 구성됩니다.
+```
+                Scene
+                  │
+                  ▼
+        SceneSnapshot  ── lock-free per-tick snapshot
+                  │       (TripleBuffer · POD · immutable)
+                  ▼
+        ┌─────────────────────────────────────────────┐
+        │  Propagation                                │
+        │   ├ IAccelerator                            │
+        │   │   ├ Internal BVH                        │
+        │   │   └ ExternalAccelerator (callback)      │
+        │   └ Path Modules  (IPathModule)             │
+        │       ├ SpecularReflectionModule            │
+        │       ├ UTDDiffractionModule                │
+        │       ├ DiffuseOffsetModule                 │
+        │       └ StaticReverbModule                  │
+        │       (+ ScatterHandoff, ComparisonReport)  │
+        └─────────────────────────────────────────────┘
+                  │
+                  ▼
+        Auralizator (filter / frequence / HRTF / states)
+                  │
+                  ▼
+              Audio Output
+```
+
+엔진은 크게 네 계층입니다.
+
+- **Scene → Snapshot** — 매 틱 장면 상태가 POD 기반 `SceneSnapshot`으로 떠지고,
+  `TripleBuffer`를 통해 propagation·렌더 스레드에 lock-free로 전달됩니다.
+- **Propagation (모듈식)** — `IPathModule` 공통 인터페이스 위에 4종 모듈이 동시
+  실행되며, 모듈별로 알고리즘 교체·수치 비교가 가능합니다. 가속기는 내장 BVH
+  외에도 호스트 측 BVH를 콜백으로 위임할 수 있습니다.
+- **Auralizator** — 추적된 경로를 IR로 합성하고, 필터·주파수 분해·HRTF를
+  적용하여 공간 오디오를 생성합니다.
+- **Audio Output** — 채널 매핑 후 호출자에게 반환합니다.
+
+## 모듈 구성
 
 ```
-┌──────────────────────────────────────────────────┐
-│  Scene                                           │
-│    └─ Object  ←  Mesh (vertices/tris) + Material │
-│    └─ SoundSource (위치·방향·강도·속도)          │
-│    └─ Listener (위치·자세·HRTF)                  │
-└────────────────────┬─────────────────────────────┘
-                     │
-        ┌────────────┴────────────┐
-        ▼                         ▼
-┌───────────────────┐   ┌──────────────────────┐
-│ Propagation       │   │ Auralization         │
-│  - Ray/Path 탐색  │   │  - IR 합성           │
-│  - BVH·SoundMesh  │   │  - 컨볼루션·HRTF     │
-│  - Guide/Mirror   │   │  - 출력 채널 매핑    │
-└───────────────────┘   └──────────────────────┘
+exaSound/
+├── src/
+│   ├── core/                    # 엔진 코어
+│   │   ├── EngineConfig         #  엔진 설정
+│   │   ├── SceneSnapshot         #  immutable per-tick snapshot
+│   │   ├── SnapshotBuilder       #  스냅샷 빌더
+│   │   ├── ExternalAccelerator   #  외부 BVH 콜백
+│   │   ├── IAccelerator          #  가속기 추상
+│   │   ├── Handle / Ref / FixedPool / PoolAllocator
+│   │   ├── ThreadAffinity / Telemetry
+│   │   └── PropagationResult
+│   ├── propagation/
+│   │   ├── Propagator            #  최상위 dispatch
+│   │   ├── RGC                   #  Ray Generation 클러스터
+│   │   ├── module/               #  Path Module 추상화
+│   │   │   ├── IPathModule       #   공통 인터페이스
+│   │   │   ├── PathModuleRegistry
+│   │   │   ├── reflection/       #   SpecularReflectionModule
+│   │   │   ├── diffraction/      #   UTDDiffractionModule
+│   │   │   ├── diffuse/          #   DiffuseOffsetModule
+│   │   │   └── reverb/           #   StaticReverbModule
+│   │   ├── UTDDiffraction.hpp    #  UTD 공식
+│   │   └── Ray/                  #  Ray·평면 유틸
+│   ├── auralizator/              # 음향화 (이전 auralization)
+│   │   ├── core / filter / frequence / HRTF / states
+│   ├── scene/
+│   │   ├── SoundObject           #  Object·Mesh·Preprocessing
+│   │   └── BVH                   #  Native BVH/TLAS
+│   ├── math/, utils/, objects/, config/
+│   ├── exasound.h                # C++ 메인 헤더
+│   └── exasoundC.h               # **공개 C API**
+├── tests/                        # Google Test
+└── demo/                         # 데모
 ```
-
-- **Scene** — 시뮬레이션 대상 세계의 정적·동적 데이터를 관리합니다.
-- **Propagation** — 광선 추적 + 평면 기반 처리로 유효 음향 경로를 탐색합니다.
-- **Auralization** — 탐색된 경로를 IR로 합성하고 음원과 컨볼루션하여 출력 신호를
-  생성합니다. HRTF가 적용 가능합니다.
 
 ## Public C API
 
-엔진은 C 링키지 API(`exasoundC.h`, 약 110개 export 함수)로 공개됩니다. 모든 바인딩
-(Web/Python/Unity/Unreal)이 이 헤더를 통해 코어에 접근하도록 설계되어 있습니다.
+C 링키지 API (`exasoundC.h`, **약 120개 export**)로 공개됩니다.
 
 | 카테고리 | 대표 함수 |
 |---|---|
 | 라이프사이클 | `exaInit`, `exaReset`, `exaGetVersion` |
-| Scene | `exaNewScene`, `exaDeleteScene`, `exaTickScene`, `exaSceneAddObject/Source/Listener` |
-| Object | `exaNewObject`, `exaObjectSetPosition/Rotation/Scale/Mesh` |
+| Engine Config | `exaSetConfig`, `exaGetConfig`, `exaSetMaxDepth` |
+| Scene | `exaNewScene`, `exaTickScene`, `exaSceneAddObject/Source/Listener` |
+| Object | `exaNewObject`, `exaObjectSetPosition/Rotation/Scale/Mesh`, `exaObjectSetUpdateType` |
 | Mesh | `exaNewMesh`, `exaMeshSetData`, `exaMeshUpdateVertices`, `exaMeshRefit`, `exaMeshSetMaterial` |
 | Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
 | SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity` |
-| Listener | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth`, `exaListenerSetHRTFFromFile/Memory` |
+| Listener (기본) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
+| Listener (HRTF) | `exaListenerSetHRTFFromFile/Memory`, `exaListenerClearHRTF` |
+| **Algorithm Selection** | `exaListenerSetReflectionAlgorithm`, `exaListenerSetDiffractionAlgorithm`, `exaListenerSetDiffuseAlgorithm`, `exaListenerSetReverbAlgorithm`, `exaListenerSetModularPropagation` |
+| **Algorithm Comparison** | `exaListenerEnableComparison`, `exaListenerDisableComparison`, `exaListenerGetComparisonResult` |
+| **External Accelerator** | `exaSetExternalAccelerator`, `exaClearExternalAccelerator` |
 | Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
 | 결과 조회 | `exaGetValidPathCount`, `exaGetValidPaths`, `exaGetSortedIRDatas` |
-| 진단 | `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetLastError` |
-
-세부 시그니처와 구조체는 [`exasoundC.h`](#) 헤더를 참고하세요. (외부 공개 시
-헤더 링크를 별도 안내합니다.)
+| 진단·시각화 | `exaPropagatorGetGuidePlanes/MirrorPositions/SortPlaneNodes`, `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot`, `exaGetLastError` |
 
 ## 시작하기
 
@@ -125,8 +178,12 @@ exaSceneAddSource(sceneID, srcID);
 int listenerID = exaNewListener();
 exaListenerSetPosition(listenerID, -1.f, 1.f, 0.f);
 exaListenerSetRayCount(listenerID, 4096);
-exaListenerSetRayDepth(listenerID, 8);
+exaListenerSetRayDepth(listenerID, 16);    // up to EXA_MAX_DEPTH = 64
 exaSceneAddListener(sceneID, listenerID);
+
+// (선택) 모듈식 propagation·알고리즘 선택
+exaListenerSetModularPropagation(listenerID, true);
+exaListenerSetReverbAlgorithm(listenerID, /* algorithm id */ 0);
 
 // 6. 매 프레임 시뮬레이션 + 오디오 렌더
 for (;;) {
@@ -139,60 +196,141 @@ for (;;) {
 exaReset();
 ```
 
-> 위 코드는 API 흐름을 보여주는 의사 예제입니다. 실제 시그니처는 [exasoundC.h](#)에서 확인하세요.
+> 위 코드는 API 흐름을 보여주는 의사 예제입니다. 실제 시그니처는 `exasoundC.h`에서 확인하세요.
 
 ## 핵심 개념
+
+### Path Module 추상화
+
+전파 알고리즘을 4종 모듈로 분리하여 독립적으로 구현·교체·비교할 수 있습니다.
+
+| 모듈 | 경로 유형 | 위치 |
+|---|---|---|
+| `SpecularReflectionModule` | 정반사 | `propagation/module/reflection/` |
+| `UTDDiffractionModule` | 회절(UTD) | `propagation/module/diffraction/` |
+| `DiffuseOffsetModule` | 산란 | `propagation/module/diffuse/` |
+| `StaticReverbModule` | 정적 잔향 | `propagation/module/reverb/` |
+
+각 모듈은 `IPathModule`을 구현하며 두 단계로 동작합니다.
+
+1. **Phase 1 — `buildSetupPlanes`** : Guide ray 결과로부터 SetupPlane 구성
+2. **Phase 2 — `validatePaths`** : 경로 추적·검증, 유효 경로를 출력 버퍼에 기록
+
+Specular → Diffuse 간에는 `ScatterHandoffEntry`로 path 상태가 전달됩니다.
+
+청취자별 알고리즘 선택:
+
+```c
+exaListenerSetModularPropagation(id, true);
+exaListenerSetReflectionAlgorithm(id, /* algId */ 0);
+exaListenerSetDiffractionAlgorithm(id, 0);
+exaListenerSetDiffuseAlgorithm(id, 0);
+exaListenerSetReverbAlgorithm(id, 0);
+```
+
+### Lock-free 스냅샷 (`SceneSnapshot`)
+
+장면 상태는 매 틱 immutable POD 스냅샷으로 떠집니다.
+
+- 모든 구조는 평탄 배열·non-virtual·heap 포인터 없음 → `TripleBuffer` 슬롯에
+  값 복사 가능
+- propagation·audio 스레드가 별도 슬롯을 읽어 lock-free로 동작
+- 지오메트리는 별도 BVH 더블 버퍼로 관리 (Phase 3)
+
+이 구조 덕분에 다중 스레드에서 mutex 없이 안전하게 시뮬레이션·렌더가 진행됩니다.
+
+### External Accelerator
+
+`IAccelerator` 인터페이스 위에 두 구현이 있습니다.
+
+| 구현 | 용도 |
+|---|---|
+| 내장 BVH | exaSound가 직접 관리 |
+| `ExternalAccelerator` | **호스트 콜백**으로 ray intersection 위임 — 게임 엔진의 BVH 재사용 |
+
+```c
+// 호스트가 보유한 ray 교차 함수를 등록
+exaSetExternalAccelerator(intersectFn, userData);
+// 해제
+exaClearExternalAccelerator();
+```
+
+External 모드에서는 build/refit이 no-op이고 `generation`만 증가합니다 — 지오메트리
+관리는 호출자 책임입니다.
+
+### Algorithm Comparison
+
+여러 알고리즘 결과를 같은 청취자에서 동시에 실행하고 수치 차이를 보고할 수 있습니다.
+
+```c
+exaListenerEnableComparison(id, /* baselineAlg */ 0, /* candidateAlg */ 1);
+// ...tick & render...
+ExaComparisonResult r;
+exaListenerGetComparisonResult(id, &r);
+exaListenerDisableComparison(id);
+```
+
+회귀 검증·신규 알고리즘 도입 시 활용합니다.
 
 ### Material 모델
 
 `SoundTriangle` 단위에 **흡수율(absorption)**과 **투과율(transmission)**을 직접
-저장합니다. 별도 Material ID/포인터를 두지 않으며, 반사 계산은 다음 규칙을
-따릅니다.
+저장합니다. 별도 Material ID/포인터를 두지 않으며, 반사 계산은 다음 규칙입니다.
 
 ```
 reflection = 1 - (absorption + transmission)
 ```
 
-경로 시각화·통계 구조체에는 흡수 계수만 노출됩니다.
+`ExaRayHit` 구조에는 `materialId` 필드가 노출되어 ray cast 시 어떤 재질에
+충돌했는지 직접 식별할 수 있습니다.
 
 ### Ray Count · Ray Depth
 
 청취자별로 광선 개수와 최대 반사 깊이를 설정합니다.
 
-- **Ray Count** — 청취자에서 발사하는 광선 수. 클수록 IR 정밀도↑, 비용↑
-- **Ray Depth** — 광선이 처리할 최대 반사·투과 단계 수 (`EXA_MAX_DEPTH = 16`)
-
 | 함수 | 효과 |
 |---|---|
 | `exaListenerSetRayCount(id, n)` | 광선 수 설정 |
-| `exaListenerSetRayDepth(id, d)` | 최대 깊이 설정 (1–16) |
+| `exaListenerSetRayDepth(id, d)` | 최대 깊이 (`1 ≤ d ≤ EXA_MAX_DEPTH = 64`) |
 
-### HRTF (선택)
+> **Note**: 이전 `EXA_MAX_DEPTH = 16` 제한은 `EXA_MAX_DEPTH_LIMIT = 64`로 4배 확장됐습니다 (backward-compat alias 유지).
 
-청취자에 HRTF 데이터를 적용하면 머리 모양·귀 위치를 반영한 입체감을 얻을 수
-있습니다.
+### Diffuse Scattering 옵션
+
+`ExaSTOption`에 산란 관련 파라미터가 추가되어 시뮬레이션을 미세 조정할 수 있습니다.
+
+| 필드 | 의미 |
+|---|---|
+| `diffuseEnabled` | 산란 처리 on/off |
+| `diffuseStartDepth` | 산란을 시작할 반사 깊이 (기본 5) |
+| `diffuseMaxOffsetRadius` | 산란 offset 반경 |
+| `diffuseCurveA/B/C` | 거리·각도에 대한 산란 곡선 계수 |
+| `guideDiffuseEnabled` | Guide diffuse ray 사용 |
+| `guideDiffuseListenerHeadRadius` | 청취자 머리 반경 (기본 0.0875m) |
+
+### HRTF
 
 ```c
-exaListenerSetHRTFFromFile(listenerID, "/path/to/sofa-or-binary.hrtf");
-// 또는 메모리에서:
+exaListenerSetHRTFFromFile(listenerID, "/path/to/hrtf");
 exaListenerSetHRTFFromMemory(listenerID, dataPtr, dataSize);
+exaListenerClearHRTF(listenerID);
 ```
 
 ### 결과 조회
 
-시뮬레이션 결과는 두 가지 형태로 얻을 수 있습니다.
+| 형태 | 함수 |
+|---|---|
+| 유효 경로 (시각화·디버깅) | `exaGetValidPathCount`, `exaGetValidPaths` |
+| 정렬된 IR (컨볼루션 입력) | `exaGetSortedIRDatas` |
+| Sort Plane (진단) | `exaPropagatorGetSortPlaneNodes`, `exaPropagatorGetSortPlaneNodeCount` |
 
-- **유효 경로(Valid Paths)** — 음원→반사→청취자에 도달한 광선의 기하 정보.
-  `exaGetValidPathCount` / `exaGetValidPaths`로 조회. 시각화·디버깅에 활용.
-- **정렬된 IR(Sorted IR Datas)** — 시간축으로 정렬된 임펄스 응답.
-  `exaGetSortedIRDatas`로 조회. 컨볼루션 입력으로 사용.
+`ExaPathData`는 `pos[0]=source`, `pos[1..N]=hit points`, `pos[N+1]=listener` 순으로
+저장됩니다.
 
 ### Object Update Type
 
-오브젝트의 정적/동적 여부를 명시해 BVH refit 빈도를 제어할 수 있습니다.
-
 ```c
-exaObjectSetUpdateType(objID, eUpdateTypeData);
+exaObjectSetUpdateType(objID, eUpdateTypeData);  // 0=Static, 1=Refit, 2=Rebuild
 ```
 
 정적 오브젝트는 매 프레임 BVH refit 비용을 피할 수 있습니다.
@@ -201,9 +339,9 @@ exaObjectSetUpdateType(objID, eUpdateTypeData);
 
 | 함수 | 용도 |
 |---|---|
-| `exaGetStatistics()` | 광선/경로/시간 통계 |
+| `exaGetStatistics()` | 광선·경로·시간 통계 |
 | `exaPropagatorGetProfile(sceneID)` | 전파 단계별 프로파일 |
-| `exaPropagatorGetGuidePlanes/MirrorPositions` | 알고리즘 내부 상태 (디버깅·시각화용) |
+| `exaPropagatorGetGuidePlanes/MirrorPositions/SortPlaneNodes` | 알고리즘 내부 상태 |
 | `exaGetMemoryTraceSnapshot()` | 메모리 사용 스냅샷 |
 | `exaGetLastError()` | 마지막 에러 메시지 |
 
