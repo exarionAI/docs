@@ -4,40 +4,87 @@ title: STCore
 
 # STCore
 
-**1세대 Sound Tracing 코어 모듈.**
+**1세대 Sound Tracing 코어 모듈. FPGA 하드웨어 가속과 연동되는 SoundTracer + Auralizator 라이브러리.**
 
 STCore는 Sound Tracing 기술의 첫 세대 구현체로, C/C++ 기반의 음향 시뮬레이션
-라이브러리입니다. 현재는 유지보수 모드이며, 신규 개발은 [STCoreV2](./stcorev2.md)
-에서 이루어집니다.
-
-:::info
-이 페이지는 외부 공개용 초안입니다. 상세 API·아키텍처 문서는 추후 보강됩니다.
-:::
+라이브러리이며 FPGA 가속기와 통신하는 HW 인터페이스 계층을 포함합니다. 현재는
+유지보수 모드이며, 신규 개발은 [STCoreV2](./stcorev2.md)에서 이루어집니다.
 
 ## 개요
 
 | 항목 | 값 |
 |---|---|
 | 주 언어 | C / C++ |
-| 빌드 시스템 | CMake |
-| 플랫폼 | macOS · Windows · Linux |
-| 상태 | 유지보수 (Maintenance) |
+| 빌드 | Visual Studio 솔루션 (`SoundTracer.sln`) + CMake |
+| 1차 플랫폼 | Windows (x64) |
+| HW 가속 | FPGA 인터페이스 (libusb 기반) |
+| 상태 | 유지보수 |
 | 후속 라인 | [STCoreV2](./stcorev2.md) |
 
-## 무엇을 다루는가
+## 모듈 구성
 
-STCore는 메시·재질로 구성된 가상 장면에서 음향 전파 경로를 추적하고, 그 결과로
-임펄스 응답(IR)을 생성하는 코어 알고리즘을 제공합니다. 광선 추적 계열의 접근에
-음향 특성에 맞춘 처리(평면 기반 역추적, 동평면 그룹화, 경계 검출 등)를 더한
-것이 특징입니다.
+```
+STCore/
+├── SoundTracerSource/
+│   ├── Core/         # 음향 추적·음향화 핵심
+│   ├── HW/           # FPGA 인터페이스
+│   ├── Auralization/ # 컨볼루션·HRTF
+│   ├── Math/         # 벡터·행렬 유틸리티
+│   ├── Objects/      # Scene 객체
+│   ├── OperatorSource/
+│   ├── GL/           # 시각화 헬퍼
+│   └── Utils/        # 공통 유틸
+├── SoundTracer/         # Visual Studio 데모/런처
+├── SoundTracingDemo/    # 데모 애플리케이션
+├── LIB/                 # 빌드 산출물
+└── Doc/                 # Doxygen 문서
+```
+
+### Core 모듈 핵심 컴포넌트
+
+| 컴포넌트 | 역할 |
+|---|---|
+| `SoundTracer` | 광선 추적 기반 음향 경로 탐색 |
+| `Auralizator` | 경로 → IR 합성 → 컨볼루션 |
+| `UTDDiffraction` | UTD(Uniform Theory of Diffraction) 회절 모델 |
+| `ReverberationZoneManager` | 잔향 영역 관리 |
+| `RGC` | Ray Generation 클러스터 |
+| `PathPPV` | 경로 정보 자료구조 |
+
+### HW 모듈
+
+`HW/` 디렉터리는 FPGA 가속기와의 통신 계층입니다.
+
+- `fpga_interface.{cpp,h}` — 보드 제어
+- `bfm_api.{c,h}` — Bus Functional Model 인터페이스
+- `mem_api.{c,h}` — 디바이스 메모리 액세스
+- `libusb` — USB 통신
+
+이 계층 덕에 동일한 음향 알고리즘을 SW(범용 CPU)와 HW(FPGA 가속) 양쪽에서 실행할
+수 있습니다.
+
+## STCoreV2와의 관계
+
+STCoreV2는 STCore에서 다음을 변경/확장한 후속 라인입니다.
+
+| 항목 | STCore | STCoreV2 |
+|---|---|---|
+| 전파 모델 | 결정론적 광선 추적 + UTD | + **통계적 음향 전파(SSP)** |
+| 빌드 | Visual Studio 우선 | CMake (cross-platform) |
+| API 노출 | C++ 직접 | **C API** (`exasoundC.h`) |
+| Web 빌드 | — | **Emscripten 지원** |
+| 테스트 | — | Google Test |
+| HW 가속 | FPGA 인터페이스 포함 | (현재 SW only) |
+| 활성 개발 | — | ✓ |
 
 ## 언제 STCore를 선택하는가
 
 신규 프로젝트는 [STCoreV2](./stcorev2.md)를 권장합니다. STCore는 다음의 경우에만
 사용을 검토하세요.
 
-- 이미 STCore에 통합되어 있고, V2로의 마이그레이션이 진행 중인 경우
-- V2에서 아직 지원하지 않는 특정 동작에 의존하는 경우 (별도 확인 필요)
+- 이미 STCore에 통합된 코드가 있고 V2로 마이그레이션 중인 경우
+- FPGA 가속 경로가 필요하며 V2의 SSP 모델로 대체할 수 없는 경우
+- Visual Studio 솔루션 기반의 기존 빌드 시스템과 직접 통합해야 하는 경우
 
 ## 참고
 
