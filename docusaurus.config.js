@@ -58,8 +58,9 @@ const config = {
       navbar: {
         title: 'Sound Tracing',
         logo: {
-          alt: 'Sound Tracing',
-          src: 'img/logo.svg',
+          alt: 'EXARION',
+          src: 'img/logo.png',
+          srcDark: 'img/logo-dark.png',
         },
         items: [
           {
