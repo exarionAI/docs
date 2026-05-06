@@ -24,7 +24,7 @@ const sidebars = {
           type: 'category',
           label: 'Core',
           collapsed: false,
-          items: ['sdk/core/stcore', 'sdk/core/stcorev2'],
+          items: ['sdk/core/stcore', 'sdk/core/stcorev2', 'sdk/core/comparison'],
         },
         {
           type: 'category',

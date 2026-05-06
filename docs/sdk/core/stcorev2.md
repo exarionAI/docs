@@ -208,6 +208,7 @@ exaObjectSetUpdateType(objID, eUpdateTypeData);
 
 ## 참고
 
+- [STCore vs STCoreV2](./comparison.md) — 두 세대의 기능 비교 표
 - [STCore](./stcore.md) — 1세대 코어
 - [SDK 개요](../overview.md)
 - [무엇을 해결하는가 — Sound Tracing이란?](../../intro/what-is-soundtracing.md)

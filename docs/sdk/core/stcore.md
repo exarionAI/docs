@@ -65,17 +65,8 @@ STCore/
 
 ## STCoreV2와의 관계
 
-STCoreV2는 STCore에서 다음을 변경/확장한 후속 라인입니다.
-
-| 항목 | STCore | STCoreV2 |
-|---|---|---|
-| 전파 모델 | 결정론적 광선 추적 + UTD | + **통계적 음향 전파(SSP)** |
-| 빌드 | Visual Studio 우선 | CMake (cross-platform) |
-| API 노출 | C++ 직접 | **C API** (`exasoundC.h`) |
-| Web 빌드 | — | **Emscripten 지원** |
-| 테스트 | — | Google Test |
-| HW 가속 | FPGA 인터페이스 포함 | (현재 SW only) |
-| 활성 개발 | — | ✓ |
+STCoreV2는 STCore에서 전파 모델·빌드·API 노출 방식을 확장한 후속 라인입니다. 전체
+비교 표는 [STCore vs STCoreV2](./comparison.md) 페이지를 참고하세요.
 
 ## 언제 STCore를 선택하는가
 
