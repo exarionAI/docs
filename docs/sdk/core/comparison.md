@@ -7,6 +7,11 @@ title: STCore vs STCoreV2
 [STCore](./stcore.md)와 [STCoreV2](./stcorev2.md)의 기능 차이를 한 페이지로 정리합니다.
 선택 가이드는 [활용 권장 케이스](#활용-권장-케이스)를 참고하세요.
 
+:::note 기준 브랜치
+- **STCore** — `main`
+- **STCoreV2** — `feat/lock-free-hybrid-v2-reverb` (lock-free reverb)
+:::
+
 ## 한눈에 보기
 
 | 항목 | STCore | STCoreV2 |
@@ -26,7 +31,7 @@ title: STCore vs STCoreV2
 | 핵심 모듈 | `SoundTracer` (Core/) | `Propagator` + `IRUpdater` (propagation/) |
 | 기반 접근 | 결정론적 광선 추적 | 광선 추적 + **통계적 음향 전파(SSP)** |
 | Ray Generation | `RGC` (Ray Generation Cluster) | `RGC` + 청취자별 ray count/depth API |
-| 회절 모델 | `UTDDiffraction` (Uniform Theory of Diffraction) | (구현 방식 별도 — 통계적 전파 + 평면 기반 처리) |
+| 회절 모델 | `UTDDiffraction` (Uniform Theory of Diffraction) | `UTDDiffraction` (Uniform Theory of Diffraction) |
 | 잔향 영역 | `ReverberationZoneManager` | (해당 분리 모듈 없음 — Propagator에 통합) |
 | 결과 자료구조 | `PathPPV`, `PropagationPath` | `PathPPV`, `Primitive`, sorted IR data |
 

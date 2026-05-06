@@ -14,6 +14,7 @@ STCoreV2는 [STCore](./stcore.md)의 후속 라인으로, 메시·재질·청취
 
 | 항목 | 값 |
 |---|---|
+| 기준 브랜치 | `feat/lock-free-hybrid-v2-reverb` (lock-free reverb) |
 | 주 언어 | C++ (C++17 빌드, C API 노출) |
 | 빌드 시스템 | CMake 3.22+ |
 | 플랫폼 | macOS · Windows · Linux |
