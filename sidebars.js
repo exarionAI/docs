@@ -47,7 +47,7 @@ const sidebars = {
     {
       type: 'category',
       label: 'ExaTools',
-      items: ['exatools/overview'],
+      items: ['exatools/overview', 'exatools/iranalyzer'],
     },
     {
       type: 'category',
