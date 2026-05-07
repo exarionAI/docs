@@ -13,10 +13,10 @@ title: SDK 개요
 
 | 이름 | 대상 | 상태 |
 |---|---|---|
-| [Web](./bindings/web.md) | 브라우저 (WebAssembly) | 예정 |
-| [Python](./bindings/python.md) | 분석·연구 | 예정 |
-| [Unity](./bindings/unity.md) | Unity 게임 엔진 | 예정 |
-| [Unreal Engine](./bindings/ue.md) | Unreal Engine | 예정 |
+| [Web](./web.md) | 브라우저 (WebAssembly) | 예정 |
+| [Python](./python.md) | 분석·연구 | 예정 |
+| [Unity](./unity.md) | Unity 게임 엔진 | 예정 |
+| [Unreal Engine](./ue.md) | Unreal Engine | 예정 |
 
 모든 바인딩은 Core의 C API(`exasoundC.h`)를 공통 진입점으로 사용합니다.
 

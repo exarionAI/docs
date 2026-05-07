@@ -26,17 +26,10 @@ const sidebars = {
       collapsed: false,
       items: [
         'sdk/overview',
-        {
-          type: 'category',
-          label: 'Bindings',
-          collapsed: false,
-          items: [
-            'sdk/bindings/web',
-            'sdk/bindings/python',
-            'sdk/bindings/unity',
-            'sdk/bindings/ue',
-          ],
-        },
+        'sdk/web',
+        'sdk/python',
+        'sdk/unity',
+        'sdk/ue',
       ],
     },
     {
