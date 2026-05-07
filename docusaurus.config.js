@@ -78,6 +78,7 @@ const config = {
           {
             title: '제품',
             items: [
+              {label: 'Core', to: '/core/stcorev2'},
               {label: 'SDK', to: '/sdk/overview'},
               {label: 'ExaStudio', to: '/exastudio/overview'},
               {label: 'ExaTools', to: '/exatools/overview'},

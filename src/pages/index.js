@@ -31,9 +31,14 @@ function Hero() {
 
 const products = [
   {
+    title: 'Core',
+    href: '/core/stcorev2',
+    desc: 'C/C++ 네이티브 음향 시뮬레이션 엔진. STCore(1세대, FPGA 가속)와 STCoreV2(모듈식·lock-free).',
+  },
+  {
     title: 'SDK',
     href: '/sdk/overview',
-    desc: 'C/C++ 코어와 각 플랫폼용 바인딩. 음향 시뮬레이션을 직접 통합할 때.',
+    desc: 'Web · Python · Unity · Unreal 바인딩 라인업 (예정). Core를 각 플랫폼에서 사용.',
   },
   {
     title: 'ExaStudio',

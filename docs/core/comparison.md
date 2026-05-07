@@ -130,4 +130,4 @@ title: STCore vs STCoreV2
 
 - [STCore](./stcore.md) — 1세대 코어 상세
 - [STCoreV2](./stcorev2.md) — 2세대 코어 상세
-- [SDK 개요](../overview.md)
+- [SDK 개요](../sdk/overview.md)

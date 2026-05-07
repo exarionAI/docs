@@ -6,7 +6,7 @@ title: IRAnalyzer
 
 **Room Impulse Response (IR) 분석·시각화 도구.**
 
-IRAnalyzer는 [exaSound (STCoreV2)](../sdk/core/stcorev2.md) 기하음향 시뮬레이터가
+IRAnalyzer는 [exaSound (STCoreV2)](../core/stcorev2.md) 기하음향 시뮬레이터가
 생성한 IR의 정확성을 검증하고, 실측 데이터·다른 시뮬레이터 결과와 비교 분석하는
 도구입니다. 두 개의 실행 파일로 구성됩니다.
 
@@ -84,5 +84,5 @@ Embree를 직접 사용해 경로를 추적하고 IR을 합성하는 **독립** 
 
 ## 참고
 
-- [STCoreV2](../sdk/core/stcorev2.md) — 분석 대상 시뮬레이터
+- [STCoreV2](../core/stcorev2.md) — 분석 대상 시뮬레이터
 - [ExaTools 개요](./overview.md)

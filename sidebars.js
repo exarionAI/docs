@@ -16,20 +16,20 @@ const sidebars = {
     },
     {
       type: 'category',
+      label: 'Core',
+      collapsed: false,
+      items: ['core/stcore', 'core/stcorev2', 'core/comparison'],
+    },
+    {
+      type: 'category',
       label: 'SDK',
       collapsed: false,
       items: [
         'sdk/overview',
         {
           type: 'category',
-          label: 'Core',
-          collapsed: false,
-          items: ['sdk/core/stcore', 'sdk/core/stcorev2', 'sdk/core/comparison'],
-        },
-        {
-          type: 'category',
           label: 'Bindings',
-          collapsed: true,
+          collapsed: false,
           items: [
             'sdk/bindings/web',
             'sdk/bindings/python',
