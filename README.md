@@ -8,8 +8,10 @@
 
 ```bash
 npm install
-npm start          # http://localhost:3000/docs/
+npm start          # http://localhost:3000/ (전체 locale 정적 preview)
+npm run dev        # http://localhost:3000/ (한국어 hot reload)
 npm run build      # build/ 디렉터리로 정적 빌드
+BASE_URL=/docs/ npm run build  # GitHub Pages project URL용 빌드
 ```
 
 ## 구조

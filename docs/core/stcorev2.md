@@ -107,21 +107,17 @@ C 링키지 API (`exasoundC.h`, **약 120개 export**)로 공개됩니다.
 
 | 카테고리 | 대표 함수 |
 |---|---|
-| 라이프사이클 | `exaInit`, `exaReset`, `exaGetVersion` |
-| Engine Config | `exaSetConfig`, `exaGetConfig`, `exaSetMaxDepth` |
+| 라이프사이클 | `exaInit`, `exaReset`, `exaGetVersion`, `exaGetPathTypeCount` |
 | Scene | `exaNewScene`, `exaTickScene`, `exaSceneAddObject/Source/Listener` |
 | Object | `exaNewObject`, `exaObjectSetPosition/Rotation/Scale/Mesh`, `exaObjectSetUpdateType` |
 | Mesh | `exaNewMesh`, `exaMeshSetData`, `exaMeshUpdateVertices`, `exaMeshRefit`, `exaMeshSetMaterial` |
 | Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
 | SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity` |
 | Listener (기본) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
-| Listener (HRTF) | `exaListenerSetHRTFFromFile/Memory`, `exaListenerClearHRTF` |
-| **Algorithm Selection** | `exaListenerSetReflectionAlgorithm`, `exaListenerSetDiffractionAlgorithm`, `exaListenerSetDiffuseAlgorithm`, `exaListenerSetReverbAlgorithm`, `exaListenerSetModularPropagation` |
-| **Algorithm Comparison** | `exaListenerEnableComparison`, `exaListenerDisableComparison`, `exaListenerGetComparisonResult` |
-| **External Accelerator** | `exaSetExternalAccelerator`, `exaClearExternalAccelerator` |
+| Listener (HRTF) | `exaListenerSetHRTFFromFile/Memory` |
 | Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
 | 결과 조회 | `exaGetValidPathCount`, `exaGetValidPaths`, `exaGetSortedIRDatas` |
-| 진단·시각화 | `exaPropagatorGetGuidePlanes/MirrorPositions/SortPlaneNodes`, `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot`, `exaGetLastError` |
+| 진단·시각화 | `exaPropagatorGetGuidePlanes/MirrorPositions`, `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot`, `exaGetLastError` |
 
 ## 시작하기
 
@@ -181,10 +177,6 @@ exaListenerSetRayCount(listenerID, 4096);
 exaListenerSetRayDepth(listenerID, 16);    // up to EXA_MAX_DEPTH = 64
 exaSceneAddListener(sceneID, listenerID);
 
-// (선택) 모듈식 propagation·알고리즘 선택
-exaListenerSetModularPropagation(listenerID, true);
-exaListenerSetReverbAlgorithm(listenerID, /* algorithm id */ 0);
-
 // 6. 매 프레임 시뮬레이션 + 오디오 렌더
 for (;;) {
   exaTickScene(sceneID, deltaTime);
@@ -200,9 +192,9 @@ exaReset();
 
 ## 핵심 개념
 
-### Path Module 추상화
+### Path Module 구조
 
-전파 알고리즘을 4종 모듈로 분리하여 독립적으로 구현·교체·비교할 수 있습니다.
+전파 알고리즘은 4종 모듈로 분리되어 내부 파이프라인에서 동작합니다.
 
 | 모듈 | 경로 유형 | 위치 |
 |---|---|---|
@@ -218,16 +210,6 @@ exaReset();
 
 Specular → Diffuse 간에는 `ScatterHandoffEntry`로 path 상태가 전달됩니다.
 
-청취자별 알고리즘 선택:
-
-```c
-exaListenerSetModularPropagation(id, true);
-exaListenerSetReflectionAlgorithm(id, /* algId */ 0);
-exaListenerSetDiffractionAlgorithm(id, 0);
-exaListenerSetDiffuseAlgorithm(id, 0);
-exaListenerSetReverbAlgorithm(id, 0);
-```
-
 ### Lock-free 스냅샷 (`SceneSnapshot`)
 
 장면 상태는 매 틱 immutable POD 스냅샷으로 떠집니다.
@@ -238,39 +220,6 @@ exaListenerSetReverbAlgorithm(id, 0);
 - 지오메트리는 별도 BVH 더블 버퍼로 관리 (Phase 3)
 
 이 구조 덕분에 다중 스레드에서 mutex 없이 안전하게 시뮬레이션·렌더가 진행됩니다.
-
-### External Accelerator
-
-`IAccelerator` 인터페이스 위에 두 구현이 있습니다.
-
-| 구현 | 용도 |
-|---|---|
-| 내장 BVH | exaSound가 직접 관리 |
-| `ExternalAccelerator` | **호스트 콜백**으로 ray intersection 위임 — 게임 엔진의 BVH 재사용 |
-
-```c
-// 호스트가 보유한 ray 교차 함수를 등록
-exaSetExternalAccelerator(intersectFn, userData);
-// 해제
-exaClearExternalAccelerator();
-```
-
-External 모드에서는 build/refit이 no-op이고 `generation`만 증가합니다 — 지오메트리
-관리는 호출자 책임입니다.
-
-### Algorithm Comparison
-
-여러 알고리즘 결과를 같은 청취자에서 동시에 실행하고 수치 차이를 보고할 수 있습니다.
-
-```c
-exaListenerEnableComparison(id, /* baselineAlg */ 0, /* candidateAlg */ 1);
-// ...tick & render...
-ExaComparisonResult r;
-exaListenerGetComparisonResult(id, &r);
-exaListenerDisableComparison(id);
-```
-
-회귀 검증·신규 알고리즘 도입 시 활용합니다.
 
 ### Material 모델
 
@@ -313,7 +262,6 @@ reflection = 1 - (absorption + transmission)
 ```c
 exaListenerSetHRTFFromFile(listenerID, "/path/to/hrtf");
 exaListenerSetHRTFFromMemory(listenerID, dataPtr, dataSize);
-exaListenerClearHRTF(listenerID);
 ```
 
 ### 결과 조회
@@ -322,7 +270,7 @@ exaListenerClearHRTF(listenerID);
 |---|---|
 | 유효 경로 (시각화·디버깅) | `exaGetValidPathCount`, `exaGetValidPaths` |
 | 정렬된 IR (컨볼루션 입력) | `exaGetSortedIRDatas` |
-| Sort Plane (진단) | `exaPropagatorGetSortPlaneNodes`, `exaPropagatorGetSortPlaneNodeCount` |
+| Guide Plane / Mirror Position (진단) | `exaPropagatorGetGuidePlanes`, `exaPropagatorGetMirrorPositions` |
 
 `ExaPathData`는 `pos[0]=source`, `pos[1..N]=hit points`, `pos[N+1]=listener` 순으로
 저장됩니다.
@@ -341,7 +289,7 @@ exaObjectSetUpdateType(objID, eUpdateTypeData);  // 0=Static, 1=Refit, 2=Rebuild
 |---|---|
 | `exaGetStatistics()` | 광선·경로·시간 통계 |
 | `exaPropagatorGetProfile(sceneID)` | 전파 단계별 프로파일 |
-| `exaPropagatorGetGuidePlanes/MirrorPositions/SortPlaneNodes` | 알고리즘 내부 상태 |
+| `exaPropagatorGetGuidePlanes/MirrorPositions` | 알고리즘 내부 상태 |
 | `exaGetMemoryTraceSnapshot()` | 메모리 사용 스냅샷 |
 | `exaGetLastError()` | 마지막 에러 메시지 |
 

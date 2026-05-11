@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>soundtrace.js — three.js basic example</title>
+    <style>
+      :root { --demo-ui-scale: 0.7; }
+      body { margin: 0; overflow: hidden; background: #111; color: #ddd; font-family: system-ui, sans-serif; }
+      #info {
+        position: absolute;
+        top: 0;
+        left: 0;
+        padding: calc(12px * var(--demo-ui-scale));
+        font-size: calc(12px * var(--demo-ui-scale));
+        line-height: 1.5;
+        pointer-events: none;
+      }
+      #controls {
+        position: absolute;
+        bottom: calc(20px * var(--demo-ui-scale));
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: calc(12px * var(--demo-ui-scale));
+        align-items: center;
+      }
+      #controls .grp {
+        display: flex;
+        flex-direction: column;
+        gap: calc(4px * var(--demo-ui-scale));
+      }
+      #controls .lab {
+        font-size: calc(10px * var(--demo-ui-scale));
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      #controls select, #controls button {
+        padding: calc(10px * var(--demo-ui-scale)) calc(16px * var(--demo-ui-scale));
+        font-size: calc(14px * var(--demo-ui-scale));
+        font-family: inherit;
+        background: #222;
+        color: #ddd;
+        border: 1px solid #555;
+        border-radius: calc(4px * var(--demo-ui-scale));
+      }
+      #controls button { cursor: pointer; align-self: flex-end; }
+      #controls button:disabled, #controls select:disabled { opacity: 0.6; cursor: default; }
+    </style>
+    <script type="module" crossorigin src="./assets/index-kn_E8UDB.js"></script>
+  </head>
+  <body>
+    <div id="info">
+      soundtrace.js + three.js<br />
+      Pick materials, press <b>Start Audio</b>. Start with the static wall,<br />
+      then toggle Flair to inspect animated BVH refit separately.<br />
+      Blue arrow = listener forward, Red arrow = listener right.
+    </div>
+    <div id="controls">
+      <div class="grp">
+        <span class="lab">Room</span>
+        <select id="roomMat" disabled><option>loading…</option></select>
+      </div>
+      <div class="grp">
+        <span class="lab">Collider</span>
+        <select id="wallMat" disabled><option>loading…</option></select>
+      </div>
+      <div class="grp">
+        <span class="lab">Thread</span>
+        <select id="threadMode">
+          <option value="st">Single</option>
+          <option value="mt">Multi</option>
+        </select>
+      </div>
+      <button id="start" disabled>Start Audio</button>
+      <button id="moveToggle" disabled>Move</button>
+      <button id="wallToggle" disabled>Wall: On</button>
+      <button id="flairToggle" disabled>Flair: Off</button>
+    </div>
+  </body>
+</html>

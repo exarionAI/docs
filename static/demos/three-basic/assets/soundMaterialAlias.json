@@ -1,0 +1,15 @@
+{
+    "defaultMaterialType": 0,
+    "aliases": {
+        "concrete": ["cement", "beton", "ciment", "石材", "콘크리트", "pavement", "sidewalk"],
+        "fabric": ["cloth", "textile", "carpet", "curtain", "velvet", "cotton", "silk", "천"],
+        "glass": ["window", "crystal", "mirror", "유리"],
+        "wood": ["log", "plank", "timber", "lumber", "oak", "pine", "birch", "bamboo", "나무", "목재","boat"],
+        "metal": ["steel", "iron", "aluminum", "copper", "brass", "chrome", "tin", "금속","gun","sword","blade","cannon","ship","missile","barrel"],
+        "brick": ["tile", "ceramic", "terracotta", "벽돌"],
+        "plastic": ["rubber", "vinyl", "pvc", "polymer", "플라스틱", "고무"],
+        "water": ["liquid", "pool", "물"],
+        "grass": ["vegetation", "leaves", "foliage", "lawn", "잔디", "풀"],
+        "sand": ["dirt", "gravel", "soil", "mud", "earth", "모래", "흙"]
+    }
+}

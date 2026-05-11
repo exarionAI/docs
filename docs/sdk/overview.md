@@ -13,7 +13,7 @@ title: SDK 개요
 
 | 이름 | 대상 | 상태 |
 |---|---|---|
-| [Web](./web.md) | 브라우저 (WebAssembly) | 예정 |
+| [Web](./web.md) | 브라우저 (WebAssembly) | 사용 가능 (초안 문서화) |
 | [Python](./python.md) | 분석·연구 | 예정 |
 | [Unity](./unity.md) | Unity 게임 엔진 | 예정 |
 | [Unreal Engine](./ue.md) | Unreal Engine | 예정 |
@@ -23,5 +23,6 @@ title: SDK 개요
 ## 어디서 시작할까
 
 - 처음 보는 경우 → [Sound Tracing이란?](../intro/what-is-soundtracing.md)
+- 브라우저/Three.js 통합 → [Web SDK](./web.md)
 - 네이티브(C/C++) 통합 → [STCoreV2](../core/stcorev2.md) (현 활성 라인)
 - 두 세대 비교 → [STCore vs STCoreV2](../core/comparison.md)

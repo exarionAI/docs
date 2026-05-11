@@ -4,12 +4,14 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
-    "start": "docusaurus start",
+    "start": "npm run build && docusaurus serve --host 127.0.0.1",
+    "dev": "docusaurus start --host 127.0.0.1",
     "build": "docusaurus build",
+    "build:github": "BASE_URL=/docs/ docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
-    "serve": "docusaurus serve",
+    "serve": "docusaurus serve --host 127.0.0.1",
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids"
   },

@@ -1,6 +1,8 @@
 // @ts-check
 import {themes as prismThemes} from 'prism-react-renderer';
 
+const baseUrl = process.env.BASE_URL || '/';
+
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Sound Tracing',
@@ -11,10 +13,9 @@ const config = {
     v4: true,
   },
 
-  // TODO: 실제 GH Pages URL로 교체 (예: https://exarionai.github.io)
   url: 'https://exarionai.github.io',
-  // TODO: 문서 레포 이름이 정해지면 '/<repo>/' 로 수정
-  baseUrl: '/docs/',
+  // Local preview uses '/'. GitHub Pages project deployment sets BASE_URL=/docs/.
+  baseUrl,
 
   organizationName: 'exarionAI',
   projectName: 'docs',
@@ -29,7 +30,29 @@ const config = {
 
   i18n: {
     defaultLocale: 'ko',
-    locales: ['ko'],
+    locales: ['ko', 'en', 'ja', 'zh-Hans', 'zh-Hant'],
+    localeConfigs: {
+      ko: {
+        label: '한국어',
+        htmlLang: 'ko-KR',
+      },
+      en: {
+        label: 'English',
+        htmlLang: 'en-US',
+      },
+      ja: {
+        label: '日本語',
+        htmlLang: 'ja-JP',
+      },
+      'zh-Hans': {
+        label: '简体中文',
+        htmlLang: 'zh-CN',
+      },
+      'zh-Hant': {
+        label: '繁體中文',
+        htmlLang: 'zh-TW',
+      },
+    },
   },
 
   presets: [
@@ -69,6 +92,10 @@ const config = {
             sidebarId: 'mainSidebar',
             position: 'left',
             label: '문서',
+          },
+          {
+            type: 'localeDropdown',
+            position: 'right',
           },
         ],
       },

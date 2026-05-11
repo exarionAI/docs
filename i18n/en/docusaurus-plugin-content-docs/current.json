@@ -1,0 +1,30 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.mainSidebar.category.소개": {
+    "message": "Introduction",
+    "description": "The label for category '소개' in sidebar 'mainSidebar'"
+  },
+  "sidebar.mainSidebar.category.Core": {
+    "message": "Core",
+    "description": "The label for category 'Core' in sidebar 'mainSidebar'"
+  },
+  "sidebar.mainSidebar.category.SDK": {
+    "message": "SDK",
+    "description": "The label for category 'SDK' in sidebar 'mainSidebar'"
+  },
+  "sidebar.mainSidebar.category.ExaStudio": {
+    "message": "ExaStudio",
+    "description": "The label for category 'ExaStudio' in sidebar 'mainSidebar'"
+  },
+  "sidebar.mainSidebar.category.ExaTools": {
+    "message": "ExaTools",
+    "description": "The label for category 'ExaTools' in sidebar 'mainSidebar'"
+  },
+  "sidebar.mainSidebar.category.데모": {
+    "message": "Demos",
+    "description": "The label for category '데모' in sidebar 'mainSidebar'"
+  }
+}

@@ -42,7 +42,7 @@ title: STCore vs STCoreV2
 |---|---|---|
 | 모듈 | `Auralization/` (Attenuation, FrequencyPartition, FrequencyResponse, PropagationPath, HRTF) | **`auralizator/`** (core, frequence, filter, HRTF, states) |
 | HRTF | `HRTF.h` + MIT HRTF library | `HRTF.h` + 외부 HRTF 파일/메모리 로드 API |
-| HRTF 로딩 API | (직접 라이브러리 호출) | `exaListenerSetHRTFFromFile/Memory` + `exaListenerClearHRTF` |
+| HRTF 로딩 API | (직접 라이브러리 호출) | `exaListenerSetHRTFFromFile/Memory` |
 | 주파수 분할 | `FrequencyPartition` | `frequence/` (FrequencyBandResponse 등) |
 | 컨볼루션 | `Auralizator` | `filter/` (FilterChain, IRConvolver) |
 
@@ -61,9 +61,8 @@ title: STCore vs STCoreV2
 | API 노출 | C++ 직접 라이브러리 링크 | **C 함수 120+개** (`exasoundC.h`) |
 | Web 빌드 | — | **Emscripten** (`EMSCRIPTEN_KEEPALIVE`) |
 | 바인딩 호환성 | C++ 타깃 한정 | Web/Python/Unity/Unreal 통합 가능 |
-| 알고리즘 선택 | (단일 구현) | `exaListenerSet{Reflection,Diffraction,Diffuse,Reverb}Algorithm`, `exaListenerSetModularPropagation` |
-| 알고리즘 비교 | — | `exaListenerEnable/Disable/GetComparisonResult` (수치 검증) |
-| 진단·통계 | (사내 사용 위주) | `exaPropagatorGetProfile/SortPlaneNodes`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot` |
+| 알고리즘 구조 | (단일 구현) | reflection / diffraction / diffuse / reverb 모듈로 내부 분리 |
+| 진단·통계 | (사내 사용 위주) | `exaPropagatorGetProfile`, `exaPropagatorGetGuidePlanes/MirrorPositions`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot` |
 | 에러 보고 | (반환값 위주) | `exaGetLastError()` 단일 진입점 |
 
 ## 플랫폼·빌드
