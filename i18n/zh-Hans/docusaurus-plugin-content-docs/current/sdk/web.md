@@ -476,15 +476,29 @@ for (const m of _soundMaterials) {
   allow="autoplay; fullscreen"
 />
 
-本地运行:
+runtime 和 demo 构建:
 
 ```bash
-cd /Users/ethanjung/dev/soundtrace.js
 npm install
+
+cd /Users/ethanjung/dev/soundtrace.js/STCoreV2/exaSound
+./mainBuild.sh rebuild wasm release
+./mainBuild.sh rebuild wasm release --use-thread
+
+cd /Users/ethanjung/dev/soundtrace.js
 npm run build
+
 cd examples/three-basic
 npm install
-npm run dev
+npm run build
+
+cd /Users/ethanjung/dev/docs
+rsync -a --delete --exclude '.DS_Store' \
+  /Users/ethanjung/dev/soundtrace.js/examples/three-basic/dist/ \
+  static/demos/three-basic/
+
+npm run build
+npm run serve
 ```
 
 Vite dev server 默认设置 COOP/COEP header，因此也能确认 MT mode。文档中嵌入的 iframe 固定为 `?thread=st`，以便在没有 COOP/COEP header 的静态托管中运行。

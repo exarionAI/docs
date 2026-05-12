@@ -514,15 +514,29 @@ tool이나 앱 레이어에서 온 문자열을 canonical material로 자동 매
   allow="autoplay; fullscreen"
 />
 
-로컬 실행:
+런타임과 데모 빌드:
 
 ```bash
-cd /Users/ethanjung/dev/soundtrace.js
 npm install
+
+cd /Users/ethanjung/dev/soundtrace.js/STCoreV2/exaSound
+./mainBuild.sh rebuild wasm release
+./mainBuild.sh rebuild wasm release --use-thread
+
+cd /Users/ethanjung/dev/soundtrace.js
 npm run build
+
 cd examples/three-basic
 npm install
-npm run dev
+npm run build
+
+cd /Users/ethanjung/dev/docs
+rsync -a --delete --exclude '.DS_Store' \
+  /Users/ethanjung/dev/soundtrace.js/examples/three-basic/dist/ \
+  static/demos/three-basic/
+
+npm run build
+npm run serve
 ```
 
 Vite dev server는 기본적으로 COOP/COEP 헤더를 설정하므로 MT 모드도 확인할 수

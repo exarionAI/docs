@@ -476,15 +476,29 @@ Default material list:
   allow="autoplay; fullscreen"
 />
 
-Run locally:
+Runtime and demo build:
 
 ```bash
-cd /Users/ethanjung/dev/soundtrace.js
 npm install
+
+cd /Users/ethanjung/dev/soundtrace.js/STCoreV2/exaSound
+./mainBuild.sh rebuild wasm release
+./mainBuild.sh rebuild wasm release --use-thread
+
+cd /Users/ethanjung/dev/soundtrace.js
 npm run build
+
 cd examples/three-basic
 npm install
-npm run dev
+npm run build
+
+cd /Users/ethanjung/dev/docs
+rsync -a --delete --exclude '.DS_Store' \
+  /Users/ethanjung/dev/soundtrace.js/examples/three-basic/dist/ \
+  static/demos/three-basic/
+
+npm run build
+npm run serve
 ```
 
 The Vite dev server sets COOP/COEP headers by default, so MT mode can also be tested. The iframe embedded in this documentation is fixed to `?thread=st` so it works on static hosting without COOP/COEP headers.

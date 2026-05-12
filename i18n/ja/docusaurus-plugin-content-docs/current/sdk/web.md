@@ -476,15 +476,29 @@ Default material list:
   allow="autoplay; fullscreen"
 />
 
-ローカル実行:
+runtime と demo の build:
 
 ```bash
-cd /Users/ethanjung/dev/soundtrace.js
 npm install
+
+cd /Users/ethanjung/dev/soundtrace.js/STCoreV2/exaSound
+./mainBuild.sh rebuild wasm release
+./mainBuild.sh rebuild wasm release --use-thread
+
+cd /Users/ethanjung/dev/soundtrace.js
 npm run build
+
 cd examples/three-basic
 npm install
-npm run dev
+npm run build
+
+cd /Users/ethanjung/dev/docs
+rsync -a --delete --exclude '.DS_Store' \
+  /Users/ethanjung/dev/soundtrace.js/examples/three-basic/dist/ \
+  static/demos/three-basic/
+
+npm run build
+npm run serve
 ```
 
 Vite dev serverはdefaultでCOOP/COEP headerを設定するため、MT modeも確認できます。文書に埋め込まれたiframeはstatic hostingでも動くように`?thread=st`で固定しています。
