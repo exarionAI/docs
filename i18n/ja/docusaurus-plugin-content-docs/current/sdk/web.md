@@ -40,11 +40,6 @@ import {
 | `soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM core |
 | `soundtrace.js/hrtf/hrtf.bytes` | default HRTF dataset |
 | `soundtrace.js/assets/soundMaterial.json` | default sound material table |
-| `soundtrace.js/assets/soundMaterialAlias.json` | app layer自動mapping用alias table |
-
-:::info 配布物
-SDK配布パッケージには`STCoreV2`サブモジュールやC++フルソースは含まれません。ブラウザruntimeにはコンパイル済み`exaSound.js`/`exaSound.wasm` binary、TypeScript wrapper、HRTF、material assetだけが含まれます。
-:::
 
 bundlerでsubpath asset URLが必要な場合は`new URL(..., import.meta.url)`で解決します。
 

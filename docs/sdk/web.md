@@ -43,13 +43,6 @@ import {
 | `soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM 코어 |
 | `soundtrace.js/hrtf/hrtf.bytes` | 기본 HRTF 데이터셋 |
 | `soundtrace.js/assets/soundMaterial.json` | 기본 사운드 재질 테이블 |
-| `soundtrace.js/assets/soundMaterialAlias.json` | 앱 레이어 자동 매핑용 alias 테이블 |
-
-:::info 배포물 기준
-SDK 배포 패키지에는 `STCoreV2` 서브모듈이나 C++ 풀소스가 포함되지 않습니다.
-브라우저 런타임에는 컴파일된 `exaSound.js`/`exaSound.wasm` 바이너리와 TypeScript
-wrapper, HRTF·material asset만 전달됩니다.
-:::
 
 번들러에서 서브패스 파일 URL이 필요할 때는 `new URL(..., import.meta.url)`로
 해결합니다.

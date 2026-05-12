@@ -40,11 +40,6 @@ import {
 | `soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM core |
 | `soundtrace.js/hrtf/hrtf.bytes` | default HRTF dataset |
 | `soundtrace.js/assets/soundMaterial.json` | default sound material table |
-| `soundtrace.js/assets/soundMaterialAlias.json` | app layer 自動 mapping 用 alias table |
-
-:::info 分發内容
-SDK 分發包不包含 `STCoreV2` 子模組或 C++ 完整源碼。瀏覽器 runtime 只提供编譯後的 `exaSound.js`/`exaSound.wasm` binary、TypeScript wrapper、HRTF 和 material asset。
-:::
 
 當 bundler 需要 subpath asset URL 時，用 `new URL(..., import.meta.url)` 解析。
 

@@ -40,11 +40,6 @@ The package includes the following runtime files.
 | `soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM core |
 | `soundtrace.js/hrtf/hrtf.bytes` | default HRTF dataset |
 | `soundtrace.js/assets/soundMaterial.json` | default sound material table |
-| `soundtrace.js/assets/soundMaterialAlias.json` | alias table for app-layer automatic mapping |
-
-:::info Distribution contents
-The SDK distribution package does not include the `STCoreV2` submodule or full C++ source. The browser runtime ships only the compiled `exaSound.js`/`exaSound.wasm` binaries, TypeScript wrapper, HRTF asset, and material assets.
-:::
 
 When a bundler needs file URLs for subpath assets, resolve them with `new URL(..., import.meta.url)`.
 
