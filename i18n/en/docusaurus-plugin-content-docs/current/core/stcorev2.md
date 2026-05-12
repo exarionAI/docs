@@ -18,7 +18,7 @@ STCoreV2 is the successor line to [STCore](./stcore.md). It is a C++ library tha
 | Platforms | macOS · Windows · Linux |
 | Web build | Emscripten support (`EMSCRIPTEN_KEEPALIVE` export) |
 | Accelerator | Built-in BVH **or** external callback such as a game engine BVH |
-| Max Path Depth | **64** (`EXA_MAX_DEPTH_LIMIT`) |
+| Max Path Depth | **16** (`EXA_MAX_DEPTH`) |
 | Tests | Google Test (unit + benchmark) |
 | Status | Active development |
 
@@ -169,7 +169,7 @@ exaSceneAddSource(sceneID, srcID);
 int listenerID = exaNewListener();
 exaListenerSetPosition(listenerID, -1.f, 1.f, 0.f);
 exaListenerSetRayCount(listenerID, 4096);
-exaListenerSetRayDepth(listenerID, 16);    // up to EXA_MAX_DEPTH = 64
+exaListenerSetRayDepth(listenerID, 16);    // up to EXA_MAX_DEPTH = 16
 exaSceneAddListener(sceneID, listenerID);
 
 // 6. Simulate and render audio each frame
@@ -232,9 +232,9 @@ Ray count and maximum reflection depth are configured per listener.
 | Function | Effect |
 |---|---|
 | `exaListenerSetRayCount(id, n)` | Set ray count |
-| `exaListenerSetRayDepth(id, d)` | Set maximum depth (`1 ≤ d ≤ EXA_MAX_DEPTH = 64`) |
+| `exaListenerSetRayDepth(id, d)` | Set maximum depth (`1 ≤ d ≤ EXA_MAX_DEPTH = 16`) |
 
-> **Note**: the old `EXA_MAX_DEPTH = 16` limit was expanded 4x to `EXA_MAX_DEPTH_LIMIT = 64` while keeping a backward-compatible alias.
+The current build caps path depth at `EXA_MAX_DEPTH = 16`.
 
 ### Diffuse Scattering Options
 

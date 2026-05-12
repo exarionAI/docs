@@ -26,7 +26,7 @@ import {
   SoundTrace,
   UpdateType,
   PathType,
-  defaultSTOption,
+  recommendedSTOption,
   type SoundMaterial,
   type Triangle,
 } from 'soundtrace.js';
@@ -53,8 +53,7 @@ const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.me
 ```ts
 import {
   SoundTrace,
-  UpdateType,
-  defaultSTOption,
+  recommendedSTOption,
   type Triangle,
   type SoundMaterial,
 } from 'soundtrace.js';
@@ -67,28 +66,28 @@ const sound = await SoundTrace.create(ctx, { thread: 'mt' });
 
 const listener = sound.createListener();
 const source = sound.createSource();
-const scene = sound.createScene().addListener(listener).addSource(source);
+const scene = sound.createScene().setListener(listener).addSource(source);
 
 await listener.setHRTFFromUrl(
   new URL('soundtrace.js/hrtf/hrtf.bytes', import.meta.url),
 );
 
 listener
-  .setOption(defaultSTOption())
+  .setOption(recommendedSTOption())
   .setAudioOption({
     sampleRate: ctx.sampleRate,
     inputSampleCount: 128,
     outputChannels: 2,
   })
   .setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])
-  .setRayCount(32, 32)
-  .setRayDepth(7)
+  .setRayCount(16, 16)
+  .setRayDepth(3)
   .setPosition(0, 0, 0);
 
 source
   .setIntensity(1)
-  .setDepth(4)
-  .setRayCount(64, 64)
+  .setDepth(3)
+  .setRayCount(16, 16)
   .setPosition(2, 0, -1);
 
 const material: SoundMaterial = {
@@ -111,15 +110,16 @@ const triangles: Triangle[] = [
   { a: 0, b: 2, c: 3, materialIndex: 0 },
 ];
 
-const mesh = sound.createMesh();
-mesh.setData(vertices, triangles, { bvhType: 0, bvhMaxDepth: 16, primPerLeaf: 4 });
+const floor = sound.createCollider({
+  vertices,
+  triangles,
+  bvhType: 0,
+  bvhMaxDepth: 16,
+  primPerLeaf: 4,
+});
+scene.addCollider(floor);
 
-const floor = sound.createObject().setMesh(mesh.id);
-floor.setUpdateType(UpdateType.Rebuild);
-scene.addObject(floor);
-
-scene.tick(0);
-scene.updatePropagation();
+scene.update(0);
 
 const spatialNode = await sound.createWorkletNode(listener, source, 2);
 const buffer = await fetch('/audio/music.mp3')
@@ -182,11 +182,11 @@ export default defineConfig({
 ## Scene 编写流程
 
 1. 用 `SoundTrace.create(ctx, options)` 加载 WASM core。
-2. 创建 `createScene()`, `createListener()`, `createSource()` 并加入 scene。
-3. 将 vertices、triangles、BVH options 传给 `createMesh()`。
-4. 给 `createObject()` 指定 mesh ID 和 transform，并加入 scene。
+2. 创建 `createScene()`, `createListener()`, `createSource()` 并加入 scene。listener 的基本模型是每个 scene 只有 1 个，因此使用 `scene.setListener(listener)`。
+3. 用 `createCollider()` 或 `createColliderFromThree()` 创建 sound collider，并加入 scene。
+4. 需要低层控制时，也可以直接创建 `createMesh()` 和 `createObject()`。
 5. 每帧更新移动的 source、listener、collider。
-6. 用 `scene.tick(dt)` 和 `scene.updatePropagation()` 更新传播结果。
+6. 用 `scene.update(dt)` 一次执行 `tick(dt)` 和 `updatePropagation()`。
 7. MT 中由 worklet render audio；ST 中可手动 pump `listener.render()` fallback。
 
 ## TypeScript API
@@ -203,6 +203,8 @@ export default defineConfig({
 | `createScene()` | 创建 `SoundScene` |
 | `createObject()` | 创建 `SoundObject` |
 | `createMesh()` | 创建 `SoundMesh` |
+| `createCollider(opts?)` | 创建同时拥有 `SoundMesh + SoundObject` 的 `SoundCollider` |
+| `createColliderFromThree(objectOrGeometry, opts?)` | 将 Three.js `Object3D`/`BufferGeometry` 转为 sound collider |
 | `createSource()` | 创建 `SoundSource` |
 | `createListener()` | 创建 `SoundListener`；listener ID 也作为 renderer handle |
 | `materials` | global material table wrapper |
@@ -224,10 +226,16 @@ export default defineConfig({
 | API | 说明 |
 |---|---|
 | `addObject(obj)`, `removeObject(obj)`, `clearObjects()` | 管理 sound collider |
+| `addCollider(collider)`, `removeCollider(collider)` | 连接/解除 `SoundCollider` RAII 对象 |
 | `addSource(src)`, `removeSource(src)`, `clearSources()` | 管理 source |
-| `addListener(listener)`, `removeListener(listener)` | 管理 listener |
+| `setListener(listener)` | 设置 scene 的单一 listener。已有 listener 时会替换 |
+| `addListener(listener)`, `removeListener(listener)` | 兼容用 listener API。添加第二个 listener 会抛出错误 |
+| `clearListeners()` | 解除当前 listener 连接 |
+| `update(dt)` | `tick(dt)` 后执行 `updatePropagation()` |
 | `tick(dt)` | 消费 object update type，并更新 TLAS/BVH state |
 | `updatePropagation()` | 执行 ray/path propagation |
+
+scene 中应只有一个 listener。即使 UI 管理多个 listener 候选，也请选出实际参与传播计算的一个，并用 `setListener()` 替换。
 
 ### `SoundObject` 与 `UpdateType`
 
@@ -251,12 +259,13 @@ export default defineConfig({
 |---|---|
 | `setData(vertices, triangles, opts?)` | 重新构建 geometry 与 BVH |
 | `updateVertices(vertices)` | 只更新 vertex buffer |
+| `updateVerticesAndRefit(vertices)` | 更新 vertex buffer 后执行 mesh refit |
 | `setMaterial(materialIndex)` | 修改全部 triangle 的 material |
 | `setMaterialRange(triStart, triCount, materialIndex)` | 修改部分 triangle 的 material |
 | `getBVHWireframe()` | 用于可视化 BVH leaf AABB 的 float array |
 | `intersect(sceneID, ray)` | 对 scene 中 sound mesh 执行 raycast |
 
-Web SDK 不把 BLAS refit/rebuild 暴露为单独的 mesh method。two-level BVH 同步通过 `SoundObject` 的 `UpdateType` flag 在 scene tick 中处理。若 topology、triangle list 或 BVH option 变化，请再次调用 `setData()`，并把已挂到 scene 的 object 标记为 `UpdateType.Rebuild`。
+two-level BVH 同步通过 `SoundObject` 的 `UpdateType` flag 在 scene tick 中处理。若 topology、triangle list 或 BVH option 变化，请再次调用 `setData()`，并把已挂到 scene 的 object 标记为 `UpdateType.Rebuild`。只有 vertex 变化的 animated collider 可使用 `updateVerticesAndRefit()` 或 `SoundCollider.refitVertices()`。
 
 `MeshBuildOptions`:
 
@@ -274,6 +283,28 @@ BVH 选择:
 | `LBVH` | `1` | **动态/skinned collider 必选**。vertex 每帧变化且需要 scene tick refit 路径的 mesh |
 
 `SpatialBuilder` 中仍有 `SBVH`, `WBVH` 等名称，但 Web SDK 的 `SoundMesh.setData()` 路径只连接了 `HKDtree` 和 `LBVH`。不要传其他值。
+
+### `SoundCollider`
+
+`SoundCollider` 是把 `SoundMesh` 和 `SoundObject` 绑在一起的上层 RAII 对象。对 Three.js 或 scene component 集成来说，它让 mesh、object、scene 连接共享同一个生命周期。
+
+| API | 说明 |
+|---|---|
+| `sound.createCollider(opts?)` | 从 `vertices`, `triangles` 和 BVH options 创建 collider |
+| `sound.createColliderFromThree(objectOrGeometry, opts?)` | 从 Three.js `Object3D` 或 `BufferGeometry` 创建 collider |
+| `scene.addCollider(collider)` | 将 collider object 加入 scene 并记录连接状态 |
+| `scene.removeCollider(collider)` | 从 scene 移除并清除连接状态 |
+| `collider.rebuild(vertices, triangles, opts?)` | 调用 `mesh.setData(...)` 后把 object 标记为 `UpdateType.Rebuild` |
+| `collider.refitVertices(vertices)` | 只更新 vertex，并把 object 标记为 `UpdateType.Refit` |
+| `collider.dispose()` | 一起清理 scene 连接、object 和 mesh |
+
+Three.js adapter 会读取 `BufferGeometry.groups[].materialIndex` 和 `mesh.material` slot，转换为 triangle 的 `materialIndex`。解析顺序如下：
+
+1. material 的 `userData.soundMaterialIndex` 或 `soundMaterialIndex`
+2. `materialMap` 中的 slot 编号、`slot:N`、material `name`、`uuid`、`type`
+3. 未匹配时使用 `defaultMaterialIndex`（默认 `0`）
+
+静态 collider 的默认 BVH 是 `HKDtree`；`dynamic: true` 或 skinned collider 的默认 BVH 是 `LBVH`。skinning animation 应保持 topology 不变，并在每帧调用 `collider.refitVertices(vertices)`。
 
 ### `SoundListener`
 
@@ -296,11 +327,15 @@ BVH 选择:
 
 `STOption` 参数:
 
-| 字段 | 默认值 | 最小/最大 | 为什么调整 |
+应用启动推荐使用 `recommendedSTOption()`。当前 ray budget 上限是
+`EXA_LISTENER_WIDTH = 32`, `EXA_LISTENER_HEIGHT = 32`, `EXA_MAX_DEPTH = 16`；
+runtime 推荐起点是 `16 × 16 × depth 3`。
+
+| 字段 | 推荐 preset | 最小/最大 | 为什么调整 |
 |---|---:|---:|---|
-| `maxDepth` | `16` | `1..16` | reflection/diffraction path 最大深度。越高越丰富，但成本随 `ray count × depth` 增加 |
-| `listenerWidth` | `32` | 推荐 `1..32`, hard cap `255` | horizontal ray resolution。demo 验证范围 `1..32` |
-| `listenerHeight` | `32` | 推荐 `1..32`, hard cap `255` | vertical ray resolution |
+| `maxDepth` | `3` | `1..16` | reflection/diffraction path 最大深度。越高越丰富，但成本随 `ray count × depth` 增加 |
+| `listenerWidth` | `16` | `1..32` | horizontal ray resolution |
+| `listenerHeight` | `16` | `1..32` | vertical ray resolution |
 | `seedValue` | `0` | `0..2^32-1` | random/cache seed。当前 C API 在 `0` 时会强制 `pathCacheSize` 为 `0` |
 | `maxSoundSource` | `116` | `1..116` | scene 中可追踪的 source 上限 |
 | `pathCacheSize` | `16384` | `0..16384` | path cache 容量。越大内存越多，`seedValue=0` 时禁用 |
@@ -331,8 +366,8 @@ BVH 选择:
 | `setGainBoostDb(db)` | overall gain boost。native clamp 到 `0..20 dB` |
 | `setReverbSendDb(db)` | reverb send。native clamp 到 `-60..20 dB` |
 | `setReflectionSendDb(db)` | reflection send。native clamp 到 `-60..20 dB` |
-| `setDepth(depth)` | source ray depth。demo 默认 `4`，实际使用推荐 `1..16` |
-| `setRayCount(width, height)` | source ray grid。demo 默认 `64 × 64` |
+| `setDepth(depth)` | source ray depth。起点 `3`，范围 `1..16` |
+| `setRayCount(width, height)` | source ray grid。起点 `16 × 16`，上限 `32 × 32` |
 | `setDistanceAttenuation(pathType, vec3)` | 每个 path type 的 distance attenuation curve |
 
 Path type:
@@ -553,6 +588,8 @@ Vite dev server 默认设置 COOP/COEP header，因此也能确认 MT mode。文
 
 three.js demo 按 **1 listener + 1 source** 配置，优先展示高质量和调试可见性。实际 app 中 gizmo 不是必需的。尤其绘制 valid path 和 BVH box 时，会把 WASM 内部数据复制到 JS 并重建为 Three.js geometry，因此会产生通信和可视化开销。建议只在开发中开启，runtime 发布时关闭。
 
+demo 是小场景，用于展示质量和可视化，因此 listener 从 `32 × 32 × depth 7` 开始，source 从 `64 × 64 × depth 4` 开始。一般 app 的起始推荐仍是 `16 × 16 × depth 3`。
+
 ## 故障排除
 
 | 症状 | 检查项 |
@@ -560,6 +597,7 @@ three.js demo 按 **1 listener + 1 source** 配置，优先展示高质量和调
 | MT 加载失败 | 确认 HTML 响应包含 COOP/COEP，且 `crossOriginIsolated` 为 `true` |
 | `createWorkletNode` error | 确认 `SoundTrace` 是用 `{ thread: 'mt' }` 创建 |
 | 没有声音 | 确认在用户点击中调用 `ctx.resume()`，`soundMaterial.json` 已加载到 material table，且 absorption array 没有误复制成与 reflection 相同 |
+| 听不到 reflection/diffraction/absorption 变化 | 没有 sound collider 时，scene 主要只产生 direct sound。请添加已映射 geometry 和 sound material 的 collider |
 | 感觉不到方向感 | 确认 HRTF asset (`hrtf.bytes`) 成功加载 |
 | 帧率下降 | 降低 `Ray Depth`, `Ray Width`, `Ray Height`。runtime 起始推荐 `16 × 16 × depth 3` |
 | mono input 无声 | SDK 将 worklet node channel count 固定为 `2`, `explicit`, `speakers`。手动创建 node 时也要使用相同设置 |

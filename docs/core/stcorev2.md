@@ -19,7 +19,7 @@ STCoreV2는 [STCore](./stcore.md)의 후속 라인으로, 메시·재질·청취
 | 플랫폼 | macOS · Windows · Linux |
 | Web 빌드 | Emscripten 지원 (`EMSCRIPTEN_KEEPALIVE` export) |
 | 가속기 | 내장 BVH **또는** External callback (게임 엔진 BVH 등) |
-| Max Path Depth | **64** (`EXA_MAX_DEPTH_LIMIT`) |
+| Max Path Depth | **16** (`EXA_MAX_DEPTH`) |
 | 테스트 | Google Test (unit + benchmark) |
 | 상태 | 활성 개발 |
 
@@ -174,7 +174,7 @@ exaSceneAddSource(sceneID, srcID);
 int listenerID = exaNewListener();
 exaListenerSetPosition(listenerID, -1.f, 1.f, 0.f);
 exaListenerSetRayCount(listenerID, 4096);
-exaListenerSetRayDepth(listenerID, 16);    // up to EXA_MAX_DEPTH = 64
+exaListenerSetRayDepth(listenerID, 16);    // up to EXA_MAX_DEPTH = 16
 exaSceneAddListener(sceneID, listenerID);
 
 // 6. 매 프레임 시뮬레이션 + 오디오 렌더
@@ -240,9 +240,9 @@ reflection = 1 - (absorption + transmission)
 | 함수 | 효과 |
 |---|---|
 | `exaListenerSetRayCount(id, n)` | 광선 수 설정 |
-| `exaListenerSetRayDepth(id, d)` | 최대 깊이 (`1 ≤ d ≤ EXA_MAX_DEPTH = 64`) |
+| `exaListenerSetRayDepth(id, d)` | 최대 깊이 (`1 ≤ d ≤ EXA_MAX_DEPTH = 16`) |
 
-> **Note**: 이전 `EXA_MAX_DEPTH = 16` 제한은 `EXA_MAX_DEPTH_LIMIT = 64`로 4배 확장됐습니다 (backward-compat alias 유지).
+현재 빌드의 path depth 상한은 `EXA_MAX_DEPTH = 16`입니다.
 
 ### Diffuse Scattering 옵션
 

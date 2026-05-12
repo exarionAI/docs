@@ -26,7 +26,7 @@ import {
   SoundTrace,
   UpdateType,
   PathType,
-  defaultSTOption,
+  recommendedSTOption,
   type SoundMaterial,
   type Triangle,
 } from 'soundtrace.js';
@@ -53,8 +53,7 @@ const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.me
 ```ts
 import {
   SoundTrace,
-  UpdateType,
-  defaultSTOption,
+  recommendedSTOption,
   type Triangle,
   type SoundMaterial,
 } from 'soundtrace.js';
@@ -67,28 +66,28 @@ const sound = await SoundTrace.create(ctx, { thread: 'mt' });
 
 const listener = sound.createListener();
 const source = sound.createSource();
-const scene = sound.createScene().addListener(listener).addSource(source);
+const scene = sound.createScene().setListener(listener).addSource(source);
 
 await listener.setHRTFFromUrl(
   new URL('soundtrace.js/hrtf/hrtf.bytes', import.meta.url),
 );
 
 listener
-  .setOption(defaultSTOption())
+  .setOption(recommendedSTOption())
   .setAudioOption({
     sampleRate: ctx.sampleRate,
     inputSampleCount: 128,
     outputChannels: 2,
   })
   .setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])
-  .setRayCount(32, 32)
-  .setRayDepth(7)
+  .setRayCount(16, 16)
+  .setRayDepth(3)
   .setPosition(0, 0, 0);
 
 source
   .setIntensity(1)
-  .setDepth(4)
-  .setRayCount(64, 64)
+  .setDepth(3)
+  .setRayCount(16, 16)
   .setPosition(2, 0, -1);
 
 const material: SoundMaterial = {
@@ -111,15 +110,16 @@ const triangles: Triangle[] = [
   { a: 0, b: 2, c: 3, materialIndex: 0 },
 ];
 
-const mesh = sound.createMesh();
-mesh.setData(vertices, triangles, { bvhType: 0, bvhMaxDepth: 16, primPerLeaf: 4 });
+const floor = sound.createCollider({
+  vertices,
+  triangles,
+  bvhType: 0,
+  bvhMaxDepth: 16,
+  primPerLeaf: 4,
+});
+scene.addCollider(floor);
 
-const floor = sound.createObject().setMesh(mesh.id);
-floor.setUpdateType(UpdateType.Rebuild);
-scene.addObject(floor);
-
-scene.tick(0);
-scene.updatePropagation();
+scene.update(0);
 
 const spatialNode = await sound.createWorkletNode(listener, source, 2);
 const buffer = await fetch('/audio/music.mp3')
@@ -182,11 +182,11 @@ export default defineConfig({
 ## Scene Authoring Flow
 
 1. Load the WASM core with `SoundTrace.create(ctx, options)`.
-2. Create `createScene()`, `createListener()`, and `createSource()`, then add them to the scene.
-3. Pass vertices, triangles, and BVH options to `createMesh()`.
-4. Assign the mesh ID and transform to `createObject()`, then add the object to the scene.
+2. Create `createScene()`, `createListener()`, and `createSource()`, then add them to the scene. A scene is modeled with one listener, so use `scene.setListener(listener)`.
+3. Create a sound collider with `createCollider()` or `createColliderFromThree()`, then add it to the scene.
+4. For lower-level control, you can still create `createMesh()` and `createObject()` directly.
 5. Update moving sources, listeners, and colliders each frame.
-6. Refresh propagation results with `scene.tick(dt)` and `scene.updatePropagation()`.
+6. Call `scene.update(dt)` to run `tick(dt)` and `updatePropagation()` together.
 7. In MT mode the worklet renders audio; in ST mode you can manually pump the `listener.render()` fallback.
 
 ## TypeScript API
@@ -203,6 +203,8 @@ export default defineConfig({
 | `createScene()` | create a `SoundScene` |
 | `createObject()` | create a `SoundObject` |
 | `createMesh()` | create a `SoundMesh` |
+| `createCollider(opts?)` | create a `SoundCollider` that owns a `SoundMesh + SoundObject` pair |
+| `createColliderFromThree(objectOrGeometry, opts?)` | convert a Three.js `Object3D` or `BufferGeometry` into a sound collider |
 | `createSource()` | create a `SoundSource` |
 | `createListener()` | create a `SoundListener`; the listener ID also acts as renderer handle |
 | `materials` | global material table wrapper |
@@ -224,10 +226,16 @@ export default defineConfig({
 | API | Description |
 |---|---|
 | `addObject(obj)`, `removeObject(obj)`, `clearObjects()` | manage sound colliders |
+| `addCollider(collider)`, `removeCollider(collider)` | attach/detach a `SoundCollider` RAII object |
 | `addSource(src)`, `removeSource(src)`, `clearSources()` | manage sound sources |
-| `addListener(listener)`, `removeListener(listener)` | manage listeners |
+| `setListener(listener)` | set the single listener for the scene. Replaces the previous listener if present |
+| `addListener(listener)`, `removeListener(listener)` | compatibility listener API. Adding a second listener throws |
+| `clearListeners()` | detach the current listener |
+| `update(dt)` | run `tick(dt)` and then `updatePropagation()` |
 | `tick(dt)` | consume object update types and update TLAS/BVH state |
 | `updatePropagation()` | execute ray/path propagation |
+
+A scene should contain one listener. If your UI exposes multiple listener candidates, choose the active one and replace it with `setListener()`.
 
 ### `SoundObject` and `UpdateType`
 
@@ -251,12 +259,13 @@ Use `Refit` when a **skinned animation is used as a sound collider**. In that ca
 |---|---|
 | `setData(vertices, triangles, opts?)` | build geometry and BVH from scratch |
 | `updateVertices(vertices)` | update only the vertex buffer |
+| `updateVerticesAndRefit(vertices)` | update the vertex buffer and refit the mesh |
 | `setMaterial(materialIndex)` | change material for all triangles |
 | `setMaterialRange(triStart, triCount, materialIndex)` | change material for a triangle range |
 | `getBVHWireframe()` | float array for visualizing BVH leaf AABBs |
 | `intersect(sceneID, ray)` | raycast against sound meshes in a scene |
 
-The Web SDK does not expose BLAS refit/rebuild as separate mesh methods. Two-level BVH synchronization is handled during scene tick through the `SoundObject` `UpdateType` flag. If topology, triangle list, or BVH options change, call `setData()` again and mark any object already attached to a scene as `UpdateType.Rebuild`.
+Two-level BVH synchronization is handled during scene tick through the `SoundObject` `UpdateType` flag. If topology, triangle list, or BVH options change, call `setData()` again and mark any object already attached to a scene as `UpdateType.Rebuild`. For animated colliders where only vertices change, use `updateVerticesAndRefit()` or `SoundCollider.refitVertices()`.
 
 `MeshBuildOptions`:
 
@@ -274,6 +283,28 @@ BVH selection:
 | `LBVH` | `1` | **Required for dynamic/skinned colliders** where vertices change every frame and the scene tick refit path is needed |
 
 Names such as `SBVH` and `WBVH` still exist in `SpatialBuilder`, but only `HKDtree` and `LBVH` are connected to the Web SDK `SoundMesh.setData()` path. Do not pass other values.
+
+### `SoundCollider`
+
+`SoundCollider` is a higher-level RAII object that owns a `SoundMesh` and `SoundObject` together. It is the preferred collider unit for Three.js and scene-component style integrations because the mesh, object, and scene attachment have one lifetime.
+
+| API | Description |
+|---|---|
+| `sound.createCollider(opts?)` | create a collider from `vertices`, `triangles`, and BVH options |
+| `sound.createColliderFromThree(objectOrGeometry, opts?)` | create a collider from a Three.js `Object3D` or `BufferGeometry` |
+| `scene.addCollider(collider)` | add the collider object to the scene and record the attachment |
+| `scene.removeCollider(collider)` | remove it from the scene and clear the attachment |
+| `collider.rebuild(vertices, triangles, opts?)` | call `mesh.setData(...)` and mark the object as `UpdateType.Rebuild` |
+| `collider.refitVertices(vertices)` | update only vertices and mark the object as `UpdateType.Refit` |
+| `collider.dispose()` | detach from the scene and dispose the object and mesh together |
+
+The Three.js adapter reads `BufferGeometry.groups[].materialIndex` and the `mesh.material` slot to produce triangle `materialIndex` values. Resolution order is:
+
+1. `material.userData.soundMaterialIndex` or `material.soundMaterialIndex`
+2. `materialMap` by slot number, `slot:N`, material `name`, `uuid`, or `type`
+3. `defaultMaterialIndex` when no match is found (`0` by default)
+
+Static colliders default to `HKDtree`; `dynamic: true` and skinned colliders default to `LBVH`. For skinned animation, keep topology stable and call `collider.refitVertices(vertices)` each frame.
 
 ### `SoundListener`
 
@@ -296,11 +327,15 @@ Names such as `SBVH` and `WBVH` still exist in `SpatialBuilder`, but only `HKDtr
 
 `STOption` parameters:
 
-| Field | Default | Min / max | Why tune it |
+Use `recommendedSTOption()` for application startup. The current ray-budget caps are
+`EXA_LISTENER_WIDTH = 32`, `EXA_LISTENER_HEIGHT = 32`, and `EXA_MAX_DEPTH = 16`;
+the recommended runtime starting point is `16 × 16 × depth 3`.
+
+| Field | Recommended preset | Min / max | Why tune it |
 |---|---:|---:|---|
-| `maxDepth` | `16` | `1..16` | Maximum depth for reflection/diffraction paths. Higher values sound richer but cost grows with `ray count × depth` |
-| `listenerWidth` | `32` | recommended `1..32`, hard cap `255` | Horizontal ray resolution. The demo validation range is `1..32` |
-| `listenerHeight` | `32` | recommended `1..32`, hard cap `255` | Vertical ray resolution |
+| `maxDepth` | `3` | `1..16` | Maximum depth for reflection/diffraction paths. Higher values sound richer but cost grows with `ray count × depth` |
+| `listenerWidth` | `16` | `1..32` | Horizontal ray resolution |
+| `listenerHeight` | `16` | `1..32` | Vertical ray resolution |
 | `seedValue` | `0` | `0..2^32-1` | Random/cache seed. The current C API forces `pathCacheSize` to `0` when this is `0` |
 | `maxSoundSource` | `116` | `1..116` | Maximum number of sources tracked in the scene |
 | `pathCacheSize` | `16384` | `0..16384` | Path cache capacity. Larger values use more memory; disabled when `seedValue=0` |
@@ -331,8 +366,8 @@ Avoid changing ray count and depth on every dragged pixel. In UI, applying them 
 | `setGainBoostDb(db)` | overall gain boost. Native clamps to `0..20 dB` |
 | `setReverbSendDb(db)` | reverb send. Native clamps to `-60..20 dB` |
 | `setReflectionSendDb(db)` | reflection send. Native clamps to `-60..20 dB` |
-| `setDepth(depth)` | source ray depth. Demo default is `4`; recommended real-use range is `1..16` |
-| `setRayCount(width, height)` | source ray grid. Demo default is `64 × 64` |
+| `setDepth(depth)` | source ray depth. Start at `3`; range is `1..16` |
+| `setRayCount(width, height)` | source ray grid. Start at `16 × 16`; cap is `32 × 32` |
 | `setDistanceAttenuation(pathType, vec3)` | distance attenuation curve per path type |
 
 Path type:
@@ -553,6 +588,8 @@ The Vite dev server sets COOP/COEP headers by default, so MT mode can also be te
 
 The three.js demo is configured for **1 listener + 1 source** and favors high quality and debugging visibility. Gizmos are not required in production apps. In particular, drawing valid paths and BVH boxes copies WASM internal data to JS and rebuilds it as Three.js geometry, so it introduces communication and visualization overhead. Enable it during development and disable it for runtime deployment.
 
+Because the demo is a small scene, it starts the listener at `32 × 32 × depth 7` and the source at `64 × 64 × depth 4` to show quality and visualization. The general app starting recommendation remains `16 × 16 × depth 3`.
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -560,6 +597,7 @@ The three.js demo is configured for **1 listener + 1 source** and favors high qu
 | MT load fails | Confirm the HTML response has COOP/COEP and `crossOriginIsolated` is `true` |
 | `createWorkletNode` error | Confirm `SoundTrace` was created with `{ thread: 'mt' }` |
 | No sound | Call `ctx.resume()` inside a user click, confirm `soundMaterial.json` loaded into the material table, and check that the absorption array was not accidentally copied identical to reflection |
+| Reflection/diffraction/absorption changes are not audible | Without a sound collider, the scene mainly produces direct sound. Add a collider with geometry and mapped sound materials |
 | Directionality feels missing | Confirm the HRTF asset (`hrtf.bytes`) loaded successfully |
 | Frame rate drops | Lower `Ray Depth`, `Ray Width`, and `Ray Height`. Recommended runtime starting point is `16 × 16 × depth 3` |
 | Mono input is silent | The SDK fixes the worklet node channel count to `2`, `explicit`, `speakers`. If you create the node manually, use the same settings |

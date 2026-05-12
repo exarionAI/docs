@@ -32,7 +32,7 @@ title: STCore vs STCoreV2
 | Ray Generation | `RGC` (Ray Generation Cluster) | `RGC` + リスナー別ray count/depth API |
 | 回折モデル | `UTDDiffraction` (Uniform Theory of Diffraction) | `UTDDiffraction` (Uniform Theory of Diffraction) |
 | 残響処理 | `ReverberationZoneManager` | **`StaticReverbModule`**。ReverbHitCollector + ReverbCoefficients |
-| Max Path Depth | プロジェクト設定 | **64** (`EXA_MAX_DEPTH_LIMIT`) |
+| Max Path Depth | プロジェクト設定 | **16** (`EXA_MAX_DEPTH`) |
 | 結果データ構造 | `PathPPV`, `PropagationPath` | `PathPPV`, `Primitive`, sorted IR data |
 
 ## 音響化 (Auralization)

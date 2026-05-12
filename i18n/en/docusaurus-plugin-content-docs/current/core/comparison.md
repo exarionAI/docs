@@ -33,7 +33,7 @@ For selection guidance, see [Recommended Use Cases](#recommended-use-cases).
 | Ray Generation | `RGC` (Ray Generation Cluster) | `RGC` + per-listener ray count/depth APIs |
 | Diffraction model | `UTDDiffraction` (Uniform Theory of Diffraction) | `UTDDiffraction` (Uniform Theory of Diffraction) |
 | Reverb | `ReverberationZoneManager` | **`StaticReverbModule`** as a separate module, ReverbHitCollector + ReverbCoefficients |
-| Max Path Depth | Project setting | **64** (`EXA_MAX_DEPTH_LIMIT`) |
+| Max Path Depth | Project setting | **16** (`EXA_MAX_DEPTH`) |
 | Result data structures | `PathPPV`, `PropagationPath` | `PathPPV`, `Primitive`, sorted IR data |
 
 ## Auralization
