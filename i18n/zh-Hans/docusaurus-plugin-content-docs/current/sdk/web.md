@@ -606,6 +606,38 @@ demo 是小场景，用于展示质量和可视化，因此 listener 从 `32 × 
 | animation collider 抖动 | 确认流程为 `LBVH`, `updateVertices()`, `object.setUpdateType(UpdateType.Refit)`, `scene.tick()` |
 | 修改 BVH option 后 crash | `mesh.setData()` 后，把 object 标记为 `UpdateType.Rebuild` 并执行 `scene.tick()` |
 
+### FAQ: 声音只从一侧播放
+
+本节面向 `soundtrace.js` 模块用户，尤其是把 SDK 接入现有 Web Audio app，或为新
+web app 构建 audio graph 时遇到的问题。典型症状是：有声音，但偏向一侧；
+HRTF/空间音频感觉不明显；移动 source 时方向变化也很弱。
+
+这个问题通常不是 STCoreV2 core 本身，而是初始化顺序、HRTF 加载检查遗漏，或 app 侧
+channel routing 引起的。示例和最近的修复中，下面这些点最关键。
+
+实现时最容易遗漏的是下面几点。
+
+- `soundtrace.js` 的 real-time HRTF 输出不是硬件 5.1/7.1 bus，而是 `2` channel binaural/stereo render target。即使实现 speaker layout，每个 speaker 也是 virtual source，最终输出仍会混合为 stereo。
+- 如果手动创建 `AudioWorkletNode`，但省略 `outputChannelCount: [2]`，1-output/1-input worklet 的初始 channel count 可能是 `1`。SDK 的 `createWorkletNode()` 会固定 `channelCount = 2`、`channelCountMode = 'explicit'`、`channelInterpretation = 'speakers'` 来避免这个问题。
+- 在 ST fallback 中直接调用 `listener.render()` 时，`channelCount` 必须是 `2`，输入 buffer 长度必须是 `frames * 2` 的 interleaved sample 数。只传 frame 数或 mono buffer 会违反 engine 的 mono-mix/render-buffer 契约。
+- 在创建多个 virtual speaker source 的 app 中，不要假设浏览器会自动按 speaker 分配 channel。app 必须为每个 source 显式设置 left/right/mix routing。
+
+检查清单:
+
+1. **确认正在使用 SDK wrapper。** 不要只手动加载 WASM 文件。应从 `soundtrace.js` 模块导入 `SoundTrace`、`SoundListener`、`createWorkletNode`、`recommendedSTOption`、`PathType` 等 API。
+2. **在用户点击中立即调用 `AudioContext.resume()`。** 如果等 WASM、HRTF、audio fetch 之后才调用 `resume()`，浏览器 autoplay policy 可能让 context 一直保持 `suspended`。参考示例，在 click handler 前半段创建 `const resumeP = ctx.resume()`，最后再 `await resumeP`。
+3. **必须检查 HRTF 加载结果。** 调用 `listener.setHRTFFromUrl(...)` 或 `setHRTFFromMemory(...)` 后，如果结果是 `false`，不要继续播放。同时记录 `hrtf.bytes` 在 bundler 或 static host 中是否真的可访问。
+4. **listener audio option 要匹配真实 context。** `sampleRate` 使用 `ctx.sampleRate`，当前 real-time HRTF path 的 `outputChannels` 使用 `2`。MT worklet 的 `inputSampleCount` 使用 `128`；ST fallback 则要与 app 的 render block size 一致。
+5. **从示例的 listener option/orientation 开始。** 使用 `listener.setOption(recommendedSTOption())`、`listener.setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])`、`listener.setPosition(...)`。如果改变 three.js 坐标基准，source position/direction 也要按同一基准更新。
+6. **先设置 material table 和 collider。** 把 `soundMaterial.json` 加入 material table，并在 scene 中添加 sound collider 后再连接 listener/source。没有 collider 时主要是 direct sound，空间变化会比较弱。
+7. **custom Web Audio graph 中显式设置 stereo。** SDK 的 `createWorkletNode()` 会设置 `channelCount = 2`、`channelCountMode = 'explicit'`、`channelInterpretation = 'speakers'`。如果手动创建 node，或组合独立 graph，也要给 input hub、splitter、merger、worklet/input node 设置相同选项。
+8. **用多个 sound source 实现 speaker layout 时，显式路由 channel。** 不要把同一个 stereo input 隐式连接到所有 source。例如 `L/LS/SL/BL` 系 source 接收 left channel 并复制到左右 input frame，`R/RS/SR/BR` 系 source 接收 right channel，`C/LFE/Mono` 使用 `(L + R) * 0.5` mono mix。
+9. **重新播放前完整清理 graph。** 断开旧的 `MediaElementAudioSourceNode`、`AudioBufferSourceNode`、splitter、merger 和 gain node，再创建新的 source graph，只把 soundtrace output 接到 master/destination。
+10. **第一个 audio block 前预热 propagation。** listener、source、collider 配置完成后，调用一次 `scene.tick(0)` 和 `scene.updatePropagation()`，准备初始 path state。
+
+因此在判断 SDK core 有问题前，先检查 HRTF load、AudioContext resume timing、
+audio option、channel routing 和 graph lifecycle。
+
 ## 参考
 
 - [SDK 概览](./overview.md)

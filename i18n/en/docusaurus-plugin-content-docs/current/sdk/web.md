@@ -606,6 +606,40 @@ Because the demo is a small scene, it starts the listener at `32 × 32 × depth 
 | Animated collider jumps | Confirm the flow is `LBVH`, `updateVertices()`, `object.setUpdateType(UpdateType.Refit)`, then `scene.tick()` |
 | Crash after changing BVH options | After `mesh.setData()`, mark the object as `UpdateType.Rebuild` and run `scene.tick()` |
 
+### FAQ: sound plays from only one side
+
+This section is for `soundtrace.js` module users who attach the SDK to an
+existing Web Audio app or build a new web app audio graph. The symptom is that
+audio is audible, but it leans to one side, HRTF/spatialization does not feel
+alive, and moving the source produces little directional change.
+
+This is usually caused by initialization order, missing HRTF checks, or
+application-level channel routing rather than the STCoreV2 core itself. The
+examples and recent fixes point to the checklist below.
+
+The points that are easiest to miss during implementation are:
+
+- The real-time HRTF output of `soundtrace.js` is not a hardware 5.1/7.1 bus. It is a `2` channel binaural/stereo render target. A speaker layout still means virtual sources summed to stereo.
+- If you create an `AudioWorkletNode` manually and omit `outputChannelCount: [2]`, a 1-output/1-input worklet can start with channel count `1`. The SDK `createWorkletNode()` avoids this by pinning `channelCount = 2`, `channelCountMode = 'explicit'`, and `channelInterpretation = 'speakers'`.
+- In ST fallback code that calls `listener.render()` directly, pass `channelCount = 2` and an interleaved input buffer whose length is `frames * 2`. Passing only the frame count or a mono buffer violates the engine's mono-mix/render-buffer contract.
+- When an app creates several virtual speaker sources, the browser will not split channels by speaker for you. The app must explicitly route left/right/mix input per source.
+
+Checklist:
+
+1. **Confirm that the SDK wrapper is used.** Do not load only the WASM files by hand. Import `SoundTrace`, `SoundListener`, `createWorkletNode`, `recommendedSTOption`, `PathType`, and related APIs from the `soundtrace.js` module.
+2. **Call `AudioContext.resume()` immediately inside a user click.** If `resume()` is delayed until after WASM, HRTF, or audio fetches, browser autoplay policy can leave the context `suspended`. Follow the example pattern: create `const resumeP = ctx.resume()` near the start of the click handler and `await resumeP` near the end.
+3. **Always check the HRTF load result.** After `listener.setHRTFFromUrl(...)` or `setHRTFFromMemory(...)`, stop playback if the result is `false`. Also log that `hrtf.bytes` is reachable from the bundler or static host.
+4. **Match listener audio options to the real context.** Use `ctx.sampleRate` for `sampleRate` and `2` for `outputChannels` on the current real-time HRTF path. Use `128` for MT worklet `inputSampleCount`; for ST fallback, match the app's render block size.
+5. **Start with the example listener option and orientation.** Use `listener.setOption(recommendedSTOption())`, `listener.setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])`, and `listener.setPosition(...)`. If the three.js coordinate basis changes, update source position and direction using the same basis.
+6. **Load materials and colliders before judging spatial behavior.** Add `soundMaterial.json` to the material table and attach a sound collider to the scene before connecting listener/source. Without a collider, the scene is mostly direct sound, so spatial changes can feel weak.
+7. **Set stereo node options explicitly in custom Web Audio graphs.** `createWorkletNode()` sets `channelCount = 2`, `channelCountMode = 'explicit'`, and `channelInterpretation = 'speakers'`. If you build nodes manually or compose a separate graph, set the same options on the input hub, splitter, merger, and worklet/input nodes.
+8. **Route channels explicitly when a speaker layout uses multiple sound sources.** Do not implicitly connect the same stereo input to every source. For example, `L/LS/SL/BL` sources should receive the left channel duplicated to both input frames, `R/RS/SR/BR` should receive the right channel duplicated, and `C/LFE/Mono` should receive `(L + R) * 0.5`.
+9. **Fully clean up the graph before replay.** Disconnect old `MediaElementAudioSourceNode`, `AudioBufferSourceNode`, splitter, merger, and gain nodes. Then build a fresh source graph and connect only the soundtrace output to master/destination.
+10. **Prime propagation before the first audio block.** After listener, source, and collider setup, call `scene.tick(0)` and `scene.updatePropagation()` once to prepare the initial path state.
+
+Before blaming the SDK core for one-sided sound, check HRTF load,
+AudioContext resume timing, audio options, channel routing, and graph lifecycle.
+
 ## References
 
 - [SDK Overview](./overview.md)

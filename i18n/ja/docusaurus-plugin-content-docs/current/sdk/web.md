@@ -606,6 +606,39 @@ demoは小さなsceneで品質と可視化を見せるため、listenerを`32 ×
 | animation colliderが跳ねる | `LBVH`, `updateVertices()`, `object.setUpdateType(UpdateType.Refit)`, `scene.tick()`の流れか確認 |
 | BVH option変更後にcrash | `mesh.setData()`後、objectに`UpdateType.Rebuild`を設定し`scene.tick()`を実行 |
 
+### FAQ: 音が片側だけから聞こえる
+
+この項目は、`soundtrace.js` moduleを既存のWeb Audio appへ追加したり、新しいweb appの
+audio graphを構成したりする時によく出る症状を扱います。音は出ているが片側へ寄って
+聞こえ、HRTFやspatializationの感触が弱く、sourceを動かしても方向変化があまり感じられない場合です。
+
+この症状は通常、STCoreV2 coreそのものではなく、初期化順序、HRTF load確認漏れ、
+またはapp側channel routingから始まります。exampleと最近の修正では、次の項目が
+重要なcheck pointです。
+
+実装時に特に見落としやすい点は次のとおりです。
+
+- `soundtrace.js`のreal-time HRTF出力はhardware 5.1/7.1 busではなく、`2` channelのbinaural/stereo render targetです。speaker layoutを作っても、各speakerはvirtual sourceで、最終出力はstereoに合算されます。
+- `AudioWorkletNode`を手動で作り、`outputChannelCount: [2]`を省略すると、1-output/1-input workletの初期channel countが`1`になることがあります。SDKの`createWorkletNode()`はこれを避けるため、`channelCount = 2`, `channelCountMode = 'explicit'`, `channelInterpretation = 'speakers'`を固定します。
+- ST fallbackで`listener.render()`を直接呼ぶ場合、`channelCount`は`2`、入力buffer長は`frames * 2`のinterleaved sample数にします。frame数だけ、またはmono bufferを渡すとengineのmono-mix/render-buffer契約とずれます。
+- 複数virtual speaker sourceを作る場合、browserがspeaker別にchannelを自動分配すると仮定してはいけません。app側でsourceごとにleft/right/mix routingを明示します。
+
+チェックリスト:
+
+1. **SDK wrapperを使っているか確認します。** WASM fileだけを直接loadせず、`SoundTrace`, `SoundListener`, `createWorkletNode`, `recommendedSTOption`, `PathType`などを`soundtrace.js` moduleからimportします。
+2. **`AudioContext.resume()`をuser click内で即時呼びます。** WASM、HRTF、audio fetch後まで`resume()`を遅らせると、browser autoplay policyでcontextが`suspended`のままになることがあります。exampleと同じくclick handlerの前半で`const resumeP = ctx.resume()`を作り、最後に`await resumeP`で確認します。
+3. **HRTF load結果を必ず検査します。** `listener.setHRTFFromUrl(...)`または`setHRTFFromMemory(...)`後、結果が`false`なら再生を進めません。`hrtf.bytes`がbundlerまたはstatic hostから実際に到達できるかもlogします。
+4. **listener audio optionを実際のcontextと合わせます。** `sampleRate`は`ctx.sampleRate`、現在のreal-time HRTF pathでは`outputChannels`は`2`です。MT workletの`inputSampleCount`は`128`、ST fallbackではappのrender block sizeと一致させます。
+5. **exampleと同じlistener option/orientationから始めます。** `listener.setOption(recommendedSTOption())`, `listener.setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])`, `listener.setPosition(...)`を使います。three.js座標基準を変えた場合、source position/directionも同じ基準で更新します。
+6. **material tableとcolliderを先に構成します。** `soundMaterial.json`をmaterial tableへ入れ、sceneにsound colliderを追加してからlistener/sourceを接続します。colliderがない場合はdirect sound中心になり、spatial changeが弱く感じられます。
+7. **custom Web Audio graphではstereo設定を明示します。** SDKの`createWorkletNode()`は`channelCount = 2`, `channelCountMode = 'explicit'`, `channelInterpretation = 'speakers'`を設定します。手動nodeや別graphを組む場合はinput hub、splitter、merger、worklet/input nodeにも同じ設定を明示します。
+8. **複数sound sourceでspeaker layoutを作る場合はchannelを直接routingします。** 同じstereo inputを全sourceへ暗黙接続しないでください。`L/LS/SL/BL`系sourceはleft channelを両input frameへ複製し、`R/RS/SR/BR`系sourceはright channelを複製し、`C/LFE/Mono`は`(L + R) * 0.5` mono mixを使います。
+9. **再生をやり直す時はgraphを完全に整理します。** 古い`MediaElementAudioSourceNode`, `AudioBufferSourceNode`, splitter, merger, gain nodeをdisconnectし、新しいsource graphを作ってsoundtrace outputだけをmaster/destinationへ接続します。
+10. **最初のaudio block前にpropagationを準備します。** listener、source、collider構成直後に`scene.tick(0)`と`scene.updatePropagation()`を一度呼び、初期path stateを作ります。
+
+片側再生をSDK coreの問題と見る前に、HRTF load、AudioContext resume timing、
+audio option、channel routing、graph lifecycleを確認してください。
+
 ## 参考
 
 - [SDK概要](./overview.md)
