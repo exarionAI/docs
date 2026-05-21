@@ -507,7 +507,7 @@ for (const m of _soundMaterials) {
 <iframe
   title="soundtrace.js three.js static single-thread demo"
   src={useBaseUrl('/demos/three-basic/?thread=st')}
-  style={{display: 'block', width: '85%', height: '540px', margin: '0 auto', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}}
+  style={{display: 'block', width: '76.5%', height: '486px', margin: '0 auto', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}}
   allow="autoplay; fullscreen"
 />
 
@@ -528,7 +528,7 @@ npm install
 npm run build
 
 cd /Users/ethanjung/dev/docs
-rsync -a --delete --exclude '.DS_Store' \
+rsync -a --delete --exclude '.DS_Store' --exclude '*.zip' \
   /Users/ethanjung/dev/soundtrace.js/examples/three-basic/dist/ \
   static/demos/three-basic/
 
