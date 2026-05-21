@@ -109,7 +109,7 @@ The public interface is a C linkage API (`exasoundC.h`, **about 120 exports**).
 | Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
 | SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity` |
 | Listener (basic) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
-| Listener (HRTF) | `exaListenerSetHRTFFromFile/Memory` |
+| Listener (HRTF) | `exaInit` loads the default HRTF once; listener renderers share it |
 | Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
 | Results | `exaGetValidPathCount`, `exaGetValidPaths`, `exaGetSortedIRDatas` |
 | Diagnostics/visualization | `exaPropagatorGetGuidePlanes/MirrorPositions`, `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot`, `exaGetLastError` |
@@ -252,8 +252,9 @@ The current build caps path depth at `EXA_MAX_DEPTH = 16`.
 ### HRTF
 
 ```c
-exaListenerSetHRTFFromFile(listenerID, "/path/to/hrtf");
-exaListenerSetHRTFFromMemory(listenerID, dataPtr, dataSize);
+exaInit();        // loads the embedded default HRTF once
+exaNewListener(); // renderer starts with the engine default HRTF
+exaReset();       // releases renderer state and the default HRTF
 ```
 
 ### Querying Results

@@ -41,8 +41,8 @@ For selection guidance, see [Recommended Use Cases](#recommended-use-cases).
 | Area | STCore | STCoreV2 |
 |---|---|---|
 | Module | `Auralization/` (Attenuation, FrequencyPartition, FrequencyResponse, PropagationPath, HRTF) | **`auralizator/`** (core, frequence, filter, HRTF, states) |
-| HRTF | `HRTF.h` + MIT HRTF library | `HRTF.h` + external HRTF file/memory load APIs |
-| HRTF loading API | Direct library calls | `exaListenerSetHRTFFromFile/Memory` |
+| HRTF | `HRTF.h` + MIT HRTF library | embedded default HRTF + engine lifecycle ownership |
+| HRTF loading API | Direct library calls | loaded by `exaInit`, released by `exaReset` |
 | Frequency partitioning | `FrequencyPartition` | `frequence/` (FrequencyBandResponse, etc.) |
 | Convolution | `Auralizator` | `filter/` (FilterChain, IRConvolver) |
 

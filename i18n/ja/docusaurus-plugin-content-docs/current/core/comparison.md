@@ -40,8 +40,8 @@ title: STCore vs STCoreV2
 | 区分 | STCore | STCoreV2 |
 |---|---|---|
 | モジュール | `Auralization/` | **`auralizator/`** (core, frequence, filter, HRTF, states) |
-| HRTF | `HRTF.h` + MIT HRTF library | `HRTF.h` + 外部HRTFファイル/メモリロードAPI |
-| HRTFロードAPI | 直接ライブラリ呼び出し | `exaListenerSetHRTFFromFile/Memory` |
+| HRTF | `HRTF.h` + MIT HRTF library | embedded default HRTF + engine lifecycle ownership |
+| HRTFロードAPI | 直接ライブラリ呼び出し | `exaInit`でload、`exaReset`で解放 |
 | 周波数分割 | `FrequencyPartition` | `frequence/` (FrequencyBandResponseなど) |
 | コンボリューション | `Auralizator` | `filter/` (FilterChain, IRConvolver) |
 

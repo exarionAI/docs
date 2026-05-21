@@ -114,7 +114,7 @@ C 링키지 API (`exasoundC.h`, **약 120개 export**)로 공개됩니다.
 | Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
 | SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity` |
 | Listener (기본) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
-| Listener (HRTF) | `exaListenerSetHRTFFromFile/Memory` |
+| Listener (HRTF) | `exaInit`에서 default HRTF를 전역 1회 로드하고 listener renderer가 공유 |
 | Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
 | 결과 조회 | `exaGetValidPathCount`, `exaGetValidPaths`, `exaGetSortedIRDatas` |
 | 진단·시각화 | `exaPropagatorGetGuidePlanes/MirrorPositions`, `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot`, `exaGetLastError` |
@@ -260,8 +260,9 @@ reflection = 1 - (absorption + transmission)
 ### HRTF
 
 ```c
-exaListenerSetHRTFFromFile(listenerID, "/path/to/hrtf");
-exaListenerSetHRTFFromMemory(listenerID, dataPtr, dataSize);
+exaInit();        // loads the embedded default HRTF once
+exaNewListener(); // renderer starts with the engine default HRTF
+exaReset();       // releases renderer state and the default HRTF
 ```
 
 ### 결과 조회

@@ -109,7 +109,7 @@ C linkage API (`exasoundC.h`, **約120 export**) として公開されます。
 | Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
 | SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity` |
 | Listener (basic) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
-| Listener (HRTF) | `exaListenerSetHRTFFromFile/Memory` |
+| Listener (HRTF) | `exaInit`でdefault HRTFを一度loadし、listener rendererが共有 |
 | Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
 | 結果取得 | `exaGetValidPathCount`, `exaGetValidPaths`, `exaGetSortedIRDatas` |
 | 診断・可視化 | `exaPropagatorGetGuidePlanes/MirrorPositions`, `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot`, `exaGetLastError` |
@@ -252,8 +252,9 @@ reflection = 1 - (absorption + transmission)
 ### HRTF
 
 ```c
-exaListenerSetHRTFFromFile(listenerID, "/path/to/hrtf");
-exaListenerSetHRTFFromMemory(listenerID, dataPtr, dataSize);
+exaInit();        // embedded default HRTFを一度load
+exaNewListener(); // rendererはengine default HRTFで開始
+exaReset();       // renderer stateとdefault HRTFを解放
 ```
 
 ### 結果取得

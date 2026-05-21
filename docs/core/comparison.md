@@ -41,8 +41,8 @@ title: STCore vs STCoreV2
 | 구분 | STCore | STCoreV2 |
 |---|---|---|
 | 모듈 | `Auralization/` (Attenuation, FrequencyPartition, FrequencyResponse, PropagationPath, HRTF) | **`auralizator/`** (core, frequence, filter, HRTF, states) |
-| HRTF | `HRTF.h` + MIT HRTF library | `HRTF.h` + 외부 HRTF 파일/메모리 로드 API |
-| HRTF 로딩 API | (직접 라이브러리 호출) | `exaListenerSetHRTFFromFile/Memory` |
+| HRTF | `HRTF.h` + MIT HRTF library | embedded default HRTF + engine lifecycle ownership |
+| HRTF 로딩 API | (직접 라이브러리 호출) | `exaInit`에서 전역 로드, `exaReset`에서 해제 |
 | 주파수 분할 | `FrequencyPartition` | `frequence/` (FrequencyBandResponse 등) |
 | 컨볼루션 | `Auralizator` | `filter/` (FilterChain, IRConvolver) |
 

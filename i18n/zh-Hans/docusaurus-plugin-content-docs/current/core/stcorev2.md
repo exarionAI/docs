@@ -109,7 +109,7 @@ exaSound/
 | Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
 | SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity` |
 | Listener (basic) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
-| Listener (HRTF) | `exaListenerSetHRTFFromFile/Memory` |
+| Listener (HRTF) | `exaInit` 加载一次 default HRTF，listener renderer 共享 |
 | Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
 | 结果查询 | `exaGetValidPathCount`, `exaGetValidPaths`, `exaGetSortedIRDatas` |
 | 诊断/可视化 | `exaPropagatorGetGuidePlanes/MirrorPositions`, `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot`, `exaGetLastError` |
@@ -252,8 +252,9 @@ reflection = 1 - (absorption + transmission)
 ### HRTF
 
 ```c
-exaListenerSetHRTFFromFile(listenerID, "/path/to/hrtf");
-exaListenerSetHRTFFromMemory(listenerID, dataPtr, dataSize);
+exaInit();        // 加载内嵌 default HRTF 一次
+exaNewListener(); // renderer 使用 engine default HRTF 启动
+exaReset();       // 释放 renderer state 和 default HRTF
 ```
 
 ### 结果查询

@@ -38,13 +38,15 @@ The package includes the following runtime files.
 |---|---|
 | `soundtrace.js/core/st/exaSound.js`, `.wasm` | single-thread WASM core |
 | `soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM core |
-| `soundtrace.js/hrtf/hrtf.bytes` | default HRTF dataset |
 | `soundtrace.js/assets/soundMaterial.json` | default sound material table |
+
+The default HRTF is not distributed as a separate file. `SoundTrace.create()`
+calls native `exaInit()`, which loads the embedded default HRTF once and shares
+it across listeners/renderers created afterward.
 
 When a bundler needs file URLs for subpath assets, resolve them with `new URL(..., import.meta.url)`.
 
 ```ts
-const hrtfUrl = new URL('soundtrace.js/hrtf/hrtf.bytes', import.meta.url);
 const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.meta.url);
 ```
 
@@ -67,10 +69,6 @@ const sound = await SoundTrace.create(ctx, { thread: 'mt' });
 const listener = sound.createListener();
 const source = sound.createSource();
 const scene = sound.createScene().setListener(listener).addSource(source);
-
-await listener.setHRTFFromUrl(
-  new URL('soundtrace.js/hrtf/hrtf.bytes', import.meta.url),
-);
 
 listener
   .setOption(recommendedSTOption())
@@ -318,8 +316,6 @@ Static colliders default to `HKDtree`; `dynamic: true` and skinned colliders def
 | `setPathEnable(pathType, enabled)` | enable/disable direct/reflection/diffraction/reverb/transmission |
 | `setRayCount(width, height)` | listener guide ray grid size |
 | `setRayDepth(depth)` | maximum path depth |
-| `setHRTFFromUrl(url)` | fetch and apply an HRTF file |
-| `setHRTFFromMemory(buffer)` | apply HRTF binary data directly |
 | `render(sourceID, input, output, channelCount)` | manual ST fallback render |
 | `setMaxDelay(sourceID, v)` | maximum delay line length |
 | `setPathFadeTime(sourceID, v)` | cross-fade time for path changes |
@@ -545,7 +541,7 @@ The Vite dev server sets COOP/COEP headers by default, so MT mode can also be te
 | `Room` | select the material for the full room collider |
 | `Collider` | select the material for the static wall and Flair collider |
 | `Thread` | choose `Single` or `Multi` before starting. If MT is unavailable, it automatically locks to ST |
-| `Start Audio` | load WASM, materials, HRTF, and MP3, then start audio. A user click is required by browser autoplay policy |
+| `Start Audio` | load WASM, materials, and MP3, then start audio. The default HRTF is applied by native initialization |
 | `Move` / `Stop` | move the source along an elliptical path in the room, or stop it at its current position |
 | `Wall: On/Off` | add or remove the static wall collider near the listener |
 | `Flair: On/Off` | add or remove the FBX skinned animation collider |
@@ -598,7 +594,7 @@ Because the demo is a small scene, it starts the listener at `32 × 32 × depth 
 | `createWorkletNode` error | Confirm `SoundTrace` was created with `{ thread: 'mt' }` |
 | No sound | Call `ctx.resume()` inside a user click, confirm `soundMaterial.json` loaded into the material table, and check that the absorption array was not accidentally copied identical to reflection |
 | Reflection/diffraction/absorption changes are not audible | Without a sound collider, the scene mainly produces direct sound. Add a collider with geometry and mapped sound materials |
-| Directionality feels missing | Confirm the HRTF asset (`hrtf.bytes`) loaded successfully |
+| Directionality feels missing | Confirm listener audio options, orientation, source/listener positions, and collider/material setup |
 | Frame rate drops | Lower `Ray Depth`, `Ray Width`, and `Ray Height`. Recommended runtime starting point is `16 × 16 × depth 3` |
 | Mono input is silent | The SDK fixes the worklet node channel count to `2`, `explicit`, `speakers`. If you create the node manually, use the same settings |
 | Path gizmo looks like it leaves trails | Use only the actual count returned by `getValidPaths()` |
@@ -613,7 +609,7 @@ existing Web Audio app or build a new web app audio graph. The symptom is that
 audio is audible, but it leans to one side, HRTF/spatialization does not feel
 alive, and moving the source produces little directional change.
 
-This is usually caused by initialization order, missing HRTF checks, or
+This is usually caused by initialization order, audio options, or
 application-level channel routing rather than the STCoreV2 core itself. The
 examples and recent fixes point to the checklist below.
 
@@ -627,18 +623,17 @@ The points that are easiest to miss during implementation are:
 Checklist:
 
 1. **Confirm that the SDK wrapper is used.** Do not load only the WASM files by hand. Import `SoundTrace`, `SoundListener`, `createWorkletNode`, `recommendedSTOption`, `PathType`, and related APIs from the `soundtrace.js` module.
-2. **Call `AudioContext.resume()` immediately inside a user click.** If `resume()` is delayed until after WASM, HRTF, or audio fetches, browser autoplay policy can leave the context `suspended`. Follow the example pattern: create `const resumeP = ctx.resume()` near the start of the click handler and `await resumeP` near the end.
-3. **Always check the HRTF load result.** After `listener.setHRTFFromUrl(...)` or `setHRTFFromMemory(...)`, stop playback if the result is `false`. Also log that `hrtf.bytes` is reachable from the bundler or static host.
-4. **Match listener audio options to the real context.** Use `ctx.sampleRate` for `sampleRate` and `2` for `outputChannels` on the current real-time HRTF path. Use `128` for MT worklet `inputSampleCount`; for ST fallback, match the app's render block size.
-5. **Start with the example listener option and orientation.** Use `listener.setOption(recommendedSTOption())`, `listener.setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])`, and `listener.setPosition(...)`. If the three.js coordinate basis changes, update source position and direction using the same basis.
-6. **Load materials and colliders before judging spatial behavior.** Add `soundMaterial.json` to the material table and attach a sound collider to the scene before connecting listener/source. Without a collider, the scene is mostly direct sound, so spatial changes can feel weak.
-7. **Set stereo node options explicitly in custom Web Audio graphs.** `createWorkletNode()` sets `channelCount = 2`, `channelCountMode = 'explicit'`, and `channelInterpretation = 'speakers'`. If you build nodes manually or compose a separate graph, set the same options on the input hub, splitter, merger, and worklet/input nodes.
-8. **Route channels explicitly when a speaker layout uses multiple sound sources.** Do not implicitly connect the same stereo input to every source. For example, `L/LS/SL/BL` sources should receive the left channel duplicated to both input frames, `R/RS/SR/BR` should receive the right channel duplicated, and `C/LFE/Mono` should receive `(L + R) * 0.5`.
-9. **Fully clean up the graph before replay.** Disconnect old `MediaElementAudioSourceNode`, `AudioBufferSourceNode`, splitter, merger, and gain nodes. Then build a fresh source graph and connect only the soundtrace output to master/destination.
-10. **Prime propagation before the first audio block.** After listener, source, and collider setup, call `scene.tick(0)` and `scene.updatePropagation()` once to prepare the initial path state.
+2. **Call `AudioContext.resume()` immediately inside a user click.** If `resume()` is delayed until after WASM or audio fetches, browser autoplay policy can leave the context `suspended`. Follow the example pattern: create `const resumeP = ctx.resume()` near the start of the click handler and `await resumeP` near the end.
+3. **Match listener audio options to the real context.** Use `ctx.sampleRate` for `sampleRate` and `2` for `outputChannels` on the current real-time HRTF path. Use `128` for MT worklet `inputSampleCount`; for ST fallback, match the app's render block size.
+4. **Start with the example listener option and orientation.** Use `listener.setOption(recommendedSTOption())`, `listener.setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])`, and `listener.setPosition(...)`. If the three.js coordinate basis changes, update source position and direction using the same basis.
+5. **Load materials and colliders before judging spatial behavior.** Add `soundMaterial.json` to the material table and attach a sound collider to the scene before connecting listener/source. Without a collider, the scene is mostly direct sound, so spatial changes can feel weak.
+6. **Set stereo node options explicitly in custom Web Audio graphs.** `createWorkletNode()` sets `channelCount = 2`, `channelCountMode = 'explicit'`, and `channelInterpretation = 'speakers'`. If you build nodes manually or compose a separate graph, set the same options on the input hub, splitter, merger, and worklet/input nodes.
+7. **Route channels explicitly when a speaker layout uses multiple sound sources.** Do not implicitly connect the same stereo input to every source. For example, `L/LS/SL/BL` sources should receive the left channel duplicated to both input frames, `R/RS/SR/BR` should receive the right channel duplicated, and `C/LFE/Mono` should receive `(L + R) * 0.5`.
+8. **Fully clean up the graph before replay.** Disconnect old `MediaElementAudioSourceNode`, `AudioBufferSourceNode`, splitter, merger, and gain nodes. Then build a fresh source graph and connect only the soundtrace output to master/destination.
+9. **Prime propagation before the first audio block.** After listener, source, and collider setup, call `scene.tick(0)` and `scene.updatePropagation()` once to prepare the initial path state.
 
-Before blaming the SDK core for one-sided sound, check HRTF load,
-AudioContext resume timing, audio options, channel routing, and graph lifecycle.
+Before blaming the SDK core for one-sided sound, check AudioContext resume
+timing, audio options, channel routing, and graph lifecycle.
 
 ## References
 
