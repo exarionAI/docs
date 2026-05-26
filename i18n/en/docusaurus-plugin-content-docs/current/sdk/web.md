@@ -23,6 +23,7 @@ The package is distributed as ESM, and the public surface is imported from the `
 
 ```ts
 import {
+  BvhType,
   SoundTrace,
   UpdateType,
   PathType,
@@ -54,6 +55,7 @@ const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.me
 
 ```ts
 import {
+  BvhType,
   SoundTrace,
   recommendedSTOption,
   type Triangle,
@@ -64,7 +66,15 @@ import {
 const ctx = new AudioContext();
 await ctx.resume();
 
-const sound = await SoundTrace.create(ctx, { thread: 'mt' });
+const sound = await SoundTrace.create(ctx, {
+  thread: 'mt',
+  propagationThreadCount: -1,
+  defaultMeshBuild: {
+    bvhType: BvhType.LBVH_SIMD8,
+    bvhMaxDepth: 16,
+    primPerLeaf: 4,
+  },
+});
 
 const listener = sound.createListener();
 const source = sound.createSource();
@@ -111,7 +121,7 @@ const triangles: Triangle[] = [
 const floor = sound.createCollider({
   vertices,
   triangles,
-  bvhType: 0,
+  bvhType: BvhType.HKDtree,
   bvhMaxDepth: 16,
   primPerLeaf: 4,
 });
@@ -152,10 +162,16 @@ ctx.destination
 
 | Mode | Option | When to use | Audio path |
 |---|---|---|---|
-| Multi | `{ thread: 'mt' }` | Recommended when deployment can use `SharedArrayBuffer` and COOP/COEP headers | WASM renders directly inside `AudioWorkletProcessor` |
-| Single | `{ thread: 'st' }` | Use when headers are constrained or when first checking a simple scene | JS main thread block render, then worklet/ring or fallback delivery |
+| Multi | `{ thread: 'mt' }` | pthread-enabled WASM binary | WASM `AudioWorkletProcessor` calls `exaRenderSound` |
+| Single | `{ thread: 'st' }` | single-thread WASM binary | WASM `AudioWorkletProcessor` calls `exaRenderSound` |
 
-MT mode requires `crossOriginIsolated === true` in the browser. Set the following headers on the HTML response.
+`thread` is an explicit binary selection, not an automatic fallback policy. ST
+and MT use the same JavaScript control flow: the app applies mutations each
+frame, then calls `tick()` and `updatePropagation()`. In the MT binary,
+STCoreV2 internal jobs are scheduled inside `updatePropagation()` and joined
+before it returns.
+
+Both modes require `crossOriginIsolated === true` in the browser. Set the following headers on the HTML response.
 
 ```txt
 Cross-Origin-Opener-Policy: same-origin
@@ -185,7 +201,7 @@ export default defineConfig({
 4. For lower-level control, you can still create `createMesh()` and `createObject()` directly.
 5. Update moving sources, listeners, and colliders each frame.
 6. Call `scene.update(dt)` to run `tick(dt)` and `updatePropagation()` together.
-7. In MT mode the worklet renders audio; in ST mode you can manually pump the `listener.render()` fallback.
+7. Audio is rendered through the `AudioWorkletNode` created by `createWorkletNode()`.
 
 ## TypeScript API
 
@@ -208,7 +224,7 @@ export default defineConfig({
 | `materials` | global material table wrapper |
 | `propagator` | valid path, guide plane, and profile queries |
 | `diagnostics` | version, memory trace, and ray statistics queries |
-| `createWorkletNode(listener, source, channels = 2)` | create an `AudioWorkletNode` for MT mode |
+| `createWorkletNode(listener, source, channels = 2)` | create an `AudioWorkletNode` for the selected ST/MT binary |
 | `reset()` | reset core state |
 | `dispose()` | disconnect output node and release WASM wrapper references |
 
@@ -218,6 +234,24 @@ export default defineConfig({
 |---|---:|---|
 | `thread` | `'st'` | `'st'` or `'mt'`; MT is recommended for production services |
 | `coreBaseUrl` | package internal `./core` | Directory containing `st/` and `mt/`, such as `./core`, when self-hosting |
+| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`; `-1` uses the native default |
+| `defaultMeshBuild` | native default | native `ExaMeshBuildOption` process-wide mesh build default |
+
+```ts
+const sound = await SoundTrace.create(ctx, {
+  thread: 'mt',
+  propagationThreadCount: -1,
+  defaultMeshBuild: {
+    bvhType: BvhType.LBVH_SIMD8,
+    bvhMaxDepth: 16,
+    primPerLeaf: 4,
+  },
+});
+```
+
+`propagationThreadCount` and `defaultMeshBuild` are applied through the C API
+before native `exaInit()`. Keep `thread: 'st' | 'mt'` as binary selection, and
+control BVH/SIMD choice through `BvhType` and mesh build options.
 
 ### `SoundScene`
 
@@ -244,7 +278,7 @@ A scene should contain one listener. If your UI exposes multiple listener candid
 | `UpdateType.Rebuild` (`2`) | `mesh.setData()`, topology change, BVH option change, or scene add/remove |
 
 :::warning Refit rule
-Use `Refit` when a **skinned animation is used as a sound collider**. In that case the BVH must be built with `LBVH`. Every frame, update only the vertex buffer with `mesh.updateVertices(vertices)`, mark the object with `UpdateType.Refit`, then run `scene.tick(dt)`. BLAS refit and TLAS refit are handled inside `SoundScene::tick()` when it consumes the update flag.
+Use `Refit` when a **skinned animation is used as a sound collider**. In that case the BVH must be built with an `LBVH`-family builder. Every frame, update only the vertex buffer with `mesh.updateVertices(vertices)`, mark the object with `UpdateType.Refit`, then run `scene.tick(dt)`. BLAS refit and TLAS refit are handled inside `SoundScene::tick()` when it consumes the update flag.
 :::
 
 :::info When Rebuild is required
@@ -269,18 +303,27 @@ Two-level BVH synchronization is handled during scene tick through the `SoundObj
 
 | Field | Default | Recommended range | Description |
 |---|---:|---:|---|
-| `bvhType` | `0` | `0` or `1` | `0 = HKDtree`, `1 = LBVH` |
-| `bvhMaxDepth` | `24` | `1..32` | Maximum tree depth. Deeper trees can create smaller leaves but increase build cost |
-| `primPerLeaf` | `4` | `1..32` | Primitive count per leaf. Lower values increase nodes; higher values increase triangle tests inside leaves |
+| `bvhType` | `BvhType.Default` | enum below | `Default(-1)` uses the current native `ExaMeshBuildOption.bvhType` |
+| `bvhMaxDepth` | `0` | `0` or `1..32` | `0` or omitted uses the native default |
+| `primPerLeaf` | `0` | `0` or `1..32` | `0` or omitted uses the native default |
 
 BVH selection:
 
 | Type | Value | Use |
 |---|---:|---|
+| `Default` | `-1` | Use current native default mesh build option in `SoundMesh.setData()` |
 | `HKDtree` | `0` | **Static sound colliders** such as walls, rooms, and floors whose topology and vertices are fixed. In the current engine it exists as a substitute for `SBVH` |
-| `LBVH` | `1` | **Required for dynamic/skinned colliders** where vertices change every frame and the scene tick refit path is needed |
+| `LBVH` | `1` | Dynamic/skinned collider default where vertices change every frame and the scene tick refit path is needed |
+| `LBVH_SIMD4` | `2` | SIMD4 LBVH builder |
+| `LBVH_SIMD8` | `3` | SIMD8 LBVH builder |
+| `LBVH_SIMD16` | `4` | SIMD16 LBVH builder |
+| `LBVH_NWAY4` | `5` | 4-way LBVH builder |
+| `LBVH_NWAY8` | `6` | 8-way LBVH builder |
+| `LBVH_NWAY16` | `7` | 16-way LBVH builder |
 
-Names such as `SBVH` and `WBVH` still exist in `SpatialBuilder`, but only `HKDtree` and `LBVH` are connected to the Web SDK `SoundMesh.setData()` path. Do not pass other values.
+`defaultMeshBuild.bvhType` is the native process-wide default and must be a real
+builder enum. `BvhType.Default` is only the per-mesh `setData()` sentinel that
+means “use the current native default”.
 
 ### `SoundCollider`
 
@@ -302,7 +345,7 @@ The Three.js adapter reads `BufferGeometry.groups[].materialIndex` and the `mesh
 2. `materialMap` by slot number, `slot:N`, material `name`, `uuid`, or `type`
 3. `defaultMaterialIndex` when no match is found (`0` by default)
 
-Static colliders default to `HKDtree`; `dynamic: true` and skinned colliders default to `LBVH`. For skinned animation, keep topology stable and call `collider.refitVertices(vertices)` each frame.
+Static colliders default to `HKDtree`; `dynamic: true` and skinned colliders default to `LBVH`. Use a SIMD/N-way builder by passing `bvhType` in collider options. For skinned animation, keep topology stable and call `collider.refitVertices(vertices)` each frame.
 
 ### `SoundListener`
 
@@ -316,7 +359,7 @@ Static colliders default to `HKDtree`; `dynamic: true` and skinned colliders def
 | `setPathEnable(pathType, enabled)` | enable/disable direct/reflection/diffraction/reverb/transmission |
 | `setRayCount(width, height)` | listener guide ray grid size |
 | `setRayDepth(depth)` | maximum path depth |
-| `render(sourceID, input, output, channelCount)` | manual ST fallback render |
+| `render(sourceID, input, output, channelCount)` | low-level manual render; normal Web Audio integration should use `createWorkletNode()` |
 | `setMaxDelay(sourceID, v)` | maximum delay line length |
 | `setPathFadeTime(sourceID, v)` | cross-fade time for path changes |
 | `setMaxDelayRate(sourceID, v)` | delay change rate limit |
@@ -348,7 +391,7 @@ Avoid changing ray count and depth on every dragged pixel. In UI, applying them 
 | Field | Recommended value | Description |
 |---|---:|---|
 | `sampleRate` | `ctx.sampleRate` | Must match the browser `AudioContext` |
-| `inputSampleCount` | MT `128`, ST `sampleRate / 100` or fallback `1024` | Number of frames the engine processes at once |
+| `inputSampleCount` | `128` | Number of frames the engine processes at once on the `createWorkletNode()` path |
 | `outputChannels` | `2` | HRTF binaural output; stereo is recommended for the current real-time path |
 
 ### `SoundSource`
@@ -400,12 +443,16 @@ Keep every coefficient `>= 0`. The demo uses `{ x: 0.001, y: 1.0, z: 0.0 }` for 
 | `getGuidePlaneCount(sceneID)`, `getGuidePlanes(sceneID)` | guide plane visualization |
 | `getMirrorPositionCount(sceneID)`, `getMirrorPositions(sceneID)` | image-source position visualization |
 | `getProfile()` | latest propagation stage timings in ms and path counts |
+| `setJobTimingOption({ enabled, frameCapacity })` | configure the native propagation job timing ring buffer |
+| `getJobTimingFrames(sceneID, maxFrames?)` | query recent propagation frame/job timing snapshots |
+| `resetJobTiming()` | reset job timing snapshots |
 | `sortIRDatas()` | request IR data sorting |
 | `findAttenuationForDistance(...)` | invert a distance for target attenuation |
-| `startBackgroundLoop(sceneID, intervalMs = 16)` | run tick + propagation on an engine pthread in MT WASM |
-| `stopBackgroundLoop()` | stop the background loop |
 
-The Web MT background loop is an auxiliary API provided because of browser WASM memory sharing constraints. Native SDKs keep the model where the caller runs `tick()` and `updatePropagation()` from their own thread/job system.
+The Web SDK does not provide a separate background propagation loop API. The
+caller applies mutations, then calls `tick()` and `updatePropagation()` in
+order. In the MT binary, internal jobs are scheduled inside
+`updatePropagation()` and joined before it returns.
 
 ## Sound Material JSON
 
@@ -519,20 +566,23 @@ cd /Users/ethanjung/dev/soundtrace.js/STCoreV2/exaSound
 cd /Users/ethanjung/dev/soundtrace.js
 npm run build
 
-cd examples/three-basic
+cd /Users/ethanjung/dev/soundtrace-three-basic
 npm install
+npm run update:sdk
 npm run build
 
 cd /Users/ethanjung/dev/docs
 rsync -a --delete --exclude '.DS_Store' --exclude '*.zip' \
-  /Users/ethanjung/dev/soundtrace.js/examples/three-basic/dist/ \
+  /Users/ethanjung/dev/soundtrace-three-basic/dist/ \
   static/demos/three-basic/
 
 npm run build
 npm run serve
 ```
 
-The Vite dev server sets COOP/COEP headers by default, so MT mode can also be tested. The iframe embedded in this documentation is fixed to `?thread=st` so it works on static hosting without COOP/COEP headers.
+The Vite dev server sets COOP/COEP headers by default, so both ST and MT modes
+can be tested. The iframe is fixed to `?thread=st` to make the startup binary
+explicit.
 
 ### Bottom Buttons
 
@@ -540,13 +590,13 @@ The Vite dev server sets COOP/COEP headers by default, so MT mode can also be te
 |---|---|
 | `Room` | select the material for the full room collider |
 | `Collider` | select the material for the static wall and Flair collider |
-| `Thread` | choose `Single` or `Multi` before starting. If MT is unavailable, it automatically locks to ST |
+| `Thread` | choose `Single` or `Multi` before starting. The selection explicitly chooses the WASM binary |
 | `Start Audio` | load WASM, materials, and MP3, then start audio. The default HRTF is applied by native initialization |
 | `Move` / `Stop` | move the source along an elliptical path in the room, or stop it at its current position |
 | `Wall: On/Off` | add or remove the static wall collider near the listener |
 | `Flair: On/Off` | add or remove the FBX skinned animation collider |
 
-`Flair` samples skinned vertices every frame and uses them as a sound collider. This path demonstrates the `LBVH + updateVertices + UpdateType.Refit` combination. If the demo BVH type is changed to `HKDtree`, treat Flair as a bind-pose static inspection case.
+`Flair` samples skinned vertices every frame and uses them as a sound collider. This path demonstrates an `LBVH`-family builder with `updateVertices + UpdateType.Refit`. If the demo BVH type is changed to `HKDtree`, treat Flair as a bind-pose static inspection case.
 
 ### lil-gui Panel
 
@@ -556,7 +606,7 @@ The Vite dev server sets COOP/COEP headers by default, so MT mode can also be te
 | `Listener` | `Ray Depth` | maximum path depth. Demo range `1..16`, default `7` |
 | `Debug overlays` | `Show Valid Paths` | show propagation result polylines |
 | `Debug overlays` | `Show FPS` | show Stats HUD |
-| `Colliders · BVH` | `Type` | `HKDtree` or `LBVH` |
+| `Colliders · BVH` | `Type` | `Default`, `HKDtree`, `LBVH`, `LBVH_SIMD4/8/16`, `LBVH_NWAY4/8/16` |
 | `Colliders · BVH` | `Max Depth` | BVH build depth. Demo range `1..32` |
 | `Colliders · BVH` | `Prims / Leaf` | primitives per leaf. Demo range `1..32` |
 | `Colliders · BVH` | `Show BVH Boxes` | show leaf AABB wireframes |
@@ -577,7 +627,7 @@ The Vite dev server sets COOP/COEP headers by default, so MT mode can also be te
 
 1. Start runtime apps at `Ray Width = 16`, `Ray Height = 16`, and `Ray Depth = 3`.
 2. Increase listener `Ray Width × Ray Height × Ray Depth` only as needed.
-3. Separate static structures as `HKDtree` and animated colliders as `LBVH`.
+3. Separate static structures as `HKDtree` and animated colliders as an `LBVH`-family builder.
 4. Keep topology stable for animated colliders and update only vertices.
 5. If paths change too abruptly, increase `Path Fade Time`; if delay pitch wobble is audible, lower `Max Delay Rate`.
 6. Enable valid path and BVH box overlays only during debugging.
@@ -590,8 +640,8 @@ Because the demo is a small scene, it starts the listener at `32 × 32 × depth 
 
 | Symptom | Check |
 |---|---|
-| MT load fails | Confirm the HTML response has COOP/COEP and `crossOriginIsolated` is `true` |
-| `createWorkletNode` error | Confirm `SoundTrace` was created with `{ thread: 'mt' }` |
+| WASM load fails | Confirm the HTML response has COOP/COEP and `crossOriginIsolated` is `true` |
+| `createWorkletNode` error | Confirm `ctx.resume()` ran inside a user gesture and the worklet core asset path is correct |
 | No sound | Call `ctx.resume()` inside a user click, confirm `soundMaterial.json` loaded into the material table, and check that the absorption array was not accidentally copied identical to reflection |
 | Reflection/diffraction/absorption changes are not audible | Without a sound collider, the scene mainly produces direct sound. Add a collider with geometry and mapped sound materials |
 | Directionality feels missing | Confirm listener audio options, orientation, source/listener positions, and collider/material setup |
@@ -599,7 +649,7 @@ Because the demo is a small scene, it starts the listener at `32 × 32 × depth 
 | Mono input is silent | The SDK fixes the worklet node channel count to `2`, `explicit`, `speakers`. If you create the node manually, use the same settings |
 | Path gizmo looks like it leaves trails | Use only the actual count returned by `getValidPaths()` |
 | Ray/path gizmo is not visible | Confirm a sound collider object has been added to the scene |
-| Animated collider jumps | Confirm the flow is `LBVH`, `updateVertices()`, `object.setUpdateType(UpdateType.Refit)`, then `scene.tick()` |
+| Animated collider jumps | Confirm the flow is `LBVH` family, `updateVertices()`, `object.setUpdateType(UpdateType.Refit)`, then `scene.tick()` |
 | Crash after changing BVH options | After `mesh.setData()`, mark the object as `UpdateType.Rebuild` and run `scene.tick()` |
 
 ### FAQ: sound plays from only one side
@@ -617,14 +667,14 @@ The points that are easiest to miss during implementation are:
 
 - The real-time HRTF output of `soundtrace.js` is not a hardware 5.1/7.1 bus. It is a `2` channel binaural/stereo render target. A speaker layout still means virtual sources summed to stereo.
 - If you create an `AudioWorkletNode` manually and omit `outputChannelCount: [2]`, a 1-output/1-input worklet can start with channel count `1`. The SDK `createWorkletNode()` avoids this by pinning `channelCount = 2`, `channelCountMode = 'explicit'`, and `channelInterpretation = 'speakers'`.
-- In ST fallback code that calls `listener.render()` directly, pass `channelCount = 2` and an interleaved input buffer whose length is `frames * 2`. Passing only the frame count or a mono buffer violates the engine's mono-mix/render-buffer contract.
+- If low-level code calls `listener.render()` directly, pass `channelCount = 2` and an interleaved input buffer whose length is `frames * 2`. Passing only the frame count or a mono buffer violates the engine's mono-mix/render-buffer contract.
 - When an app creates several virtual speaker sources, the browser will not split channels by speaker for you. The app must explicitly route left/right/mix input per source.
 
 Checklist:
 
 1. **Confirm that the SDK wrapper is used.** Do not load only the WASM files by hand. Import `SoundTrace`, `SoundListener`, `createWorkletNode`, `recommendedSTOption`, `PathType`, and related APIs from the `soundtrace.js` module.
 2. **Call `AudioContext.resume()` immediately inside a user click.** If `resume()` is delayed until after WASM or audio fetches, browser autoplay policy can leave the context `suspended`. Follow the example pattern: create `const resumeP = ctx.resume()` near the start of the click handler and `await resumeP` near the end.
-3. **Match listener audio options to the real context.** Use `ctx.sampleRate` for `sampleRate` and `2` for `outputChannels` on the current real-time HRTF path. Use `128` for MT worklet `inputSampleCount`; for ST fallback, match the app's render block size.
+3. **Match listener audio options to the real context.** Use `ctx.sampleRate` for `sampleRate`, `2` for `outputChannels`, and `128` for `inputSampleCount` on the `createWorkletNode()` path.
 4. **Start with the example listener option and orientation.** Use `listener.setOption(recommendedSTOption())`, `listener.setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])`, and `listener.setPosition(...)`. If the three.js coordinate basis changes, update source position and direction using the same basis.
 5. **Load materials and colliders before judging spatial behavior.** Add `soundMaterial.json` to the material table and attach a sound collider to the scene before connecting listener/source. Without a collider, the scene is mostly direct sound, so spatial changes can feel weak.
 6. **Set stereo node options explicitly in custom Web Audio graphs.** `createWorkletNode()` sets `channelCount = 2`, `channelCountMode = 'explicit'`, and `channelInterpretation = 'speakers'`. If you build nodes manually or compose a separate graph, set the same options on the input hub, splitter, merger, and worklet/input nodes.
