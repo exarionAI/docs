@@ -27,9 +27,10 @@ const sidebars = {
       items: [
         'sdk/overview',
         'sdk/web',
-        'sdk/python',
         'sdk/unity',
         'sdk/ue',
+        'sdk/python',
+        'sdk/performance',
       ],
     },
     {

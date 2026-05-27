@@ -24,5 +24,6 @@ title: SDK 개요
 
 - 처음 보는 경우 → [Sound Tracing이란?](../intro/what-is-soundtracing.md)
 - 브라우저/Three.js 통합 → [Web SDK](./web.md)
+- Web SDK 성능 옵션 기준 → [Performance Guide](./performance.md)
 - 네이티브(C/C++) 통합 → [STCoreV2](../core/stcorev2.md) (현 활성 라인)
 - 두 세대 비교 → [STCore vs STCoreV2](../core/comparison.md)

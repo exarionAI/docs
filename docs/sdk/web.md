@@ -164,6 +164,9 @@ ctx.destination
 받고, 출력으로 `AudioNode`를 돌려줍니다. 따라서 공간화 앞뒤에 EQ, 컴프레서,
 마스터 볼륨 같은 일반 Web Audio 노드를 자유롭게 삽입할 수 있습니다.
 
+source count, ray count, BVH, geometry scale에 따른 성능/품질 조정 기준은
+[Performance Guide](./performance.md)를 참고하세요.
+
 ## 스레드 모드
 
 | 모드 | 선택값 | 사용 상황 | 오디오 경로 |
