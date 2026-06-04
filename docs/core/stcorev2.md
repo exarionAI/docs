@@ -112,7 +112,7 @@ C 링키지 API (`exasoundC.h`, **약 120개 export**)로 공개됩니다.
 | Object | `exaNewObject`, `exaObjectSetPosition/Rotation/Scale/Mesh`, `exaObjectSetUpdateType` |
 | Mesh | `exaNewMesh`, `exaMeshSetData`, `exaMeshUpdateVertices`, `exaMeshRefit`, `exaMeshSetMaterial` |
 | Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
-| SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity` |
+| SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity`, `exaSoundSourceSetRayCount/GetRayCount`, `exaSoundSourceSetDepth/GetDepth`, `exaSoundSourceSetReverbSendDb/GetReverbSendDb`, `exaSoundSourceSetPathEnable/IsPathEnabled` |
 | Listener (기본) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
 | Listener (HRTF) | `exaInit`에서 default HRTF를 전역 1회 로드하고 listener renderer가 공유 |
 | Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
@@ -233,9 +233,10 @@ reflection = 1 - (absorption + transmission)
 `ExaRayHit` 구조에는 `materialId` 필드가 노출되어 ray cast 시 어떤 재질에
 충돌했는지 직접 식별할 수 있습니다.
 
-### Ray Count · Ray Depth
+### Listener Ray Count · Ray Depth
 
-청취자별로 광선 개수와 최대 반사 깊이를 설정합니다.
+청취자 기준 guide ray 개수와 최대 깊이를 설정합니다. direct/reflection/diffraction
+경로 발견 품질에 직접 영향을 주는 전역 품질 축입니다.
 
 | 함수 | 효과 |
 |---|---|
@@ -243,6 +244,26 @@ reflection = 1 - (absorption + transmission)
 | `exaListenerSetRayDepth(id, d)` | 최대 깊이 (`1 ≤ d ≤ EXA_MAX_DEPTH = 16`) |
 
 현재 빌드의 path depth 상한은 `EXA_MAX_DEPTH = 16`입니다.
+
+### Source Reverb Ray Count · Ray Depth
+
+source reverb ray는 listener ray와 별도의 source-side late reverb 비용 축입니다.
+multi-source에서는 source 수와 곱해지므로 listener ray보다 낮은 budget에서 시작합니다.
+
+| 함수 | 효과 |
+|---|---|
+| `exaSoundSourceSetRayCount(id, width, height)` | source-side reverb ray grid 설정 |
+| `exaSoundSourceGetRayCount(id, outWidth, outHeight)` | source-side reverb ray grid 조회 |
+| `exaSoundSourceSetDepth(id, depth)` | source-side reverb ray depth 설정 |
+| `exaSoundSourceGetDepth(id, outDepth)` | source-side reverb ray depth 조회 |
+| `exaSoundSourceSetReverbSendDb(id, db)` | source별 reverb send gain 설정 |
+| `exaSoundSourceGetReverbSendDb(id, outDb)` | source별 reverb send gain 조회 |
+| `exaSoundSourceSetPathEnable(id, pathType, enabled)` | source별 path type 활성화 제어 |
+| `exaSoundSourceIsPathEnabled(id, pathType, outEnabled)` | source별 path type 활성화 상태 조회 |
+
+`width` 또는 `height`를 `0`으로 두면 native는 listener ray count fallback을 사용할 수
+있습니다. production tuning과 QA matrix에서는 명시적인 non-zero budget을 지정해
+listener ray와 source reverb ray 비용을 분리해서 측정하세요.
 
 ### Diffuse Scattering 옵션
 

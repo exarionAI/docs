@@ -34,8 +34,8 @@ geometry 크기, ray budget, BVH, ST/MT 모드에 따라 따로 측정해야 합
 |---|---|---|
 | Listener ray width/height | 청취자 기준 경로 발견과 방향 안정성이 좋아짐 | ray grid 면적에 비례해 전파 계산 증가 |
 | Listener depth | 더 깊은 reflection/diffraction/reverb 경로 허용 | path search, cache pressure 증가 |
-| Source ray width/height | 음원별 경로 coverage와 material 반응 안정성 개선 | source 수와 곱해져 multi-source에서 가장 빨리 비용 증가 |
-| Source depth | 음원별 전파 깊이 증가 | source-side propagation 비용 증가 |
+| Source reverb ray width/height | source-side late reverb coverage와 material 반응 안정성 개선 | source 수와 ray grid 면적에 비례해 비용 증가 |
+| Source reverb depth | source-side late reverb 추적 깊이 증가 | depth가 커질수록 path search와 cache pressure 증가 |
 | Source count | 동시에 공간화되는 emitter 수 증가 | propagation과 AudioWorklet mixer 비용 증가 |
 | BVH type | traversal/build 특성 변경 | geometry와 update 방식에 따라 build/refit/traversal 비용 차이 |
 | BVH max depth | tree 깊이 제어 | 너무 얕으면 traversal 비효율, 너무 깊으면 build/memory 비용 증가 |
@@ -43,20 +43,28 @@ geometry 크기, ray budget, BVH, ST/MT 모드에 따라 따로 측정해야 합
 | Animated/refit geometry | 움직이는 collider 반영 | refit/rebuild 비용 증가. stress 항목으로 분리 측정 |
 | Thread mode | MT는 propagation job을 worker thread로 분산 가능 | cross-origin isolation 필요, thread/memory overhead 증가 |
 
+## Reverb ray budget
+
+Reverb ray는 listener ray를 복제해서 쓰는 값이 아닙니다. source-side late reverb는
+`source count × width × height × depth`로 비용이 커지므로, production 기본값은
+listener ray와 분리해서 장면별로 올립니다. QA 기준 sweep은 source `[4, 8, 12, 16]`,
+general ray와 reverb ray 각각 `4 x 4 x 3`, `8 x 8 x 7`, `16 x 16 x 11`,
+`32 x 32 x 16` 단계, path cache `[256, 512, 1024]`입니다.
+
 ## 시작 preset
 
 실측 테이블이 채워지기 전까지는 아래 값을 시작점으로 사용하고, 앱의 목표 FPS와
 청감 품질에 맞춰 조정합니다.
 
-| Preset | Thread | Listener rays | Source rays | Depth | BVH | 용도 | 측정 상태 |
+| Preset | Thread | Listener rays | Reverb rays | Depth | BVH | 용도 | 측정 상태 |
 |---|---|---:|---:|---:|---|---|---|
-| Mobile conservative | ST | `16 x 16` | `16 x 8` | `3` | LBVH 또는 platform default | 모바일 최소 기준 | Measurement pending |
-| Desktop balanced | ST 또는 MT | `16 x 16` | `16 x 8` | `3` | LBVH_SIMD8 | 데스크탑 기본 기준 | Measurement pending |
-| Desktop quality | MT | `32 x 32` | `32 x 16` | `4..7` | LBVH_SIMD8 | 품질 우선 데스크탑 | Measurement pending |
-| Stress only | MT | `32 x 32` | `64 x 64` | `7..16` | BVH matrix | 한계 측정 전용 | Realtime default 아님 |
+| Mobile conservative | ST | `16 x 16` | `4 x 4` 또는 `8 x 8` | `3` | LBVH 또는 platform default | 모바일 최소 기준 | Measurement pending |
+| Desktop balanced | ST 또는 MT | `16 x 16` | `8 x 8` | `3` | LBVH_SIMD8 | 데스크탑 기본 기준 | Measurement pending |
+| Desktop quality | MT | `32 x 32` | `16 x 16` | `3..7` | LBVH_SIMD8 | 품질 우선 데스크탑 | Measurement pending |
+| Stress only | MT | `32 x 32` | `32 x 32` | `7..16` | BVH matrix | 한계 측정 전용 | Realtime default 아님 |
 
-공간감이 약하면 source 수를 먼저 늘리지 말고, listener/source ray count와 depth를
-단계적으로 올려 확인합니다. source 수 증가는 마지막에 측정합니다.
+공간감이 약하면 source 수를 먼저 늘리지 말고, listener ray와 source reverb ray count/depth를
+분리해서 단계적으로 올려 확인합니다. source 수 증가는 마지막에 측정합니다.
 
 ## 측정해야 하는 지표
 
@@ -83,8 +91,9 @@ geometry 크기, ray budget, BVH, ST/MT 모드에 따라 따로 측정해야 합
 | Matrix | 값 |
 |---|---|
 | Baseline | ST/MT 각각 1 source, listener `16 x 16 x 3`, source `16 x 8 x 3`, static small geometry |
-| Quality scale | listener `16 x 16`, `32 x 32`; source `16 x 8`, `32 x 16`, `64 x 64`; depth `1`, `3`, `4`, `7`, `16` |
+| Quality scale | listener `16 x 16`, `32 x 32`; source reverb `4 x 4`, `8 x 8`, `16 x 16`, `32 x 32`; depth `3`, `7`, `11`, `16` |
 | Source scale | `1`, `4`, `8`, `16`, `32`, `64`, `116` sources |
+| Reverb ray scale | source `[4, 8, 12, 16]`, general ray step `4 x 4 x 3` → `8 x 8 x 7` → `16 x 16 x 11` → `32 x 32 x 16`, reverb ray도 같은 step, path cache `[256, 512, 1024]` |
 | Geometry/BVH | small/medium/large geometry, HKDtree, LBVH, LBVH_SIMD4/8/16, LBVH_NWAY4/8/16 |
 | Stress only | animated/refit, rebuild-heavy, native source cap, high ray budget |
 

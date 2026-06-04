@@ -60,6 +60,7 @@ const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.me
 ```ts
 import {
   BvhType,
+  PathType,
   SoundTrace,
   recommendedSTOption,
   type Triangle,
@@ -98,8 +99,9 @@ listener
 
 source
   .setIntensity(1)
-  .setDepth(3)
-  .setRayCount(16, 16)
+  .setPathEnable(PathType.Reverb, true)
+  .setReverbRayDepth(3)
+  .setReverbRayCount(8, 8)
   .setPosition(2, 0, -1);
 
 const material: SoundMaterial = {
@@ -435,9 +437,22 @@ Ray count와 depth는 드래그 중 매 픽셀마다 바꾸지 말고, UI에서�
 | `setGainBoostDb(db)` | 전체 gain boost. native에서 `0..20 dB`로 clamp |
 | `setReverbSendDb(db)` | reverb send. native에서 `-60..20 dB`로 clamp |
 | `setReflectionSendDb(db)` | reflection send. native에서 `-60..20 dB`로 clamp |
-| `setDepth(depth)` | source ray depth. 시작값 `3`, 범위 `1..16` |
-| `setRayCount(width, height)` | source ray grid. 시작값 `16 × 16`, 상한 `32 × 32` |
+| `setDepth(depth)` | source ray depth. 기존 API 유지용 alias |
+| `getDepth()` | 현재 source ray depth 조회 |
+| `setRayCount(width, height)` | source ray grid. 기존 API 유지용 alias |
+| `getRayCount()` | 현재 source ray grid 조회 |
+| `setReverbRayDepth(depth)` | source-side late reverb ray depth. 시작값 `3`, 범위 `1..16` |
+| `getReverbRayDepth()` | 현재 source-side late reverb ray depth 조회 |
+| `setReverbRayCount(width, height)` | source-side late reverb ray grid. 시작값 `4 × 4` 또는 `8 × 8` |
+| `getReverbRayCount()` | 현재 source-side late reverb ray grid 조회 |
+| `setPathEnable(pathType, enabled)` | source별 direct/reflection/diffraction/reverb/transmission path enable 제어 |
+| `isPathEnabled(pathType)` | source별 path enable 상태 조회 |
 | `setDistanceAttenuation(pathType, vec3)` | path type별 거리 감쇠 곡선 |
+
+Reverb ray는 listener ray와 별개의 **source-side late reverb 비용 축**입니다.
+listener ray를 `16 × 16` 또는 `32 × 32`로 쓰더라도 source reverb ray는 먼저
+`4 × 4`, `8 × 8`처럼 낮게 시작하세요. multi-source에서는 `source count × reverb
+ray grid × depth`가 곧 propagation 비용으로 이어집니다.
 
 Path type:
 
