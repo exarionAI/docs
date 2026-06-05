@@ -21,6 +21,8 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 2. `Default Speaker Mode`を`Stereo`に設定します。
 3. `DSP Buffer Size`を`Best latency`に設定します。
 
+![Unity Audio設定画面](/img/unity/Image01_AudioSetting.png)
+
 ## Getting Started
 
 1. `Read/Write Enabled`を有効にしたメッシュをシーンへ配置し、`SoundTraceObject`を追加します。

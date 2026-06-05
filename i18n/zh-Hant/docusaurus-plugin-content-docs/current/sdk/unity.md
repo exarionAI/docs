@@ -21,6 +21,8 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 2. 將 `Default Speaker Mode` 設為 `Stereo`。
 3. 將 `DSP Buffer Size` 設為 `Best latency`。
 
+![Unity Audio 設定畫面](/img/unity/Image01_AudioSetting.png)
+
 ## Getting Started
 
 1. 在場景中放置已啟用 `Read/Write Enabled` 的網格，並新增 `SoundTraceObject`。

@@ -21,6 +21,8 @@ SoundTrace SDK for Unity is a real-time spatial audio plugin that brings the nat
 2. Set `Default Speaker Mode` to `Stereo`.
 3. Set `DSP Buffer Size` to `Best latency`.
 
+![Unity Audio settings screen](/img/unity/Image01_AudioSetting.png)
+
 ## Getting Started
 
 1. Place a mesh with `Read/Write Enabled` in the scene and add `SoundTraceObject`.
