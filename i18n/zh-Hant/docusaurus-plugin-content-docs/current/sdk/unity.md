@@ -71,11 +71,11 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 
 | 設定 | 說明 |
 |---|---|
-| `Ray Count Width`, `Ray Count Height` | listener guide ray 解析度。值越高，總 ray 數和 CPU cost 越高。 |
-| `Ray Depth` | ray 的反射/傳播 depth。最大值是 `16`。值越高，殘響感和複雜 path 表現越好，但計算量也越高。 |
+| `Ray Resolution` | listener guide ray 解析度。範圍是 `1-64`，同一個值會同時套用到 native listener width 和 height。值為 `16` 時使用 `16 x 16` guide rays。 |
+| `Ray Depth` | ray 的反射/傳播 depth。範圍是 `1-16`。值越高，殘響感和複雜 path 表現越好，但計算量也越高。 |
 | `Per-path enable` | 按類型啟用或停用 `Direct`, `Reflection`, `Diffraction`, `Reverb`, `Transmission` path。 |
 
-複雜遊戲場景的初始值建議使用 `16 x 16 x 4`。
+複雜遊戲場景的初始值建議使用 `Ray Resolution 16`、`Ray Depth 4`。
 
 ### SoundTraceSource (image: soundtrace-source-inspector)
 
@@ -85,7 +85,7 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 |---|---|
 | `Intensity` | 聲源基礎強度。 |
 | `Gain Boost Db`, `Reverb Send Db`, `Reflection Send Db` | 以 dB 調整整體 gain 與 reverb/reflection send level。 |
-| `Reverb Rays` | 聲源側的殘響 ray 解析度和 depth。它與 listener ray 是獨立設定。 |
+| `Reverb Rays` | 聲源側的殘響 ray 設定。`Ray Resolution` 範圍是 `1-64`，會同時套用到 reverb ray width 和 height。`Reverb Ray Depth` 範圍是 `1-16`。它與 listener ray 是獨立設定。 |
 | `Per-path enable` | 按聲源啟用或停用 path type。 |
 | `Distance Attenuation` | 按 path type 控制衰減範圍。當前 inspector slider 控制 attenuation constant；數值越大，有效範圍越小。 |
 | `Distance Attenuation Gizmos` | 在 Scene View 中用 wire sphere 顯示各 path type 的衰減範圍。 |

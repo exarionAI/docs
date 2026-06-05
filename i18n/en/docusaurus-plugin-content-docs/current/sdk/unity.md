@@ -71,11 +71,11 @@ It does not change Unity render materials. It maps each render material slot to 
 
 | Setting | Description |
 |---|---|
-| `Ray Count Width`, `Ray Count Height` | Listener guide-ray resolution. Higher values increase total ray count and CPU cost. |
-| `Ray Depth` | Ray reflection/propagation depth. The maximum is `16`. Higher values improve reverb feel and complex path coverage but increase cost. |
+| `Ray Resolution` | Listener guide-ray resolution. The range is `1-64`, and one value is applied to both native listener width and height. A value of `16` uses `16 x 16` guide rays. |
+| `Ray Depth` | Ray reflection/propagation depth. The range is `1-16`. Higher values improve reverb feel and complex path coverage but increase cost. |
 | `Per-path enable` | Enables or disables `Direct`, `Reflection`, `Diffraction`, `Reverb`, and `Transmission` paths by type. |
 
-For complex game scenes, start with `16 x 16 x 4`.
+For complex game scenes, start with `Ray Resolution 16` and `Ray Depth 4`.
 
 ### SoundTraceSource (image: soundtrace-source-inspector)
 
@@ -85,7 +85,7 @@ For complex game scenes, start with `16 x 16 x 4`.
 |---|---|
 | `Intensity` | Base source intensity. |
 | `Gain Boost Db`, `Reverb Send Db`, `Reflection Send Db` | Overall gain and reverb/reflection send levels in dB. |
-| `Reverb Rays` | Source-side reverb ray resolution and depth. This is separate from listener rays. |
+| `Reverb Rays` | Source-side reverb ray settings. `Ray Resolution` ranges from `1-64` and is applied to both reverb ray width and height. `Reverb Ray Depth` ranges from `1-16`. This is separate from listener rays. |
 | `Per-path enable` | Enables or disables path types per source. |
 | `Distance Attenuation` | Controls attenuation range per path type. The current inspector slider controls the attenuation constant; larger values make the effective range smaller. |
 | `Distance Attenuation Gizmos` | Shows attenuation ranges per path type as Scene View wire spheres. |

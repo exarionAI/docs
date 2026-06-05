@@ -71,11 +71,11 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 | 設定 | 説明 |
 |---|---|
-| `Ray Count Width`, `Ray Count Height` | listener guide rayの解像度です。値が大きいほど総ray数とCPU costが増えます。 |
-| `Ray Depth` | rayの反射/伝播depthです。最大は`16`です。値が大きいほど残響感と複雑なpath表現は向上しますが、計算量も増えます。 |
+| `Ray Resolution` | listener guide rayの解像度です。範囲は`1-64`で、1つの値がnative listener widthとheightの両方へ同じように適用されます。値が`16`の場合は`16 x 16` guide rayを使います。 |
+| `Ray Depth` | rayの反射/伝播depthです。範囲は`1-16`です。値が大きいほど残響感と複雑なpath表現は向上しますが、計算量も増えます。 |
 | `Per-path enable` | `Direct`, `Reflection`, `Diffraction`, `Reverb`, `Transmission` pathをtype別に有効化または無効化します。 |
 
-複雑なゲームシーンの初期値は`16 x 16 x 4`を推奨します。
+複雑なゲームシーンの初期値は`Ray Resolution 16`、`Ray Depth 4`を推奨します。
 
 ### SoundTraceSource (image: soundtrace-source-inspector)
 
@@ -85,7 +85,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 |---|---|
 | `Intensity` | ソースの基本強度です。 |
 | `Gain Boost Db`, `Reverb Send Db`, `Reflection Send Db` | 全体gainとreverb/reflection send levelをdB単位で調整します。 |
-| `Reverb Rays` | ソース側の残響ray解像度とdepthです。listener rayとは別設定です。 |
+| `Reverb Rays` | ソース側の残響ray設定です。`Ray Resolution`の範囲は`1-64`で、reverb ray widthとheightの両方へ同じように適用されます。`Reverb Ray Depth`の範囲は`1-16`です。listener rayとは別設定です。 |
 | `Per-path enable` | ソース単位でpath typeを有効化または無効化します。 |
 | `Distance Attenuation` | path type別の減衰範囲を調整します。現在のinspector sliderはattenuation constantを制御し、値が大きいほど有効範囲が小さくなります。 |
 | `Distance Attenuation Gizmos` | path type別の減衰範囲をScene Viewのwire sphereで表示します。 |
