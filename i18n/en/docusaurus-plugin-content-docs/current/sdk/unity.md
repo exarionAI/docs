@@ -56,7 +56,7 @@ SoundTrace SDK for Unity is a real-time spatial audio plugin that brings the nat
 
 10. Move the listener or source and verify that the sound changes physically.
 11. If a `SoundTraceObject` uses `Static` update mode, moving it will not rebuild the geometry for runtime updates.
-12. Use `Refit` for objects that need movement or runtime shape updates.
+12. Use `Refit` for objects that need movement.
 
 ![Movable object setting](/img/unity/Image09_Movable.png)
 
@@ -78,6 +78,7 @@ It does not change Unity render materials. It maps each render material slot to 
 - For example, if a fantasy sword model such as `Sword` has a material name containing `Metal`, it maps to a `Steel`-style preset.
 - If no name matches, or if a material is missing, the fallback is `Concrete`.
 - If the automatic match is wrong, choose the preset manually from each submesh row dropdown.
+- To make reflection easy to hear, test with `Steel`/`Marble`; to hear absorption, test with `Snow`/`Soil`; to hear transmission, test with `Fabric`.
 
 ### BVH and update mode
 

@@ -56,7 +56,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 10. リスナーまたはソースの位置を動かし、音が物理的に変化するか確認します。
 11. `SoundTraceObject`の`Update Mode`が`Static`の場合、Transformを動かしてもruntime geometry update用の再構築は行いません。
-12. 移動またはruntime shape updateが必要なオブジェクトには`Refit`を使います。
+12. 移動が必要なオブジェクトには`Refit`を使います。
 
 ![移動可能オブジェクト設定](/img/unity/Image09_Movable.png)
 
@@ -78,6 +78,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 - たとえば`Sword`のようなファンタジー剣モデルのmaterial名に`Metal`が含まれる場合、`Steel`系presetへ割り当てられます。
 - 一致する名前がない、またはmaterialが空の場合のfallbackは`Concrete`です。
 - 自動割り当てが違う場合は、各submesh rowのdropdownから手動でpresetを選びます。
+- 反射を強く確認したい場合は`Steel`/`Marble`、吸音を確認したい場合は`Snow`/`Soil`、透過を確認したい場合は`Fabric`でテストすることを推奨します。
 
 ### BVH and update mode
 

@@ -56,7 +56,7 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 
 10. 移動聽者或聲源，確認聲音會依物理關係變化。
 11. 如果 `SoundTraceObject` 的 `Update Mode` 是 `Static`，移動 Transform 不會為 runtime update 重建 geometry。
-12. 對需要移動或 runtime shape update 的物件使用 `Refit`。
+12. 對需要移動的物件使用 `Refit`。
 
 ![可移動物件設定](/img/unity/Image09_Movable.png)
 
@@ -78,6 +78,7 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 - 例如，`Sword` 這樣的幻想劍模型的 material 名稱包含 `Metal` 時，會映射到 `Steel` 系列 preset。
 - 如果沒有匹配名稱，或 material 為空，fallback 是 `Concrete`。
 - 如果自動匹配不正確，請在每個 submesh row 的 dropdown 中手動選擇 preset。
+- 如果想明顯感受反射，建議用 `Steel`/`Marble` 測試；想感受吸音，建議用 `Snow`/`Soil` 測試；想感受透射，建議用 `Fabric` 測試。
 
 ### BVH and update mode
 
