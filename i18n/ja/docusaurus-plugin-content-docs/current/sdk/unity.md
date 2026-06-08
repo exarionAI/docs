@@ -15,7 +15,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 ## Unity Project Setup
 
-### Unity Audio設定 (image: unity-audio-settings-stereo-best-latency)
+### Unity Audio設定
 
 1. `Edit > Project Settings > Audio`を開きます。
 2. `Default Speaker Mode`を`Stereo`に設定します。
@@ -25,19 +25,44 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 ## Getting Started
 
+![モデルRead/Write設定](/img/unity/Image02_ModelRW.png)
+
 1. `Read/Write Enabled`を有効にしたメッシュをシーンへ配置し、`SoundTraceObject`を追加します。
+
+![SoundTraceObjectコンポーネント](/img/unity/Image03_SoundTraceObject.png)
+
 2. リスナー役のGameObjectに`SoundTraceListener`を追加します。Unity標準の`AudioListener`と一緒に構成してください。標準Unityシーンでは`AudioListener`がすでにMain Cameraに付いている点に注意してください。
-3. ソース役のGameObjectを作成し、`SoundTraceSource`を追加します。Unity `AudioSource`は自動的に要求されます。
+
+![SoundTraceListenerコンポーネント](/img/unity/Image04_Listener.png)
+
+3. ソース役のGameObjectを作成し、`SoundTraceSource`を追加します。Unity `AudioSource`は自動的に追加されます。
+
+![SoundTraceSourceコンポーネント](/img/unity/Image05_Source.png)
+
 4. Unity `AudioSource`に再生したいaudio clipを割り当てます。
 5. マネージャー役のGameObjectを作成し、`SoundTraceManager`と`SoundTracePathVisualizer`を追加します。
+
+![SoundTraceManagerとPath Visualizerコンポーネント](/img/unity/Image06_Manager.png)
+
 6. リスナー、ソース、`SoundTraceObject` geometryの間で反射音響pathが作られる位置へ再配置します。
+
+![リスナー、ソース、ジオメトリの配置](/img/unity/Image07_Positioning.png)
+
 7. Play Modeを実行します。
 8. `SoundTracePathVisualizer`でpath visualizationを有効にします。
 9. リスナー、ソース、オブジェクトの間に反射path lineが表示されれば、基本接続は成功です。
+
+![反射path lineの成功確認](/img/unity/Image08_Success.png)
+
 10. リスナーまたはソースの位置を動かし、音が物理的に変化するか確認します。
 11. `SoundTraceObject`の`Update Mode`が`Static`の場合、Transformを動かしてもruntime geometry update用の再構築は行いません。
 12. 移動またはruntime shape updateが必要なオブジェクトには`Refit`を使います。
+
+![移動可能オブジェクト設定](/img/unity/Image09_Movable.png)
+
 13. `Rebuild`は形状が大きく変わる場合だけ使い、毎frame rebuildする構成は避けます。
+
+![移動後のpath確認](/img/unity/Image10_Moved.png)
 
 ## Main Features
 
@@ -47,7 +72,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 レンダリングmaterial自体を変更する機能ではありません。各render material slotをSoundTrace material preset indexへ対応付け、そのindexを該当submesh triangleに付与します。
 
-### Sound material slots (image: soundtrace-object-material-slots-auto-set)
+### Sound material slots
 
 - `Auto Set`はUnity render material名を読み、最も近いSoundTrace material presetを自動割り当てします。
 - たとえば`Sword`のようなファンタジー剣モデルのmaterial名に`Metal`が含まれる場合、`Steel`系presetへ割り当てられます。
@@ -67,7 +92,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 | `Refit` | 既存構造を維持しながらruntime transformまたはshape updateへ追従します。 |
 | `Rebuild` | topologyまたは形状がBVH再構築を必要とするほど変わる場合だけ使います。 |
 
-### SoundTraceListener (image: soundtrace-listener-inspector)
+### SoundTraceListener
 
 `SoundTraceListener`はシーンのリスナーです。毎frame Transform positionとorientationをネイティブlistenerへ同期し、listener ray設定とpath type enableを保持します。
 
@@ -79,7 +104,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 複雑なゲームシーンの初期値は`Ray Resolution 16`、`Ray Depth 4`を推奨します。
 
-### SoundTraceSource (image: soundtrace-source-inspector)
+### SoundTraceSource
 
 `SoundTraceSource`はUnity `AudioSource`を必要とするSoundTrace音源コンポーネントです。Unity audio filter callbackである`OnAudioFilterRead`で入力bufferをSoundTrace spatial outputへin-placeレンダリングします。
 
@@ -97,7 +122,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 `SoundTraceManager`はシーンごとのSoundTrace runtime ownerです。listener、source、objectはenable時にmanagerへ登録され、managerがscene tickとpropagation updateを実行します。
 
-### SoundTraceManager settings (image: soundtrace-manager-visualizer-inspector)
+### SoundTraceManager settings
 
 | 設定 | 説明 |
 |---|---|
@@ -106,7 +131,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 | `Load Default Materials On Enable` | パッケージの標準`SoundTraceMaterialPresetLibrary.asset`をnative material tableへ登録します。 |
 | `Propagation Thread Count` | 内部job systemのworker数です。`-1`の場合、STCoreV2がlogical hardware threadを基準に選択します。アプリケーション側でCPU budgetを見て割り当てる必要があり、実運用テストでは3 thread以上から始める構成を推奨します。 |
 
-### SoundTracePathVisualizer (image: soundtrace-path-visualizer-rays)
+### SoundTracePathVisualizer
 
 `SoundTracePathVisualizer`はvalid pathをruntime line rendererとして表示するデバッグコンポーネントです。reflection、diffraction、reverb、transmission pathがシーン内でどう生成されるかを目視確認するために使います。
 
@@ -118,7 +143,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 | `Path Alpha Intensity` | attenuationベースのalpha scaling強度です。 |
 | `Draw Valid Paths`, `Draw Hit Triangles` | Scene View debug drawing optionです。 |
 
-### SoundTraceMaterialPresetLibrary (image: material-preset-library-editor)
+### SoundTraceMaterialPresetLibrary
 
 標準material preset libraryはパッケージ内の`Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`にあります。Unityメニュー`SoundTrace > Material Preset Library`から選択できます。
 

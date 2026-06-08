@@ -15,7 +15,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 ## Unity Project Setup
 
-### Unity Audio 设置 (image: unity-audio-settings-stereo-best-latency)
+### Unity Audio 设置
 
 1. 打开 `Edit > Project Settings > Audio`。
 2. 将 `Default Speaker Mode` 设置为 `Stereo`。
@@ -25,19 +25,44 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 ## Getting Started
 
+![模型 Read/Write 设置](/img/unity/Image02_ModelRW.png)
+
 1. 在场景中放置已启用 `Read/Write Enabled` 的网格，并添加 `SoundTraceObject`。
+
+![SoundTraceObject 组件](/img/unity/Image03_SoundTraceObject.png)
+
 2. 给听者角色的 GameObject 添加 `SoundTraceListener`。请与 Unity 内置 `AudioListener` 一起配置。默认 Unity 场景中，`AudioListener` 已经挂在 Main Camera 上，请注意这一点。
-3. 创建声源 GameObject 并添加 `SoundTraceSource`。Unity `AudioSource` 会被自动要求。
+
+![SoundTraceListener 组件](/img/unity/Image04_Listener.png)
+
+3. 创建声源 GameObject 并添加 `SoundTraceSource`。Unity `AudioSource` 会自动添加。
+
+![SoundTraceSource 组件](/img/unity/Image05_Source.png)
+
 4. 给 Unity `AudioSource` 分配要播放的 audio clip。
 5. 创建管理器 GameObject，并添加 `SoundTraceManager` 和 `SoundTracePathVisualizer`。
+
+![SoundTraceManager 和 Path Visualizer 组件](/img/unity/Image06_Manager.png)
+
 6. 重新放置听者、声源和 `SoundTraceObject` geometry，让它们之间可以形成反射声学路径。
+
+![听者、声源和几何体定位](/img/unity/Image07_Positioning.png)
+
 7. 进入 Play Mode。
 8. 在 `SoundTracePathVisualizer` 中启用 path visualization。
 9. 如果听者、声源和物体之间出现反射 path line，基础连接就已成功。
+
+![反射 path line 成功确认](/img/unity/Image08_Success.png)
+
 10. 移动听者或声源，确认声音会按物理关系变化。
 11. 如果 `SoundTraceObject` 的 `Update Mode` 是 `Static`，移动 Transform 不会为了 runtime update 重建 geometry。
 12. 对需要移动或 runtime shape update 的对象使用 `Refit`。
+
+![可移动对象设置](/img/unity/Image09_Movable.png)
+
 13. `Rebuild` 只在形状发生明显变化时使用，避免每 frame rebuild 的配置。
+
+![移动后的 path 确认](/img/unity/Image10_Moved.png)
 
 ## Main Features
 
@@ -47,7 +72,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 它不是修改渲染材质本身的功能，而是把每个 render material slot 映射到 SoundTrace material preset index，并把该 index 附加到对应的 submesh triangle。
 
-### Sound material slots (image: soundtrace-object-material-slots-auto-set)
+### Sound material slots
 
 - `Auto Set` 会读取 Unity render material 名称，并自动分配最接近的 SoundTrace material preset。
 - 例如，`Sword` 这样的幻想剑模型的 material 名称包含 `Metal` 时，会映射到 `Steel` 系列 preset。
@@ -67,7 +92,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 | `Refit` | 保持现有结构，同时跟随 runtime transform 或 shape update。 |
 | `Rebuild` | 仅在 topology 或形状变化到必须重建 BVH 时使用。 |
 
-### SoundTraceListener (image: soundtrace-listener-inspector)
+### SoundTraceListener
 
 `SoundTraceListener` 是场景听者。它每 frame 将 Transform position 和 orientation 同步到原生 listener，并拥有 listener ray 设置和 path type enable。
 
@@ -79,7 +104,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 复杂游戏场景的初始值建议使用 `Ray Resolution 16`、`Ray Depth 4`。
 
-### SoundTraceSource (image: soundtrace-source-inspector)
+### SoundTraceSource
 
 `SoundTraceSource` 是 SoundTrace 声源组件，需要 Unity `AudioSource`。它在 Unity audio filter callback `OnAudioFilterRead` 中，将输入 buffer in-place 渲染为 SoundTrace spatial output。
 
@@ -97,7 +122,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 `SoundTraceManager` 是每个场景的 SoundTrace runtime owner。listener、source、object 启用时会注册到 manager，manager 负责运行 scene tick 和 propagation update。
 
-### SoundTraceManager settings (image: soundtrace-manager-visualizer-inspector)
+### SoundTraceManager settings
 
 | 设置 | 说明 |
 |---|---|
@@ -106,7 +131,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 | `Load Default Materials On Enable` | 将 package 的默认 `SoundTraceMaterialPresetLibrary.asset` 注册到 native material table。 |
 | `Propagation Thread Count` | 内部 job system 的 worker 数。`-1` 表示 STCoreV2 按 logical hardware thread 选择。应用开发者应根据整体 CPU budget 分配，实际项目建议从 3 个以上 thread 开始测试。 |
 
-### SoundTracePathVisualizer (image: soundtrace-path-visualizer-rays)
+### SoundTracePathVisualizer
 
 `SoundTracePathVisualizer` 是将 valid path 以 runtime line renderer 显示出来的调试组件。用于目视确认场景中的 reflection、diffraction、reverb、transmission path 如何生成。
 
@@ -118,7 +143,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 | `Path Alpha Intensity` | 基于 attenuation 的 alpha scaling 强度。 |
 | `Draw Valid Paths`, `Draw Hit Triangles` | Scene View debug drawing 选项。 |
 
-### SoundTraceMaterialPresetLibrary (image: material-preset-library-editor)
+### SoundTraceMaterialPresetLibrary
 
 默认 material preset library 位于 package 内部的 `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`。可通过 Unity 菜单 `SoundTrace > Material Preset Library` 选择。
 
