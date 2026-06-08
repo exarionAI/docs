@@ -90,7 +90,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 | `LBVH` | build 快的默认 LBVH。对于复杂形状，它可能更粗略地近似 geometry，导致设计师制作的孔洞表现得像被封住。 |
 | `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16` | LBVH 系列的 SIMD variant。场景越复杂，较高 SIMD width 的选项可能越有利。 |
 | `bvhMaxDepth` | BVH 最大 depth。depth 越大，越能受益于 traversal pruning，建议先从较大的值开始测试。 |
-| `primitivesPerLeaf` | 最终 leaf node 内包含的 triangle 数量。值越小 detail 越好，但 build/traversal cost 会变化。 |
+| `primitivesPerLeaf` | 最终 leaf node 内包含的 triangle 数量。范围是 `1-128`。值越小 detail 越好，但 build/traversal cost 会变化。 |
 | `Static` | 用于静态 geometry。适合不需要把 runtime 移动或形状变化反映到传播中的对象。 |
 | `Refit` | 保持现有结构，同时跟随 runtime transform 或 shape update。 |
 | `Rebuild` | 仅在 topology 或形状变化到必须重建 BVH 时使用。 |

@@ -90,7 +90,7 @@ It does not change Unity render materials. It maps each render material slot to 
 | `LBVH` | The default fast-build LBVH. On complex geometry it can approximate shape more roughly, so authored holes may behave as if they are closed. |
 | `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16` | SIMD variants of LBVH. Higher SIMD width can be better for complex scenes. |
 | `bvhMaxDepth` | Maximum BVH depth. Larger depths can benefit more from traversal pruning, so start testing from a high value. |
-| `primitivesPerLeaf` | Triangle count stored in each final leaf node. Smaller values improve detail but change build and traversal cost. |
+| `primitivesPerLeaf` | Triangle count stored in each final leaf node. The range is `1-128`. Smaller values improve detail but change build and traversal cost. |
 | `Static` | For static geometry. Use it when runtime movement or shape changes do not need to affect propagation. |
 | `Refit` | Keeps the existing structure while following runtime transform or shape updates. |
 | `Rebuild` | Use only when topology or shape changes enough to require rebuilding the BVH. |
