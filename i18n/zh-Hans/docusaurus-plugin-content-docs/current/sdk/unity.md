@@ -70,6 +70,8 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 `SoundTraceObject` 会把 Unity `MeshFilter`/`MeshRenderer` 注册为 SoundTrace collision geometry。它当前基于 `MeshFilter` 和 `MeshRenderer`，用作 SoundTrace geometry 的网格需要在 import settings 中启用 `Read/Write Enabled`。不要假设 `SkinnedMeshRenderer` 的 vertex deformation 会每 tick 自动 bake。
 
+对于由多个子 mesh object 组成的 import model，可以先在根 GameObject 上添加 `SoundTraceObject`，再点击 `Add To Child Meshes`，把组件添加到所有包含 mesh 的子对象。之后如果根组件的 `MeshFilter` 为空，请用 `Remove Root Component(s)` 移除根上的空组件。
+
 它不是修改渲染材质本身的功能，而是把每个 render material slot 映射到 SoundTrace material preset index，并把该 index 附加到对应的 submesh triangle。
 
 ### Sound material slots
@@ -99,7 +101,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 | 设置 | 说明 |
 |---|---|
-| `Ray Resolution` | listener guide ray 分辨率。范围是 `1-64`，同一个值会同时应用到 native listener width 和 height。值为 `16` 时使用 `16 x 16` guide rays。 |
+| `Ray Resolution` | listener guide ray 分辨率。范围是 `1-32`，同一个值会同时应用到 native listener width 和 height。值为 `16` 时使用 `16 x 16` guide rays。 |
 | `Ray Depth` | ray 的反射/传播 depth。范围是 `1-16`。值越高，残响感和复杂 path 表现越好，但计算量也越高。 |
 | `Per-path enable` | 按类型启用或禁用 `Direct`, `Reflection`, `Diffraction`, `Reverb`, `Transmission` path。 |
 
@@ -113,7 +115,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 |---|---|
 | `Intensity` | 声源基础强度。 |
 | `Gain Boost Db`, `Reverb Send Db`, `Reflection Send Db` | 以 dB 调整整体 gain 与 reverb/reflection send level。 |
-| `Reverb Rays` | 声源侧的残响 ray 设置。`Ray Resolution` 范围是 `1-64`，会同时应用到 reverb ray width 和 height。`Reverb Ray Depth` 范围是 `1-16`。它与 listener ray 是独立设置。 |
+| `Reverb Rays` | 声源侧的残响 ray 设置。`Ray Resolution` 范围是 `1-32`，会同时应用到 reverb ray width 和 height。`Reverb Ray Depth` 范围是 `1-16`。它与 listener ray 是独立设置。 |
 | `Per-path enable` | 按声源启用或禁用 path type。 |
 | `Distance Attenuation` | 按 path type 控制衰减范围。当前 inspector slider 控制 attenuation constant；数值越大，有效范围越小。 |
 | `Distance Attenuation Gizmos` | 在 Scene View 中用 wire sphere 显示各 path type 的衰减范围。 |
@@ -123,14 +125,13 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 `SoundTraceManager` 是每个场景的 SoundTrace runtime owner。listener、source、object 启用时会注册到 manager，manager 负责运行 scene tick 和 propagation update。
 
-### SoundTraceManager settings
-
 | 设置 | 说明 |
 |---|---|
 | `Propagation Interval Ms` | ray-trace propagation pass 的执行间隔。position sync tick 每 frame 运行，propagation 会按该间隔 throttle。 |
 | `Propagate On Start` | 在 `Start()` 时先 flush 一次 scene graph，然后立即执行一次 propagation pass 和 visualizer update。下一次 propagation 会在 `Propagation Interval Ms` 之后运行。 |
 | `Load Default Materials On Enable` | 将 package 的默认 `SoundTraceMaterialPresetLibrary.asset` 注册到 native material table。 |
 | `Propagation Thread Count` | 内部 job system 的 worker 数。`-1` 表示 STCoreV2 按 logical hardware thread 选择。应用开发者应根据整体 CPU budget 分配，实际项目建议从 3 个以上 thread 开始测试。 |
+| `Path Cache Size` | 值为 `0` 或更低时不使用 cache buffer。值为 `1` 或更高时，每 frame 保存 path cache，增加 ray 数量和声学 detail。推荐值为 `256`、`512`、`1024`。 |
 
 ### SoundTracePathVisualizer
 

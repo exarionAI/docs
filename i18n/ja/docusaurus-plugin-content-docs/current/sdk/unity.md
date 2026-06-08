@@ -70,6 +70,8 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 `SoundTraceObject`はUnity `MeshFilter`/`MeshRenderer`をSoundTrace collision geometryとして登録します。現在`MeshFilter`と`MeshRenderer`ベースのコンポーネントであり、SoundTrace geometryとして使うメッシュはimport settingで`Read/Write Enabled`が必要です。`SkinnedMeshRenderer`のvertex deformationを毎tick自動bakeするものとして想定しないでください。
 
+複数の子mesh objectで構成されたimport modelでは、ルートGameObjectに`SoundTraceObject`を追加してから`Add To Child Meshes`を押すことで、meshを持つすべての子オブジェクトへコンポーネントを追加できます。その後、ルートコンポーネントの`MeshFilter`が空であれば、`Remove Root Component(s)`でルートの空コンポーネントを削除します。
+
 レンダリングmaterial自体を変更する機能ではありません。各render material slotをSoundTrace material preset indexへ対応付け、そのindexを該当submesh triangleに付与します。
 
 ### Sound material slots
@@ -99,7 +101,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 | 設定 | 説明 |
 |---|---|
-| `Ray Resolution` | listener guide rayの解像度です。範囲は`1-64`で、1つの値がnative listener widthとheightの両方へ同じように適用されます。値が`16`の場合は`16 x 16` guide rayを使います。 |
+| `Ray Resolution` | listener guide rayの解像度です。範囲は`1-32`で、1つの値がnative listener widthとheightの両方へ同じように適用されます。値が`16`の場合は`16 x 16` guide rayを使います。 |
 | `Ray Depth` | rayの反射/伝播depthです。範囲は`1-16`です。値が大きいほど残響感と複雑なpath表現は向上しますが、計算量も増えます。 |
 | `Per-path enable` | `Direct`, `Reflection`, `Diffraction`, `Reverb`, `Transmission` pathをtype別に有効化または無効化します。 |
 
@@ -113,7 +115,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 |---|---|
 | `Intensity` | ソースの基本強度です。 |
 | `Gain Boost Db`, `Reverb Send Db`, `Reflection Send Db` | 全体gainとreverb/reflection send levelをdB単位で調整します。 |
-| `Reverb Rays` | ソース側の残響ray設定です。`Ray Resolution`の範囲は`1-64`で、reverb ray widthとheightの両方へ同じように適用されます。`Reverb Ray Depth`の範囲は`1-16`です。listener rayとは別設定です。 |
+| `Reverb Rays` | ソース側の残響ray設定です。`Ray Resolution`の範囲は`1-32`で、reverb ray widthとheightの両方へ同じように適用されます。`Reverb Ray Depth`の範囲は`1-16`です。listener rayとは別設定です。 |
 | `Per-path enable` | ソース単位でpath typeを有効化または無効化します。 |
 | `Distance Attenuation` | path type別の減衰範囲を調整します。現在のinspector sliderはattenuation constantを制御し、値が大きいほど有効範囲が小さくなります。 |
 | `Distance Attenuation Gizmos` | path type別の減衰範囲をScene Viewのwire sphereで表示します。 |
@@ -123,14 +125,13 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 `SoundTraceManager`はシーンごとのSoundTrace runtime ownerです。listener、source、objectはenable時にmanagerへ登録され、managerがscene tickとpropagation updateを実行します。
 
-### SoundTraceManager settings
-
 | 設定 | 説明 |
 |---|---|
 | `Propagation Interval Ms` | ray-trace propagation passを実行する間隔です。position sync tickは毎frame実行され、propagationはこの間隔でthrottleされます。 |
 | `Propagate On Start` | `Start()`時点でscene graphを一度flushし、続けてpropagation passとvisualizer updateを即時に一度実行します。次のpropagationは`Propagation Interval Ms`後に実行されます。 |
 | `Load Default Materials On Enable` | パッケージの標準`SoundTraceMaterialPresetLibrary.asset`をnative material tableへ登録します。 |
 | `Propagation Thread Count` | 内部job systemのworker数です。`-1`の場合、STCoreV2がlogical hardware threadを基準に選択します。アプリケーション側でCPU budgetを見て割り当てる必要があり、実運用テストでは3 thread以上から始める構成を推奨します。 |
+| `Path Cache Size` | `0`以下の値ではcache bufferを使用しません。`1`以上の値ではframeごとにpath cacheを保存し、ray数と音響detailを増やします。推奨値は`256`、`512`、`1024`です。 |
 
 ### SoundTracePathVisualizer
 

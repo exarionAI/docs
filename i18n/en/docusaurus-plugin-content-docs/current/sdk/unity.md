@@ -70,6 +70,8 @@ SoundTrace SDK for Unity is a real-time spatial audio plugin that brings the nat
 
 `SoundTraceObject` registers a Unity `MeshFilter`/`MeshRenderer` as SoundTrace collision geometry. It is currently built around `MeshFilter` and `MeshRenderer`, and meshes used as SoundTrace geometry need `Read/Write Enabled` in import settings. Do not assume automatic per-tick baking of `SkinnedMeshRenderer` vertex deformation.
 
+For imported models made of multiple child mesh objects, add `SoundTraceObject` to the root GameObject, then click `Add To Child Meshes` to add components to all child objects that contain meshes. If the root component's `MeshFilter` is empty afterward, remove that empty root component with `Remove Root Component(s)`.
+
 It does not change Unity render materials. It maps each render material slot to a SoundTrace material preset index and attaches that index to the corresponding submesh triangles.
 
 ### Sound material slots
@@ -99,7 +101,7 @@ It does not change Unity render materials. It maps each render material slot to 
 
 | Setting | Description |
 |---|---|
-| `Ray Resolution` | Listener guide-ray resolution. The range is `1-64`, and one value is applied to both native listener width and height. A value of `16` uses `16 x 16` guide rays. |
+| `Ray Resolution` | Listener guide-ray resolution. The range is `1-32`, and one value is applied to both native listener width and height. A value of `16` uses `16 x 16` guide rays. |
 | `Ray Depth` | Ray reflection/propagation depth. The range is `1-16`. Higher values improve reverb feel and complex path coverage but increase cost. |
 | `Per-path enable` | Enables or disables `Direct`, `Reflection`, `Diffraction`, `Reverb`, and `Transmission` paths by type. |
 
@@ -113,7 +115,7 @@ For complex game scenes, start with `Ray Resolution 16` and `Ray Depth 4`.
 |---|---|
 | `Intensity` | Base source intensity. |
 | `Gain Boost Db`, `Reverb Send Db`, `Reflection Send Db` | Overall gain and reverb/reflection send levels in dB. |
-| `Reverb Rays` | Source-side reverb ray settings. `Ray Resolution` ranges from `1-64` and is applied to both reverb ray width and height. `Reverb Ray Depth` ranges from `1-16`. This is separate from listener rays. |
+| `Reverb Rays` | Source-side reverb ray settings. `Ray Resolution` ranges from `1-32` and is applied to both reverb ray width and height. `Reverb Ray Depth` ranges from `1-16`. This is separate from listener rays. |
 | `Per-path enable` | Enables or disables path types per source. |
 | `Distance Attenuation` | Controls attenuation range per path type. The current inspector slider controls the attenuation constant; larger values make the effective range smaller. |
 | `Distance Attenuation Gizmos` | Shows attenuation ranges per path type as Scene View wire spheres. |
@@ -123,14 +125,13 @@ For complex game scenes, start with `Ray Resolution 16` and `Ray Depth 4`.
 
 `SoundTraceManager` is the per-scene SoundTrace runtime owner. Listeners, sources, and objects register with it when enabled, and the manager runs scene ticks and propagation updates.
 
-### SoundTraceManager settings
-
 | Setting | Description |
 |---|---|
 | `Propagation Interval Ms` | Interval for the ray-trace propagation pass. Position sync ticks every frame; propagation is throttled by this interval. |
 | `Propagate On Start` | During `Start()`, flushes the scene graph once, then immediately runs one propagation pass and visualizer update. The next propagation runs after `Propagation Interval Ms`. |
 | `Load Default Materials On Enable` | Registers the package's default `SoundTraceMaterialPresetLibrary.asset` into the native material table. |
 | `Propagation Thread Count` | Worker count for the internal job system. `-1` lets STCoreV2 choose from logical hardware threads. The application should assign this based on CPU budget; begin production testing from 3 or more threads. |
+| `Path Cache Size` | A value of `0` or lower disables the cache buffer. A value of `1` or higher stores the path cache each frame, increasing ray count and acoustic detail. Recommended values are `256`, `512`, and `1024`. |
 
 ### SoundTracePathVisualizer
 
