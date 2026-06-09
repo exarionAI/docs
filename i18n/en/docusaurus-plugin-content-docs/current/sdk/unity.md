@@ -63,8 +63,8 @@ SoundTrace SDK for Unity is a real-time spatial audio plugin that brings the nat
 
 ![Movable object setting](/img/unity/Image09_Movable.png)
 
-14. Use `Refit` for skinned or animated meshes where vertex positions change but topology stays the same.
-15. Use `Rebuild` only when topology, the triangle list, BVH options, or the shape structure changes. Avoid configurations that rebuild every frame.
+14. Use `Refit` for skinned or animated meshes where vertex positions change but topology stays the same. This path also refreshes TLAS with the current Transform after the BLAS work.
+15. Use `Rebuild` only when topology, the triangle list, BVH options, or the shape structure changes. Avoid configurations that rebuild every frame. This path also rebuilds TLAS with the current Transform.
 
 ![Path check after movement](/img/unity/Image10_Moved.png)
 
@@ -110,8 +110,8 @@ Each preset contains 8-band `Reflection`, `Absorption`, `Transmission`, and `Sca
 | `primitivesPerLeaf` | Triangle count stored in each final leaf node. The range is `1-128`. Smaller values improve detail but change build and traversal cost. |
 | `Static` | For static collision geometry. Runtime Transform movement is not reflected in propagation and has no TLAS refit cost. |
 | `Dynamic` | Reflects Transform movement in propagation. It updates only TLAS instance/bounds without refitting BLAS. |
-| `Refit` | Use for skinned or animated meshes where vertex positions change while topology stays the same. |
-| `Rebuild` | Use only when topology, the triangle list, BVH options, or the shape structure changes enough to rebuild the BVH. |
+| `Refit` | Use for skinned or animated meshes where vertex positions change while topology stays the same. After BLAS refit it also refreshes TLAS instance/bounds with the current Transform. |
+| `Rebuild` | Use only when topology, the triangle list, BVH options, or the shape structure changes enough to rebuild the BVH. After rebuild it also rebuilds TLAS with the current Transform. |
 
 ### SoundTraceListener
 

@@ -63,8 +63,8 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 ![可移动对象设置](/img/unity/Image09_Movable.png)
 
-14. 对于 skinned/animated mesh 这类 topology 保持不变、只有 vertex 位置变化的情况，使用 `Refit`。
-15. `Rebuild` 只在 topology、triangle list、BVH option 或 shape 结构发生变化时使用，避免每 frame rebuild 的配置。
+14. 对于 skinned/animated mesh 这类 topology 保持不变、只有 vertex 位置变化的情况，使用 `Refit`。这一路径也会在 BLAS 处理后，用当前 Transform 更新 TLAS。
+15. `Rebuild` 只在 topology、triangle list、BVH option 或 shape 结构发生变化时使用，避免每 frame rebuild 的配置。这一路径也会在 rebuild 后，用当前 Transform 重建 TLAS。
 
 ![移动后的 path 确认](/img/unity/Image10_Moved.png)
 
@@ -110,8 +110,8 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 | `primitivesPerLeaf` | 最终 leaf node 内包含的 triangle 数量。范围是 `1-128`。值越小 detail 越好，但 build/traversal cost 会变化。 |
 | `Static` | 用于静态 collision geometry。runtime Transform 移动不会反映到 propagation，也不会产生 TLAS refit 成本。 |
 | `Dynamic` | 将 Transform 移动反映到 propagation。它不 refit BLAS，只更新 TLAS instance/bounds。 |
-| `Refit` | 用于 skinned/animated mesh 这类 vertex 位置变化但 topology 保持不变的情况。 |
-| `Rebuild` | 仅在 topology、triangle list、BVH option 或 shape 结构变化到需要重建 BVH 时使用。 |
+| `Refit` | 用于 skinned/animated mesh 这类 vertex 位置变化但 topology 保持不变的情况。BLAS refit 后，也会用当前 Transform 更新 TLAS instance/bounds。 |
+| `Rebuild` | 仅在 topology、triangle list、BVH option 或 shape 结构变化到需要重建 BVH 时使用。Rebuild 后，也会用当前 Transform 重建 TLAS。 |
 
 ### SoundTraceListener
 
