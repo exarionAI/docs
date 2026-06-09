@@ -54,13 +54,16 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 
 ![反射 path line 成功確認](/img/unity/Image08_Success.png)
 
-10. 移動聽者或聲源，確認聲音會依物理關係變化。
-11. 如果 `SoundTraceObject` 的 `Update Mode` 是 `Static`，移動 Transform 不會為 runtime update 重建 geometry。
-12. 對需要移動的物件使用 `Refit`。
+![Path type 顏色](/img/unity/Image11_PathTypes.png)
+
+10. 紅色線 - 直接聲（`Direct Path`）<br />橙色線 - 反射聲（`Reflection Path`）<br />綠色線 - 繞射聲（`Diffraction Path`）
+11. 移動聽者或聲源，確認聲音會依物理關係變化。
+12. 如果 `SoundTraceObject` 的 `Update Mode` 是 `Static`，移動 Transform 不會為 runtime update 重建 geometry。
+13. 對需要移動的物件使用 `Refit`。
 
 ![可移動物件設定](/img/unity/Image09_Movable.png)
 
-13. `Rebuild` 只在形狀發生明顯變化時使用，避免每 frame rebuild 的設定。
+14. `Rebuild` 只在形狀發生明顯變化時使用，避免每 frame rebuild 的設定。
 
 ![移動後的 path 確認](/img/unity/Image10_Moved.png)
 
@@ -68,11 +71,24 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 
 ### SoundTraceObject
 
+![SoundTraceObject Inspector](/img/unity/Image_20_Object.png)
+
 `SoundTraceObject` 會把 Unity `MeshFilter`/`MeshRenderer` 註冊為 SoundTrace collision geometry。它目前基於 `MeshFilter` 和 `MeshRenderer`，用作 SoundTrace geometry 的網格需要在 import settings 中啟用 `Read/Write Enabled`。不要假設 `SkinnedMeshRenderer` 的 vertex deformation 會每 tick 自動 bake。
+
+![給子 mesh object 新增元件](/img/unity/Image12_ChildObjh.png)
 
 對於由多個子 mesh object 組成的 import model，可以先在根 GameObject 上新增 `SoundTraceObject`，再點擊 `Add To Child Meshes`，把元件新增到所有包含 mesh 的子物件。之後如果根元件的 `MeshFilter` 為空，請用 `Remove Root Component(s)` 移除根上的空元件。
 
 它不是修改渲染材質本身的功能，而是把每個 render material slot 映射到 SoundTrace material preset index，並把該 index 附加到對應的 submesh triangle。
+
+### SoundTraceMaterialPresetLibrary
+
+| ![Material Preset Library 1](/img/unity/Image_Mat_01.png) | ![Material Preset Library 2](/img/unity/Image_Mat_02.png) |
+|---|---|
+
+預設 material preset library 位於 package 內部的 `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`。可透過 Unity 選單 `SoundTrace > Material Preset Library` 選擇。
+
+每個 preset 都包含 8-band `Reflection`, `Absorption`, `Transmission` 和 `Scattering` 值。可以直接編輯 ScriptableObject 來修改 material property 或新增 preset，也可以在 inspector toolbar 中 import/export `soundMaterial.json`。
 
 ### Sound material slots
 
@@ -97,6 +113,8 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 
 ### SoundTraceListener
 
+![SoundTraceListener 元件](/img/unity/Image04_Listener.png)
+
 `SoundTraceListener` 是場景聽者。它每 frame 將 Transform position 和 orientation 同步到原生 listener，並擁有 listener ray 設定和 path type enable。
 
 | 設定 | 說明 |
@@ -108,6 +126,8 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 複雜遊戲場景的初始值建議使用 `Ray Resolution 16`、`Ray Depth 4`。
 
 ### SoundTraceSource
+
+![SoundTraceSource 元件](/img/unity/Image05_Source.png)
 
 `SoundTraceSource` 是 SoundTrace 聲源元件，需要 Unity `AudioSource`。它在 Unity audio filter callback `OnAudioFilterRead` 中，將輸入 buffer in-place 渲染為 SoundTrace spatial output。
 
@@ -123,6 +143,8 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 
 ### SoundTraceManager
 
+![SoundTraceManager 元件](/img/unity/Image_21_Manager.png)
+
 `SoundTraceManager` 是每個場景的 SoundTrace runtime owner。listener、source、object 啟用時會註冊到 manager，manager 負責執行 scene tick 和 propagation update。
 
 | 設定 | 說明 |
@@ -135,6 +157,8 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 
 ### SoundTracePathVisualizer
 
+![SoundTracePathVisualizer 元件](/img/unity/Image_22_PathVisual.png)
+
 `SoundTracePathVisualizer` 是將 valid path 以 runtime line renderer 顯示出來的除錯元件。用於目視確認場景中的 reflection、diffraction、reverb、transmission path 如何產生。
 
 | 設定 | 說明 |
@@ -144,12 +168,6 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 | `Path Width` | line width。 |
 | `Path Alpha Intensity` | 基於 attenuation 的 alpha scaling 強度。 |
 | `Draw Valid Paths`, `Draw Hit Triangles` | Scene View debug drawing 選項。 |
-
-### SoundTraceMaterialPresetLibrary
-
-預設 material preset library 位於 package 內部的 `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`。可透過 Unity 選單 `SoundTrace > Material Preset Library` 選擇。
-
-每個 preset 都包含 8-band `Reflection`, `Absorption`, `Transmission` 和 `Scattering` 值。可以直接編輯 ScriptableObject 來修改 material property 或新增 preset，也可以在 inspector toolbar 中 import/export `soundMaterial.json`。
 
 ## Samples
 

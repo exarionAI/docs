@@ -54,13 +54,16 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 ![反射path lineの成功確認](/img/unity/Image08_Success.png)
 
-10. リスナーまたはソースの位置を動かし、音が物理的に変化するか確認します。
-11. `SoundTraceObject`の`Update Mode`が`Static`の場合、Transformを動かしてもruntime geometry update用の再構築は行いません。
-12. 移動が必要なオブジェクトには`Refit`を使います。
+![Path typeの色](/img/unity/Image11_PathTypes.png)
+
+10. 赤いライン - 直接音（`Direct Path`）<br />オレンジのライン - 反射音（`Reflection Path`）<br />緑のライン - 回折音（`Diffraction Path`）
+11. リスナーまたはソースの位置を動かし、音が物理的に変化するか確認します。
+12. `SoundTraceObject`の`Update Mode`が`Static`の場合、Transformを動かしてもruntime geometry update用の再構築は行いません。
+13. 移動が必要なオブジェクトには`Refit`を使います。
 
 ![移動可能オブジェクト設定](/img/unity/Image09_Movable.png)
 
-13. `Rebuild`は形状が大きく変わる場合だけ使い、毎frame rebuildする構成は避けます。
+14. `Rebuild`は形状が大きく変わる場合だけ使い、毎frame rebuildする構成は避けます。
 
 ![移動後のpath確認](/img/unity/Image10_Moved.png)
 
@@ -68,11 +71,24 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 ### SoundTraceObject
 
+![SoundTraceObjectインスペクター](/img/unity/Image_20_Object.png)
+
 `SoundTraceObject`はUnity `MeshFilter`/`MeshRenderer`をSoundTrace collision geometryとして登録します。現在`MeshFilter`と`MeshRenderer`ベースのコンポーネントであり、SoundTrace geometryとして使うメッシュはimport settingで`Read/Write Enabled`が必要です。`SkinnedMeshRenderer`のvertex deformationを毎tick自動bakeするものとして想定しないでください。
+
+![子mesh objectへのコンポーネント追加](/img/unity/Image12_ChildObjh.png)
 
 複数の子mesh objectで構成されたimport modelでは、ルートGameObjectに`SoundTraceObject`を追加してから`Add To Child Meshes`を押すことで、meshを持つすべての子オブジェクトへコンポーネントを追加できます。その後、ルートコンポーネントの`MeshFilter`が空であれば、`Remove Root Component(s)`でルートの空コンポーネントを削除します。
 
 レンダリングmaterial自体を変更する機能ではありません。各render material slotをSoundTrace material preset indexへ対応付け、そのindexを該当submesh triangleに付与します。
+
+### SoundTraceMaterialPresetLibrary
+
+| ![Material Preset Library 1](/img/unity/Image_Mat_01.png) | ![Material Preset Library 2](/img/unity/Image_Mat_02.png) |
+|---|---|
+
+標準material preset libraryはパッケージ内の`Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`にあります。Unityメニュー`SoundTrace > Material Preset Library`から選択できます。
+
+各presetは8-bandの`Reflection`, `Absorption`, `Transmission`と`Scattering`値を持ちます。ScriptableObjectを直接編集してmaterial propertyを変更したり、新しいpresetを追加したりできます。inspector toolbarから`soundMaterial.json`のimport/exportも可能です。
 
 ### Sound material slots
 
@@ -97,6 +113,8 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 ### SoundTraceListener
 
+![SoundTraceListenerコンポーネント](/img/unity/Image04_Listener.png)
+
 `SoundTraceListener`はシーンのリスナーです。毎frame Transform positionとorientationをネイティブlistenerへ同期し、listener ray設定とpath type enableを保持します。
 
 | 設定 | 説明 |
@@ -108,6 +126,8 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 複雑なゲームシーンの初期値は`Ray Resolution 16`、`Ray Depth 4`を推奨します。
 
 ### SoundTraceSource
+
+![SoundTraceSourceコンポーネント](/img/unity/Image05_Source.png)
 
 `SoundTraceSource`はUnity `AudioSource`を必要とするSoundTrace音源コンポーネントです。Unity audio filter callbackである`OnAudioFilterRead`で入力bufferをSoundTrace spatial outputへin-placeレンダリングします。
 
@@ -123,6 +143,8 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 ### SoundTraceManager
 
+![SoundTraceManagerコンポーネント](/img/unity/Image_21_Manager.png)
+
 `SoundTraceManager`はシーンごとのSoundTrace runtime ownerです。listener、source、objectはenable時にmanagerへ登録され、managerがscene tickとpropagation updateを実行します。
 
 | 設定 | 説明 |
@@ -135,6 +157,8 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 ### SoundTracePathVisualizer
 
+![SoundTracePathVisualizerコンポーネント](/img/unity/Image_22_PathVisual.png)
+
 `SoundTracePathVisualizer`はvalid pathをruntime line rendererとして表示するデバッグコンポーネントです。reflection、diffraction、reverb、transmission pathがシーン内でどう生成されるかを目視確認するために使います。
 
 | 設定 | 説明 |
@@ -144,12 +168,6 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 | `Path Width` | line widthです。 |
 | `Path Alpha Intensity` | attenuationベースのalpha scaling強度です。 |
 | `Draw Valid Paths`, `Draw Hit Triangles` | Scene View debug drawing optionです。 |
-
-### SoundTraceMaterialPresetLibrary
-
-標準material preset libraryはパッケージ内の`Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`にあります。Unityメニュー`SoundTrace > Material Preset Library`から選択できます。
-
-各presetは8-bandの`Reflection`, `Absorption`, `Transmission`と`Scattering`値を持ちます。ScriptableObjectを直接編集してmaterial propertyを変更したり、新しいpresetを追加したりできます。inspector toolbarから`soundMaterial.json`のimport/exportも可能です。
 
 ## Samples
 

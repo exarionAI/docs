@@ -54,13 +54,16 @@ SoundTrace SDK for Unity is a real-time spatial audio plugin that brings the nat
 
 ![Successful reflected path lines](/img/unity/Image08_Success.png)
 
-10. Move the listener or source and verify that the sound changes physically.
-11. If a `SoundTraceObject` uses `Static` update mode, moving it will not rebuild the geometry for runtime updates.
-12. Use `Refit` for objects that need movement.
+![Path type colors](/img/unity/Image11_PathTypes.png)
+
+10. Red line - direct sound (`Direct Path`)<br />Orange line - reflected sound (`Reflection Path`)<br />Green line - diffracted sound (`Diffraction Path`)
+11. Move the listener or source and verify that the sound changes physically.
+12. If a `SoundTraceObject` uses `Static` update mode, moving it will not rebuild the geometry for runtime updates.
+13. Use `Refit` for objects that need movement.
 
 ![Movable object setting](/img/unity/Image09_Movable.png)
 
-13. Use `Rebuild` only when the shape changes substantially. Avoid configurations that rebuild every frame.
+14. Use `Rebuild` only when the shape changes substantially. Avoid configurations that rebuild every frame.
 
 ![Path check after movement](/img/unity/Image10_Moved.png)
 
@@ -68,11 +71,24 @@ SoundTrace SDK for Unity is a real-time spatial audio plugin that brings the nat
 
 ### SoundTraceObject
 
+![SoundTraceObject inspector](/img/unity/Image_20_Object.png)
+
 `SoundTraceObject` registers a Unity `MeshFilter`/`MeshRenderer` as SoundTrace collision geometry. It is currently built around `MeshFilter` and `MeshRenderer`, and meshes used as SoundTrace geometry need `Read/Write Enabled` in import settings. Do not assume automatic per-tick baking of `SkinnedMeshRenderer` vertex deformation.
+
+![Add components to child mesh objects](/img/unity/Image12_ChildObjh.png)
 
 For imported models made of multiple child mesh objects, add `SoundTraceObject` to the root GameObject, then click `Add To Child Meshes` to add components to all child objects that contain meshes. If the root component's `MeshFilter` is empty afterward, remove that empty root component with `Remove Root Component(s)`.
 
 It does not change Unity render materials. It maps each render material slot to a SoundTrace material preset index and attaches that index to the corresponding submesh triangles.
+
+### SoundTraceMaterialPresetLibrary
+
+| ![Material Preset Library 1](/img/unity/Image_Mat_01.png) | ![Material Preset Library 2](/img/unity/Image_Mat_02.png) |
+|---|---|
+
+The default material preset library is stored in the package at `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`. Select it from Unity with `SoundTrace > Material Preset Library`.
+
+Each preset contains 8-band `Reflection`, `Absorption`, `Transmission`, and `Scattering` values. You can edit the ScriptableObject directly, add presets, and import or export `soundMaterial.json` from the inspector toolbar.
 
 ### Sound material slots
 
@@ -97,6 +113,8 @@ It does not change Unity render materials. It maps each render material slot to 
 
 ### SoundTraceListener
 
+![SoundTraceListener component](/img/unity/Image04_Listener.png)
+
 `SoundTraceListener` is the scene listener. It synchronizes Transform position and orientation to the native listener every frame and owns listener ray settings plus path-type enable flags.
 
 | Setting | Description |
@@ -108,6 +126,8 @@ It does not change Unity render materials. It maps each render material slot to 
 For complex game scenes, start with `Ray Resolution 16` and `Ray Depth 4`.
 
 ### SoundTraceSource
+
+![SoundTraceSource component](/img/unity/Image05_Source.png)
 
 `SoundTraceSource` is the SoundTrace audio source component and requires a Unity `AudioSource`. It uses Unity's audio filter callback, `OnAudioFilterRead`, to render the input buffer in place into SoundTrace spatial output.
 
@@ -123,6 +143,8 @@ For complex game scenes, start with `Ray Resolution 16` and `Ray Depth 4`.
 
 ### SoundTraceManager
 
+![SoundTraceManager component](/img/unity/Image_21_Manager.png)
+
 `SoundTraceManager` is the per-scene SoundTrace runtime owner. Listeners, sources, and objects register with it when enabled, and the manager runs scene ticks and propagation updates.
 
 | Setting | Description |
@@ -135,6 +157,8 @@ For complex game scenes, start with `Ray Resolution 16` and `Ray Depth 4`.
 
 ### SoundTracePathVisualizer
 
+![SoundTracePathVisualizer component](/img/unity/Image_22_PathVisual.png)
+
 `SoundTracePathVisualizer` is a debugging component that renders valid paths as runtime line renderers. Use it to visually inspect reflection, diffraction, reverb, and transmission paths in the scene.
 
 | Setting | Description |
@@ -144,12 +168,6 @@ For complex game scenes, start with `Ray Resolution 16` and `Ray Depth 4`.
 | `Path Width` | Line width. |
 | `Path Alpha Intensity` | Strength of attenuation-based alpha scaling. |
 | `Draw Valid Paths`, `Draw Hit Triangles` | Scene View debug drawing options. |
-
-### SoundTraceMaterialPresetLibrary
-
-The default material preset library is stored in the package at `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`. Select it from Unity with `SoundTrace > Material Preset Library`.
-
-Each preset contains 8-band `Reflection`, `Absorption`, `Transmission`, and `Scattering` values. You can edit the ScriptableObject directly, add presets, and import or export `soundMaterial.json` from the inspector toolbar.
 
 ## Samples
 
