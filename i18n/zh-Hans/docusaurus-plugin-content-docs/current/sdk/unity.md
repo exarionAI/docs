@@ -58,12 +58,13 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 10. 红色线 - 直接声（`Direct Path`）<br />橙色线 - 反射声（`Reflection Path`）<br />绿色线 - 衍射声（`Diffraction Path`）
 11. 移动听者或声源，确认声音会按物理关系变化。
-12. 如果 `SoundTraceObject` 的 `Update Mode` 是 `Static`，移动 Transform 不会为了 runtime update 重建 geometry。
-13. 对需要移动的对象使用 `Refit`。
+12. 如果 `SoundTraceObject` 的 `Update Mode` 是 `Static`，runtime Transform 移动不会反映到 propagation，也不会产生 TLAS refit 成本。
+13. 需要让 Transform 移动影响 propagation 的对象使用 `Dynamic`。
 
 ![可移动对象设置](/img/unity/Image09_Movable.png)
 
-14. `Rebuild` 只在形状发生明显变化时使用，避免每 frame rebuild 的配置。
+14. 对于 skinned/animated mesh 这类 topology 保持不变、只有 vertex 位置变化的情况，使用 `Refit`。
+15. `Rebuild` 只在 topology、triangle list、BVH option 或 shape 结构发生变化时使用，避免每 frame rebuild 的配置。
 
 ![移动后的 path 确认](/img/unity/Image10_Moved.png)
 
@@ -107,9 +108,10 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 | `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16` | LBVH 系列的 SIMD variant。场景越复杂，较高 SIMD width 的选项可能越有利。 |
 | `bvhMaxDepth` | BVH 最大 depth。depth 越大，越能受益于 traversal pruning，建议先从较大的值开始测试。 |
 | `primitivesPerLeaf` | 最终 leaf node 内包含的 triangle 数量。范围是 `1-128`。值越小 detail 越好，但 build/traversal cost 会变化。 |
-| `Static` | 用于静态 geometry。适合不需要把 runtime 移动或形状变化反映到传播中的对象。 |
-| `Refit` | 保持现有结构，同时跟随 runtime transform 或 shape update。 |
-| `Rebuild` | 仅在 topology 或形状变化到必须重建 BVH 时使用。 |
+| `Static` | 用于静态 collision geometry。runtime Transform 移动不会反映到 propagation，也不会产生 TLAS refit 成本。 |
+| `Dynamic` | 将 Transform 移动反映到 propagation。它不 refit BLAS，只更新 TLAS instance/bounds。 |
+| `Refit` | 用于 skinned/animated mesh 这类 vertex 位置变化但 topology 保持不变的情况。 |
+| `Rebuild` | 仅在 topology、triangle list、BVH option 或 shape 结构变化到需要重建 BVH 时使用。 |
 
 ### SoundTraceListener
 

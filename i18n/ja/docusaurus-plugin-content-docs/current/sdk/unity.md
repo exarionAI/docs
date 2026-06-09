@@ -58,12 +58,13 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 10. 赤いライン - 直接音（`Direct Path`）<br />オレンジのライン - 反射音（`Reflection Path`）<br />緑のライン - 回折音（`Diffraction Path`）
 11. リスナーまたはソースの位置を動かし、音が物理的に変化するか確認します。
-12. `SoundTraceObject`の`Update Mode`が`Static`の場合、Transformを動かしてもruntime geometry update用の再構築は行いません。
-13. 移動が必要なオブジェクトには`Refit`を使います。
+12. `SoundTraceObject`の`Update Mode`が`Static`の場合、runtime Transform移動はpropagationに反映されず、TLAS refit costも発生しません。
+13. Transform移動をpropagationに反映するオブジェクトには`Dynamic`を使います。
 
 ![移動可能オブジェクト設定](/img/unity/Image09_Movable.png)
 
-14. `Rebuild`は形状が大きく変わる場合だけ使い、毎frame rebuildする構成は避けます。
+14. Skinned/animated meshのようにtopologyは維持され、vertex位置だけが変わる場合は`Refit`を使います。
+15. `Rebuild`はtopology、triangle list、BVH option、shape構造が変わる場合だけ使い、毎frame rebuildする構成は避けます。
 
 ![移動後のpath確認](/img/unity/Image10_Moved.png)
 
@@ -107,9 +108,10 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 | `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16` | LBVH系のSIMD variantです。複雑なシーンほど高いSIMD widthの選択肢が有利になる場合があります。 |
 | `bvhMaxDepth` | BVH最大depthです。大きいほどtraversal pruningの効果を受けやすいため、まず大きめの値からテストする構成を推奨します。 |
 | `primitivesPerLeaf` | 最終leaf nodeに入るtriangle数です。範囲は`1-128`です。小さくするとdetailは上がりますが、build/traversal costが変わります。 |
-| `Static` | 静的geometry用です。runtimeの移動や形状変更を伝播へ反映しない構成で使います。 |
-| `Refit` | 既存構造を維持しながらruntime transformまたはshape updateへ追従します。 |
-| `Rebuild` | topologyまたは形状がBVH再構築を必要とするほど変わる場合だけ使います。 |
+| `Static` | 静的collision geometry用です。runtime Transform移動はpropagationに反映されず、TLAS refit costも発生しません。 |
+| `Dynamic` | Transform移動をpropagationに反映します。BLAS refitなしでTLAS instance/boundsだけを更新します。 |
+| `Refit` | Skinned/animated meshのようにvertex位置が変わり、topologyは維持される場合に使います。 |
+| `Rebuild` | topology、triangle list、BVH option、shape構造が変わり、BVHを作り直す必要がある場合だけ使います。 |
 
 ### SoundTraceListener
 

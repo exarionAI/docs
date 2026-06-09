@@ -58,12 +58,13 @@ SoundTrace SDK for Unity is a real-time spatial audio plugin that brings the nat
 
 10. Red line - direct sound (`Direct Path`)<br />Orange line - reflected sound (`Reflection Path`)<br />Green line - diffracted sound (`Diffraction Path`)
 11. Move the listener or source and verify that the sound changes physically.
-12. If a `SoundTraceObject` uses `Static` update mode, moving it will not rebuild the geometry for runtime updates.
-13. Use `Refit` for objects that need movement.
+12. If a `SoundTraceObject` uses `Static` update mode, runtime Transform movement is not reflected in propagation and has no TLAS refit cost.
+13. Use `Dynamic` for objects whose Transform movement must affect propagation.
 
 ![Movable object setting](/img/unity/Image09_Movable.png)
 
-14. Use `Rebuild` only when the shape changes substantially. Avoid configurations that rebuild every frame.
+14. Use `Refit` for skinned or animated meshes where vertex positions change but topology stays the same.
+15. Use `Rebuild` only when topology, the triangle list, BVH options, or the shape structure changes. Avoid configurations that rebuild every frame.
 
 ![Path check after movement](/img/unity/Image10_Moved.png)
 
@@ -107,9 +108,10 @@ Each preset contains 8-band `Reflection`, `Absorption`, `Transmission`, and `Sca
 | `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16` | SIMD variants of LBVH. Higher SIMD width can be better for complex scenes. |
 | `bvhMaxDepth` | Maximum BVH depth. Larger depths can benefit more from traversal pruning, so start testing from a high value. |
 | `primitivesPerLeaf` | Triangle count stored in each final leaf node. The range is `1-128`. Smaller values improve detail but change build and traversal cost. |
-| `Static` | For static geometry. Use it when runtime movement or shape changes do not need to affect propagation. |
-| `Refit` | Keeps the existing structure while following runtime transform or shape updates. |
-| `Rebuild` | Use only when topology or shape changes enough to require rebuilding the BVH. |
+| `Static` | For static collision geometry. Runtime Transform movement is not reflected in propagation and has no TLAS refit cost. |
+| `Dynamic` | Reflects Transform movement in propagation. It updates only TLAS instance/bounds without refitting BLAS. |
+| `Refit` | Use for skinned or animated meshes where vertex positions change while topology stays the same. |
+| `Rebuild` | Use only when topology, the triangle list, BVH options, or the shape structure changes enough to rebuild the BVH. |
 
 ### SoundTraceListener
 
