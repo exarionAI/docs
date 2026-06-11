@@ -11,7 +11,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 | 項目 | 要件 |
 |---|---|
 | Unity | `2022.3.62f2`以上 |
-| プラットフォーム | macOS, Windows, Linux, iOS, Android, WebGL |
+| プラットフォーム | macOS, Windows, Linux, iOS, Android |
 
 ## Unity Project Setup
 
@@ -173,12 +173,30 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 ## Samples
 
-:::info 予定
-サンプル文書は別ページとして追加予定です。
-:::
+### SampleScene01
+
+![SampleScene01](/img/unity/SampleScene01.png)
+
+`SampleScene01`はGetting Startedに近い構成のシンプルなサンプルシーンです。追加スクリプトは含まれておらず、単純なcube geometry room内でSoundTraceの詳細なray演算を体験できます。
+
+### SampleScene02
+
+![SampleScene02](/img/unity/SampleScene02.png)
+
+`SampleScene02`では、touchまたはmouseでlistenerとsound sourceの位置を直接変更できます。
+
+灰色の円形outlineは単なるUI表示ではなく、実際の`Ico Sphere Dome` geometryです。cube roomとは異なる反射音響を提供します。
+
+1. 分離されたsound sourceを左右へ動かし、outline boundaryの外側にも移動させて、音楽の変化を確認します。
+2. `UIVisible` buttonはsource操作をしやすくするためにUIを非表示にします。
+3. `Reset` buttonは音楽、位置、materialを初期値に戻します。
+4. `Toggle UnitySound` buttonはSoundTrace renderingと標準Unity `AudioSource`出力の差をtoggleします。
+5. 右側のmaterial scroll barで、提供されるSoundTrace material presetを使ってDomeの材質を変更できます。`Steel`、`Marble`、`Snow`、`Soil`は体感差が大きいpresetです。
 
 ## Troubleshooting
 
-:::info 予定
-トラブルシューティング文書は別ページとして追加予定です。
-:::
+| 症状 | 確認すること |
+|---|---|
+| 複数のaudio sourceの同期がずれ、echo/flangingのように聞こえる | 複数の`AudioSource`は`playOnAwake`や個別の`Play()`ではなく、1つのscriptから開始します。`AudioSettings.dspTime`を基準に同じ`startDspTime`を作り、すべてのsourceを`AudioSource.PlayScheduled(startDspTime)`で開始します。<br /><br />検証用audio assetはImport Settingsで`Decompress On Load`、`PCM`、`Preserve Sample Rate`、`Preload Audio Data`、`Force To Mono` On、`Normalize` Offに設定します。 |
+
+<img src="/img/unity/ImportSetting.png" alt="Audio Import Settings" width="420" />

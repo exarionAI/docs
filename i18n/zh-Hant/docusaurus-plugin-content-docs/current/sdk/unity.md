@@ -11,7 +11,7 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 | 項目 | 需求 |
 |---|---|
 | Unity | `2022.3.62f2` 或更新版本 |
-| 平台 | macOS, Windows, Linux, iOS, Android, WebGL |
+| 平台 | macOS, Windows, Linux, iOS, Android |
 
 ## Unity Project Setup
 
@@ -173,12 +173,30 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 
 ## Samples
 
-:::info 計畫中
-範例文件將作為獨立頁面新增。
-:::
+### SampleScene01
+
+![SampleScene01](/img/unity/SampleScene01.png)
+
+`SampleScene01` 是一個與 Getting Started 類似的簡單範例場景。它不包含額外腳本，可在簡單的 cube geometry room 中體驗 SoundTrace 細緻的 ray 計算。
+
+### SampleScene02
+
+![SampleScene02](/img/unity/SampleScene02.png)
+
+`SampleScene02` 可透過 touch 或 mouse 直接改變 listener 和 sound source 的位置。
+
+灰色圓形邊框不是單純的 UI 標記，而是真實的 `Ico Sphere Dome` geometry。它會提供不同於 cube room 的反射聲學效果。
+
+1. 將分離的 sound source 左右移動，並嘗試移出邊框邊界，確認音樂如何變化。
+2. `UIVisible` 按鈕會隱藏 UI，方便操作 source。
+3. `Reset` 按鈕會將音樂、位置、material 恢復到初始值。
+4. `Toggle UnitySound` 按鈕會在 SoundTrace rendering 與預設 Unity `AudioSource` 輸出之間切換。
+5. 右側 material scroll bar 可使用提供的 SoundTrace material preset 修改 Dome 材質。測試 `Steel`、`Marble`、`Snow`、`Soil` 時體感效果較明顯。
 
 ## Troubleshooting
 
-:::info 計畫中
-疑難排解文件將作為獨立頁面新增。
-:::
+| 症狀 | 檢查項 |
+|---|---|
+| 多個音源不同步，聽起來像 echo/flanging | 多個 `AudioSource` 不要用 `playOnAwake` 或單獨的 `Play()` 分別啟動，而是由一個 script 統一啟動。基於 `AudioSettings.dspTime` 建立同一個 `startDspTime`，並對所有 source 呼叫 `AudioSource.PlayScheduled(startDspTime)`。<br /><br />驗證用 audio asset 請在 Import Settings 中設定為 `Decompress On Load`、`PCM`、`Preserve Sample Rate`、`Preload Audio Data`、`Force To Mono` On、`Normalize` Off。 |
+
+<img src="/img/unity/ImportSetting.png" alt="Audio Import Settings" width="420" />

@@ -11,7 +11,7 @@ SoundTrace SDK for Unity is a real-time spatial audio plugin that brings the nat
 | Item | Requirement |
 |---|---|
 | Unity | `2022.3.62f2` or newer |
-| Platforms | macOS, Windows, Linux, iOS, Android, WebGL |
+| Platforms | macOS, Windows, Linux, iOS, Android |
 
 ## Unity Project Setup
 
@@ -173,12 +173,30 @@ For complex game scenes, start with `Ray Resolution 16` and `Ray Depth 4`.
 
 ## Samples
 
-:::info Planned
-Sample documentation will be added on a separate page.
-:::
+### SampleScene01
+
+![SampleScene01](/img/unity/SampleScene01.png)
+
+`SampleScene01` is a simple sample scene similar to Getting Started. It does not include additional scripts, and lets you inspect detailed SoundTrace ray calculations inside a simple cube-geometry room.
+
+### SampleScene02
+
+![SampleScene02](/img/unity/SampleScene02.png)
+
+`SampleScene02` lets you move the listener and sound sources directly with touch or mouse input.
+
+The gray circular outline is not just a UI marker; it is real `Ico Sphere Dome` geometry. It provides a different reflection response from the cube room.
+
+1. Move the separated sound sources left and right, including outside the outline boundary, and listen for how the music changes.
+2. The `UIVisible` button hides the UI so source manipulation is easier.
+3. The `Reset` button restores the music, positions, and material to their initial values.
+4. The `Toggle UnitySound` button toggles between SoundTrace rendering and the default Unity `AudioSource` output.
+5. The material scroll bar on the right changes the Dome material using the provided SoundTrace material presets. `Steel`, `Marble`, `Snow`, and `Soil` provide a strong audible contrast.
 
 ## Troubleshooting
 
-:::info Planned
-Troubleshooting documentation will be added on a separate page.
-:::
+| Symptom | What to check |
+|---|---|
+| Multiple audio sources drift out of sync and sound like echo/flanging | Start multiple `AudioSource` instances from one script instead of `playOnAwake` or separate `Play()` calls. Create one `startDspTime` from `AudioSettings.dspTime` and start every source with `AudioSource.PlayScheduled(startDspTime)`.<br /><br />For verification audio assets, set Import Settings to `Decompress On Load`, `PCM`, `Preserve Sample Rate`, `Preload Audio Data`, `Force To Mono` On, and `Normalize` Off. |
+
+<img src="/img/unity/ImportSetting.png" alt="Audio Import Settings" width="420" />
