@@ -171,7 +171,7 @@ frame, then calls `tick()` and `updatePropagation()`. In the MT binary,
 STCoreV2 internal jobs are scheduled inside `updatePropagation()` and joined
 before it returns.
 
-Both modes require `crossOriginIsolated === true` in the browser. Set the following headers on the HTML response.
+The native WASM AudioWorklet path requires `crossOriginIsolated === true` in the browser. MT mode requires this path; ST mode can fall back to main-thread rendering on static deployments without these headers. Set the following headers on HTML responses for native worklet deployments.
 
 ```txt
 Cross-Origin-Opener-Policy: same-origin
@@ -580,9 +580,9 @@ npm run build
 npm run serve
 ```
 
-The Vite dev server sets COOP/COEP headers by default, so both ST and MT modes
-can be tested. The iframe is fixed to `?thread=st` to make the startup binary
-explicit.
+The iframe is fixed to `?thread=st`, and ST runs through the single-thread
+fallback render path regardless of COOP/COEP. The Vite dev server's COOP/COEP
+headers are used when testing the MT/native worklet path separately.
 
 ### Bottom Buttons
 
@@ -642,7 +642,7 @@ Because the demo is a small scene, it starts listener `General Rays` at `32 × 3
 
 | Symptom | Check |
 |---|---|
-| WASM load fails | Confirm the HTML response has COOP/COEP and `crossOriginIsolated` is `true` |
+| Native worklet/MT load fails | Confirm the HTML response has COOP/COEP and `crossOriginIsolated` is `true` |
 | `createWorkletNode` error | Confirm `ctx.resume()` ran inside a user gesture and the worklet core asset path is correct |
 | No sound | Call `ctx.resume()` inside a user click, confirm `soundMaterial.json` loaded into the material table, and check that the absorption array was not accidentally copied identical to reflection |
 | Reflection/diffraction/absorption changes are not audible | Without a sound collider, the scene mainly produces direct sound. Add a collider with geometry and mapped sound materials |

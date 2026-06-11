@@ -170,7 +170,7 @@ JavaScript control flow 相同：app 每帧先套用 mutation，然後呼叫 `ti
 `updatePropagation()`。MT binary 會在 `updatePropagation()` 內調度 STCoreV2
 internal jobs，並在返回前 join。
 
-兩個模式都要求瀏覽器 `crossOriginIsolated === true`。請在 HTML 響應中設定以下 header。
+Native WASM AudioWorklet 路徑要求瀏覽器 `crossOriginIsolated === true`。MT mode 必須使用這條路徑；ST mode 在沒有這些 header 的靜態部署中可以 fallback 到 main-thread render。Native worklet 部署的 HTML 響應請設定以下 header。
 
 ```txt
 Cross-Origin-Opener-Policy: same-origin
@@ -577,8 +577,8 @@ npm run build
 npm run serve
 ```
 
-Vite dev server 預設設定 COOP/COEP header，因此可以確認 ST/MT mode。iframe 固定為
-`?thread=st`，用於明確啟動 binary。
+iframe 固定為 `?thread=st`，ST 無論是否有 COOP/COEP 都使用 single-thread fallback render
+路徑。Vite dev server 的 COOP/COEP header 只用於另外確認 MT/native worklet 路徑。
 
 ### 底部按鈕
 
@@ -640,7 +640,7 @@ demo 是小場景，用於展示品質和視覺化，因此 listener `General Ra
 
 | 症状 | 檢查項 |
 |---|---|
-| WASM 載入失败 | 確認 HTML 響應包含 COOP/COEP，且 `crossOriginIsolated` 為 `true` |
+| Native worklet/MT 載入失败 | 確認 HTML 響應包含 COOP/COEP，且 `crossOriginIsolated` 為 `true` |
 | `createWorkletNode` error | 確認 `ctx.resume()` 在 user gesture 中執行，且 worklet core asset path 正確 |
 | 沒有聲音 | 確認在使用者點擊中调用 `ctx.resume()`，`soundMaterial.json` 已載入到 material table，且 absorption array 沒有误複製成與 reflection 相同 |
 | 聽不到 reflection/diffraction/absorption 變化 | 沒有 sound collider 時，scene 主要只產生 direct sound。請加入已映射 geometry 和 sound material 的 collider |

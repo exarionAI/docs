@@ -170,7 +170,7 @@ ST/MTのJavaScript control flowは同じで、appはframeごとにmutationを適
 `tick()`と`updatePropagation()`を呼びます。MT binaryではSTCoreV2 internal jobsが
 `updatePropagation()`内でscheduleされ、戻る前にjoinされます。
 
-両モードともブラウザの`crossOriginIsolated === true`が必要です。HTML応答に次のheaderを設定してください。
+Native WASM AudioWorklet経路では、ブラウザの`crossOriginIsolated === true`が必要です。MT modeではこの経路が必須です。ST modeは、これらのheaderがない静的deployではmain-thread render fallbackで動作できます。Native worklet配信のHTML応答には次のheaderを設定してください。
 
 ```txt
 Cross-Origin-Opener-Policy: same-origin
@@ -576,7 +576,7 @@ npm run build
 npm run serve
 ```
 
-Vite dev serverはdefaultでCOOP/COEP headerを設定するため、ST/MT modeを確認できます。iframeは起動binaryを明示するため`?thread=st`で固定しています。
+iframeは`?thread=st`で固定し、STはCOOP/COEPの有無に関係なくsingle-thread fallback render経路で実行されます。Vite dev serverのCOOP/COEP headerは、MT/native worklet経路を別途確認するときに使用します。
 
 ### 下部ボタン
 
@@ -636,7 +636,7 @@ demoは小さなsceneで品質と可視化を見せるため、listener `General
 
 | 症状 | 確認すること |
 |---|---|
-| WASM load失敗 | HTML応答にCOOP/COEPがあり、`crossOriginIsolated`が`true`か確認 |
+| Native worklet/MT load失敗 | HTML応答にCOOP/COEPがあり、`crossOriginIsolated`が`true`か確認 |
 | `createWorkletNode` error | `ctx.resume()`がuser gesture内で実行されたか、worklet core asset pathが正しいか確認 |
 | 音が出ない | `ctx.resume()`をuser click内で呼んだか、`soundMaterial.json`がmaterial tableへloadされたか、absorption配列がreflection配列と同じcopyになっていないか確認 |
 | reflection/diffraction/absorptionの変化が聞こえない | sound colliderがないsceneではdirect sound中心で動作します。geometryとsound materialをmappingしたcolliderを追加してください |
