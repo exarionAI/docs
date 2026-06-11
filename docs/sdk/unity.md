@@ -202,6 +202,7 @@ Web 플랫폼은 지원하지 않습니다.
 | Ray/path가 생성되지 않음 | `SoundTraceSource`, `SoundTraceListener`, `SoundTraceObject`가 서로 상호작용 가능한 위치에 있는지 확인합니다. Play Mode에서 `SoundTracePathVisualizer`를 켜고, 직접음 또는 반사 path가 만들어질 수 있는 geometry 배치부터 확인합니다. |
 | `SoundTraceObject`가 적용되지 않음 | 메시 import setting의 `Read/Write Enabled`가 켜져 있는지, `MeshFilter`와 `MeshRenderer`가 비어 있지 않은지 확인합니다. `Add To Child Meshes` 후 루트 `MeshFilter`가 비어 있다면 빈 루트 컴포넌트는 `Remove Root Component(s)`로 제거합니다. |
 | 모든 설정을 했는데 소리가 들리지 않음 | material preset을 직접 수정했다면 활성 대역의 `Absorption`이 `Reflection`보다 과도하게 커져 있지 않은지 확인합니다. 흡음이 반사보다 지배적이면 반사/잔향 에너지가 거의 사라질 수 있으므로 preset을 되돌리거나 `Absorption`을 낮춥니다. |
+| 소리가 너무 작음 | `Distance Attenuation` 값을 낮춰 거리 감쇠를 완화하고, `Intensity`를 증가시키거나 `SoundTraceSource`의 실제 위치를 listener에 더 가깝게 이동시킵니다. |
 | 프레임 부하가 큼 | `SoundTraceListener`의 `Ray Resolution`/`Ray Depth`, `SoundTraceSource`의 `Reverb Rays` 해상도/depth를 낮춥니다. 잔향이 필수가 아니면 먼저 `Reverb` path 자체를 비활성화합니다. |
 | 스레드 사용량이 과함 | `Propagation Thread Count`가 `-1`이면 STCoreV2가 logical hardware thread 기준으로 worker 수를 선택합니다. 개발 중인 애플리케이션의 job/render/audio budget과 조율해 `3` 같은 명시 값을 배정해 테스트합니다. |
 | 음향 퀄리티가 부족함 | `SoundTraceManager`의 `Path Cache Size`를 필요한 만큼 키웁니다. cache가 클수록 더 많은 path 데이터를 저장해 detail이 좋아질 수 있지만 RAM 사용량도 증가합니다. |
