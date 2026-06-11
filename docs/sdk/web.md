@@ -610,7 +610,7 @@ tool이나 앱 레이어에서 온 문자열을 canonical material로 자동 매
 <iframe
   title="soundtrace.js three.js static single-thread demo"
   src={useBaseUrl('/demos/three-basic/?thread=st')}
-  style={{display: 'block', width: '76.5%', height: '486px', margin: '0 auto', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}}
+  style={{display: 'block', width: '100%', height: '486px', margin: '0 auto', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}}
   allow="autoplay; fullscreen"
 />
 
@@ -665,8 +665,10 @@ Vite dev server는 기본적으로 COOP/COEP 헤더를 설정하므로 ST/MT 모
 
 | 패널 | 컨트롤 | 설명 |
 |---|---|---|
-| `Listener` | `Ray Width`, `Ray Height` | listener guide ray 해상도. 데모 범위 `1..32` |
-| `Listener` | `Ray Depth` | 최대 path depth. 데모 범위 `1..16`, 기본 `7` |
+| `Listener · General Rays` | `Width`, `Height` | listener guide ray 해상도. 데모 범위 `1..32`, 기본 `32` |
+| `Listener · General Rays` | `Depth` | listener guide ray 최대 path depth. 데모 범위 `1..16`, 기본 `7` |
+| `Listener · Reverb Rays` | `Width`, `Height` | source reverb ray 해상도. 데모 범위 `1..64`, 기본 `16` |
+| `Listener · Reverb Rays` | `Depth` | source reverb ray depth. 데모 범위 `1..16`, 기본 `4` |
 | `Debug overlays` | `Show Valid Paths` | 전파 결과 polyline 표시 |
 | `Debug overlays` | `Show FPS` | Stats HUD 표시 |
 | `Colliders · BVH` | `Type` | `Default`, `HKDtree`, `LBVH`, `LBVH_SIMD4/8/16`, `LBVH_NWAY4/8/16` |
@@ -689,7 +691,7 @@ Vite dev server는 기본적으로 COOP/COEP 헤더를 설정하므로 ST/MT 모
 ## 성능 튜닝 순서
 
 1. 런타임 앱은 `Ray Width = 16`, `Ray Height = 16`, `Ray Depth = 3`에서 시작합니다.
-2. listener `Ray Width × Ray Height × Ray Depth`를 필요한 만큼만 올립니다.
+2. listener `General Rays`와 source `Reverb Rays`를 필요한 만큼만 올립니다.
 3. 정적 구조물은 `HKDtree`, 애니메이션 collider는 `LBVH` 계열로 분리합니다.
 4. 애니메이션 collider는 topology를 유지하고 vertex만 갱신합니다.
 5. path가 너무 급격히 바뀌면 `Path Fade Time`을 늘리고, delay pitch wobble이 들리면
@@ -702,9 +704,9 @@ path와 BVH box를 그릴 때는 WASM 내부 데이터를 JS로 복사하고 Thr
 재구성하는 통신·시각화 오버헤드가 생기므로, 개발 중에만 켜고 런타임 배포에서는
 끄는 것을 권장합니다.
 
-데모는 작은 장면에서 품질과 시각화를 보여주기 위해 listener를 `32 × 32 × depth 7`,
-source를 `64 × 64 × depth 4`로 시작합니다. 일반 앱 시작값 권장은 여전히
-`16 × 16 × depth 3`입니다.
+데모는 작은 장면에서 품질과 시각화를 보여주기 위해 listener `General Rays`를
+`32 × 32 × depth 7`, source `Reverb Rays`를 `16 × 16 × depth 4`로 시작합니다.
+일반 앱 시작값 권장은 여전히 `16 × 16 × depth 3`입니다.
 
 ## 문제 해결
 

@@ -5,8 +5,17 @@
   "homepage.hero.primaryCta": {
     "message": "Get started ->"
   },
-  "homepage.hero.secondaryCta": {
-    "message": "Explore the SDK"
+  "homepage.hero.summaryLabel": {
+    "message": "SoundTrace documentation entry points"
+  },
+  "homepage.hero.summary.core": {
+    "message": "Native acoustic engine"
+  },
+  "homepage.hero.summary.sdk": {
+    "message": "Web, Unity, and Unreal bindings"
+  },
+  "homepage.hero.summary.tools": {
+    "message": "Rendering and analysis workflows"
   },
   "homepage.products.core.desc": {
     "message": "Native C/C++ acoustic simulation engines: STCore (first generation, FPGA acceleration) and STCoreV2 (modular, lock-free)."

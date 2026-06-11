@@ -5,8 +5,17 @@
   "homepage.hero.primaryCta": {
     "message": "开始使用 →"
   },
-  "homepage.hero.secondaryCta": {
-    "message": "查看 SDK"
+  "homepage.hero.summaryLabel": {
+    "message": "SoundTrace 文档入口"
+  },
+  "homepage.hero.summary.core": {
+    "message": "原生声学引擎"
+  },
+  "homepage.hero.summary.sdk": {
+    "message": "Web、Unity 与 Unreal 绑定"
+  },
+  "homepage.hero.summary.tools": {
+    "message": "渲染与分析工作流"
   },
   "homepage.products.core.desc": {
     "message": "C/C++ 原生声学仿真引擎。STCore（第一代，FPGA 加速）与 STCoreV2（模块化、lock-free）。"

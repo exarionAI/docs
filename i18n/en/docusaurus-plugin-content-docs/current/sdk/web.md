@@ -550,7 +550,7 @@ Default material list:
 <iframe
   title="soundtrace.js three.js static single-thread demo"
   src={useBaseUrl('/demos/three-basic/?thread=st')}
-  style={{display: 'block', width: '76.5%', height: '486px', margin: '0 auto', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}}
+  style={{display: 'block', width: '100%', height: '486px', margin: '0 auto', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}}
   allow="autoplay; fullscreen"
 />
 
@@ -602,8 +602,10 @@ explicit.
 
 | Panel | Control | Description |
 |---|---|---|
-| `Listener` | `Ray Width`, `Ray Height` | listener guide ray resolution. Demo range `1..32` |
-| `Listener` | `Ray Depth` | maximum path depth. Demo range `1..16`, default `7` |
+| `Listener · General Rays` | `Width`, `Height` | listener guide ray resolution. Demo range `1..32`, default `32` |
+| `Listener · General Rays` | `Depth` | listener guide ray max path depth. Demo range `1..16`, default `7` |
+| `Listener · Reverb Rays` | `Width`, `Height` | source reverb ray resolution. Demo range `1..64`, default `16` |
+| `Listener · Reverb Rays` | `Depth` | source reverb ray depth. Demo range `1..16`, default `4` |
 | `Debug overlays` | `Show Valid Paths` | show propagation result polylines |
 | `Debug overlays` | `Show FPS` | show Stats HUD |
 | `Colliders · BVH` | `Type` | `Default`, `HKDtree`, `LBVH`, `LBVH_SIMD4/8/16`, `LBVH_NWAY4/8/16` |
@@ -626,7 +628,7 @@ explicit.
 ## Performance Tuning Order
 
 1. Start runtime apps at `Ray Width = 16`, `Ray Height = 16`, and `Ray Depth = 3`.
-2. Increase listener `Ray Width × Ray Height × Ray Depth` only as needed.
+2. Increase listener `General Rays` and source `Reverb Rays` only as needed.
 3. Separate static structures as `HKDtree` and animated colliders as an `LBVH`-family builder.
 4. Keep topology stable for animated colliders and update only vertices.
 5. If paths change too abruptly, increase `Path Fade Time`; if delay pitch wobble is audible, lower `Max Delay Rate`.
@@ -634,7 +636,7 @@ explicit.
 
 The three.js demo is configured for **1 listener + 1 source** and favors high quality and debugging visibility. Gizmos are not required in production apps. In particular, drawing valid paths and BVH boxes copies WASM internal data to JS and rebuilds it as Three.js geometry, so it introduces communication and visualization overhead. Enable it during development and disable it for runtime deployment.
 
-Because the demo is a small scene, it starts the listener at `32 × 32 × depth 7` and the source at `64 × 64 × depth 4` to show quality and visualization. The general app starting recommendation remains `16 × 16 × depth 3`.
+Because the demo is a small scene, it starts listener `General Rays` at `32 × 32 × depth 7` and source `Reverb Rays` at `16 × 16 × depth 4` to show quality and visualization. The general app starting recommendation remains `16 × 16 × depth 3`.
 
 ## Troubleshooting
 

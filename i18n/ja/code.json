@@ -5,8 +5,17 @@
   "homepage.hero.primaryCta": {
     "message": "はじめる →"
   },
-  "homepage.hero.secondaryCta": {
-    "message": "SDKを見る"
+  "homepage.hero.summaryLabel": {
+    "message": "SoundTraceドキュメントの入口"
+  },
+  "homepage.hero.summary.core": {
+    "message": "ネイティブ音響エンジン"
+  },
+  "homepage.hero.summary.sdk": {
+    "message": "Web・Unity・Unrealバインディング"
+  },
+  "homepage.hero.summary.tools": {
+    "message": "レンダリング・解析ワークフロー"
   },
   "homepage.products.core.desc": {
     "message": "C/C++ネイティブ音響シミュレーションエンジン。STCore（第1世代、FPGAアクセラレーション）とSTCoreV2（モジュール式・lock-free）。"

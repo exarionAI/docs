@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>soundtrace.js — three.js basic example</title>
     <style>
-      :root { --demo-ui-scale: 0.7; }
+      :root {
+        --demo-ui-scale: 0.7;
+        --demo-panel-width: calc(245px * var(--demo-ui-scale));
+        --demo-ui-edge: calc(20px * var(--demo-ui-scale));
+        --demo-panel-gutter: calc(40px * var(--demo-ui-scale));
+      }
       body { margin: 0; overflow: hidden; background: #111; color: #ddd; font-family: system-ui, sans-serif; }
       #info {
         position: absolute;
@@ -18,12 +23,15 @@
       }
       #controls {
         position: absolute;
-        bottom: calc(20px * var(--demo-ui-scale));
-        left: 50%;
-        transform: translateX(-50%);
+        bottom: var(--demo-ui-edge);
+        left: var(--demo-ui-edge);
+        right: calc(var(--demo-panel-width) + var(--demo-panel-gutter));
         display: flex;
-        gap: calc(12px * var(--demo-ui-scale));
-        align-items: center;
+        flex-wrap: wrap;
+        column-gap: calc(12px * var(--demo-ui-scale));
+        row-gap: calc(8px * var(--demo-ui-scale));
+        align-items: flex-end;
+        justify-content: flex-start;
       }
       #controls .grp {
         display: flex;
@@ -34,7 +42,7 @@
         font-size: calc(10px * var(--demo-ui-scale));
         color: #888;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0;
       }
       #controls select, #controls button {
         padding: calc(10px * var(--demo-ui-scale)) calc(16px * var(--demo-ui-scale));
@@ -48,7 +56,7 @@
       #controls button { cursor: pointer; align-self: flex-end; }
       #controls button:disabled, #controls select:disabled { opacity: 0.6; cursor: default; }
     </style>
-    <script type="module" crossorigin src="./assets/index-DLznvGHg.js"></script>
+    <script type="module" crossorigin src="./assets/index-DnebpCc4.js"></script>
   </head>
   <body>
     <div id="info">

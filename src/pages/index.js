@@ -20,15 +20,36 @@ function Hero() {
         <p className={styles.tagline}>{tagline}</p>
         <div className={styles.cta}>
           <Link
-            className="button button--primary button--lg"
+            className={clsx('button button--primary button--lg', styles.ctaPrimary)}
             to="/intro/what-is-soundtracing">
             <Translate id="homepage.hero.primaryCta">시작하기 →</Translate>
           </Link>
-          <Link
-            className={clsx('button button--secondary button--lg', styles.ctaSecondary)}
-            to="/sdk/overview">
-            <Translate id="homepage.hero.secondaryCta">SDK 살펴보기</Translate>
-          </Link>
+        </div>
+        <div
+          className={styles.heroSummary}
+          role="list"
+          aria-label={translate({
+            id: 'homepage.hero.summaryLabel',
+            message: 'SoundTrace 문서 진입점',
+          })}>
+          <span className={styles.heroSummaryItem} role="listitem">
+            <strong>Core</strong>
+            <span className={styles.heroSummaryDetail}>
+              <Translate id="homepage.hero.summary.core">네이티브 음향 엔진</Translate>
+            </span>
+          </span>
+          <span className={styles.heroSummaryItem} role="listitem">
+            <strong>SDK</strong>
+            <span className={styles.heroSummaryDetail}>
+              <Translate id="homepage.hero.summary.sdk">Web · Unity · Unreal 바인딩</Translate>
+            </span>
+          </span>
+          <span className={styles.heroSummaryItem} role="listitem">
+            <strong>Tools</strong>
+            <span className={styles.heroSummaryDetail}>
+              <Translate id="homepage.hero.summary.tools">렌더링 · 분석 워크플로우</Translate>
+            </span>
+          </span>
         </div>
       </div>
     </header>
