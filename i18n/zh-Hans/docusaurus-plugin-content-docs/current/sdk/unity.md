@@ -13,6 +13,8 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 | Unity | `2022.3.62f2` 或更新版本 |
 | 平台 | macOS, Windows, Linux, iOS, Android |
 
+不支持 Web 平台。
+
 ## Unity Project Setup
 
 ### Unity Audio 设置
@@ -177,7 +179,7 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 
 ![SampleScene01](/img/unity/SampleScene01.png)
 
-`SampleScene01` 是一个与 Getting Started 类似的简单示例场景。它不包含额外脚本，可在简单的 cube geometry room 中体验 SoundTrace 细致的 ray 计算。
+`SampleScene01` 是一个与 Getting Started 类似的简单示例场景。可在简单的 cube geometry room 中体验 SoundTrace 细致的 ray 计算。
 
 ### SampleScene02
 

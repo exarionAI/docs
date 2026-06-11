@@ -13,6 +13,8 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 | Unity | `2022.3.62f2`以上 |
 | プラットフォーム | macOS, Windows, Linux, iOS, Android |
 
+Webプラットフォームはサポートしていません。
+
 ## Unity Project Setup
 
 ### Unity Audio設定
@@ -177,7 +179,7 @@ SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stc
 
 ![SampleScene01](/img/unity/SampleScene01.png)
 
-`SampleScene01`はGetting Startedに近い構成のシンプルなサンプルシーンです。追加スクリプトは含まれておらず、単純なcube geometry room内でSoundTraceの詳細なray演算を体験できます。
+`SampleScene01`はGetting Startedに近い構成のシンプルなサンプルシーンです。単純なcube geometry room内でSoundTraceの詳細なray演算を体験できます。
 
 ### SampleScene02
 

@@ -13,6 +13,8 @@ SoundTrace SDK for Unity is a real-time spatial audio plugin that brings the nat
 | Unity | `2022.3.62f2` or newer |
 | Platforms | macOS, Windows, Linux, iOS, Android |
 
+The Web platform is not supported.
+
 ## Unity Project Setup
 
 ### Unity Audio settings
@@ -177,7 +179,7 @@ For complex game scenes, start with `Ray Resolution 16` and `Ray Depth 4`.
 
 ![SampleScene01](/img/unity/SampleScene01.png)
 
-`SampleScene01` is a simple sample scene similar to Getting Started. It does not include additional scripts, and lets you inspect detailed SoundTrace ray calculations inside a simple cube-geometry room.
+`SampleScene01` is a simple sample scene similar to Getting Started. It lets you inspect detailed SoundTrace ray calculations inside a simple cube-geometry room.
 
 ### SampleScene02
 
