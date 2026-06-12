@@ -577,8 +577,9 @@ npm run build
 npm run serve
 ```
 
-iframe 固定為 `?thread=st`，ST 無論是否有 COOP/COEP 都使用 single-thread fallback render
-路徑。Vite dev server 的 COOP/COEP header 只用於另外確認 MT/native worklet 路徑。
+iframe 固定為 `?thread=st`，用於明確啟動 mode。ST 會選擇 single-thread WASM binary，
+但 audio render 仍在 native Emscripten AudioWorkletNode 中執行。MT 需要
+SharedArrayBuffer，因此請在啟用 COOP/COEP 的 host 上另外確認。
 
 ### 底部按鈕
 

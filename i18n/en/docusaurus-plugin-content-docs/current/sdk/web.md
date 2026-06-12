@@ -580,9 +580,10 @@ npm run build
 npm run serve
 ```
 
-The iframe is fixed to `?thread=st`, and ST runs through the single-thread
-fallback render path regardless of COOP/COEP. The Vite dev server's COOP/COEP
-headers are used when testing the MT/native worklet path separately.
+The iframe is fixed to `?thread=st` to make the startup mode explicit. ST
+selects the single-thread WASM binary, but audio still renders through the
+native Emscripten AudioWorkletNode. Test MT separately on a COOP/COEP-enabled
+host because it requires SharedArrayBuffer.
 
 ### Bottom Buttons
 

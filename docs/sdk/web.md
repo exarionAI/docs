@@ -641,9 +641,10 @@ npm run build
 npm run serve
 ```
 
-문서 iframe은 시작 기본값을 명확히 하기 위해 `?thread=st`로 고정하며, ST는 COOP/COEP
-유무와 상관없이 싱글스레드 fallback 렌더 경로로 실행됩니다. Vite dev server의
-COOP/COEP 헤더는 MT/native worklet 경로를 별도로 확인할 때 사용합니다.
+문서 iframe은 시작 기본값을 명확히 하기 위해 `?thread=st`로 고정합니다. ST는
+single-thread WASM binary를 선택하지만 오디오 렌더링은 native Emscripten
+AudioWorkletNode에서 실행됩니다. MT는 SharedArrayBuffer가 필요하므로 COOP/COEP가
+있는 호스트에서 별도로 확인합니다.
 
 ### 하단 버튼
 

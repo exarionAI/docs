@@ -576,7 +576,7 @@ npm run build
 npm run serve
 ```
 
-iframeは`?thread=st`で固定し、STはCOOP/COEPの有無に関係なくsingle-thread fallback render経路で実行されます。Vite dev serverのCOOP/COEP headerは、MT/native worklet経路を別途確認するときに使用します。
+iframeは起動modeを明確にするため`?thread=st`で固定しています。STはsingle-thread WASM binaryを選択しますが、audio renderはnative Emscripten AudioWorkletNodeで実行されます。MTはSharedArrayBufferが必要なため、COOP/COEP有効hostで別途確認します。
 
 ### 下部ボタン
 
