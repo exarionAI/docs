@@ -195,6 +195,16 @@ SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/s
 4. `Toggle UnitySound` 按鈕會在 SoundTrace rendering 與預設 Unity `AudioSource` 輸出之間切換。
 5. 右側 material scroll bar 可使用提供的 SoundTrace material preset 修改 Dome 材質。測試 `Steel`、`Marble`、`Snow`、`Soil` 時體感效果較明顯。
 
+### SampleScene03
+
+![SampleScene03](/img/unity/Img_25_Sample03.png)
+
+`SampleScene03` 是一個可在寬闊空間中四處移動並體驗 NPC 對話聲音的範例場景。
+
+根據聲音是否穿過左側牆體，對話的混響感和遮蔽感會有所不同。繞著 capsule 周圍移動時，可透過 HRTF 清楚分辨是誰在發出哪一種聲音。
+
+使用 WASD 移動，並使用 Space/Ctrl 上升/下降。
+
 ## Troubleshooting
 
 | 症狀 | 檢查項 |

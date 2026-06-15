@@ -195,6 +195,16 @@ Webプラットフォームはサポートしていません。
 4. `Toggle UnitySound` buttonはSoundTrace renderingと標準Unity `AudioSource`出力の差をtoggleします。
 5. 右側のmaterial scroll barで、提供されるSoundTrace material presetを使ってDomeの材質を変更できます。`Steel`、`Marble`、`Snow`、`Soil`は体感差が大きいpresetです。
 
+### SampleScene03
+
+![SampleScene03](/img/unity/Img_25_Sample03.png)
+
+`SampleScene03`は、広い空間を歩き回りながらNPCの会話音を体感できるサンプルシーンです。
+
+左側の壁を通過するかどうかによって、会話の残響感と遮蔽感が異なって聞こえます。capsuleの周囲を歩き回ると、HRTFによって誰がどの音を出しているのかを明確に区別できます。
+
+WASDで移動し、Space/Ctrlで上昇/下降します。
+
 ## Troubleshooting
 
 | 症状 | 確認すること |

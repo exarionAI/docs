@@ -195,6 +195,16 @@ The gray circular outline is not just a UI marker; it is real `Ico Sphere Dome` 
 4. The `Toggle UnitySound` button toggles between SoundTrace rendering and the default Unity `AudioSource` output.
 5. The material scroll bar on the right changes the Dome material using the provided SoundTrace material presets. `Steel`, `Marble`, `Snow`, and `Soil` provide a strong audible contrast.
 
+### SampleScene03
+
+![SampleScene03](/img/unity/Img_25_Sample03.png)
+
+`SampleScene03` is a sample scene where you can walk through a wide space and experience NPC dialogue audio.
+
+Depending on whether the sound passes through the wall on the left, the dialogue's reverberation and occlusion feel different. Walk around the capsules to clearly distinguish through HRTF which character is producing each sound.
+
+Move with WASD, and ascend or descend with Space/Ctrl.
+
 ## Troubleshooting
 
 | Symptom | What to check |

@@ -195,6 +195,16 @@ Web 플랫폼은 지원하지 않습니다.
 4. `Toggle UnitySound` 버튼은 SoundTrace 렌더링과 기본 Unity `AudioSource` 출력의 차이를 토글합니다.
 5. 우측 머티리얼 스크롤 바에서 제공되는 SoundTrace material preset으로 Dome의 재질을 변경할 수 있습니다. `Steel`, `Marble`, `Snow`, `Soil`을 테스트하면 체감 효과가 큽니다.
 
+### SampleScene03
+
+![SampleScene03](/img/unity/Img_25_Sample03.png)
+
+`SampleScene03`은 넓은 공간을 돌아다니며 NPC의 대화 소리를 체감할 수 있는 샘플 씬입니다.
+
+좌측 벽을 지나가는 여부에 따라 대화의 잔향감과 차폐감이 다르게 느껴지고, 캡슐 주변을 돌아다녀 보면 HRTF를 통해 누가 어떤 소리를 내는지 명확하게 구분됨을 느끼실 수 있습니다.
+
+WASD로 이동하고 스페이스바/컨트롤로 상승/하강합니다.
+
 ## Troubleshooting
 
 | 증상 | 확인할 것 |
