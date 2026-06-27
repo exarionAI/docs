@@ -11,7 +11,7 @@ export const SoundTrace: SoundTraceConstructor = SoundTraceImplementation;
 export interface SoundTrace extends SoundTraceFacade {}
 export type {
   SoundTraceAddMeshOptions, SoundTraceAddSourceOptions, SoundTraceAudioOptions,
-  SoundTraceFacade, SoundTraceOptions,
+  SoundTraceFacade, SoundTraceOptions, MaterialRef, MeshTriangle,
 } from './SoundTrace-public.js';
 export type {
   HrtfLoadMode, HrtfSource, StatisticsPathSnapshot, StatisticsSnapshot,
@@ -33,7 +33,7 @@ export {
 export type {
   Vec3, Ray, RayHit, Transform, AudioOption, AmbientPhysicalFilterOption,
   AirAbsorptionOption, PerceptualDepthOption, STOption,
-  SoundMaterial, Triangle, GuidePlane, AmbientSoundPath, MirrorPosition,
+  SoundMaterial, GuidePlane, AmbientSoundPath, MirrorPosition,
   PropagatorProfile, RuntimeOption, MeshBuildOption,
   PropagationFrameTiming, PropagationJobTiming, PropagationJobTimingOption,
   MemoryTraceOption, MemoryTraceSnapshot, PathData,

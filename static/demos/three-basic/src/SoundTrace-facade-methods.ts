@@ -7,11 +7,11 @@ import { SoundMesh } from './SoundMesh.js';
 import { SoundObject } from './SoundObject.js';
 import { SoundScene } from './SoundScene.js';
 import { PathType, SoundSource } from './SoundSource.js';
-import type { Triangle } from './native/index.js';
 import { createDisposedError } from './soundtrace-mt-facade-errors.js';
 import { SoundTraceMtUnsupportedError, normalizeLimit, normalizeOptionalLimit, normalizeStatisticsLength, FACADE_DISTANCE_ATTENUATION, FACADE_SOURCE_RAY_DEPTH, FACADE_SOURCE_RAY_HEIGHT, FACADE_SOURCE_RAY_WIDTH, FACADE_STATISTICS_PATHS, FACADE_STATISTICS_RAY_DATA_LIMIT, type StatisticsPathSnapshot, type StatisticsSnapshot, type StatisticsSnapshotOptions, type StatisticsSourceSnapshot } from './SoundTrace-types.js';
 import { resolveMaterialName, type MaterialRef } from './material-resolver.js';
 import type { DebugSnapshot, DebugSnapshotOptions } from './control-protocol.js';
+import type { MeshTriangle } from './SoundTrace-public.js';
 import type { SoundTrace } from './SoundTrace.js';
 
 export function facadeScene(self: SoundTrace): SoundScene {
@@ -113,7 +113,7 @@ export function getSourceStatisticsSnapshot(self: SoundTrace, source: Source, le
   };
 }
 
-export function addMesh(self: SoundTrace, opts: { vertices: ArrayLike<number>; indices?: ArrayLike<number>; triangles?: Triangle[]; material?: MaterialRef; updateType?: ObjectUpdateType }): Mesh {
+export function addMesh(self: SoundTrace, opts: { vertices: ArrayLike<number>; indices?: ArrayLike<number>; triangles?: MeshTriangle[]; material?: MaterialRef; updateType?: ObjectUpdateType }): Mesh {
   const rawMaterial = opts.material ?? 0;
   const materialIndex = typeof rawMaterial === 'number'
     ? rawMaterial

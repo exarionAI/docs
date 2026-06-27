@@ -1,6 +1,7 @@
 import { Listener, Mesh, Source, indicesToTriangles, objectUpdateTypeValue, qualityPreset, transformVec3, transformVertices, type CoordinateTransform, type ObjectUpdateType, type QualityTier, type SourcePathOptions, type Vec3In } from './facade.js';
 import type { DebugSnapshot, DebugSnapshotOptions } from './control-protocol.js';
-import type { AudioOption, Triangle } from './native/index.js';
+import type { AudioOption } from './native/index.js';
+import type { MeshTriangle } from './SoundTrace-public.js';
 import type { SoundTrace } from './SoundTrace.js';
 import { createBadHandleError, createDisposedError } from './soundtrace-mt-facade-errors.js';
 import { createMtListenerNative, createMtSourceNative } from './soundtrace-mt-facade-natives.js';
@@ -148,7 +149,7 @@ export class SoundTraceMtFacadeState implements MtCommandScheduler {
   addMesh(options: {
     readonly indices?: ArrayLike<number>;
     readonly material: number;
-    readonly triangles?: Triangle[];
+    readonly triangles?: MeshTriangle[];
     readonly updateType?: ObjectUpdateType;
     readonly vertices: ArrayLike<number>;
   }): Mesh {
