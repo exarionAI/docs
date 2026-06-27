@@ -29,7 +29,7 @@ facade 표면에서 시작합니다.
 import {
   SoundTrace,
   workerHostedMtSupport,
-  type Triangle,
+  type MeshTriangle,
 } from 'soundtrace.js';
 ```
 
@@ -59,7 +59,7 @@ const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.me
 import {
   SoundTrace,
   workerHostedMtSupport,
-  type Triangle,
+  type MeshTriangle,
 } from 'soundtrace.js';
 
 // Run this inside a user click/tap handler.
@@ -91,7 +91,7 @@ const vertices = new Float32Array([
    2, -1,  2,
   -2, -1,  2,
 ]);
-const triangles: Triangle[] = [
+const triangles: MeshTriangle[] = [
   { a: 0, b: 1, c: 2, materialIndex: 0 },
   { a: 0, b: 2, c: 3, materialIndex: 0 },
 ];
