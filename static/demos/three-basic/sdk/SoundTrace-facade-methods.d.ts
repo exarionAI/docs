@@ -1,9 +1,9 @@
 import { Mesh, Source, type ObjectUpdateType, type QualityTier, type SourcePathOptions, type Vec3In } from './facade.js';
 import { SoundScene } from './SoundScene.js';
-import type { Triangle } from './native/index.js';
 import { type StatisticsSnapshot, type StatisticsSnapshotOptions, type StatisticsSourceSnapshot } from './SoundTrace-types.js';
 import { type MaterialRef } from './material-resolver.js';
 import type { DebugSnapshot, DebugSnapshotOptions } from './control-protocol.js';
+import type { MeshTriangle } from './SoundTrace-public.js';
 import type { SoundTrace } from './SoundTrace.js';
 export declare function facadeScene(self: SoundTrace): SoundScene;
 export declare function setQuality(self: SoundTrace, quality: QualityTier): SoundTrace;
@@ -16,7 +16,7 @@ export declare function getSourceStatisticsSnapshot(self: SoundTrace, source: So
 export declare function addMesh(self: SoundTrace, opts: {
     vertices: ArrayLike<number>;
     indices?: ArrayLike<number>;
-    triangles?: Triangle[];
+    triangles?: MeshTriangle[];
     material?: MaterialRef;
     updateType?: ObjectUpdateType;
 }): Mesh;

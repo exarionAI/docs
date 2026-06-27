@@ -1,7 +1,13 @@
 import type { CoordinateBasisOption, ExecutionMode, Listener, Mesh, ObjectUpdateType, QualityTier, Source, SourcePathOptions, ThreadOption, Throughput, Vec3In } from './facade.js';
 import type { MaterialRef } from './material-resolver.js';
-import type { Triangle } from './native-public.js';
 import type { HrtfLoadMode, HrtfSource, StatisticsSnapshot, StatisticsSnapshotOptions } from './SoundTrace-types.js';
+export interface MeshTriangle {
+    readonly a: number;
+    readonly b: number;
+    readonly c: number;
+    readonly materialIndex: number;
+}
+export type { MaterialRef };
 export interface DebugSnapshot {
     readonly validPathCount?: number;
     readonly paths?: readonly unknown[];
@@ -31,7 +37,7 @@ export interface SoundTraceAudioOptions {
 export interface SoundTraceAddMeshOptions {
     readonly vertices: ArrayLike<number>;
     readonly indices?: ArrayLike<number>;
-    readonly triangles?: Triangle[];
+    readonly triangles?: MeshTriangle[];
     readonly material?: MaterialRef;
     readonly updateType?: ObjectUpdateType;
 }

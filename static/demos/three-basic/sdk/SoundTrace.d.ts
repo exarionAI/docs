@@ -8,12 +8,13 @@ import { SoundScene } from './SoundScene.js';
 import { SoundSource } from './SoundSource.js';
 import { SoundCollider, type SoundColliderBuildOptions } from './SoundCollider.js';
 import { Mesh, Listener, Source, type CoordinateTransform, type ObjectUpdateType, type QualityTier, type SourcePathOptions, type Vec3In } from './facade.js';
-import type { Bindings, Heap, MeshBuildOption, RuntimeOption, STOption, Triangle } from './native/index.js';
+import type { Bindings, Heap, MeshBuildOption, RuntimeOption, STOption } from './native/index.js';
 import type { DebugSnapshot, DebugSnapshotOptions, StartupOptions } from './control-protocol.js';
 import type { WorkerHostedControlState } from './soundtrace-mt-worker-load.js';
 import type { ExaSoundModule, SoundTraceOptions, ThreadMode } from './types.js';
 import type { Disposable } from './Disposable.js';
 import type { MaterialRef } from './material-resolver.js';
+import type { MeshTriangle } from './SoundTrace-public.js';
 import { SoundTraceMtFacadeState } from './soundtrace-mt-facade-state.js';
 import { SoundTraceMtUnsupportedError, type HrtfLoadMode, type HrtfSource, type StatisticsSnapshot, type StatisticsSnapshotOptions } from './SoundTrace-types.js';
 export { SoundTraceMtUnsupportedError } from './SoundTrace-types.js';
@@ -94,7 +95,7 @@ export declare class SoundTrace implements Disposable {
     addMesh(opts: {
         vertices: ArrayLike<number>;
         indices?: ArrayLike<number>;
-        triangles?: Triangle[];
+        triangles?: MeshTriangle[];
         material?: MaterialRef;
         updateType?: ObjectUpdateType;
     }): Mesh;
