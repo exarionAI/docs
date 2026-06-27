@@ -1,0 +1,1 @@
+{"version":3,"file":"control-worker-host-types.js","sourceRoot":"","sources":["../src/control-worker-host-types.ts"],"names":[],"mappings":"AA0GA,MAAM,UAAU,0BAA0B,CACxC,OAAqC;IAErC,IAAI,qBAAqB,CAAC,OAAO,CAAC,EAAE,CAAC;QACnC,OAAO,OAAO,CAAC,YAAY,CAAC;IAC9B,CAAC;IACD,OAAO,OAAO,CAAC;AACjB,CAAC;AAED,SAAS,qBAAqB,CAC5B,OAAqC;IAErC,OAAO,cAAc,IAAI,OAAO,CAAC;AACnC,CAAC"}

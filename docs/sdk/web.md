@@ -22,16 +22,13 @@ TypeScript/WebAssembly 바인딩입니다. 애플리케이션이 소유한 `Audi
 
 ## 설치와 아티팩트
 
-패키지는 ESM으로 배포되며 공개 표면은 `soundtrace.js` 엔트리에서 가져옵니다.
+패키지는 ESM으로 배포되며 일반 애플리케이션은 `soundtrace.js` 엔트리의
+facade 표면에서 시작합니다.
 
 ```ts
 import {
-  BvhType,
   SoundTrace,
-  UpdateType,
-  PathType,
-  recommendedSTOption,
-  type SoundMaterial,
+  workerHostedMtSupport,
   type Triangle,
 } from 'soundtrace.js';
 ```
@@ -43,10 +40,11 @@ import {
 | `soundtrace.js/core/st/exaSound.js`, `.wasm` | single-thread WASM 코어 |
 | `soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM 코어 |
 | `soundtrace.js/assets/soundMaterial.json` | 기본 사운드 재질 테이블 |
+| `soundtrace.js/assets/hrtf/*.bin` | `loadHrtf()`에서 쓰는 packaged HRTF 테이블 |
 
-기본 HRTF는 별도 파일로 배포하지 않습니다. `SoundTrace.create()`가 native
-`exaInit()`을 호출할 때 엔진 내부에 embedded된 default HRTF가 한 번 로드되고, 이후
-생성되는 listener/renderer가 공유합니다.
+HRTF는 `loadHrtf('parametric')` 또는 `loadHrtf('convolution')`으로 명시적으로
+로드합니다. 패키지 기본 테이블을 쓰거나, 앱이 URL·`ArrayBuffer`·typed array로
+자체 테이블을 전달할 수 있습니다.
 
 번들러에서 서브패스 파일 URL이 필요할 때는 `new URL(..., import.meta.url)`로
 해결합니다.
@@ -59,59 +57,33 @@ const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.me
 
 ```ts
 import {
-  BvhType,
-  PathType,
   SoundTrace,
-  recommendedSTOption,
+  workerHostedMtSupport,
   type Triangle,
-  type SoundMaterial,
 } from 'soundtrace.js';
 
 // Run this inside a user click/tap handler.
 const ctx = new AudioContext();
 await ctx.resume();
 
+const mt = workerHostedMtSupport();
+if (!mt.supported) {
+  throw new Error(`soundtrace.js mode=multi_thread requires ${mt.missing.join(', ')}`);
+}
+
 const sound = await SoundTrace.create(ctx, {
-  thread: 'mt',
-  propagationThreadCount: -1,
-  defaultMeshBuild: {
-    bvhType: BvhType.LBVH_SIMD8,
-    bvhMaxDepth: 16,
-    primPerLeaf: 4,
-  },
+  mode: 'multi_thread',
+  throughput: 'max',
+  quality: 'balanced',
 });
 
-const listener = sound.createListener();
-const source = sound.createSource();
-const scene = sound.createScene().setListener(listener).addSource(source);
-
-listener
-  .setOption(recommendedSTOption())
+sound.listener
   .setAudioOption({
     sampleRate: ctx.sampleRate,
     inputSampleCount: 128,
     outputChannels: 2,
   })
-  .setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])
-  .setRayCount(16, 16)
-  .setRayDepth(3)
-  .setPosition(0, 0, 0);
-
-source
-  .setIntensity(1)
-  .setPathEnable(PathType.Reverb, true)
-  .setReverbRayDepth(3)
-  .setReverbRayCount(8, 8)
-  .setPosition(2, 0, -1);
-
-const material: SoundMaterial = {
-  reflection:   [0.95, 0.95, 0.92, 0.88, 0.80, 0.70, 0.65, 0.60],
-  absorption:   [0.05, 0.05, 0.08, 0.12, 0.20, 0.30, 0.35, 0.40],
-  transmission: [0.01, 0.01, 0.01, 0.005, 0.003, 0.002, 0.001, 0.001],
-  scattering: 0.12,
-  index: 0,
-};
-sound.materials.add(material);
+  .setPose({ position: [0, 0, 0], orientation: [0, 0, 0, 1] });
 
 const vertices = new Float32Array([
   -2, -1, -2,
@@ -124,18 +96,25 @@ const triangles: Triangle[] = [
   { a: 0, b: 2, c: 3, materialIndex: 0 },
 ];
 
-const floor = sound.createCollider({
+const floor = sound.addMesh({
   vertices,
   triangles,
-  bvhType: BvhType.HKDtree,
-  bvhMaxDepth: 16,
-  primPerLeaf: 4,
+  material: 'Concrete',
 });
-scene.addCollider(floor);
 
-scene.update(0);
+const source = sound.addSource({
+  position: [2, 0, -1],
+  gain: 1,
+  paths: {
+    direct: true,
+    reflection: true,
+    diffraction: true,
+    reverberation: true,
+  },
+});
 
-const spatialNode = await sound.createWorkletNode(listener, source, 2);
+await sound.update(0);
+
 const buffer = await fetch('/audio/music.mp3')
   .then((r) => r.arrayBuffer())
   .then((b) => ctx.decodeAudioData(b));
@@ -143,8 +122,15 @@ const buffer = await fetch('/audio/music.mp3')
 const player = ctx.createBufferSource();
 player.buffer = buffer;
 player.loop = true;
-player.connect(spatialNode).connect(sound.output).connect(ctx.destination);
+const spatialNode = await source.play(player, 2);
+spatialNode.connect(sound.output).connect(ctx.destination);
 player.start();
+
+// HOT source/listener/mesh transforms are regular facade pose writes.
+source.setPose({ position: [1.5, 0, -0.5] });
+sound.listener.setPose({ position: [0, 0, 0.25] });
+floor.setPose({ position: [0, 0, 0] });
+await sound.update(1 / 60);
 ```
 
 ## 런타임 구조
@@ -173,18 +159,28 @@ source count, ray count, BVH, geometry scale에 따른 성능/품질 조정 기�
 
 | 모드 | 선택값 | 사용 상황 | 오디오 경로 |
 |---|---|---|---|
-| Multi | `{ thread: 'mt' }` | pthread-enabled WASM binary가 필요한 배포 | WASM `AudioWorkletProcessor`가 `exaRenderSound` 호출 |
-| Single | `{ thread: 'st' }` | single-thread WASM binary가 필요한 배포 | WASM `AudioWorkletProcessor`가 `exaRenderSound` 호출 |
+| Multi | `{ thread: 'mt' }` | worker-hosted control과 pthread-enabled propagation이 필요한 배포 | WASM `AudioWorkletProcessor`가 worker-owned engine session을 렌더 |
+| Single | `{ thread: 'st' }` | single-thread WASM binary가 필요한 배포 | WASM `AudioWorkletProcessor`가 ST engine session을 렌더 |
 
 `thread`는 자동 fallback 정책이 아니라 로드할 WASM binary를 명시적으로 고르는
-옵션입니다. ST/MT 모두 JavaScript 호출 흐름은 같고, 앱 또는 데모의 control loop가
-프레임마다 mutation을 적용한 뒤 `tick()`과 `updatePropagation()`을 호출합니다.
-MT binary에서는 `updatePropagation()` 내부에서 STCoreV2 job system이
-`propagationThreadCount`에 맞춰 작업을 나누고, 함수가 반환되기 전에 join됩니다.
+옵션입니다. `thread: 'mt'`는 브라우저 main thread에서 MT 코어를 직접 제어하지
+않습니다. SDK가 전용 **control worker**를 만들고, 그 worker가 MT WASM module,
+scene state, propagation frame loop를 소유합니다.
 
-Native WASM AudioWorklet 경로는 브라우저가 `crossOriginIsolated === true`여야 합니다.
-MT 모드는 이 경로가 필수이고, ST 모드는 헤더가 없는 정적 배포에서 main-thread render
-fallback으로 동작할 수 있습니다. Native worklet 배포 HTML 응답에는 다음 헤더를 설정하세요.
+MT의 worker-hosted 토폴로지는 두 입력 경로를 사용합니다.
+
+| 경로 | 의미 | 대상 |
+|---|---|---|
+| HOT lane | 최신 값만 의미 있는 per-frame transform. SharedArrayBuffer를 통해 worker frame 전에 소비됩니다. | `source transform`, `listener transform`, `mesh transform` |
+| command channel | 순서와 결과가 중요한 비동기 작업. worker가 FIFO로 처리하고 Promise를 resolve/reject합니다. | create/delete, material 변경, mesh upload, BVH/options, audio source start/stop, reset/dispose, 기타 non-transform 작업 |
+
+HOT lane은 덮어쓰기 가능한 최신 상태용입니다. 같은 frame 안에서 source/listener/mesh가
+여러 번 움직이면 worker는 마지막 transform을 적용합니다. command channel은 씹히면
+안 되는 구조 변경과 옵션 변경용입니다.
+
+MT 모드에는 브라우저의 cross-origin isolation이 필요합니다. 배포 HTML 응답과 WASM,
+worker, worklet asset이 모두 아래 조건을 만족해야 `SharedArrayBuffer`와
+`crossOriginIsolated === true`가 활성화됩니다.
 
 ```txt
 Cross-Origin-Opener-Policy: same-origin
@@ -206,15 +202,63 @@ export default defineConfig({
 });
 ```
 
-## Scene 작성 흐름
+런타임에서는 facade preflight helper로 다음 조건을 확인할 수 있습니다.
 
-1. `SoundTrace.create(ctx, options)`로 WASM 코어를 로드합니다.
+```ts
+import { workerHostedMtSupport } from 'soundtrace.js';
+
+const mt = workerHostedMtSupport();
+if (!mt.supported) {
+  throw new Error(`soundtrace.js thread=mt requires ${mt.missing.join(', ')}`);
+}
+```
+
+ST 모드도 실시간 Web Audio 통합에서는 `AudioWorkletNode`를 사용합니다. 서비스 배포는
+ST/MT 모두 같은 COOP/COEP 헤더를 적용하는 편이 가장 단순합니다.
+
+## Worker-hosted MT 작성 흐름
+
+`thread: 'mt'` 또는 `mode: 'multi_thread'`에서는 main thread가 native scene 객체를
+직접 만들지 않습니다. 지원되는 공개 흐름은 facade와 데모 흐름입니다.
+
+1. `SoundTrace.create(ctx, { mode: 'multi_thread' })` 또는 `{ thread: 'mt' }`로
+   control worker와 MT WASM을 준비합니다.
+2. `sound.addMesh(...)`로 geometry를 추가합니다. facade는 material table과 mesh/object
+   생명주기를 관리하고, create/delete/material/mesh upload/BVH/options 같은
+   non-transform 작업은 command channel로 보냅니다.
+3. `sound.listener.setPose(...)`, `source.setPose(...)`, `mesh.setPose(...)`로
+   listener/source/mesh pose를 갱신합니다. 이 세 transform은 SharedArrayBuffer 기반
+   HOT lane으로 전달됩니다.
+4. `const source = sound.addSource(...)`로 음원을 추가합니다.
+5. `await sound.update(dt)`로 worker frame request를 보내고 결과를 기다립니다.
+6. 오디오는 `await source.play(inputNode, 2)`가 만든 `AudioWorkletNode`를 통해 렌더합니다.
+7. engine-output-style data는 `await sound.debugSnapshot(...)` 같은 async API로 읽습니다.
+
+`simple.ts`와 `three-basic` 데모가 이 흐름의 기준 예제입니다. `GET` 성격의 동기
+진단(`getStatistics()`, `propagator.getValidPaths()` 등)은 MT에서 main thread native
+getter를 호출하지 않으며, 필요한 경우 `debugSnapshot()` 기반 async readback을 사용합니다.
+
+## 고급 direct-native reference
+
+일반 앱은 위의 facade 흐름(`SoundTrace.create`, `sound.addMesh`, `sound.addSource`,
+`source.play`, `sound.update`)을 기본 경로로 사용합니다. 아래 내용은 기존 엔진
+객체를 직접 다루어야 하는 고급 `thread: 'st'`/direct-native 통합 참고용입니다.
+저수준 클래스와 1:1 native wrapper는 `soundtrace.js/native`에서 계속 사용할 수
+있습니다.
+
+worker-hosted MT에서는
+`createScene()`, `createListener()`, `createSource()`, `createMesh()`,
+`createCollider()`, `scene.update(...)`, `createWorkletNode(...)`,
+`materials`/`propagator`/`diagnostics` 같은 direct-native getter surface가
+`[soundtrace.js] ... is not available for thread=mt` 에러를 냅니다.
+
+1. `SoundTrace.create(ctx, { thread: 'st' })`로 ST WASM 코어를 로드합니다.
 2. `createScene()`, `createListener()`, `createSource()`를 만들고 scene에 추가합니다.
    listener는 scene당 1개가 기본 모델이므로 `scene.setListener(listener)`를 사용합니다.
-3. `createCollider()` 또는 `createColliderFromThree()`로 사운드 콜라이더를 만들고 scene에 추가합니다.
+3. `createCollider()`로 사운드 콜라이더를 만들고 scene에 추가합니다.
 4. 저수준 제어가 필요하면 `createMesh()`와 `createObject()`를 직접 만들 수 있습니다.
 5. 프레임마다 움직인 음원·청취자·콜라이더를 갱신합니다.
-6. `scene.update(dt)`로 `tick(dt)`와 `updatePropagation()`을 한 번에 수행합니다.
+6. `scene.update(dt)` 또는 `await sound.update(dt)`로 frame advancement와 propagation을 수행합니다.
 7. 오디오는 `createWorkletNode()`가 만든 `AudioWorkletNode`를 통해 렌더합니다.
 
 ## TypeScript API
@@ -225,20 +269,25 @@ export default defineConfig({
 |---|---|
 | `new SoundTrace(audioContext, options)` | 인스턴스 생성. 사용 전 `load()` 필요 |
 | `SoundTrace.create(audioContext, options)` | 생성과 `load()`를 한 번에 수행 |
-| `load()` | `st` 또는 `mt` WASM 로드, `exaInit()`, `output` 생성 |
+| `load()` | `st`는 local WASM session을 로드하고, `mt`는 worker-hosted control session을 준비 |
 | `output` | master `GainNode` |
 | `audioContext` | 생성자에서 받은 컨텍스트 |
-| `createScene()` | `SoundScene` 생성 |
-| `createObject()` | `SoundObject` 생성 |
-| `createMesh()` | `SoundMesh` 생성 |
-| `createCollider(opts?)` | `SoundMesh + SoundObject`를 함께 소유하는 `SoundCollider` 생성 |
-| `createColliderFromThree(objectOrGeometry, opts?)` | Three.js `Object3D`/`BufferGeometry`를 사운드 콜라이더로 변환 |
-| `createSource()` | `SoundSource` 생성 |
-| `createListener()` | `SoundListener` 생성. listener ID가 renderer handle 역할도 함 |
-| `materials` | 전역 material table wrapper |
-| `propagator` | valid path, guide plane, profile 조회 |
-| `diagnostics` | 버전, 메모리 trace, ray 통계 조회 |
-| `createWorkletNode(listener, source, channels = 2)` | 선택한 ST/MT binary의 `AudioWorkletNode` 생성 |
+| `listener` | facade listener. ST와 worker-hosted MT에서 사용 가능 |
+| `addMesh(opts)` | facade mesh/object 추가. ST와 worker-hosted MT에서 사용 가능 |
+| `removeMesh(mesh)` | facade mesh/object 제거. ST와 worker-hosted MT에서 사용 가능 |
+| `addSource(opts)` | facade source 추가. ST와 worker-hosted MT에서 사용 가능 |
+| `createScene()` | ST/direct-native only. `SoundScene` 생성 |
+| `createObject()` | ST/direct-native only. `SoundObject` 생성 |
+| `createMesh()` | ST/direct-native only. `SoundMesh` 생성 |
+| `createCollider(opts?)` | ST/direct-native only. `SoundMesh + SoundObject`를 함께 소유하는 `SoundCollider` 생성 |
+| `createSource()` | ST/direct-native only. `SoundSource` 생성 |
+| `createListener()` | ST/direct-native only. `SoundListener` 생성. listener ID가 renderer handle 역할도 함 |
+| `materials` | ST/direct-native only. 전역 material table wrapper |
+| `propagator` | ST/direct-native only. valid path, guide plane, profile 조회 |
+| `diagnostics` | ST/direct-native only. 버전, 메모리 trace, ray 통계 조회 |
+| `createWorkletNode(listener, source, channels = 2)` | ST/direct-native only. facade는 `source.play(input, channels)` 사용 |
+| `update(dt = 0)` | `st`는 number를 반환하고, `mt`는 worker frame 결과를 기다리는 `Promise<number>`를 반환 |
+| `debugSnapshot(options?)` | `mt`에서 valid path count, profile 같은 engine-output-style data를 async로 조회 |
 | `reset()` | 코어 상태 reset |
 | `dispose()` | 출력 노드 disconnect, WASM wrapper 참조 해제 |
 
@@ -246,7 +295,7 @@ export default defineConfig({
 
 | 필드 | 기본값 | 범위·주의 |
 |---|---:|---|
-| `thread` | `'st'` | `'st'` 또는 `'mt'`. 실제 서비스는 MT 권장 |
+| `thread` | `'st'` | `'st'` 또는 `'mt'`. MT는 control worker, SharedArrayBuffer, COOP/COEP 필요 |
 | `coreBaseUrl` | 패키지 내부 `./core` | 직접 호스팅할 때 `./core`처럼 `st/`, `mt/`가 있는 디렉터리 지정 |
 | `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`. `-1`은 native default, `1` 이상은 propagation job thread budget |
 | `defaultMeshBuild` | native default | native `ExaMeshBuildOption`. `bvhType`, `bvhMaxDepth`, `primPerLeaf`의 process-wide mesh build default |
@@ -264,8 +313,23 @@ const sound = await SoundTrace.create(ctx, {
 ```
 
 `propagationThreadCount`와 `defaultMeshBuild`는 WASM 로드 후 native `exaInit()` 전에
-C API로 전달됩니다. `thread: 'st' | 'mt'` 분기는 binary 선택으로 유지하고, SIMD/BVH
-선택은 `BvhType`과 mesh build option으로 제어하세요.
+C API로 전달됩니다. worker-hosted MT에서 세부 BVH 옵션을 바꾸는 공개 경로는 facade
+명령 surface로 제한되며, direct-native mesh build option 조작은 ST/direct-native
+통합에서만 사용하세요.
+
+### MT readback 규칙
+
+MT에서는 main thread가 native getter를 직접 호출하지 않습니다.
+
+| 데이터 종류 | MT 동작 |
+|---|---|
+| 앱이 방금 넣은 input 상태 | JS input readback cache에서 즉시 반환 |
+| propagation 결과, valid path count, profile, memory trace | `await sound.debugSnapshot(...)` 같은 async 경로 사용 |
+| synchronous native diagnostics | MT에서는 에러를 내고 async snapshot 사용을 안내 |
+
+예를 들어 source position, listener position, mesh transform처럼 앱이 설정한 값은
+main-side cache에서 읽습니다. 반대로 `getStatistics()`처럼 engine-output-style data를
+읽는 동기 GET API는 MT에서 사용하지 말고 `debugSnapshot()`을 사용하세요.
 
 ### `SoundScene`
 
@@ -359,7 +423,6 @@ Three.js나 씬 컴포넌트 패턴에서는 이 객체를 기본 콜라이더 �
 | API | 설명 |
 |---|---|
 | `sound.createCollider(opts?)` | `vertices`, `triangles`, BVH 옵션으로 collider 생성 |
-| `sound.createColliderFromThree(objectOrGeometry, opts?)` | Three.js `Object3D` 또는 `BufferGeometry`에서 collider 생성 |
 | `scene.addCollider(collider)` | collider object를 scene에 추가하고 연결 상태 기록 |
 | `scene.removeCollider(collider)` | scene에서 제거하고 연결 상태 해제 |
 | `collider.rebuild(vertices, triangles, opts?)` | `mesh.setData(...)` 후 object를 `UpdateType.Rebuild`로 표시 |
@@ -501,10 +564,9 @@ transmission은 `setDistanceAttenuation(PathType.Transmission, value)`로 따로
 | `sortIRDatas()` | IR data 정렬 요청 |
 | `findAttenuationForDistance(...)` | target attenuation에 해당하는 거리 역산 |
 
-Web SDK는 별도 background propagation loop API를 제공하지 않습니다. 호출자는 렌더
-루프나 시뮬레이션 루프에서 mutation을 끝낸 뒤 `tick()`과 `updatePropagation()`을
-순서대로 호출합니다. MT binary의 내부 job은 `updatePropagation()` 안에서 schedule되고
-반환 전에 join됩니다.
+Web SDK는 앱의 렌더 루프나 시뮬레이션 루프에서 명시적으로 frame update를 호출하는
+모델입니다. ST에서는 scene이 즉시 frame work를 수행하고, MT에서는 SDK가 control
+worker에 frame request를 보내 비동기 결과를 받습니다.
 
 ## 사운드 재질 JSON
 
@@ -609,42 +671,50 @@ tool이나 앱 레이어에서 온 문자열을 canonical material로 자동 매
 ## Three.js 데모
 
 <iframe
-  title="soundtrace.js three.js static single-thread demo"
-  src={useBaseUrl('/demos/three-basic/?thread=st')}
+  title="soundtrace.js three-basic worker-hosted MT demo"
+  src={useBaseUrl('/demos/three-basic/simple.html')}
   style={{display: 'block', width: '100%', height: '486px', margin: '0 auto', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}}
   allow="autoplay; fullscreen"
 />
+
+`three-basic`은 Web SDK의 `simple.ts` 통합 예제입니다. 문서 사이트의 로컬 preview
+서버는 COOP/COEP 헤더를 붙이므로 iframe에서 MT를 바로 확인할 수 있습니다. 다른
+정적 호스트로 옮길 때도 같은 헤더가 필요합니다.
 
 런타임과 데모 빌드:
 
 ```bash
 npm install
 
-cd /Users/ethanjung/dev/soundtrace.js/STCoreV2/exaSound
-./mainBuild.sh rebuild wasm release
-./mainBuild.sh rebuild wasm release --use-thread
-
-cd /Users/ethanjung/dev/soundtrace.js
+cd /path/to/soundtrace.js
 npm run build
 
-cd /Users/ethanjung/dev/soundtrace-three-basic
+cd /path/to/soundtrace-three-basic
 npm install
-npm run update:sdk
+SOUNDTRACE_SDK_DIR=/path/to/soundtrace.js npm run update:sdk
 npm run build
+npm run dev
 
-cd /Users/ethanjung/dev/docs
-rsync -a --delete --exclude '.DS_Store' --exclude '*.zip' \
-  /Users/ethanjung/dev/soundtrace-three-basic/dist/ \
+cd /path/to/docs
+rsync -a --delete /path/to/soundtrace-three-basic/dist/ \
   static/demos/three-basic/
 
-npm run build
-npm run serve
+BASE_URL=/docs/ npm run build
+npm run serve -- --port 3100
 ```
 
-문서 iframe은 시작 기본값을 명확히 하기 위해 `?thread=st`로 고정합니다. ST는
-single-thread WASM binary를 선택하지만 오디오 렌더링은 native Emscripten
-AudioWorkletNode에서 실행됩니다. MT는 SharedArrayBuffer가 필요하므로 COOP/COEP가
-있는 호스트에서 별도로 확인합니다.
+`http://127.0.0.1:3100/docs/sdk/web` 같은 배포 경로 preview는 build에도
+`BASE_URL=/docs/`를 지정해야 Docusaurus client route와 정적 파일 prefix가 일치합니다.
+
+MT 확인 절차:
+
+1. `npm run dev` 또는 `npm run serve`가 COOP/COEP 헤더를 보내는지 확인합니다.
+2. 브라우저에서 `crossOriginIsolated === true`와 `SharedArrayBuffer`가 사용 가능한지 확인합니다.
+3. `simple.html` 또는 문서 iframe에서 `Backend`를 `mt`로 두고 `Start Audio`를 누릅니다.
+4. source/listener/mesh를 움직여 `source transform`, `listener transform`, `mesh transform`이 즉시 반영되는지 확인합니다.
+
+검증된 MT 브라우저 시나리오는 worker-hosted control, `AudioWorkletNode` 생성,
+`audioRms > 0.000001`, valid path 생성, main-thread MT WASM control 미사용을 확인합니다.
 
 ### 하단 버튼
 
@@ -652,8 +722,8 @@ AudioWorkletNode에서 실행됩니다. MT는 SharedArrayBuffer가 필요하므�
 |---|---|
 | `Room` | 방 전체 collider의 재질 선택 |
 | `Collider` | 정적 wall과 Flair collider의 재질 선택 |
-| `Thread` | 시작 전 `Single` 또는 `Multi` 선택. 선택값은 로드할 WASM binary를 명시 |
-| `Start Audio` | WASM, 재질, MP3를 로드하고 오디오를 시작. 기본 HRTF는 native 초기화에서 자동 적용됨 |
+| `Backend` | 시작 전 `st` 또는 `mt` 선택. `mt`는 worker-hosted MT 경로 |
+| `Start Audio` | WASM, 재질, MP3, HRTF asset을 로드하고 AudioWorklet 오디오를 시작 |
 | `Move` / `Stop` | 음원을 방 안의 타원 경로로 이동하거나 현재 위치에 정지 |
 | `Wall: On/Off` | 청취자 근처의 정적 wall collider를 scene에 추가·제거 |
 | `Flair: On/Off` | FBX 스키닝 애니메이션 collider를 scene에 추가·제거 |
@@ -746,15 +816,15 @@ path와 BVH box를 그릴 때는 WASM 내부 데이터를 JS로 복사하고 Thr
 
 체크리스트:
 
-1. **SDK wrapper를 사용 중인지 확인합니다.** WASM 파일만 직접 로드하지 말고 `SoundTrace`, `SoundListener`, `createWorkletNode`, `recommendedSTOption`, `PathType` 등을 `soundtrace.js` 모듈에서 가져옵니다.
+1. **SDK wrapper를 사용 중인지 확인합니다.** WASM 파일만 직접 로드하지 말고 facade의 `SoundTrace`, `sound.listener`, `sound.addSource()`, `source.play()`를 `soundtrace.js` 모듈에서 가져옵니다. `SoundListener`, `createWorkletNode`, `recommendedSTOption`, `PathType` 같은 direct-native 조합은 ST/direct-native 통합에서만 사용합니다.
 2. **`AudioContext.resume()`을 사용자 클릭 안에서 즉시 호출합니다.** WASM이나 MP3 fetch가 끝난 뒤에 `resume()`을 미루면 브라우저 정책 때문에 context가 계속 `suspended`로 남을 수 있습니다. 예제처럼 클릭 핸들러 초반에 `const resumeP = ctx.resume()`을 잡고, 마지막에 `await resumeP`로 확인합니다.
-3. **listener audio option을 실제 context와 맞춥니다.** `sampleRate`는 `ctx.sampleRate`, `outputChannels`는 현재 실시간 HRTF 경로 기준 `2`로 설정합니다. `inputSampleCount`는 `createWorkletNode()` 경로에서 `128`을 기준으로 맞춥니다.
-4. **listener option과 orientation을 예제와 같은 기준으로 시작합니다.** 최소 초기값은 `listener.setOption(recommendedSTOption())`, `listener.setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])`, `listener.setPosition(...)`입니다. three.js 좌표계에서 listener/source 방향을 바꿨다면 source position과 direction도 같은 기준으로 갱신합니다.
-5. **material table과 collider를 먼저 구성합니다.** `soundMaterial.json`을 material table에 넣고, scene에 sound collider를 추가한 뒤 listener/source를 연결합니다. collider가 없으면 direct sound 중심이라 공간 변화가 약하게 느껴질 수 있습니다.
-6. **custom Web Audio graph에서는 stereo 설정을 명시합니다.** SDK의 `createWorkletNode()`는 `channelCount = 2`, `channelCountMode = 'explicit'`, `channelInterpretation = 'speakers'`를 설정합니다. 직접 node를 만들거나 별도 graph를 조합한다면 input hub, splitter, merger, worklet/input node에도 같은 기준을 명시합니다.
+3. **listener audio option을 실제 context와 맞춥니다.** `sampleRate`는 `ctx.sampleRate`, `outputChannels`는 현재 실시간 HRTF 경로 기준 `2`로 설정합니다. `inputSampleCount`는 facade `source.play()`와 ST/direct-native `createWorkletNode()` 경로 모두 `128`을 기준으로 맞춥니다.
+4. **listener pose와 품질 옵션을 예제와 같은 기준으로 시작합니다.** facade에서는 `sound.listener.setPose(...)`, `sound.setQuality(...)`, `sound.setAudioOption(...)`을 사용합니다. ST/direct-native 통합에서만 `listener.setOption(recommendedSTOption())`, `listener.setOrientation(...)`, `listener.setPosition(...)` 조합을 직접 씁니다.
+5. **material table과 collider를 먼저 구성합니다.** facade에서는 `sound.addMesh(...)`로 material과 collider를 추가하고, ST/direct-native 통합에서는 `sound.materials`, `createCollider()`, `scene.addCollider(...)`를 사용합니다. collider가 없으면 direct sound 중심이라 공간 변화가 약하게 느껴질 수 있습니다.
+6. **custom Web Audio graph에서는 stereo 설정을 명시합니다.** facade의 `source.play()`와 ST/direct-native `createWorkletNode()`는 `channelCount = 2`, `channelCountMode = 'explicit'`, `channelInterpretation = 'speakers'`를 설정합니다. 직접 node를 만들거나 별도 graph를 조합한다면 input hub, splitter, merger, worklet/input node에도 같은 기준을 명시합니다.
 7. **여러 sound source로 speaker layout을 만들 때는 채널을 직접 라우팅합니다.** 모든 source에 같은 stereo input을 암묵적으로 연결하지 마세요. 예를 들어 `L/LS/SL/BL` 계열 source에는 left channel을 양쪽 input frame에 복제하고, `R/RS/SR/BR` 계열 source에는 right channel을 복제하며, `C/LFE/Mono`는 `(L + R) * 0.5` mono mix를 사용합니다.
 8. **재생을 다시 시작할 때 graph를 완전히 정리합니다.** 기존 `MediaElementAudioSourceNode`, `AudioBufferSourceNode`, splitter, merger, gain node 연결을 끊고 새 source graph를 만든 뒤 soundtrace output만 master/destination으로 연결합니다. 오래된 node가 남으면 두 번째 재생부터 무음이나 한쪽 출력처럼 보일 수 있습니다.
-9. **첫 audio block 전에 propagation을 한 번 준비합니다.** listener, source, collider 구성이 끝난 직후 `scene.tick(0)`과 `scene.updatePropagation()`을 호출해 초기 path state를 만들어 둡니다.
+9. **첫 audio block 전에 propagation을 한 번 준비합니다.** facade에서는 listener, source, collider 구성이 끝난 직후 `await sound.update(0)`를 호출합니다. ST/direct-native 통합에서는 `scene.tick(0)`과 `scene.updatePropagation()`으로 초기 path state를 만들어 둡니다.
 
 따라서 “소리가 한쪽에서만 들림”은 SDK core 판정보다 먼저 AudioContext resume
 타이밍, audio option, channel routing, graph lifecycle을

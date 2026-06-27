@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>soundtrace.js — simple facade demo (shoebox)</title>
+    <style>
+      :root {
+        --surface-primary: #0a0a12;
+        --surface-panel: rgba(20,20,30,0.88);
+        --surface-control: #1f1f2a;
+        --text-primary: #dddddd;
+        --text-secondary: #aaaaaa;
+        --text-tertiary: #777777;
+        --label-default: #888888;
+        --border-default: #333333;
+        --border-control: #444444;
+        --status-success: #66aa66;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+      }
+      html, body { margin: 0; height: 100%; background: var(--surface-primary); color: var(--text-primary);
+        font-family: system-ui, sans-serif; overflow: hidden; }
+      #app { position: fixed; inset: 0; }
+      #panel {
+        position: fixed; top: var(--space-3); left: var(--space-3); z-index: 10;
+        width: min(360px, calc(100vw - 24px)); max-height: calc(100dvh - 24px);
+        overflow-y: auto; box-sizing: border-box;
+        background: var(--surface-panel); border: 1px solid var(--border-default);
+        border-radius: 8px; padding: 14px var(--space-4);
+        backdrop-filter: blur(6px); font-size: 13px; line-height: 1.5;
+      }
+      #panel h1 { font-size: 14px; margin: 0 0 8px; font-weight: 600; }
+      #panel .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+      #panel label { color: var(--label-default); font-size: 11px; text-transform: uppercase; min-width: 70px; }
+      #panel select, #panel button, #panel input[type="number"] {
+        background: var(--surface-control); color: var(--text-primary); border: 1px solid var(--border-control);
+        border-radius: 4px; padding: 6px 10px; font: inherit; cursor: pointer;
+      }
+      #panel input[type="number"] { width: 100%; min-width: 0; box-sizing: border-box; cursor: text; }
+      #panel select:focus, #panel button:focus, #panel input:focus {
+        outline: 1px solid var(--text-secondary); outline-offset: 1px;
+      }
+      #panel button:disabled, #panel select:disabled, #panel input:disabled { opacity: 0.5; cursor: default; }
+      #panel input[type="file"] { font-size: 11px; color: var(--text-secondary); }
+      #panel input[type="file"]::file-selector-button {
+        background: var(--surface-control); color: var(--text-primary); border: 1px solid var(--border-control);
+        border-radius: 4px; padding: 4px 8px; font: inherit; cursor: pointer;
+      }
+      .group {
+        margin: var(--space-2) 0; padding: var(--space-2) 0 0;
+        border: 0; border-top: 1px solid var(--border-default);
+      }
+      .group legend {
+        padding: 0 var(--space-2) 0 0; color: var(--text-secondary);
+        font-size: 11px; font-weight: 600; text-transform: uppercase;
+      }
+      .control-title { margin-top: var(--space-2); color: var(--label-default); font-size: 11px; text-transform: uppercase; }
+      .axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+      .axis-grid label { display: grid; gap: var(--space-1); min-width: 0; }
+      .toggle-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1) var(--space-2); margin-top: var(--space-2); }
+      .toggle-grid label {
+        display: flex; align-items: center; gap: var(--space-1); min-width: 0;
+        color: var(--text-primary); font-size: 11px; text-transform: none;
+      }
+      #panel input[type="checkbox"] { accent-color: var(--status-success); }
+      #statisticsReadout {
+        margin-top: var(--space-2); padding: var(--space-2);
+        border: 1px solid var(--border-default); border-radius: 4px;
+        color: var(--text-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px; line-height: 1.4; white-space: pre-wrap;
+      }
+      #status { margin-top: 10px; font-size: 11px; color: var(--status-success); min-height: 16px; }
+      #hint { margin-top: 8px; font-size: 11px; color: var(--text-tertiary); }
+    </style>
+    <script type="module" crossorigin src="./assets/simple-BpVq8KZo.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/OrbitControls-CV8AHo9e.js">
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="panel">
+      <h1>soundtrace.js · facade demo</h1>
+      <div class="row">
+        <label>Quality</label>
+        <select id="quality">
+          <option value="fast">fast</option>
+          <option value="middle" selected>middle</option>
+          <option value="quality">quality</option>
+        </select>
+      </div>
+      <fieldset class="group">
+        <legend>Backend</legend>
+        <div class="row">
+          <label>Mode</label>
+          <select id="backendMode">
+            <option value="st" selected>st</option>
+            <option value="mt">mt</option>
+            <option value="gpu">gpu</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Throughput</label>
+          <select id="mtThroughput" disabled>
+            <option value="low">low</option>
+            <option value="medium" selected>medium</option>
+            <option value="max">max</option>
+          </select>
+        </div>
+      </fieldset>
+      <div class="row">
+        <label>Material</label>
+        <select id="material" disabled>
+          <option value="concrete">concrete</option>
+          <option value="wood">wood</option>
+          <option value="glass">glass</option>
+          <option value="brick">brick</option>
+          <option value="metal">metal</option>
+        </select>
+      </div>
+      <fieldset class="group">
+        <legend>Source</legend>
+        <div class="axis-grid">
+          <label>X<input type="number" id="sourceX" value="2.5" step="0.1" /></label>
+          <label>Y<input type="number" id="sourceY" value="1.6" step="0.1" /></label>
+          <label>Z<input type="number" id="sourceZ" value="0" step="0.1" /></label>
+        </div>
+        <div class="control-title">Path</div>
+        <div class="toggle-grid">
+          <label><input type="checkbox" id="pathDirect" checked />Direct</label>
+          <label><input type="checkbox" id="pathReflection" checked />Reflection</label>
+          <label><input type="checkbox" id="pathReverberation" checked />Reverberation</label>
+          <label><input type="checkbox" id="pathDiffraction" checked />Diffraction</label>
+        </div>
+      </fieldset>
+      <fieldset class="group">
+        <legend>Listener</legend>
+        <div class="axis-grid">
+          <label>X<input type="number" id="listenerX" value="0" step="0.1" /></label>
+          <label>Y<input type="number" id="listenerY" value="1.6" step="0.1" /></label>
+          <label>Z<input type="number" id="listenerZ" value="0" step="0.1" /></label>
+        </div>
+      </fieldset>
+      <fieldset class="group">
+        <legend>Object</legend>
+        <div class="row">
+          <label>Update</label>
+          <select id="objectUpdateType">
+            <option value="static">static</option>
+            <option value="refit">refit</option>
+            <option value="rebuild">rebuild</option>
+            <option value="dynamic" selected>dynamic</option>
+          </select>
+        </div>
+        <div class="control-title">Position</div>
+        <div class="axis-grid">
+          <label>X<input type="number" id="objectX" value="0" step="0.1" /></label>
+          <label>Y<input type="number" id="objectY" value="0" step="0.1" /></label>
+          <label>Z<input type="number" id="objectZ" value="0" step="0.1" /></label>
+        </div>
+        <div class="control-title">Rotation</div>
+        <div class="axis-grid">
+          <label>X<input type="number" id="objectRotX" value="0" step="5" /></label>
+          <label>Y<input type="number" id="objectRotY" value="0" step="5" /></label>
+          <label>Z<input type="number" id="objectRotZ" value="0" step="5" /></label>
+        </div>
+        <div class="control-title">Scale</div>
+        <div class="axis-grid">
+          <label>X<input type="number" id="objectScaleX" value="1" step="0.05" min="0.1" /></label>
+          <label>Y<input type="number" id="objectScaleY" value="1" step="0.05" min="0.1" /></label>
+          <label>Z<input type="number" id="objectScaleZ" value="1" step="0.05" min="0.1" /></label>
+        </div>
+      </fieldset>
+      <div class="row">
+        <label>Audio</label>
+        <input type="file" id="audioFile" accept="audio/*" />
+      </div>
+      <div class="row">
+        <button id="start" disabled>Start</button>
+        <button id="move" disabled>Move source</button>
+        <button id="statistics" disabled>Stats</button>
+      </div>
+      <div id="statisticsReadout">Stats idle.</div>
+      <div id="status">Idle.</div>
+      <div id="hint">Shoebox room · 1 source · 1 listener (ears).<br/>Upload an audio file or use the default track.<br/>Facade API only.</div>
+    </div>
+  </body>
+</html>

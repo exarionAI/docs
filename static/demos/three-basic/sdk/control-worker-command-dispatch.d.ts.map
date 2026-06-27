@@ -1,0 +1,1 @@
+{"version":3,"file":"control-worker-command-dispatch.d.ts","sourceRoot":"","sources":["../src/control-worker-command-dispatch.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,sBAAsB,EAAE,cAAc,EAAE,MAAM,uBAAuB,CAAC;AACpF,OAAO,KAAK,EAAE,2BAA2B,EAAE,MAAM,qCAAqC,CAAC;AAsBvF,wBAAsB,iBAAiB,CACrC,QAAQ,EAAE,SAAS,cAAc,EAAE,EACnC,OAAO,EAAE,2BAA2B,GACnC,OAAO,CAAC,sBAAsB,EAAE,CAAC,CAyDnC"}

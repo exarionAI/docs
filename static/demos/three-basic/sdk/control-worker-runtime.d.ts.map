@@ -1,0 +1,1 @@
+{"version":3,"file":"control-worker-runtime.d.ts","sourceRoot":"","sources":["../src/control-worker-runtime.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAuC,WAAW,EAAE,MAAM,uBAAuB,CAAC;AAmB9F,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,YAAY,CAAC;AACjD,OAAO,KAAK,EAAE,oBAAoB,EAAwB,MAAM,mCAAmC,CAAC;AAEpG,wBAAsB,iCAAiC,CACrD,MAAM,EAAE,cAAc,EACtB,OAAO,EAAE,WAAW,GACnB,OAAO,CAAC,oBAAoB,CAAC,CAkL/B"}

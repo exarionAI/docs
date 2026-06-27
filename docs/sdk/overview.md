@@ -13,7 +13,7 @@ title: SDK 개요
 
 | 이름 | 대상 | 상태 |
 |---|---|---|
-| [Web](./web.md) | 브라우저 (WebAssembly) | 사용 가능 (초안 문서화) |
+| [Web](./web.md) | 브라우저 (WebAssembly) | 사용 가능. ST/worker-hosted MT 문서화 |
 | [Python](./python.md) | 분석·연구 | 예정 |
 | [Unity](./unity.md) | Unity 게임 엔진 | 예정 |
 | [Unreal Engine](./ue.md) | Unreal Engine | 예정 |

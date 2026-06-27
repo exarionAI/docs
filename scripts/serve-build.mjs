@@ -47,7 +47,13 @@ function sendHeaders(res, status, filePath) {
 function resolveRequestPath(url) {
   const requestUrl = new URL(url, `http://${host}:${port}`);
   const decodedPath = decodeURIComponent(requestUrl.pathname);
-  const safePath = normalize(decodedPath).replace(/^(\.\.[/\\])+/, '');
+  let servedPath = decodedPath;
+  if (decodedPath === '/docs') {
+    servedPath = '/';
+  } else if (decodedPath.startsWith('/docs/')) {
+    servedPath = decodedPath.slice('/docs'.length);
+  }
+  const safePath = normalize(servedPath).replace(/^(\.\.[/\\])+/, '');
   let filePath = resolve(join(root, safePath));
 
   if (!filePath.startsWith(root + sep) && filePath !== root) {

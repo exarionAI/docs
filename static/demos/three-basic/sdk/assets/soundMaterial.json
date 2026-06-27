@@ -1,0 +1,180 @@
+{
+    "_soundMaterials": [
+        {
+            "materialType": 0,
+            "description": "Concrete",
+            "scattering": 0.08,
+            "reflection": [0.99, 0.98, 0.94, 0.86, 0.63, 0.40, 0.35, 0.30],
+            "absorption": [0.01, 0.02, 0.06, 0.14, 0.37, 0.60, 0.65, 0.70],
+            "transmission": [0.005, 0.005, 0.003, 0.002, 0.001, 0.001, 0.001, 0.001]
+        },
+        {
+            "materialType": 1,
+            "description": "Fabric",
+            "scattering": 0.40,
+            "reflection": [0.91, 0.86, 0.65, 0.45, 0.28, 0.30, 0.35, 0.40],
+            "absorption": [0.09, 0.14, 0.35, 0.55, 0.72, 0.70, 0.65, 0.60],
+            "transmission": [0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.02, 0.01]
+        },
+        {
+            "materialType": 2,
+            "description": "Wood",
+            "scattering": 0.15,
+            "reflection": [0.50, 0.58, 0.79, 0.90, 0.92, 0.94, 0.94, 0.93],
+            "absorption": [0.50, 0.42, 0.21, 0.10, 0.08, 0.06, 0.06, 0.07],
+            "transmission": [0.12, 0.10, 0.06, 0.04, 0.02, 0.01, 0.01, 0.01]
+        },
+        {
+            "materialType": 3,
+            "description": "Brick",
+            "scattering": 0.25,
+            "reflection": [0.98, 0.98, 0.98, 0.98, 0.98, 0.98, 0.98, 0.98],
+            "absorption": [0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02],
+            "transmission": [0.005, 0.004, 0.003, 0.002, 0.001, 0.001, 0.001, 0.001]
+        },
+        {
+            "materialType": 4,
+            "description": "ConcreteBlock",
+            "scattering": 0.35,
+            "reflection": [0.72, 0.64, 0.56, 0.69, 0.71, 0.61, 0.75, 0.80],
+            "absorption": [0.28, 0.36, 0.44, 0.31, 0.29, 0.39, 0.25, 0.20],
+            "transmission": [0.02, 0.02, 0.01, 0.01, 0.005, 0.005, 0.005, 0.005]
+        },
+        {
+            "materialType": 5,
+            "description": "Glass",
+            "scattering": 0.05,
+            "reflection": [0.60, 0.65, 0.75, 0.82, 0.88, 0.93, 0.96, 0.97],
+            "absorption": [0.40, 0.35, 0.25, 0.18, 0.12, 0.07, 0.04, 0.03],
+            "transmission": [0.30, 0.25, 0.18, 0.12, 0.06, 0.03, 0.02, 0.01]
+        },
+        {
+            "materialType": 6,
+            "description": "Gravel",
+            "scattering": 0.65,
+            "reflection": [0.85, 0.75, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15],
+            "absorption": [0.15, 0.25, 0.60, 0.65, 0.70, 0.50, 0.80, 0.85],
+            "transmission": [0.005, 0.005, 0.003, 0.002, 0.001, 0.001, 0.001, 0.001]
+        },
+        {
+            "materialType": 7,
+            "description": "GypsumBoard",
+            "scattering": 0.08,
+            "reflection": [0.40, 0.45, 0.86, 0.92, 0.96, 0.88, 0.89, 0.89],
+            "absorption": [0.60, 0.55, 0.14, 0.08, 0.04, 0.12, 0.11, 0.11],
+            "transmission": [0.18, 0.15, 0.08, 0.05, 0.03, 0.02, 0.02, 0.02]
+        },
+        {
+            "materialType": 8,
+            "description": "Linoleum,RubberOrAsphaltTile",
+            "scattering": 0.05,
+            "reflection": [0.98, 0.98, 0.97, 0.97, 0.97, 0.97, 0.98, 0.98],
+            "absorption": [0.02, 0.02, 0.03, 0.03, 0.03, 0.03, 0.02, 0.02],
+            "transmission": [0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005]
+        },
+        {
+            "materialType": 9,
+            "description": "Marble",
+            "scattering": 0.05,
+            "reflection": [0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99],
+            "absorption": [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01],
+            "transmission": [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+        },
+        {
+            "materialType": 10,
+            "description": "Plaster",
+            "scattering": 0.06,
+            "reflection": [0.99, 0.99, 0.98, 0.98, 0.97, 0.96, 0.95, 0.94],
+            "absorption": [0.01, 0.01, 0.02, 0.02, 0.03, 0.04, 0.05, 0.06],
+            "transmission": [0.005, 0.005, 0.004, 0.003, 0.002, 0.002, 0.001, 0.001]
+        },
+        {
+            "materialType": 11,
+            "description": "Plywood",
+            "scattering": 0.12,
+            "reflection": [0.66, 0.72, 0.78, 0.83, 0.91, 0.90, 0.89, 0.87],
+            "absorption": [0.34, 0.28, 0.22, 0.17, 0.09, 0.10, 0.11, 0.13],
+            "transmission": [0.10, 0.08, 0.05, 0.03, 0.02, 0.01, 0.01, 0.01]
+        },
+        {
+            "materialType": 12,
+            "description": "Sherdded-woodFiberborad",
+            "scattering": 0.55,
+            "reflection": [0.90, 0.85, 0.74, 0.38, 0.06, 0.36, 0.08, 0.07],
+            "absorption": [0.10, 0.15, 0.26, 0.62, 0.94, 0.64, 0.92, 0.93],
+            "transmission": [0.03, 0.03, 0.02, 0.01, 0.005, 0.005, 0.005, 0.005]
+        },
+        {
+            "materialType": 13,
+            "description": "Snow",
+            "scattering": 0.75,
+            "reflection": [0.65, 0.55, 0.25, 0.10, 0.05, 0.05, 0.05, 0.05],
+            "absorption": [0.35, 0.45, 0.75, 0.90, 0.95, 0.95, 0.95, 0.95],
+            "transmission": [0.01, 0.01, 0.005, 0.003, 0.002, 0.001, 0.001, 0.001]
+        },
+        {
+            "materialType": 14,
+            "description": "Soil",
+            "scattering": 0.60,
+            "reflection": [0.90, 0.85, 0.75, 0.60, 0.45, 0.40, 0.40, 0.36],
+            "absorption": [0.10, 0.15, 0.25, 0.40, 0.55, 0.60, 0.60, 0.64],
+            "transmission": [0.005, 0.005, 0.003, 0.002, 0.001, 0.001, 0.001, 0.001]
+        },
+        {
+            "materialType": 15,
+            "description": "Steel",
+            "scattering": 0.06,
+            "reflection": [0.97, 0.95, 0.90, 0.90, 0.90, 0.95, 0.98, 0.98],
+            "absorption": [0.03, 0.05, 0.10, 0.10, 0.10, 0.07, 0.02, 0.02],
+            "transmission": [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+        },
+        {
+            "materialType": 16,
+            "description": "Stone",
+            "scattering": 0.30,
+            "reflection": [0.98, 0.98, 0.98, 0.97, 0.97, 0.96, 0.95, 0.95],
+            "absorption": [0.02, 0.02, 0.02, 0.03, 0.03, 0.04, 0.05, 0.05],
+            "transmission": [0.002, 0.002, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+        },
+        {
+            "materialType": 17,
+            "description": "WaterSurface",
+            "scattering": 0.03,
+            "reflection": [0.99, 0.99, 0.99, 0.99, 0.98, 0.98, 0.97, 0.97],
+            "absorption": [0.01, 0.01, 0.01, 0.01, 0.02, 0.02, 0.03, 0.03],
+            "transmission": [0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005]
+        },
+        {
+            "materialType": 18,
+            "description": "TunableAbsorber",
+            "scattering": 0.20,
+            "reflection": [0.955, 0.955, 0.955, 0.955, 0.955, 0.955, 0.955, 0.955],
+            "absorption": [0.045, 0.045, 0.045, 0.045, 0.045, 0.045, 0.045, 0.045],
+            "transmission": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        },
+        {
+            "materialType": 19,
+            "description": "LowVarianceTarget",
+            "scattering": 0.02,
+            "reflection": [0.918, 0.925, 0.929, 0.931, 0.932, 0.933, 0.934, 0.935],
+            "absorption": [0.082, 0.075, 0.071, 0.069, 0.068, 0.067, 0.066, 0.065],
+            "transmission": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        },
+        {
+            "materialType": 20,
+            "description": "ConcreteBlockPainted",
+            "scattering": 0.15,
+            "reflection": [0.64, 0.64, 0.56, 0.69, 0.71, 0.61, 0.75, 0.75],
+            "absorption": [0.36, 0.36, 0.44, 0.31, 0.29, 0.39, 0.25, 0.25],
+            "transmission": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        },
+        {
+            "materialType": 21,
+            "description": "FiberglassReinforcedPlastic",
+            "scattering": 0.10,
+            "reflection": [0.92, 0.90, 0.88, 0.86, 0.84, 0.82, 0.80, 0.78],
+            "absorption": [0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20, 0.22],
+            "transmission": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        }
+    ]
+}

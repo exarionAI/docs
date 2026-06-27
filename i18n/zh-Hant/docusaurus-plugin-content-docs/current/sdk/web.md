@@ -19,16 +19,12 @@ import useBaseUrl from '@docusaurus/useBaseUrl';
 
 ## 安装與構件
 
-包以 ESM 分發，公開 API 從 `soundtrace.js` 入口匯入。
+包以 ESM 分發。普通應用從 `soundtrace.js` 入口的 facade 表面開始。
 
 ```ts
 import {
-  BvhType,
   SoundTrace,
-  UpdateType,
-  PathType,
-  recommendedSTOption,
-  type SoundMaterial,
+  workerHostedMtSupport,
   type Triangle,
 } from 'soundtrace.js';
 ```
@@ -40,10 +36,10 @@ import {
 | `soundtrace.js/core/st/exaSound.js`, `.wasm` | single-thread WASM core |
 | `soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM core |
 | `soundtrace.js/assets/soundMaterial.json` | default sound material table |
+| `soundtrace.js/assets/hrtf/*.bin` | `loadHrtf()` 使用的 packaged HRTF tables |
 
-default HRTF 不再作為單獨檔案分發。`SoundTrace.create()` 會呼叫 native
-`exaInit()`，此時 engine 內嵌的 default HRTF 只載入一次，之後建立的
-listener/renderer 會共享同一份 HRTF。
+請用 `loadHrtf('parametric')` 或 `loadHrtf('convolution')` 明確載入 HRTF。
+可以使用 packaged tables，也可以由應用傳入 URL、`ArrayBuffer` 或 typed array。
 
 當 bundler 需要 subpath asset URL 時，用 `new URL(..., import.meta.url)` 解析。
 
@@ -55,57 +51,33 @@ const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.me
 
 ```ts
 import {
-  BvhType,
   SoundTrace,
-  recommendedSTOption,
   type Triangle,
-  type SoundMaterial,
+  workerHostedMtSupport,
 } from 'soundtrace.js';
 
 // Run this inside a user click/tap handler.
 const ctx = new AudioContext();
 await ctx.resume();
 
+const mt = workerHostedMtSupport();
+if (!mt.supported) {
+  throw new Error(`soundtrace.js mode=multi_thread requires ${mt.missing.join(', ')}`);
+}
+
 const sound = await SoundTrace.create(ctx, {
-  thread: 'mt',
-  propagationThreadCount: -1,
-  defaultMeshBuild: {
-    bvhType: BvhType.LBVH_SIMD8,
-    bvhMaxDepth: 16,
-    primPerLeaf: 4,
-  },
+  mode: 'multi_thread',
+  throughput: 'max',
+  quality: 'balanced',
 });
 
-const listener = sound.createListener();
-const source = sound.createSource();
-const scene = sound.createScene().setListener(listener).addSource(source);
-
-listener
-  .setOption(recommendedSTOption())
+sound.listener
   .setAudioOption({
     sampleRate: ctx.sampleRate,
     inputSampleCount: 128,
     outputChannels: 2,
   })
-  .setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])
-  .setRayCount(16, 16)
-  .setRayDepth(3)
-  .setPosition(0, 0, 0);
-
-source
-  .setIntensity(1)
-  .setDepth(3)
-  .setRayCount(16, 16)
-  .setPosition(2, 0, -1);
-
-const material: SoundMaterial = {
-  reflection:   [0.95, 0.95, 0.92, 0.88, 0.80, 0.70, 0.65, 0.60],
-  absorption:   [0.05, 0.05, 0.08, 0.12, 0.20, 0.30, 0.35, 0.40],
-  transmission: [0.01, 0.01, 0.01, 0.005, 0.003, 0.002, 0.001, 0.001],
-  scattering: 0.12,
-  index: 0,
-};
-sound.materials.add(material);
+  .setPose({ position: [0, 0, 0], orientation: [0, 0, 0, 1] });
 
 const vertices = new Float32Array([
   -2, -1, -2,
@@ -118,18 +90,25 @@ const triangles: Triangle[] = [
   { a: 0, b: 2, c: 3, materialIndex: 0 },
 ];
 
-const floor = sound.createCollider({
+const floor = sound.addMesh({
   vertices,
   triangles,
-  bvhType: BvhType.HKDtree,
-  bvhMaxDepth: 16,
-  primPerLeaf: 4,
+  material: 'Concrete',
 });
-scene.addCollider(floor);
 
-scene.update(0);
+const source = sound.addSource({
+  position: [2, 0, -1],
+  gain: 1,
+  paths: {
+    direct: true,
+    reflection: true,
+    diffraction: true,
+    reverberation: true,
+  },
+});
 
-const spatialNode = await sound.createWorkletNode(listener, source, 2);
+await sound.update(0);
+
 const buffer = await fetch('/audio/music.mp3')
   .then((r) => r.arrayBuffer())
   .then((b) => ctx.decodeAudioData(b));
@@ -137,9 +116,24 @@ const buffer = await fetch('/audio/music.mp3')
 const player = ctx.createBufferSource();
 player.buffer = buffer;
 player.loop = true;
-player.connect(spatialNode).connect(sound.output).connect(ctx.destination);
+const spatialNode = await source.play(player, 2);
+spatialNode.connect(sound.output).connect(ctx.destination);
 player.start();
 ```
+
+運行時可以用 facade preflight helper 檢查部署支持：
+
+```ts
+import { workerHostedMtSupport } from 'soundtrace.js';
+
+const mt = workerHostedMtSupport();
+if (!mt.supported) {
+  throw new Error(`soundtrace.js thread=mt requires ${mt.missing.join(', ')}`);
+}
+```
+
+ST mode 在 real-time Web Audio 整合中也使用 `AudioWorkletNode`。服務部署時，給 ST/MT
+都應用同一組 COOP/COEP headers 通常最簡單。
 
 ## Runtime 結構
 
@@ -162,15 +156,22 @@ ctx.destination
 
 | 模式 | 選擇值 | 使用場景 | Audio path |
 |---|---|---|---|
-| Multi | `{ thread: 'mt' }` | pthread-enabled WASM binary | WASM `AudioWorkletProcessor` 調用 `exaRenderSound` |
-| Single | `{ thread: 'st' }` | single-thread WASM binary | WASM `AudioWorkletProcessor` 調用 `exaRenderSound` |
+| Multi | `{ thread: 'mt' }` | 需要 worker-hosted control 和 pthread-enabled propagation 的部署 | WASM `AudioWorkletProcessor` 渲染 worker-owned engine session |
+| Single | `{ thread: 'st' }` | single-thread WASM binary | WASM `AudioWorkletProcessor` 渲染 ST engine session |
 
-`thread` 不是 automatic fallback，而是明確選擇要載入的 WASM binary。ST/MT 的
-JavaScript control flow 相同：app 每帧先套用 mutation，然後呼叫 `tick()` 和
-`updatePropagation()`。MT binary 會在 `updatePropagation()` 內調度 STCoreV2
-internal jobs，並在返回前 join。
+`thread` 不是 automatic fallback，而是明確選擇要載入的 WASM binary。在
+`thread: 'mt'` 中，SDK 會建立專用 control worker。該 worker 擁有 MT WASM module、
+scene state 和 propagation frame loop；browser main thread 不會直接呼叫 MT control loop。
 
-Native WASM AudioWorklet 路徑要求瀏覽器 `crossOriginIsolated === true`。MT mode 必須使用這條路徑；ST mode 在沒有這些 header 的靜態部署中可以 fallback 到 main-thread render。Native worklet 部署的 HTML 響應請設定以下 header。
+MT 使用兩條輸入路徑：
+
+| 路徑 | 含義 | 對象 |
+|---|---|---|
+| HOT lane | 只有最新值有意義的 per-frame transform，透過 `SharedArrayBuffer` 寫入並在 worker frame 前消費 | `source transform`, `listener transform`, `mesh transform` |
+| command channel | 不可丟棄、按 FIFO 處理的 async operation | create/delete、material 變更、mesh upload、BVH/options、audio source start/stop、reset/dispose 和其他 non-transform 工作 |
+
+MT mode 要求瀏覽器 cross-origin isolation。HTML response 以及所有 WASM、worker、
+worklet asset 都必須滿足條件，使 `SharedArrayBuffer` 和 `crossOriginIsolated === true` 可用。
 
 ```txt
 Cross-Origin-Opener-Policy: same-origin
@@ -192,15 +193,28 @@ export default defineConfig({
 });
 ```
 
-## Scene 编写流程
+## Worker-hosted MT 编写流程
 
-1. 用 `SoundTrace.create(ctx, options)` 載入 WASM core。
-2. 建立 `createScene()`, `createListener()`, `createSource()` 並加入 scene。listener 的基本模型是每個 scene 只有 1 個，因此使用 `scene.setListener(listener)`。
-3. 用 `createCollider()` 或 `createColliderFromThree()` 建立 sound collider，並加入 scene。
-4. 需要低層控制時，也可以直接建立 `createMesh()` 和 `createObject()`。
-5. 每帧更新移動的 source、listener、collider。
-6. 用 `scene.update(dt)` 一次執行 `tick(dt)` 和 `updatePropagation()`。
-7. audio 透過 `createWorkletNode()` 建立的 `AudioWorkletNode` render。
+在 `thread: 'mt'` 或 `mode: 'multi_thread'` 中，main thread 不會直接建立 native
+scene object。支持的公開流程是 facade 和 demo 流程。
+
+1. 用 `SoundTrace.create(ctx, { mode: 'multi_thread' })` 或 `{ thread: 'mt' }` 準備 control worker 和 MT WASM。
+2. 用 `sound.addMesh(...)` 加入 geometry。facade 管理 material table 和 mesh lifecycle，而 create/delete/material/mesh upload/BVH/options 等工作透過 command channel 傳送。
+3. 用 `sound.listener.setPose(...)`、`source.setPose(...)`、`mesh.setPose(...)` 更新 listener/source/mesh pose。這三個 transform 透過 SharedArrayBuffer backed HOT lane 傳遞。
+4. 用 `const source = sound.addSource(...)` 加入 source。
+5. 用 `await sound.update(dt)` 傳送 worker frame request 並等待結果。
+6. audio 透過 `await source.play(inputNode, 2)` 建立的 `AudioWorkletNode` render。
+7. engine-output-style data 透過 `await sound.debugSnapshot(...)` 等 async API 讀取。
+
+`simple.ts` 和 `three-basic` demo 是該流程的參考範例。`getStatistics()`、
+`propagator.getValidPaths()` 等同步 GET 診斷在 MT 中不會呼叫 main-thread native getter；
+需要時請使用 `debugSnapshot()` 的 async readback。
+
+## Advanced direct-native reference
+
+普通應用應使用上面的 facade flow（`SoundTrace.create`, `sound.addMesh`,
+`sound.addSource`, `source.play`, `sound.update`）作為預設路徑。以下內容是需要直接
+engine object 的高級 `thread: 'st'`/direct-native 整合參考。
 
 ## TypeScript API
 
@@ -217,7 +231,6 @@ export default defineConfig({
 | `createObject()` | 建立 `SoundObject` |
 | `createMesh()` | 建立 `SoundMesh` |
 | `createCollider(opts?)` | 建立同時擁有 `SoundMesh + SoundObject` 的 `SoundCollider` |
-| `createColliderFromThree(objectOrGeometry, opts?)` | 將 Three.js `Object3D`/`BufferGeometry` 轉為 sound collider |
 | `createSource()` | 建立 `SoundSource` |
 | `createListener()` | 建立 `SoundListener`；listener ID 也作為 renderer handle |
 | `materials` | global material table wrapper |
@@ -330,7 +343,6 @@ BVH 選擇:
 | API | 说明 |
 |---|---|
 | `sound.createCollider(opts?)` | 從 `vertices`, `triangles` 和 BVH options 建立 collider |
-| `sound.createColliderFromThree(objectOrGeometry, opts?)` | 從 Three.js `Object3D` 或 `BufferGeometry` 建立 collider |
 | `scene.addCollider(collider)` | 將 collider object 加入 scene 並記錄連接狀態 |
 | `scene.removeCollider(collider)` | 從 scene 移除並清除連接狀態 |
 | `collider.rebuild(vertices, triangles, opts?)` | 調用 `mesh.setData(...)` 後把 object 標記為 `UpdateType.Rebuild` |
@@ -447,9 +459,9 @@ gain = 1 / (constant + linear * distance + quadratic * distance^2)
 | `sortIRDatas()` | 請求 IR data 排序 |
 | `findAttenuationForDistance(...)` | 反算 target attenuation 對應 distance |
 
-Web SDK 不提供單獨的 background propagation loop API。caller 應先套用 mutation，
-再按順序呼叫 `tick()` 和 `updatePropagation()`。MT binary 的 internal jobs 會在
-`updatePropagation()` 內 schedule，並在返回前 join。
+direct-native `Propagator` surface 僅用於 ST/direct-native 整合。worker-hosted MT
+應用應使用 facade command API 和 async debug snapshot API，而不是在 browser main
+thread 直接呼叫 `tick()` 和 `updatePropagation()`。
 
 ## Sound Material JSON
 
@@ -545,41 +557,45 @@ for (const m of _soundMaterials) {
 ## Three.js 示範
 
 <iframe
-  title="soundtrace.js three.js static single-thread demo"
-  src={useBaseUrl('/demos/three-basic/?thread=st')}
+  title="soundtrace.js three-basic worker-hosted MT demo"
+  src={useBaseUrl('/demos/three-basic/simple.html')}
   style={{display: 'block', width: '100%', height: '486px', margin: '0 auto', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}}
   allow="autoplay; fullscreen"
 />
+
+`three-basic` 是 Web SDK 的 `simple.ts` 整合範例。docs preview server 會傳送
+COOP/COEP headers，因此可以在 iframe 中直接檢查 MT。遷移到其他 static host 時也需要同樣的 headers。
 
 runtime 和 demo 建置:
 
 ```bash
 npm install
 
-cd /Users/ethanjung/dev/soundtrace.js/STCoreV2/exaSound
-./mainBuild.sh rebuild wasm release
-./mainBuild.sh rebuild wasm release --use-thread
-
-cd /Users/ethanjung/dev/soundtrace.js
+cd /path/to/soundtrace.js
 npm run build
 
-cd /Users/ethanjung/dev/soundtrace-three-basic
+cd /path/to/soundtrace-three-basic
 npm install
-npm run update:sdk
+SOUNDTRACE_SDK_DIR=/path/to/soundtrace.js npm run update:sdk
 npm run build
 
-cd /Users/ethanjung/dev/docs
-rsync -a --delete --exclude '.DS_Store' --exclude '*.zip' \
-  /Users/ethanjung/dev/soundtrace-three-basic/dist/ \
+cd /path/to/docs
+rsync -a --delete /path/to/soundtrace-three-basic/dist/ \
   static/demos/three-basic/
 
-npm run build
-npm run serve
+BASE_URL=/docs/ npm run build
+npm run serve -- --port 3100
 ```
 
-iframe 固定為 `?thread=st`，用於明確啟動 mode。ST 會選擇 single-thread WASM binary，
-但 audio render 仍在 native Emscripten AudioWorkletNode 中執行。MT 需要
-SharedArrayBuffer，因此請在啟用 COOP/COEP 的 host 上另外確認。
+對於 `http://127.0.0.1:3100/docs/sdk/web` 這樣的部署路徑 preview，build 時也要指定
+`BASE_URL=/docs/`，使 Docusaurus client route 與 static file prefix 一致。
+
+MT 檢查流程：
+
+1. 確認 `npm run dev` 或 `npm run serve` 傳送 COOP/COEP headers。
+2. 在瀏覽器中確認 `crossOriginIsolated === true` 且 `SharedArrayBuffer` 可用。
+3. 在 `simple.html` 或 docs iframe 中將 `Backend` 設為 `mt`，然後按 `Start Audio`。
+4. 移動 source/listener/mesh，確認 `source transform`、`listener transform`、`mesh transform` 會立即反映。
 
 ### 底部按鈕
 
@@ -587,7 +603,7 @@ SharedArrayBuffer，因此請在啟用 COOP/COEP 的 host 上另外確認。
 |---|---|
 | `Room` | 選擇整個 room collider 的 material |
 | `Collider` | 選擇 static wall 與 Flair collider 的 material |
-| `Thread` | 啟動前選擇 `Single` 或 `Multi`。選擇值明確指定要載入的 WASM binary |
+| `Backend` | 啟動前選擇 `st` 或 `mt`。選擇值明確指定要載入的 WASM binary |
 | `Start Audio` | 載入 WASM、material、MP3 並啟動 audio。default HRTF 會在 native 初始化中自動套用 |
 | `Move` / `Stop` | 讓 source 沿 room 内椭圆路徑移動，或停在目前位置 |
 | `Wall: On/Off` | 向 scene 新增/移除 listener 附近的 static wall collider |
@@ -671,12 +687,12 @@ channel routing 引起的。示範和最近的修復中，下面這些點最關�
 
 檢查清單:
 
-1. **確認正在使用 SDK wrapper。** 不要只手動載入 WASM 檔案。應從 `soundtrace.js` 模組匯入 `SoundTrace`、`SoundListener`、`createWorkletNode`、`recommendedSTOption`、`PathType` 等 API。
+1. **確認正在使用 SDK wrapper。** 不要只手動載入 WASM 檔案。對 facade 路徑，應使用 `soundtrace.js` 模組中的 `SoundTrace`、`sound.listener`、`sound.addSource()`、`source.play()`。像 `SoundListener`、`createWorkletNode`、`recommendedSTOption`、`PathType` 這類 direct-native 組合，只適用於 ST/direct-native 整合。
 2. **在使用者點擊中立即呼叫 `AudioContext.resume()`。** 如果等 WASM 或 audio fetch 之後才呼叫 `resume()`，瀏覽器 autoplay policy 可能讓 context 一直保持 `suspended`。參考示範，在 click handler 前半段建立 `const resumeP = ctx.resume()`，最後再 `await resumeP`。
-3. **listener audio option 要匹配真實 context。** `sampleRate` 使用 `ctx.sampleRate`，`outputChannels` 使用 `2`，`createWorkletNode()` path 的 `inputSampleCount` 以 `128` 為基準。
-4. **從示範的 listener option/orientation 開始。** 使用 `listener.setOption(recommendedSTOption())`、`listener.setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])`、`listener.setPosition(...)`。如果改變 three.js 座標基準，source position/direction 也要按同一基準更新。
-5. **先設定 material table 和 collider。** 把 `soundMaterial.json` 加入 material table，並在 scene 中新增 sound collider 後再連接 listener/source。沒有 collider 時主要是 direct sound，空間變化會比較弱。
-6. **custom Web Audio graph 中明確設定 stereo。** SDK 的 `createWorkletNode()` 會設定 `channelCount = 2`、`channelCountMode = 'explicit'`、`channelInterpretation = 'speakers'`。如果手動建立 node，或組合獨立 graph，也要給 input hub、splitter、merger、worklet/input node 設定相同選項。
+3. **listener audio option 要匹配真實 context。** `sampleRate` 使用 `ctx.sampleRate`，`outputChannels` 在目前即時 HRTF 路徑中使用 `2`。`inputSampleCount` 以 `128` 為基準，適用於 facade 的 `source.play()` 路徑與 ST/direct-native 的 `createWorkletNode()` 路徑。
+4. **listener pose 和品質選項先依示範起步。** facade 路徑使用 `sound.listener.setPose(...)`、`sound.setQuality(...)`、`sound.setAudioOption(...)`。只有在 ST/direct-native 整合中，才直接使用 `listener.setOption(recommendedSTOption())`、`listener.setOrientation(...)`、`listener.setPosition(...)`。
+5. **先設定 material table 和 collider。** facade 路徑用 `sound.addMesh(...)` 新增 material 與 collider。ST/direct-native 整合則使用 `sound.materials`、`createCollider()`、`scene.addCollider(...)`。沒有 collider 時主要是 direct sound，空間變化會比較弱。
+6. **custom Web Audio graph 中明確設定 stereo。** facade 的 `source.play()` 路徑與 ST/direct-native 的 `createWorkletNode()` 路徑都會使用 `channelCount = 2`、`channelCountMode = 'explicit'`、`channelInterpretation = 'speakers'`。如果手動建立 node，或組合獨立 graph，也要給 input hub、splitter、merger、worklet/input node 設定相同選項。
 7. **用多個 sound source 實作 speaker layout 時，明確 routing channel。** 不要把同一個 stereo input 隱式連接到所有 source。例如 `L/LS/SL/BL` 系 source 接收 left channel 並複製到左右 input frame，`R/RS/SR/BR` 系 source 接收 right channel，`C/LFE/Mono` 使用 `(L + R) * 0.5` mono mix。
 8. **重新播放前完整清理 graph。** 斷開舊的 `MediaElementAudioSourceNode`、`AudioBufferSourceNode`、splitter、merger 和 gain node，再建立新的 source graph，只把 soundtrace output 接到 master/destination。
 9. **第一個 audio block 前預熱 propagation。** listener、source、collider 設定完成後，呼叫一次 `scene.tick(0)` 和 `scene.updatePropagation()`，準備初始 path state。

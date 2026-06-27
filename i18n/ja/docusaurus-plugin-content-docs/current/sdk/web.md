@@ -19,16 +19,13 @@ import useBaseUrl from '@docusaurus/useBaseUrl';
 
 ## インストールとアーティファクト
 
-パッケージはESMとして配布され、公開APIは`soundtrace.js`エントリからimportします。
+パッケージはESMとして配布されます。通常のアプリケーションは`soundtrace.js`
+エントリのfacade表面から始めます。
 
 ```ts
 import {
-  BvhType,
   SoundTrace,
-  UpdateType,
-  PathType,
-  recommendedSTOption,
-  type SoundMaterial,
+  workerHostedMtSupport,
   type Triangle,
 } from 'soundtrace.js';
 ```
@@ -40,10 +37,10 @@ import {
 | `soundtrace.js/core/st/exaSound.js`, `.wasm` | single-thread WASM core |
 | `soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM core |
 | `soundtrace.js/assets/soundMaterial.json` | default sound material table |
+| `soundtrace.js/assets/hrtf/*.bin` | `loadHrtf()`で使うpackaged HRTF table |
 
-default HRTFは別fileとして配布されません。`SoundTrace.create()`がnative
-`exaInit()`を呼び、その時点でengine内蔵default HRTFを一度だけloadします。
-以後に作成されるlistener/rendererは同じHRTFを共有します。
+HRTFは`loadHrtf('parametric')`または`loadHrtf('convolution')`で明示的にloadします。
+packaged tableを使うことも、アプリがURL、`ArrayBuffer`、typed arrayを渡すこともできます。
 
 bundlerでsubpath asset URLが必要な場合は`new URL(..., import.meta.url)`で解決します。
 
@@ -55,57 +52,33 @@ const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.me
 
 ```ts
 import {
-  BvhType,
   SoundTrace,
-  recommendedSTOption,
   type Triangle,
-  type SoundMaterial,
+  workerHostedMtSupport,
 } from 'soundtrace.js';
 
 // Run this inside a user click/tap handler.
 const ctx = new AudioContext();
 await ctx.resume();
 
+const mt = workerHostedMtSupport();
+if (!mt.supported) {
+  throw new Error(`soundtrace.js mode=multi_thread requires ${mt.missing.join(', ')}`);
+}
+
 const sound = await SoundTrace.create(ctx, {
-  thread: 'mt',
-  propagationThreadCount: -1,
-  defaultMeshBuild: {
-    bvhType: BvhType.LBVH_SIMD8,
-    bvhMaxDepth: 16,
-    primPerLeaf: 4,
-  },
+  mode: 'multi_thread',
+  throughput: 'max',
+  quality: 'balanced',
 });
 
-const listener = sound.createListener();
-const source = sound.createSource();
-const scene = sound.createScene().setListener(listener).addSource(source);
-
-listener
-  .setOption(recommendedSTOption())
+sound.listener
   .setAudioOption({
     sampleRate: ctx.sampleRate,
     inputSampleCount: 128,
     outputChannels: 2,
   })
-  .setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])
-  .setRayCount(16, 16)
-  .setRayDepth(3)
-  .setPosition(0, 0, 0);
-
-source
-  .setIntensity(1)
-  .setDepth(3)
-  .setRayCount(16, 16)
-  .setPosition(2, 0, -1);
-
-const material: SoundMaterial = {
-  reflection:   [0.95, 0.95, 0.92, 0.88, 0.80, 0.70, 0.65, 0.60],
-  absorption:   [0.05, 0.05, 0.08, 0.12, 0.20, 0.30, 0.35, 0.40],
-  transmission: [0.01, 0.01, 0.01, 0.005, 0.003, 0.002, 0.001, 0.001],
-  scattering: 0.12,
-  index: 0,
-};
-sound.materials.add(material);
+  .setPose({ position: [0, 0, 0], orientation: [0, 0, 0, 1] });
 
 const vertices = new Float32Array([
   -2, -1, -2,
@@ -118,18 +91,25 @@ const triangles: Triangle[] = [
   { a: 0, b: 2, c: 3, materialIndex: 0 },
 ];
 
-const floor = sound.createCollider({
+const floor = sound.addMesh({
   vertices,
   triangles,
-  bvhType: BvhType.HKDtree,
-  bvhMaxDepth: 16,
-  primPerLeaf: 4,
+  material: 'Concrete',
 });
-scene.addCollider(floor);
 
-scene.update(0);
+const source = sound.addSource({
+  position: [2, 0, -1],
+  gain: 1,
+  paths: {
+    direct: true,
+    reflection: true,
+    diffraction: true,
+    reverberation: true,
+  },
+});
 
-const spatialNode = await sound.createWorkletNode(listener, source, 2);
+await sound.update(0);
+
 const buffer = await fetch('/audio/music.mp3')
   .then((r) => r.arrayBuffer())
   .then((b) => ctx.decodeAudioData(b));
@@ -137,9 +117,24 @@ const buffer = await fetch('/audio/music.mp3')
 const player = ctx.createBufferSource();
 player.buffer = buffer;
 player.loop = true;
-player.connect(spatialNode).connect(sound.output).connect(ctx.destination);
+const spatialNode = await source.play(player, 2);
+spatialNode.connect(sound.output).connect(ctx.destination);
 player.start();
 ```
+
+runtimeではfacade preflight helperで配信条件を確認できます。
+
+```ts
+import { workerHostedMtSupport } from 'soundtrace.js';
+
+const mt = workerHostedMtSupport();
+if (!mt.supported) {
+  throw new Error(`soundtrace.js thread=mt requires ${mt.missing.join(', ')}`);
+}
+```
+
+ST modeもreal-time Web Audio統合では`AudioWorkletNode`を使います。service配信では、
+ST/MTの両方に同じCOOP/COEP headersを適用するのが最も単純です。
 
 ## Runtime構造
 
@@ -162,15 +157,23 @@ ctx.destination
 
 | モード | 選択値 | 使用状況 | Audio path |
 |---|---|---|---|
-| Multi | `{ thread: 'mt' }` | pthread-enabled WASM binary | WASM `AudioWorkletProcessor`が`exaRenderSound`を呼ぶ |
-| Single | `{ thread: 'st' }` | single-thread WASM binary | WASM `AudioWorkletProcessor`が`exaRenderSound`を呼ぶ |
+| Multi | `{ thread: 'mt' }` | worker-hosted controlとpthread-enabled propagationが必要な配信 | worker-owned engine sessionをWASM `AudioWorkletProcessor`がrender |
+| Single | `{ thread: 'st' }` | single-thread WASM binary | ST engine sessionをWASM `AudioWorkletProcessor`がrender |
 
 `thread`はautomatic fallbackではなく、loadするWASM binaryを明示的に選ぶoptionです。
-ST/MTのJavaScript control flowは同じで、appはframeごとにmutationを適用した後
-`tick()`と`updatePropagation()`を呼びます。MT binaryではSTCoreV2 internal jobsが
-`updatePropagation()`内でscheduleされ、戻る前にjoinされます。
+`thread: 'mt'`ではSDKが専用control workerを作り、そのworkerがMT WASM module、
+scene state、propagation frame loopを所有します。browser main threadはMT control
+loopを直接呼びません。
 
-Native WASM AudioWorklet経路では、ブラウザの`crossOriginIsolated === true`が必要です。MT modeではこの経路が必須です。ST modeは、これらのheaderがない静的deployではmain-thread render fallbackで動作できます。Native worklet配信のHTML応答には次のheaderを設定してください。
+MTは2つの入力経路を使います。
+
+| 経路 | 意味 | 対象 |
+|---|---|---|
+| HOT lane | 最新値だけが意味を持つper-frame transform。`SharedArrayBuffer`経由でworker frame前に消費されます。 | `source transform`, `listener transform`, `mesh transform` |
+| command channel | dropできないFIFO async operation | create/delete, material変更, mesh upload, BVH/options, audio source start/stop, reset/dispose, その他non-transform作業 |
+
+MT modeにはbrowser cross-origin isolationが必要です。HTML responseとすべてのWASM、
+worker、worklet assetで`SharedArrayBuffer`と`crossOriginIsolated === true`が有効になる必要があります。
 
 ```txt
 Cross-Origin-Opener-Policy: same-origin
@@ -192,15 +195,28 @@ export default defineConfig({
 });
 ```
 
-## Scene作成フロー
+## Worker-hosted MT作成フロー
 
-1. `SoundTrace.create(ctx, options)`でWASM coreをロードします。
-2. `createScene()`, `createListener()`, `createSource()`を作成し、sceneへ追加します。listenerはsceneごとに1つが基本モデルなので、`scene.setListener(listener)`を使います。
-3. `createCollider()`または`createColliderFromThree()`でsound colliderを作成し、sceneへ追加します。
-4. 低レベル制御が必要な場合は`createMesh()`と`createObject()`を直接作成できます。
-5. 毎フレーム、動くsource、listener、colliderを更新します。
-6. `scene.update(dt)`で`tick(dt)`と`updatePropagation()`をまとめて実行します。
-7. audioは`createWorkletNode()`が作る`AudioWorkletNode`でrenderします。
+`thread: 'mt'`または`mode: 'multi_thread'`では、main threadがnative scene objectを
+直接作りません。公開される通常の流れはfacadeとdemoの流れです。
+
+1. `SoundTrace.create(ctx, { mode: 'multi_thread' })`または`{ thread: 'mt' }`でcontrol workerとMT WASMを準備します。
+2. `sound.addMesh(...)`でgeometryを追加します。facadeはmaterial tableとmesh lifecycleを管理し、create/delete/material/mesh upload/BVH/optionsはcommand channelで送ります。
+3. `sound.listener.setPose(...)`、`source.setPose(...)`、`mesh.setPose(...)`でlistener/source/mesh poseを更新します。この3つのtransformはSharedArrayBuffer backed HOT laneで渡されます。
+4. `const source = sound.addSource(...)`でsourceを追加します。
+5. `await sound.update(dt)`でworker frame requestを送り、結果を待ちます。
+6. audioは`await source.play(inputNode, 2)`が作る`AudioWorkletNode`でrenderします。
+7. engine-output-style dataは`await sound.debugSnapshot(...)`などのasync APIで読みます。
+
+`simple.ts`と`three-basic` demoがこの流れの基準例です。`getStatistics()`や
+`propagator.getValidPaths()`のような同期GET診断は、MTでmain-thread native getterを
+呼びません。必要な場合は`debugSnapshot()`によるasync readbackを使います。
+
+## Advanced direct-native reference
+
+通常のアプリケーションは上のfacade flow（`SoundTrace.create`, `sound.addMesh`,
+`sound.addSource`, `source.play`, `sound.update`）を基本経路として使います。以下は
+直接engine objectが必要な高度な`thread: 'st'`/direct-native統合向けのreferenceです。
 
 ## TypeScript API
 
@@ -217,7 +233,6 @@ export default defineConfig({
 | `createObject()` | `SoundObject`生成 |
 | `createMesh()` | `SoundMesh`生成 |
 | `createCollider(opts?)` | `SoundMesh + SoundObject`を一緒に所有する`SoundCollider`生成 |
-| `createColliderFromThree(objectOrGeometry, opts?)` | Three.js `Object3D`/`BufferGeometry`をsound colliderへ変換 |
 | `createSource()` | `SoundSource`生成 |
 | `createListener()` | `SoundListener`生成。listener IDはrenderer handleとしても使われる |
 | `materials` | global material table wrapper |
@@ -329,7 +344,6 @@ BVH選択:
 | API | 説明 |
 |---|---|
 | `sound.createCollider(opts?)` | `vertices`, `triangles`, BVH optionsからcolliderを作成 |
-| `sound.createColliderFromThree(objectOrGeometry, opts?)` | Three.js `Object3D`または`BufferGeometry`からcolliderを作成 |
 | `scene.addCollider(collider)` | collider objectをsceneへ追加し、接続状態を記録 |
 | `scene.removeCollider(collider)` | sceneから削除し、接続状態を解除 |
 | `collider.rebuild(vertices, triangles, opts?)` | `mesh.setData(...)`後にobjectを`UpdateType.Rebuild`としてmark |
@@ -446,9 +460,9 @@ gain = 1 / (constant + linear * distance + quadratic * distance^2)
 | `sortIRDatas()` | IR data sort要求 |
 | `findAttenuationForDistance(...)` | target attenuationに対応するdistanceを逆算 |
 
-Web SDKは別のbackground propagation loop APIを提供しません。callerがmutationを適用した後、
-`tick()`と`updatePropagation()`を順番に呼びます。MT binaryのinternal jobsは
-`updatePropagation()`内でscheduleされ、戻る前にjoinされます。
+direct-native `Propagator` surfaceはST/direct-native統合用です。worker-hosted MTでは、
+browser main threadから`tick()`と`updatePropagation()`を直接呼ばず、facade command APIと
+async debug snapshot APIを使います。
 
 ## Sound Material JSON
 
@@ -544,39 +558,46 @@ Default material list:
 ## Three.jsデモ
 
 <iframe
-  title="soundtrace.js three.js static single-thread demo"
-  src={useBaseUrl('/demos/three-basic/?thread=st')}
+  title="soundtrace.js three-basic worker-hosted MT demo"
+  src={useBaseUrl('/demos/three-basic/simple.html')}
   style={{display: 'block', width: '100%', height: '486px', margin: '0 auto', border: '1px solid var(--ifm-color-emphasis-300)', borderRadius: '8px'}}
   allow="autoplay; fullscreen"
 />
+
+`three-basic`はWeb SDKの`simple.ts`統合例です。docs preview serverはCOOP/COEP
+headersを送るため、iframeでMTを直接確認できます。他のstatic hostへ移す場合も
+同じheadersが必要です。
 
 runtime と demo の build:
 
 ```bash
 npm install
 
-cd /Users/ethanjung/dev/soundtrace.js/STCoreV2/exaSound
-./mainBuild.sh rebuild wasm release
-./mainBuild.sh rebuild wasm release --use-thread
-
-cd /Users/ethanjung/dev/soundtrace.js
+cd /path/to/soundtrace.js
 npm run build
 
-cd /Users/ethanjung/dev/soundtrace-three-basic
+cd /path/to/soundtrace-three-basic
 npm install
-npm run update:sdk
+SOUNDTRACE_SDK_DIR=/path/to/soundtrace.js npm run update:sdk
 npm run build
 
-cd /Users/ethanjung/dev/docs
-rsync -a --delete --exclude '.DS_Store' --exclude '*.zip' \
-  /Users/ethanjung/dev/soundtrace-three-basic/dist/ \
+cd /path/to/docs
+rsync -a --delete /path/to/soundtrace-three-basic/dist/ \
   static/demos/three-basic/
 
-npm run build
-npm run serve
+BASE_URL=/docs/ npm run build
+npm run serve -- --port 3100
 ```
 
-iframeは起動modeを明確にするため`?thread=st`で固定しています。STはsingle-thread WASM binaryを選択しますが、audio renderはnative Emscripten AudioWorkletNodeで実行されます。MTはSharedArrayBufferが必要なため、COOP/COEP有効hostで別途確認します。
+`http://127.0.0.1:3100/docs/sdk/web`のような配信path previewでは、Docusaurus
+client routeとstatic file prefixを合わせるため、build時にも`BASE_URL=/docs/`を指定します。
+
+MT確認手順:
+
+1. `npm run dev`または`npm run serve`がCOOP/COEP headersを送ることを確認します。
+2. browserで`crossOriginIsolated === true`と`SharedArrayBuffer`が使えることを確認します。
+3. `simple.html`またはdocs iframeで`Backend`を`mt`にして`Start Audio`を押します。
+4. source/listener/meshを動かし、`source transform`、`listener transform`、`mesh transform`がすぐ反映されることを確認します。
 
 ### 下部ボタン
 
@@ -584,7 +605,7 @@ iframeは起動modeを明確にするため`?thread=st`で固定しています�
 |---|---|
 | `Room` | 部屋全体colliderのmaterial選択 |
 | `Collider` | static wallとFlair colliderのmaterial選択 |
-| `Thread` | 開始前に`Single`または`Multi`を選択。選択値はloadするWASM binaryを明示 |
+| `Backend` | 開始前に`st`または`mt`を選択。選択値はloadするWASM binaryを明示 |
 | `Start Audio` | WASM、material、MP3をloadしaudio開始。default HRTFはnative初期化で自動適用 |
 | `Move` / `Stop` | 音源を部屋内の楕円経路で移動、または現在位置で停止 |
 | `Wall: On/Off` | listener近くのstatic wall colliderをsceneへ追加・削除 |
@@ -667,12 +688,12 @@ audio graphを構成したりする時によく出る症状を扱います。音
 
 チェックリスト:
 
-1. **SDK wrapperを使っているか確認します。** WASM fileだけを直接loadせず、`SoundTrace`, `SoundListener`, `createWorkletNode`, `recommendedSTOption`, `PathType`などを`soundtrace.js` moduleからimportします。
+1. **SDK wrapperを使っているか確認します。** WASM fileだけを直接loadせず、facade pathでは`soundtrace.js` moduleの`SoundTrace`, `sound.listener`, `sound.addSource()`, `source.play()`を使います。`SoundListener`, `createWorkletNode`, `recommendedSTOption`, `PathType`のようなdirect-native組み合わせは、ST/direct-native integrationでのみ使います。
 2. **`AudioContext.resume()`をuser click内で即時呼びます。** WASMやaudio fetch後まで`resume()`を遅らせると、browser autoplay policyでcontextが`suspended`のままになることがあります。exampleと同じくclick handlerの前半で`const resumeP = ctx.resume()`を作り、最後に`await resumeP`で確認します。
-3. **listener audio optionを実際のcontextと合わせます。** `sampleRate`は`ctx.sampleRate`、`outputChannels`は`2`、`createWorkletNode()` pathの`inputSampleCount`は`128`を基準にします。
-4. **exampleと同じlistener option/orientationから始めます。** `listener.setOption(recommendedSTOption())`, `listener.setOrientation([1, 0, 0, 0, 1, 0, 0, 0, -1])`, `listener.setPosition(...)`を使います。three.js座標基準を変えた場合、source position/directionも同じ基準で更新します。
-5. **material tableとcolliderを先に構成します。** `soundMaterial.json`をmaterial tableへ入れ、sceneにsound colliderを追加してからlistener/sourceを接続します。colliderがない場合はdirect sound中心になり、spatial changeが弱く感じられます。
-6. **custom Web Audio graphではstereo設定を明示します。** SDKの`createWorkletNode()`は`channelCount = 2`, `channelCountMode = 'explicit'`, `channelInterpretation = 'speakers'`を設定します。手動nodeや別graphを組む場合はinput hub、splitter、merger、worklet/input nodeにも同じ設定を明示します。
+3. **listener audio optionを実際のcontextと合わせます。** `sampleRate`は`ctx.sampleRate`、`outputChannels`は現在のreal-time HRTF pathに合わせて`2`にします。`inputSampleCount`はfacadeの`source.play()` pathとST/direct-nativeの`createWorkletNode()` pathの両方で`128`を基準にします。
+4. **listener poseとquality optionはexampleと同じ基準から始めます。** facadeでは`sound.listener.setPose(...)`, `sound.setQuality(...)`, `sound.setAudioOption(...)`を使います。`listener.setOption(recommendedSTOption())`, `listener.setOrientation(...)`, `listener.setPosition(...)`を直接使うのはST/direct-native integrationだけにします。
+5. **material tableとcolliderを先に構成します。** facadeでは`sound.addMesh(...)`でmaterialとcolliderを追加します。ST/direct-native integrationでは`sound.materials`, `createCollider()`, `scene.addCollider(...)`を使います。colliderがない場合はdirect sound中心になり、spatial changeが弱く感じられます。
+6. **custom Web Audio graphではstereo設定を明示します。** facadeの`source.play()` pathとST/direct-nativeの`createWorkletNode()` pathは、どちらも`channelCount = 2`, `channelCountMode = 'explicit'`, `channelInterpretation = 'speakers'`を使います。手動nodeや別graphを組む場合はinput hub、splitter、merger、worklet/input nodeにも同じ設定を明示します。
 7. **複数sound sourceでspeaker layoutを作る場合はchannelを直接routingします。** 同じstereo inputを全sourceへ暗黙接続しないでください。`L/LS/SL/BL`系sourceはleft channelを両input frameへ複製し、`R/RS/SR/BR`系sourceはright channelを複製し、`C/LFE/Mono`は`(L + R) * 0.5` mono mixを使います。
 8. **再生をやり直す時はgraphを完全に整理します。** 古い`MediaElementAudioSourceNode`, `AudioBufferSourceNode`, splitter, merger, gain nodeをdisconnectし、新しいsource graphを作ってsoundtrace outputだけをmaster/destinationへ接続します。
 9. **最初のaudio block前にpropagationを準備します。** listener、source、collider構成直後に`scene.tick(0)`と`scene.updatePropagation()`を一度呼び、初期path stateを作ります。
