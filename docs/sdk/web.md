@@ -327,6 +327,23 @@ C API로 전달됩니다. worker-hosted MT에서 세부 BVH 옵션을 바꾸는 
 명령 surface로 제한되며, direct-native mesh build option 조작은 ST/direct-native
 통합에서만 사용하세요.
 
+### 품질 tier
+
+`quality`는 한 값으로 **propagation 비용 레버**와 **오디오 렌더 옵션**을 함께
+설정하는 단조(speed↔quality) 사다리입니다. 정식 값은 3개이며, `'speed'`(=`'fast'`)와
+`'middle'`(=`'balanced'`)은 하위호환 `@deprecated` 별칭입니다(런타임은 계속 동작).
+기본값은 `'balanced'`.
+
+| tier | propagation `maxDepth` | listener ray grid | HRTF | diffuse | late reverb | delay interp |
+|---|---:|---:|---|---|---|---|
+| `fast` (`speed`) | 4 | 16 × 16 | low | off | one-pole | linear |
+| `balanced` (`middle`, 기본) | 8 | 24 × 24 | medium | medium | tilt | cubic-lagrange |
+| `quality` | 12 | 32 × 32 | high | high | eight-band(per-band) | lagrange6 |
+
+`mode: 'gpu'`에서는 tier의 ray grid·render option은 그대로 적용되지만 propagation
+depth는 WebGPU backend 상한 `8`로 고정됩니다. 오디오 렌더 옵션만 따로 조정하려면
+`sound.listener.setRenderOptions(...)`로 tier와 독립적으로 override할 수 있습니다.
+
 ### MT readback 규칙
 
 MT에서는 main thread가 native getter를 직접 호출하지 않습니다.
