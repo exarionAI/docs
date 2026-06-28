@@ -1,3 +1,0 @@
-import type { RuntimeCommandAdapterContext, RuntimeCommandAdapterSet } from './control-worker-runtime-command-shared.js';
-export declare function createRuntimeMeshCommandAdapters(context: RuntimeCommandAdapterContext): Pick<RuntimeCommandAdapterSet, 'createMesh' | 'deleteMesh' | 'setMeshMaterial' | 'setMeshMaterialRange' | 'setMeshUpdateType'>;
-//# sourceMappingURL=control-worker-runtime-mesh-commands.d.ts.map

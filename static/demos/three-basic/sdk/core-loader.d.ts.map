@@ -1,1 +1,0 @@
-{"version":3,"file":"core-loader.d.ts","sourceRoot":"","sources":["../src/core-loader.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,eAAe,EAAE,cAAc,EAAE,UAAU,EAAE,MAAM,YAAY,CAAC;AAS9E,OAAO,CAAC,MAAM,CAAC;IAEb,IAAI,cAAc,EAAE,eAAe,GAAG,SAAS,CAAC;CACjD;AA2DD,wBAAsB,QAAQ,CAC5B,MAAM,EAAE,UAAU,EAClB,WAAW,EAAE,MAAM,GAClB,OAAO,CAAC,cAAc,CAAC,CA+BzB"}
