@@ -443,7 +443,7 @@ object라면 다음 tick 전에 `object.setUpdateType(UpdateType.Rebuild)`를 �
 
 | API | 설명 |
 |---|---|
-| `setData(vertices, triangles, opts?)` | geometry와 BVH를 새로 빌드 |
+| `setData(vertices, triangles, opts?)` | geometry와 BVH를 새로 빌드. triangle 인덱스(`a`/`b`/`c`)는 `[0, numVerts)` 범위의 정수여야 하며, 범위 밖·음수·비정수는 native 호출 전에 에러로 거부됩니다(`addMesh`도 동일 검증) |
 | `updateVertices(vertices)` | vertex buffer만 갱신 |
 | `updateVerticesAndRefit(vertices)` | vertex buffer 갱신 후 mesh refit 실행 |
 | `setMaterial(materialIndex)` | 전체 triangle 재질 변경 |
