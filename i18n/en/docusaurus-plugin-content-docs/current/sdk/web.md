@@ -123,6 +123,10 @@ spatialNode.connect(sound.output).connect(ctx.destination);
 player.start();
 ```
 
+When `mode: 'gpu'` is selected, the chosen `quality` still controls the ray grid
+and render options, but GPU propagation depth is fixed at the validated WebGPU
+backend cap of `8`.
+
 At runtime, the facade preflight helper can check deployment support:
 
 ```ts

@@ -133,6 +133,9 @@ floor.setPose({ position: [0, 0, 0] });
 await sound.update(1 / 60);
 ```
 
+`mode: 'gpu'`를 선택하면 `quality`의 ray grid와 render option은 그대로 적용되지만,
+GPU propagation depth는 WebGPU backend의 검증된 상한인 `8`로 고정됩니다.
+
 ## 런타임 구조
 
 ```

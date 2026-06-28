@@ -121,6 +121,9 @@ spatialNode.connect(sound.output).connect(ctx.destination);
 player.start();
 ```
 
+选择 `mode: 'gpu'` 时，所选 `quality` 仍会控制 ray grid 和 render option，
+但 GPU propagation depth 会固定为经过验证的 WebGPU backend 上限 `8`。
+
 运行时可以用 facade preflight helper 检查部署支持：
 
 ```ts

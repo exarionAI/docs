@@ -122,6 +122,9 @@ spatialNode.connect(sound.output).connect(ctx.destination);
 player.start();
 ```
 
+`mode: 'gpu'` を選ぶ場合、選択した `quality` の ray grid と render option はそのまま適用されますが、
+GPU propagation depth は検証済みの WebGPU backend 上限である `8` に固定されます。
+
 runtimeではfacade preflight helperで配信条件を確認できます。
 
 ```ts
