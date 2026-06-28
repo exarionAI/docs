@@ -289,19 +289,26 @@ worker-hosted MT에서는
 | `propagator` | ST/direct-native only. valid path, guide plane, profile 조회 |
 | `diagnostics` | ST/direct-native only. 버전, 메모리 trace, ray 통계 조회 |
 | `createWorkletNode(listener, source, channels = 2)` | ST/direct-native only. facade는 `source.play(input, channels)` 사용 |
-| `update(dt = 0)` | `st`는 number를 반환하고, `mt`는 worker frame 결과를 기다리는 `Promise<number>`를 반환 |
+| `update(dt = 0)` | propagation을 advance하고 `Promise<number>`를 반환. ST·MT 모두 항상 async(facade가 ST/MT 실행 모드를 숨김) — `await sound.update(dt)`로 호출 |
 | `debugSnapshot(options?)` | `mt`에서 valid path count, profile 같은 engine-output-style data를 async로 조회 |
-| `reset()` | 코어 상태 reset |
+| `reset()` | 코어 상태 reset. `Promise<void>`를 반환(ST·MT 모두 항상 async) — `await sound.reset()` |
 | `dispose()` | 출력 노드 disconnect, WASM wrapper 참조 해제 |
 
 `SoundTraceOptions`:
 
 | 필드 | 기본값 | 범위·주의 |
 |---|---:|---|
-| `thread` | `'st'` | `'st'` 또는 `'mt'`. MT는 control worker, SharedArrayBuffer, COOP/COEP 필요 |
+| `mode` | (미지정) | 실행 모드 선택자(권장): `'single_thread'` \| `'multi_thread'` \| `'gpu'`. `'gpu'`는 load 시 WebGPU 자동 활성(미지원 시 CPU fallback). `thread`보다 우선 |
+| `thread` | `'auto'` | wasm 빌드 변형(고급; `mode`가 있으면 무시): `'auto'`(cross-origin isolated면 `'mt'`, 아니면 `'st'`) \| `'st'` \| `'mt'`. MT는 control worker·SharedArrayBuffer·COOP/COEP 필요 |
+| `quality` | `'balanced'` | facade 품질 tier: `'fast'` \| `'balanced'` \| `'quality'`. 별칭 `'speed'`(=fast)·`'middle'`(=balanced)는 `@deprecated`(런타임 유지). 상세는 아래 [품질 tier](#품질-tier) |
+| `throughput` | (미지정) | propagation 처리량 tier(mt 전용): `'low'`(¼ pool) \| `'medium'`(½) \| `'max'`(full). `propagationThreadCount`로 매핑되며 그게 명시되면 무시 |
 | `coreBaseUrl` | 패키지 내부 `./core` | 직접 호스팅할 때 `./core`처럼 `st/`, `mt/`가 있는 디렉터리 지정 |
-| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`. `-1`은 native default, `1` 이상은 propagation job thread budget |
+| `assetBaseUrl` | 패키지 내부 `./assets` | HRTF·재질 등 packaged asset 베이스 URL. CDN/복사 배포 시 지정 |
+| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`. `-1`은 native default, `1` 이상은 propagation job thread budget. `throughput`보다 우선 |
 | `defaultMeshBuild` | native default | native `ExaMeshBuildOption`. `bvhType`, `bvhMaxDepth`, `primPerLeaf`의 process-wide mesh build default |
+| `coordinateBasis` | (기본 basis) | 입력 좌표계 변환 옵션 |
+| `autoLoadMaterials` | `true` | load 시 `soundMaterial*.json`을 자동 fetch·등록(`addMesh({material:'concrete'})` 이름 해석). `false`면 fetch 생략(offline/통제 환경) |
+| `debug` | `false` | load 시 `[soundtrace.js] ready (...)` 진단 로그를 콘솔에 출력. 기본은 조용(라이브러리가 콘솔을 더럽히지 않음) |
 
 ```ts
 const sound = await SoundTrace.create(ctx, {
