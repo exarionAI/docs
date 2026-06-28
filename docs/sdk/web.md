@@ -219,6 +219,48 @@ if (!mt.supported) {
 ST 모드도 실시간 Web Audio 통합에서는 `AudioWorkletNode`를 사용합니다. 서비스 배포는
 ST/MT 모두 같은 COOP/COEP 헤더를 적용하는 편이 가장 단순합니다.
 
+### 번들러 통합
+
+`soundtrace.js`는 deep-import ESM이고, MT control worker를
+`new Worker(new URL('./control/control-worker.js', import.meta.url))`로 만듭니다.
+번들러(Vite/webpack/Next)에서 두 가지를 주의하세요.
+
+1. **worker 모듈 그래프가 자동 추적되지 않음.** 번들러는 worker *엔트리* 청크는
+   내보내지만, worker가 런타임에 import하는 형제 모듈(`control-worker-*.js`,
+   `control-hot-*.js`)까지 따라가지 못해 그 파일들이 출력에서 누락돼 런타임 404가
+   날 수 있습니다.
+2. **wasm glue가 동적 import됨.** 패키지를 의존성 pre-bundle에서 제외하고,
+   `dist/core`(wasm)·`dist/assets`(HRTF)가 서빙되며 MT는 COOP/COEP가 적용돼야 합니다.
+
+Vite 권장 설정:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  // soundtrace.js는 wasm glue를 동적 import → pre-bundle 제외
+  optimizeDeps: { exclude: ['soundtrace.js'] },
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+});
+```
+
+`vite build` 후에는 worker 엔트리의 전이 모듈 그래프를 산출물에 복사하는 post-build
+단계가 필요합니다(Rollup이 worker의 런타임 import를 따라가지 못함). `three-basic`
+데모가 기준 스크립트 `scripts/copy-worker-module-graph.mjs`를 유지하며 다음처럼 묶습니다.
+
+```jsonc
+// package.json
+"scripts": { "build": "vite build && node scripts/copy-worker-module-graph.mjs" }
+```
+
+webpack/Next도 같은 제약(worker 그래프 + wasm asset + COOP/COEP)이 적용됩니다.
+asset 디렉터리를 다른 base로 호스팅하면 `coreBaseUrl`/`assetBaseUrl`로 런타임 해석을
+맞추세요.
+
 ## Worker-hosted MT 작성 흐름
 
 `thread: 'mt'` 또는 `mode: 'multi_thread'`에서는 main thread가 native scene 객체를
