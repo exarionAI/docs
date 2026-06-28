@@ -2,6 +2,8 @@
 title: Unity
 ---
 
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
 # SoundTrace SDK for Unity
 
 SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/stcorev2.md) 引擎的实时空间音频插件。它会把 Unity 场景中的网格、渲染材质槽、声源和听者 Transform 传入 SoundTrace runtime，并将 direct、reflection、diffraction、reverb、transmission path 应用到 Unity `AudioSource` 输出。
@@ -211,4 +213,4 @@ SoundTrace SDK for Unity 是用于在 Unity 中使用原生 [STCoreV2](../core/s
 |---|---|
 | 多个音源不同步，听起来像 echo/flanging | 多个 `AudioSource` 不要用 `playOnAwake` 或单独的 `Play()` 分别启动，而是由一个 script 统一启动。基于 `AudioSettings.dspTime` 创建同一个 `startDspTime`，并对所有 source 调用 `AudioSource.PlayScheduled(startDspTime)`。<br /><br />验证用 audio asset 请在 Import Settings 中设置为 `Decompress On Load`、`PCM`、`Preserve Sample Rate`、`Preload Audio Data`、`Force To Mono` On、`Normalize` Off。 |
 
-<img src="/img/unity/ImportSetting.png" alt="Audio Import Settings" width="420" />
+<img src={useBaseUrl('/img/unity/ImportSetting.png')} alt="Audio Import Settings" width="420" />

@@ -2,6 +2,8 @@
 title: Unity
 ---
 
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
 # SoundTrace SDK for Unity
 
 SoundTrace SDK for Unity is a real-time spatial audio plugin that brings the native [STCoreV2](../core/stcorev2.md) engine into Unity. It sends Unity meshes, render-material slots, audio sources, and listener transforms into the SoundTrace runtime, then applies direct, reflection, diffraction, reverb, and transmission paths to Unity `AudioSource` output.
@@ -211,4 +213,4 @@ Move with WASD, and ascend or descend with Space/Ctrl.
 |---|---|
 | Multiple audio sources drift out of sync and sound like echo/flanging | Start multiple `AudioSource` instances from one script instead of `playOnAwake` or separate `Play()` calls. Create one `startDspTime` from `AudioSettings.dspTime` and start every source with `AudioSource.PlayScheduled(startDspTime)`.<br /><br />For verification audio assets, set Import Settings to `Decompress On Load`, `PCM`, `Preserve Sample Rate`, `Preload Audio Data`, `Force To Mono` On, and `Normalize` Off. |
 
-<img src="/img/unity/ImportSetting.png" alt="Audio Import Settings" width="420" />
+<img src={useBaseUrl('/img/unity/ImportSetting.png')} alt="Audio Import Settings" width="420" />

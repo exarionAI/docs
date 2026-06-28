@@ -196,6 +196,46 @@ export default defineConfig({
 });
 ```
 
+### 打包器集成
+
+`soundtrace.js` 是 deep-import ESM，并通过
+`new Worker(new URL('./control/control-worker.js', import.meta.url))` 创建 MT control worker。
+在打包器（Vite/webpack/Next）中需要注意两点。
+
+1. **worker 模块图不会被自动追踪。** 打包器会输出 worker *入口* chunk，但不会跟进
+   worker 在 runtime import 的同级模块（`control-worker-*.js`、`control-hot-*.js`），
+   导致这些文件在产物中缺失并引发 runtime 404。
+2. **wasm glue 是动态 import 的。** 请把该包从依赖 pre-bundle 中排除，并确保
+   `dist/core`（wasm）、`dist/assets`（HRTF）被正确 serve，MT 还需应用 COOP/COEP。
+
+Vite 推荐配置：
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  // soundtrace.js 动态 import wasm glue → 排除 pre-bundle
+  optimizeDeps: { exclude: ['soundtrace.js'] },
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+});
+```
+
+`vite build` 之后需要一个 post-build 步骤，把 worker 入口的传递模块图复制到产物中
+（Rollup 不会跟进 worker 的 runtime import）。`three-basic` demo 维护了参考脚本
+`scripts/copy-worker-module-graph.mjs`，并按如下方式串联。
+
+```jsonc
+// package.json
+"scripts": { "build": "vite build && node scripts/copy-worker-module-graph.mjs" }
+```
+
+webpack/Next 也适用同样的约束（worker 图 + wasm asset + COOP/COEP）。如果把 asset
+目录托管在其他 base 上，请用 `coreBaseUrl`/`assetBaseUrl` 对齐 runtime 解析。
+
 ## Worker-hosted MT 编写流程
 
 在 `thread: 'mt'` 或 `mode: 'multi_thread'` 中，main thread 不会直接创建 native
@@ -240,17 +280,25 @@ engine object 的高级 `thread: 'st'`/direct-native 集成参考。
 | `propagator` | valid path、guide plane、profile 查询 |
 | `diagnostics` | version、memory trace、ray statistics 查询 |
 | `createWorkletNode(listener, source, channels = 2)` | 创建所选 ST/MT binary 的 `AudioWorkletNode` |
-| `reset()` | reset core state |
+| `update(dt = 0)` | 推进 propagation 并返回 `Promise<number>`。ST 和 MT 始终为 async（facade 隐藏 ST/MT 执行模式）——请用 `await sound.update(dt)` 调用 |
+| `reset()` | reset core state。返回 `Promise<void>`（ST 和 MT 始终为 async）——请用 `await sound.reset()` 调用 |
 | `dispose()` | disconnect output node 并释放 WASM wrapper 引用 |
 
 `SoundTraceOptions`:
 
 | 字段 | 默认值 | 范围/注意 |
 |---|---:|---|
-| `thread` | `'st'` | `'st'` 或 `'mt'`。实际服务推荐 MT |
+| `mode` | （未指定） | 执行模式选择器（推荐）：`'single_thread'` \| `'multi_thread'` \| `'gpu'`。`'gpu'` 在 load 时自动启用 WebGPU（不支持时 fallback 到 CPU）。优先于 `thread` |
+| `thread` | `'auto'` | wasm 构建变体（高级；存在 `mode` 时忽略）：`'auto'`（cross-origin isolated 时为 `'mt'`，否则 `'st'`）\| `'st'` \| `'mt'`。MT 需要 control worker、SharedArrayBuffer、COOP/COEP |
+| `quality` | `'balanced'` | facade 质量 tier：`'fast'` \| `'balanced'` \| `'quality'`。别名 `'speed'`（=fast）、`'middle'`（=balanced）为 `@deprecated`（runtime 仍保留）。详见下文 [质量 tier](#质量-tier) |
+| `throughput` | （未指定） | propagation 吞吐量 tier（mt 专用）：`'low'`（¼ pool）\| `'medium'`（½）\| `'max'`（full）。映射到 `propagationThreadCount`，若后者显式指定则忽略 |
 | `coreBaseUrl` | package internal `./core` | 自托管时指定包含 `st/`, `mt/` 的目录，例如 `./core` |
-| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`; `-1` 使用 native default |
-| `defaultMeshBuild` | native default | native `ExaMeshBuildOption` process-wide mesh build default |
+| `assetBaseUrl` | package internal `./assets` | HRTF、material 等 packaged asset 的 base URL。CDN/复制部署时指定 |
+| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`。`-1` 使用 native default，`1` 及以上为 propagation job thread budget。优先于 `throughput` |
+| `defaultMeshBuild` | native default | native `ExaMeshBuildOption`。`bvhType`、`bvhMaxDepth`、`primPerLeaf` 的 process-wide mesh build default |
+| `coordinateBasis` | （default basis） | 输入坐标系转换选项 |
+| `autoLoadMaterials` | `true` | load 时自动 fetch 并注册 `soundMaterial*.json`（解析 `addMesh({material:'concrete'})` 的名称）。`false` 时跳过 fetch（offline/受控环境） |
+| `debug` | `false` | load 时把 `[soundtrace.js] ready (...)` 诊断日志输出到 console。默认安静（库不污染 console） |
 
 ```ts
 const sound = await SoundTrace.create(ctx, {
@@ -267,6 +315,22 @@ const sound = await SoundTrace.create(ctx, {
 `propagationThreadCount` 和 `defaultMeshBuild` 会在 native `exaInit()` 前通过 C API
 传入。`thread: 'st' | 'mt'` 保持为 binary selection，BVH/SIMD 选择通过
 `BvhType` 和 mesh build option 控制。
+
+### 质量 tier
+
+`quality` 用一个值同时设置 **propagation 成本杠杆**和 **audio render option**，是一架单调
+（speed↔quality）的阶梯。正式值有 3 个，`'speed'`（=`'fast'`）和 `'middle'`（=`'balanced'`）
+是向后兼容的 `@deprecated` 别名（runtime 仍可工作）。默认值是 `'balanced'`。
+
+| tier | propagation `maxDepth` | listener ray grid | HRTF | diffuse | late reverb | delay interp |
+|---|---:|---:|---|---|---|---|
+| `fast` (`speed`) | 4 | 16 × 16 | low | off | one-pole | linear |
+| `balanced` (`middle`, 默认) | 8 | 24 × 24 | medium | medium | tilt | cubic-lagrange |
+| `quality` | 12 | 32 × 32 | high | high | eight-band(per-band) | lagrange6 |
+
+在 `mode: 'gpu'` 中，tier 的 ray grid 和 render option 仍照常应用，但 propagation
+depth 会固定为 WebGPU backend 上限 `8`。若只想单独调整 audio render option，可用
+`sound.listener.setRenderOptions(...)` 独立于 tier 进行 override。
 
 ### `SoundScene`
 
@@ -304,7 +368,7 @@ scene 中应只有一个 listener。即使 UI 管理多个 listener 候选，也
 
 | API | 说明 |
 |---|---|
-| `setData(vertices, triangles, opts?)` | 重新构建 geometry 与 BVH |
+| `setData(vertices, triangles, opts?)` | 重新构建 geometry 与 BVH。triangle 索引（`a`/`b`/`c`）必须是 `[0, numVerts)` 范围内的整数，超出范围、负数或非整数会在调用 native 前被拒绝并报错（`addMesh` 也做同样校验） |
 | `updateVertices(vertices)` | 只更新 vertex buffer |
 | `updateVerticesAndRefit(vertices)` | 更新 vertex buffer 后执行 mesh refit |
 | `setMaterial(materialIndex)` | 修改全部 triangle 的 material |

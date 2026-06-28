@@ -203,6 +203,50 @@ export default defineConfig({
 });
 ```
 
+### Bundler Integration
+
+`soundtrace.js` is deep-import ESM and creates the MT control worker with
+`new Worker(new URL('./control/control-worker.js', import.meta.url))`. Watch for
+two things in bundlers (Vite/webpack/Next).
+
+1. **The worker module graph is not traced automatically.** Bundlers emit the
+   worker *entry* chunk, but they do not follow the sibling modules the worker
+   imports at runtime (`control-worker-*.js`, `control-hot-*.js`), so those files
+   can be missing from the output and produce runtime 404s.
+2. **The wasm glue is dynamically imported.** Exclude the package from dependency
+   pre-bundling, and make sure `dist/core` (wasm) and `dist/assets` (HRTF) are
+   served and that MT has COOP/COEP applied.
+
+Recommended Vite config:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  // soundtrace.js dynamically imports its wasm glue → exclude from pre-bundle
+  optimizeDeps: { exclude: ['soundtrace.js'] },
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+});
+```
+
+After `vite build`, you need a post-build step that copies the worker entry's
+transitive module graph into the output (Rollup does not follow the worker's
+runtime imports). The `three-basic` demo keeps the reference script
+`scripts/copy-worker-module-graph.mjs` and wires it up like this.
+
+```jsonc
+// package.json
+"scripts": { "build": "vite build && node scripts/copy-worker-module-graph.mjs" }
+```
+
+webpack/Next have the same constraints (worker graph + wasm assets + COOP/COEP).
+If you host the asset directories under a different base, align runtime resolution
+with `coreBaseUrl`/`assetBaseUrl`.
+
 ## Worker-hosted MT Authoring Flow
 
 With `thread: 'mt'` or `mode: 'multi_thread'`, the main thread does not create
@@ -250,17 +294,25 @@ for cases that need direct engine objects.
 | `propagator` | valid path, guide plane, and profile queries |
 | `diagnostics` | version, memory trace, and ray statistics queries |
 | `createWorkletNode(listener, source, channels = 2)` | create an `AudioWorkletNode` for the selected ST/MT binary |
-| `reset()` | reset core state |
+| `update(dt = 0)` | advance propagation and return a `Promise<number>`. Always async in both ST and MT (the facade hides the ST/MT execution mode) — call with `await sound.update(dt)` |
+| `reset()` | reset core state. Returns a `Promise<void>` (always async in both ST and MT) — call with `await sound.reset()` |
 | `dispose()` | disconnect output node and release WASM wrapper references |
 
 `SoundTraceOptions`:
 
 | Field | Default | Range / note |
 |---|---:|---|
-| `thread` | `'st'` | `'st'` or `'mt'`; MT is recommended for production services |
+| `mode` | (unspecified) | Execution-mode selector (recommended): `'single_thread'` \| `'multi_thread'` \| `'gpu'`. `'gpu'` auto-enables WebGPU at load (falls back to CPU when unsupported). Takes precedence over `thread` |
+| `thread` | `'auto'` | WASM build variant (advanced; ignored when `mode` is set): `'auto'` (`'mt'` when cross-origin isolated, otherwise `'st'`) \| `'st'` \| `'mt'`. MT requires a control worker, `SharedArrayBuffer`, and COOP/COEP |
+| `quality` | `'balanced'` | Facade quality tier: `'fast'` \| `'balanced'` \| `'quality'`. The aliases `'speed'` (=fast) and `'middle'` (=balanced) are `@deprecated` (kept at runtime). See [Quality tier](#quality-tier) below |
+| `throughput` | (unspecified) | Propagation throughput tier (mt only): `'low'` (¼ pool) \| `'medium'` (½) \| `'max'` (full). Maps to `propagationThreadCount`; ignored when that is set explicitly |
 | `coreBaseUrl` | package internal `./core` | Directory containing `st/` and `mt/`, such as `./core`, when self-hosting |
-| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`; `-1` uses the native default |
-| `defaultMeshBuild` | native default | native `ExaMeshBuildOption` process-wide mesh build default |
+| `assetBaseUrl` | package internal `./assets` | Base URL for packaged assets such as HRTF and materials. Set this for CDN/copied deployments |
+| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`. `-1` uses the native default; `1` or more sets the propagation job thread budget. Takes precedence over `throughput` |
+| `defaultMeshBuild` | native default | native `ExaMeshBuildOption`. Process-wide mesh build default for `bvhType`, `bvhMaxDepth`, and `primPerLeaf` |
+| `coordinateBasis` | (default basis) | Input coordinate-system conversion option |
+| `autoLoadMaterials` | `true` | Auto-fetch and register `soundMaterial*.json` at load (resolves names like `addMesh({material:'concrete'})`). When `false`, the fetch is skipped (offline/controlled environments) |
+| `debug` | `false` | Print the `[soundtrace.js] ready (...)` diagnostic log to the console at load. Quiet by default (the library does not pollute the console) |
 
 ```ts
 const sound = await SoundTrace.create(ctx, {
@@ -277,6 +329,25 @@ const sound = await SoundTrace.create(ctx, {
 `propagationThreadCount` and `defaultMeshBuild` are applied through the C API
 before native `exaInit()`. Keep `thread: 'st' | 'mt'` as binary selection, and
 control BVH/SIMD choice through `BvhType` and mesh build options.
+
+### Quality tier
+
+`quality` is a single value that sets both the **propagation cost levers** and the
+**audio render options** along one monotonic speed↔quality ladder. There are three
+canonical values, and `'speed'` (=`'fast'`) and `'middle'` (=`'balanced'`) are
+backward-compatible `@deprecated` aliases (still functional at runtime). The
+default is `'balanced'`.
+
+| Tier | propagation `maxDepth` | listener ray grid | HRTF | diffuse | late reverb | delay interp |
+|---|---:|---:|---|---|---|---|
+| `fast` (`speed`) | 4 | 16 × 16 | low | off | one-pole | linear |
+| `balanced` (`middle`, default) | 8 | 24 × 24 | medium | medium | tilt | cubic-lagrange |
+| `quality` | 12 | 32 × 32 | high | high | eight-band (per-band) | lagrange6 |
+
+With `mode: 'gpu'`, the tier's ray grid and render options still apply, but
+propagation depth is fixed at the WebGPU backend cap of `8`. To adjust only the
+audio render options, use `sound.listener.setRenderOptions(...)` to override them
+independently of the tier.
 
 ### `SoundScene`
 
@@ -314,7 +385,7 @@ Use `Refit` when a **skinned animation is used as a sound collider**. In that ca
 
 | API | Description |
 |---|---|
-| `setData(vertices, triangles, opts?)` | build geometry and BVH from scratch |
+| `setData(vertices, triangles, opts?)` | build geometry and BVH from scratch. Triangle indices (`a`/`b`/`c`) must be integers in `[0, numVerts)`; out-of-range, negative, or non-integer values are rejected with an error before the native call (`addMesh` validates the same way) |
 | `updateVertices(vertices)` | update only the vertex buffer |
 | `updateVerticesAndRefit(vertices)` | update the vertex buffer and refit the mesh |
 | `setMaterial(materialIndex)` | change material for all triangles |
