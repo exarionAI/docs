@@ -1,5 +1,6 @@
 ---
 title: Web
+description: soundtrace.js — STCoreV2의 브라우저용 TypeScript/WebAssembly 공간 음향 SDK. 설치·facade API·스레드 모드·번들러 통합·재질.
 ---
 
 import useBaseUrl from '@docusaurus/useBaseUrl';

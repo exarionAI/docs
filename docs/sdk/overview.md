@@ -1,6 +1,7 @@
 ---
 sidebar_position: 1
 title: SDK 개요
+description: STCoreV2 실시간 공간 음향 엔진의 Web·Unity·Unreal·Python SDK 개요.
 ---
 
 # SDK 개요
