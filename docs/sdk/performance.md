@@ -19,7 +19,7 @@ soundtrace.js는 ray count, depth, source count, geometry/BVH 설정을 높일�
 | Listener | scene당 1개 |
 | Realtime output | stereo/binaural 2ch |
 | 오디오 렌더 경로 | ST/MT 모두 WASM `AudioWorkletProcessor` |
-| Multi-source 오디오 | `createMixerWorkletNode(listener, sources, 2)` 사용 |
+| Multi-source 오디오 | source마다 `source.play(input, 2)` (facade) / ST·direct-native는 `createWorkletNode()` |
 | Native source cap | 116 sources |
 | Ray depth 상한 | 16 |
 | 기본 권장 listener preset | `recommendedSTOption()` = `16 x 16`, depth `3` |

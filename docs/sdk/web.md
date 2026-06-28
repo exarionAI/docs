@@ -47,11 +47,13 @@ HRTF는 `loadHrtf('parametric')` 또는 `loadHrtf('convolution')`으로 명시�
 로드합니다. 패키지 기본 테이블을 쓰거나, 앱이 URL·`ArrayBuffer`·typed array로
 자체 테이블을 전달할 수 있습니다.
 
-번들러에서 서브패스 파일 URL이 필요할 때는 `new URL(..., import.meta.url)`로
-해결합니다.
+에셋은 패키지 `exports`(`soundtrace.js/assets/*`)에 노출돼 있습니다. 서브패스
+파일 URL이 필요할 때는 bare specifier를 `import.meta.resolve`로 해석합니다.
+(`new URL('soundtrace.js/...', import.meta.url)`는 bare specifier를 모듈 해석하지
+않고 현재 파일 기준 상대경로로 처리하므로 깨집니다.)
 
 ```ts
-const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.meta.url);
+const materialUrl = import.meta.resolve('soundtrace.js/assets/soundMaterial.json');
 ```
 
 ## 빠른 시작
@@ -78,13 +80,13 @@ const sound = await SoundTrace.create(ctx, {
   quality: 'balanced',
 });
 
-sound.listener
-  .setAudioOption({
-    sampleRate: ctx.sampleRate,
-    inputSampleCount: 128,
-    outputChannels: 2,
-  })
-  .setPose({ position: [0, 0, 0], orientation: [0, 0, 0, 1] });
+// 오디오 옵션은 facade(sound)에서 설정합니다. sampleRate는 AudioContext에서
+// 자동으로 맞춰지므로 지정하지 않습니다(SoundTraceAudioOptions에 없음).
+sound.setAudioOption({
+  inputSampleCount: 128,
+  outputChannels: 2,
+});
+sound.listener.setPose({ position: [0, 0, 0], orientation: [0, 0, 0, 1] });
 
 const vertices = new Float32Array([
   -2, -1, -2,
@@ -348,7 +350,6 @@ worker-hosted MT에서는
 | `coreBaseUrl` | 패키지 내부 `./core` | 직접 호스팅할 때 `./core`처럼 `st/`, `mt/`가 있는 디렉터리 지정 |
 | `assetBaseUrl` | 패키지 내부 `./assets` | HRTF·재질 등 packaged asset 베이스 URL. CDN/복사 배포 시 지정 |
 | `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`. `-1`은 native default, `1` 이상은 propagation job thread budget. `throughput`보다 우선 |
-| `defaultMeshBuild` | native default | native `ExaMeshBuildOption`. `bvhType`, `bvhMaxDepth`, `primPerLeaf`의 process-wide mesh build default |
 | `coordinateBasis` | (기본 basis) | 입력 좌표계 변환 옵션 |
 | `autoLoadMaterials` | `true` | load 시 `soundMaterial*.json`을 자동 fetch·등록(`addMesh({material:'concrete'})` 이름 해석). `false`면 fetch 생략(offline/통제 환경) |
 | `debug` | `false` | load 시 `[soundtrace.js] ready (...)` 진단 로그를 콘솔에 출력. 기본은 조용(라이브러리가 콘솔을 더럽히지 않음) |
@@ -357,18 +358,17 @@ worker-hosted MT에서는
 const sound = await SoundTrace.create(ctx, {
   thread: 'mt',
   propagationThreadCount: -1,
-  defaultMeshBuild: {
-    bvhType: BvhType.LBVH_SIMD8,
-    bvhMaxDepth: 16,
-    primPerLeaf: 4,
-  },
 });
 ```
 
-`propagationThreadCount`와 `defaultMeshBuild`는 WASM 로드 후 native `exaInit()` 전에
-C API로 전달됩니다. worker-hosted MT에서 세부 BVH 옵션을 바꾸는 공개 경로는 facade
-명령 surface로 제한되며, direct-native mesh build option 조작은 ST/direct-native
-통합에서만 사용하세요.
+`propagationThreadCount`는 WASM 로드 후 native `exaInit()` 전에 C API로 전달됩니다.
+
+> **고급 / native 전용 — 메시 빌드 기본값**: BVH 빌드 기본값
+> (`bvhType`·`bvhMaxDepth`·`primPerLeaf`)을 process-wide로 바꾸는 것은 native 표면의
+> 역할이며 typed facade `SoundTraceOptions`에는 포함되지 않습니다. `bvhType` 값의
+> `BvhType` enum은 메인 엔트리가 아니라 `soundtrace.js/native`에서 import합니다.
+> worker-hosted MT에서 세부 BVH 옵션 변경은 facade 명령 surface로 제한되며, mesh
+> build option 직접 조작은 ST/direct-native 통합에서만 사용하세요.
 
 ### 품질 tier
 
@@ -681,7 +681,7 @@ worker에 frame request를 보내 비동기 결과를 받습니다.
 런타임 로딩 예시:
 
 ```ts
-const res = await fetch(new URL('soundtrace.js/assets/soundMaterial.json', import.meta.url));
+const res = await fetch(import.meta.resolve('soundtrace.js/assets/soundMaterial.json'));
 const { _soundMaterials } = await res.json() as {
   _soundMaterials: Array<{
     materialType: number;
