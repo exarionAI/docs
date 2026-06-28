@@ -23,43 +23,66 @@ TypeScript/WebAssembly 바인딩입니다. 애플리케이션이 소유한 `Audi
 
 ## 설치와 아티팩트
 
-패키지는 ESM으로 배포되며 일반 애플리케이션은 `soundtrace.js` 엔트리의
-facade 표면에서 시작합니다.
+`@exarionai/soundtrace.js`는 ESM으로 배포되며 일반 애플리케이션은 facade 표면에서
+시작합니다. 비공개(closed-source) 패키지로 **GitHub Packages(npm)** 레지스트리에서
+배포되므로 공개 npm·CDN(unpkg/jsdelivr)에는 없습니다.
+
+### 설치 (GitHub Packages)
+
+`@exarionai` 스코프를 GitHub Packages 레지스트리로 보내도록 프로젝트 루트에 `.npmrc`를
+둡니다. 인증은 `read:packages` 권한이 있는 GitHub Personal Access Token(PAT)을 씁니다.
+
+```ini
+# .npmrc
+@exarionai:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+```bash
+# GITHUB_TOKEN은 read:packages 스코프의 PAT (CI에서는 시크릿으로 주입)
+export GITHUB_TOKEN=ghp_xxx
+npm install @exarionai/soundtrace.js
+```
+
+> 토큰을 저장소에 커밋하지 마세요 — 로컬은 환경변수, CI는 시크릿으로 주입합니다.
+> Node 20 이상이 필요합니다(`package.json` engines).
+
+facade 표면은 다음과 같이 시작합니다.
 
 ```ts
 import {
   SoundTrace,
   workerHostedMtSupport,
   type MeshTriangle,
-} from 'soundtrace.js';
+} from '@exarionai/soundtrace.js';
 ```
 
 패키지에는 다음 런타임 파일이 함께 들어갑니다.
 
 | 경로 | 용도 |
 |---|---|
-| `soundtrace.js/core/st/exaSound.js`, `.wasm` | single-thread WASM 코어 |
-| `soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM 코어 |
-| `soundtrace.js/assets/soundMaterial.json` | 기본 사운드 재질 테이블 |
-| `soundtrace.js/assets/hrtf/*.bin` | `loadHrtf()`에서 쓰는 packaged HRTF 테이블 |
+| `@exarionai/soundtrace.js/core/st/exaSound.js`, `.wasm` | single-thread WASM 코어 |
+| `@exarionai/soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM 코어 |
+| `@exarionai/soundtrace.js/assets/soundMaterial.json` | 기본 사운드 재질 테이블 |
+| `@exarionai/soundtrace.js/assets/hrtf/*.bin` | `loadHrtf()`에서 쓰는 packaged HRTF 테이블 |
 
 HRTF는 `loadHrtf('parametric')` 또는 `loadHrtf('convolution')`으로 명시적으로
 로드합니다. 패키지 기본 테이블을 쓰거나, 앱이 URL·`ArrayBuffer`·typed array로
 자체 테이블을 전달할 수 있습니다.
 
-에셋은 패키지 `exports`(`soundtrace.js/assets/*`)에 노출돼 있습니다. 서브패스
+에셋은 패키지 `exports`(`@exarionai/soundtrace.js/assets/*`)에 노출돼 있습니다. 서브패스
 파일 URL이 필요할 때는 bare specifier를 `import.meta.resolve`로 해석합니다.
-(`new URL('soundtrace.js/...', import.meta.url)`는 bare specifier를 모듈 해석하지
+(`new URL('@exarionai/soundtrace.js/...', import.meta.url)`는 bare specifier를 모듈 해석하지
 않고 현재 파일 기준 상대경로로 처리하므로 깨집니다.)
 
 ```ts
-const materialUrl = import.meta.resolve('soundtrace.js/assets/soundMaterial.json');
+const materialUrl = import.meta.resolve('@exarionai/soundtrace.js/assets/soundMaterial.json');
 ```
 
 ## 빠른 시작
 
 ```ts
-import { SoundTrace, type MeshTriangle } from 'soundtrace.js';
+import { SoundTrace, type MeshTriangle } from '@exarionai/soundtrace.js';
 
 // 반드시 사용자 클릭/탭 핸들러 안에서 실행합니다(브라우저 자동재생 정책).
 // resume은 핸들러 초반에 호출합니다 — fetch/decode 뒤로 미루면 제스처가 만료돼
@@ -243,7 +266,7 @@ export default defineConfig({
 런타임에서는 facade preflight helper로 다음 조건을 확인할 수 있습니다.
 
 ```ts
-import { workerHostedMtSupport } from 'soundtrace.js';
+import { workerHostedMtSupport } from '@exarionai/soundtrace.js';
 
 const mt = workerHostedMtSupport();
 if (!mt.supported) {
@@ -273,7 +296,7 @@ Vite 권장 설정:
 // vite.config.ts
 export default defineConfig({
   // soundtrace.js는 wasm glue를 동적 import → pre-bundle 제외
-  optimizeDeps: { exclude: ['soundtrace.js'] },
+  optimizeDeps: { exclude: ['@exarionai/soundtrace.js'] },
   server: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
@@ -323,7 +346,7 @@ getter를 호출하지 않으며, 필요한 경우 `debugSnapshot()` 기반 asyn
 일반 앱은 위의 facade 흐름(`SoundTrace.create`, `sound.addMesh`, `sound.addSource`,
 `source.play`, `sound.update`)을 기본 경로로 사용합니다. 아래 내용은 기존 엔진
 객체를 직접 다루어야 하는 고급 `thread: 'st'`/direct-native 통합 참고용입니다.
-저수준 클래스와 1:1 native wrapper는 `soundtrace.js/native`에서 계속 사용할 수
+저수준 클래스와 1:1 native wrapper는 `@exarionai/soundtrace.js/native`에서 계속 사용할 수
 있습니다.
 
 worker-hosted MT에서는
@@ -398,7 +421,7 @@ const sound = await SoundTrace.create(ctx, {
 > **고급 / native 전용 — 메시 빌드 기본값**: BVH 빌드 기본값
 > (`bvhType`·`bvhMaxDepth`·`primPerLeaf`)을 process-wide로 바꾸는 것은 native 표면의
 > 역할이며 typed facade `SoundTraceOptions`에는 포함되지 않습니다. `bvhType` 값의
-> `BvhType` enum은 메인 엔트리가 아니라 `soundtrace.js/native`에서 import합니다.
+> `BvhType` enum은 메인 엔트리가 아니라 `@exarionai/soundtrace.js/native`에서 import합니다.
 > worker-hosted MT에서 세부 BVH 옵션 변경은 facade 명령 surface로 제한되며, mesh
 > build option 직접 조작은 ST/direct-native 통합에서만 사용하세요.
 
@@ -713,7 +736,7 @@ worker에 frame request를 보내 비동기 결과를 받습니다.
 런타임 로딩 예시:
 
 ```ts
-const res = await fetch(import.meta.resolve('soundtrace.js/assets/soundMaterial.json'));
+const res = await fetch(import.meta.resolve('@exarionai/soundtrace.js/assets/soundMaterial.json'));
 const { _soundMaterials } = await res.json() as {
   _soundMaterials: Array<{
     materialType: number;
