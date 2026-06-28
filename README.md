@@ -31,13 +31,12 @@ Web SDK MT 데모는 `SharedArrayBuffer`가 필요하므로 preview는 `npm run 
 
 ```
 docs/
-├── intro/        # 소개 (what-is, features, products, demos)
-├── sdk/          # SDK
-│   ├── core/    # STCore, STCoreV2
-│   └── bindings/ # web, python, unity, ue (예정)
-├── exastudio/    # ExaStudio
-├── exatools/     # ExaTools
-└── demos/        # 데모
+├── intro/        # 소개 (what-is-soundtracing, features, products, demos)
+├── core/         # STCore, STCoreV2, comparison
+├── sdk/          # overview, web, unity, ue, python, performance
+├── exastudio/    # ExaStudio (overview)
+├── exatools/     # ExaTools (overview, iranalyzer)
+└── demos/        # 데모 (overview)
 ```
 
 `static/demos/three-basic/`은 `projects/soundtrace-three-basic/dist/`에서 동기화한

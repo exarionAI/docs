@@ -1,1 +1,0 @@
-{"version":3,"file":"control-worker-state.js","sourceRoot":"","sources":["../src/control-worker-state.ts"],"names":[],"mappings":"AA6BA,MAAM,UAAU,wBAAwB;IACtC,OAAO;QACL,OAAO,EAAE,IAAI;QACb,aAAa,EAAE,EAAE;QACjB,eAAe,EAAE,EAAE;QACnB,qBAAqB,EAAE,EAAE;QACzB,eAAe,EAAE,IAAI,GAAG,EAA0B;QAClD,aAAa,EAAE,IAAI,GAAG,EAA0B;QAChD,kBAAkB,EAAE,KAAK;QACzB,QAAQ,EAAE,KAAK;KAChB,CAAC;AACJ,CAAC"}

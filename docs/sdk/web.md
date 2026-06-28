@@ -1,5 +1,6 @@
 ---
 title: Web
+description: soundtrace.js — STCoreV2의 브라우저용 TypeScript/WebAssembly 공간 음향 SDK. 설치·facade API·스레드 모드·번들러 통합·재질.
 ---
 
 import useBaseUrl from '@docusaurus/useBaseUrl';
@@ -133,6 +134,9 @@ floor.setPose({ position: [0, 0, 0] });
 await sound.update(1 / 60);
 ```
 
+`mode: 'gpu'`를 선택하면 `quality`의 ray grid와 render option은 그대로 적용되지만,
+GPU propagation depth는 WebGPU backend의 검증된 상한인 `8`로 고정됩니다.
+
 ## 런타임 구조
 
 ```
@@ -216,6 +220,48 @@ if (!mt.supported) {
 ST 모드도 실시간 Web Audio 통합에서는 `AudioWorkletNode`를 사용합니다. 서비스 배포는
 ST/MT 모두 같은 COOP/COEP 헤더를 적용하는 편이 가장 단순합니다.
 
+### 번들러 통합
+
+`soundtrace.js`는 deep-import ESM이고, MT control worker를
+`new Worker(new URL('./control/control-worker.js', import.meta.url))`로 만듭니다.
+번들러(Vite/webpack/Next)에서 두 가지를 주의하세요.
+
+1. **worker 모듈 그래프가 자동 추적되지 않음.** 번들러는 worker *엔트리* 청크는
+   내보내지만, worker가 런타임에 import하는 형제 모듈(`control-worker-*.js`,
+   `control-hot-*.js`)까지 따라가지 못해 그 파일들이 출력에서 누락돼 런타임 404가
+   날 수 있습니다.
+2. **wasm glue가 동적 import됨.** 패키지를 의존성 pre-bundle에서 제외하고,
+   `dist/core`(wasm)·`dist/assets`(HRTF)가 서빙되며 MT는 COOP/COEP가 적용돼야 합니다.
+
+Vite 권장 설정:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  // soundtrace.js는 wasm glue를 동적 import → pre-bundle 제외
+  optimizeDeps: { exclude: ['soundtrace.js'] },
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+});
+```
+
+`vite build` 후에는 worker 엔트리의 전이 모듈 그래프를 산출물에 복사하는 post-build
+단계가 필요합니다(Rollup이 worker의 런타임 import를 따라가지 못함). `three-basic`
+데모가 기준 스크립트 `scripts/copy-worker-module-graph.mjs`를 유지하며 다음처럼 묶습니다.
+
+```jsonc
+// package.json
+"scripts": { "build": "vite build && node scripts/copy-worker-module-graph.mjs" }
+```
+
+webpack/Next도 같은 제약(worker 그래프 + wasm asset + COOP/COEP)이 적용됩니다.
+asset 디렉터리를 다른 base로 호스팅하면 `coreBaseUrl`/`assetBaseUrl`로 런타임 해석을
+맞추세요.
+
 ## Worker-hosted MT 작성 흐름
 
 `thread: 'mt'` 또는 `mode: 'multi_thread'`에서는 main thread가 native scene 객체를
@@ -286,19 +332,26 @@ worker-hosted MT에서는
 | `propagator` | ST/direct-native only. valid path, guide plane, profile 조회 |
 | `diagnostics` | ST/direct-native only. 버전, 메모리 trace, ray 통계 조회 |
 | `createWorkletNode(listener, source, channels = 2)` | ST/direct-native only. facade는 `source.play(input, channels)` 사용 |
-| `update(dt = 0)` | `st`는 number를 반환하고, `mt`는 worker frame 결과를 기다리는 `Promise<number>`를 반환 |
+| `update(dt = 0)` | propagation을 advance하고 `Promise<number>`를 반환. ST·MT 모두 항상 async(facade가 ST/MT 실행 모드를 숨김) — `await sound.update(dt)`로 호출 |
 | `debugSnapshot(options?)` | `mt`에서 valid path count, profile 같은 engine-output-style data를 async로 조회 |
-| `reset()` | 코어 상태 reset |
+| `reset()` | 코어 상태 reset. `Promise<void>`를 반환(ST·MT 모두 항상 async) — `await sound.reset()` |
 | `dispose()` | 출력 노드 disconnect, WASM wrapper 참조 해제 |
 
 `SoundTraceOptions`:
 
 | 필드 | 기본값 | 범위·주의 |
 |---|---:|---|
-| `thread` | `'st'` | `'st'` 또는 `'mt'`. MT는 control worker, SharedArrayBuffer, COOP/COEP 필요 |
+| `mode` | (미지정) | 실행 모드 선택자(권장): `'single_thread'` \| `'multi_thread'` \| `'gpu'`. `'gpu'`는 load 시 WebGPU 자동 활성(미지원 시 CPU fallback). `thread`보다 우선 |
+| `thread` | `'auto'` | wasm 빌드 변형(고급; `mode`가 있으면 무시): `'auto'`(cross-origin isolated면 `'mt'`, 아니면 `'st'`) \| `'st'` \| `'mt'`. MT는 control worker·SharedArrayBuffer·COOP/COEP 필요 |
+| `quality` | `'balanced'` | facade 품질 tier: `'fast'` \| `'balanced'` \| `'quality'`. 별칭 `'speed'`(=fast)·`'middle'`(=balanced)는 `@deprecated`(런타임 유지). 상세는 아래 [품질 tier](#품질-tier) |
+| `throughput` | (미지정) | propagation 처리량 tier(mt 전용): `'low'`(¼ pool) \| `'medium'`(½) \| `'max'`(full). `propagationThreadCount`로 매핑되며 그게 명시되면 무시 |
 | `coreBaseUrl` | 패키지 내부 `./core` | 직접 호스팅할 때 `./core`처럼 `st/`, `mt/`가 있는 디렉터리 지정 |
-| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`. `-1`은 native default, `1` 이상은 propagation job thread budget |
+| `assetBaseUrl` | 패키지 내부 `./assets` | HRTF·재질 등 packaged asset 베이스 URL. CDN/복사 배포 시 지정 |
+| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`. `-1`은 native default, `1` 이상은 propagation job thread budget. `throughput`보다 우선 |
 | `defaultMeshBuild` | native default | native `ExaMeshBuildOption`. `bvhType`, `bvhMaxDepth`, `primPerLeaf`의 process-wide mesh build default |
+| `coordinateBasis` | (기본 basis) | 입력 좌표계 변환 옵션 |
+| `autoLoadMaterials` | `true` | load 시 `soundMaterial*.json`을 자동 fetch·등록(`addMesh({material:'concrete'})` 이름 해석). `false`면 fetch 생략(offline/통제 환경) |
+| `debug` | `false` | load 시 `[soundtrace.js] ready (...)` 진단 로그를 콘솔에 출력. 기본은 조용(라이브러리가 콘솔을 더럽히지 않음) |
 
 ```ts
 const sound = await SoundTrace.create(ctx, {
@@ -316,6 +369,23 @@ const sound = await SoundTrace.create(ctx, {
 C API로 전달됩니다. worker-hosted MT에서 세부 BVH 옵션을 바꾸는 공개 경로는 facade
 명령 surface로 제한되며, direct-native mesh build option 조작은 ST/direct-native
 통합에서만 사용하세요.
+
+### 품질 tier
+
+`quality`는 한 값으로 **propagation 비용 레버**와 **오디오 렌더 옵션**을 함께
+설정하는 단조(speed↔quality) 사다리입니다. 정식 값은 3개이며, `'speed'`(=`'fast'`)와
+`'middle'`(=`'balanced'`)은 하위호환 `@deprecated` 별칭입니다(런타임은 계속 동작).
+기본값은 `'balanced'`.
+
+| tier | propagation `maxDepth` | listener ray grid | HRTF | diffuse | late reverb | delay interp |
+|---|---:|---:|---|---|---|---|
+| `fast` (`speed`) | 4 | 16 × 16 | low | off | one-pole | linear |
+| `balanced` (`middle`, 기본) | 8 | 24 × 24 | medium | medium | tilt | cubic-lagrange |
+| `quality` | 12 | 32 × 32 | high | high | eight-band(per-band) | lagrange6 |
+
+`mode: 'gpu'`에서는 tier의 ray grid·render option은 그대로 적용되지만 propagation
+depth는 WebGPU backend 상한 `8`로 고정됩니다. 오디오 렌더 옵션만 따로 조정하려면
+`sound.listener.setRenderOptions(...)`로 tier와 독립적으로 override할 수 있습니다.
 
 ### MT readback 규칙
 
@@ -374,7 +444,7 @@ object라면 다음 tick 전에 `object.setUpdateType(UpdateType.Rebuild)`를 �
 
 | API | 설명 |
 |---|---|
-| `setData(vertices, triangles, opts?)` | geometry와 BVH를 새로 빌드 |
+| `setData(vertices, triangles, opts?)` | geometry와 BVH를 새로 빌드. triangle 인덱스(`a`/`b`/`c`)는 `[0, numVerts)` 범위의 정수여야 하며, 범위 밖·음수·비정수는 native 호출 전에 에러로 거부됩니다(`addMesh`도 동일 검증) |
 | `updateVertices(vertices)` | vertex buffer만 갱신 |
 | `updateVerticesAndRefit(vertices)` | vertex buffer 갱신 후 mesh refit 실행 |
 | `setMaterial(materialIndex)` | 전체 triangle 재질 변경 |

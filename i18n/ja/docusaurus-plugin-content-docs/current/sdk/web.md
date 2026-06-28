@@ -122,6 +122,9 @@ spatialNode.connect(sound.output).connect(ctx.destination);
 player.start();
 ```
 
+`mode: 'gpu'` を選ぶ場合、選択した `quality` の ray grid と render option はそのまま適用されますが、
+GPU propagation depth は検証済みの WebGPU backend 上限である `8` に固定されます。
+
 runtimeではfacade preflight helperで配信条件を確認できます。
 
 ```ts
@@ -195,6 +198,48 @@ export default defineConfig({
 });
 ```
 
+### バンドラ統合
+
+`soundtrace.js`はdeep-import ESMで、MT control workerを
+`new Worker(new URL('./control/control-worker.js', import.meta.url))`で作ります。
+bundler（Vite/webpack/Next）では次の2点に注意してください。
+
+1. **worker module graphが自動追跡されない。** bundlerはworkerの*エントリ*チャンクは
+   出力しますが、workerがruntimeでimportする兄弟module（`control-worker-*.js`,
+   `control-hot-*.js`）まで辿れず、それらのfileが出力から欠落してruntime 404に
+   なることがあります。
+2. **wasm glueが動的importされる。** パッケージを依存pre-bundleから除外し、
+   `dist/core`（wasm）・`dist/assets`（HRTF）が配信され、MTはCOOP/COEPが適用される必要があります。
+
+Vite推奨設定:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  // soundtrace.jsはwasm glueを動的import → pre-bundle除外
+  optimizeDeps: { exclude: ['soundtrace.js'] },
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+});
+```
+
+`vite build`後は、worker エントリの推移的module graphを成果物へcopyするpost-build
+ステップが必要です（Rollupがworkerのruntime importを辿れません）。`three-basic`
+demoが基準スクリプト`scripts/copy-worker-module-graph.mjs`を維持し、次のように束ねます。
+
+```jsonc
+// package.json
+"scripts": { "build": "vite build && node scripts/copy-worker-module-graph.mjs" }
+```
+
+webpack/Nextでも同じ制約（worker graph + wasm asset + COOP/COEP）が適用されます。
+asset directoryを別のbaseでhostingする場合は、`coreBaseUrl`/`assetBaseUrl`でruntime解決を
+合わせてください。
+
 ## Worker-hosted MT作成フロー
 
 `thread: 'mt'`または`mode: 'multi_thread'`では、main threadがnative scene objectを
@@ -239,17 +284,26 @@ export default defineConfig({
 | `propagator` | valid path、guide plane、profile取得 |
 | `diagnostics` | version、memory trace、ray statistics取得 |
 | `createWorkletNode(listener, source, channels = 2)` | 選択したST/MT binaryの`AudioWorkletNode`生成 |
-| `reset()` | core state reset |
+| `update(dt = 0)` | propagationをadvanceし`Promise<number>`を返す。ST・MTのどちらも常にasync（facadeがST/MT実行モードを隠す）— `await sound.update(dt)`で呼ぶ |
+| `debugSnapshot(options?)` | `mt`でvalid path count、profileなどengine-output-style dataをasyncで取得 |
+| `reset()` | core state reset。`Promise<void>`を返す（ST・MTのどちらも常にasync）— `await sound.reset()` |
 | `dispose()` | output nodeをdisconnectし、WASM wrapper参照を解放 |
 
 `SoundTraceOptions`:
 
 | フィールド | default | 範囲・注意 |
 |---|---:|---|
-| `thread` | `'st'` | `'st'`または`'mt'`。実サービスではMT推奨 |
+| `mode` | (未指定) | 実行モード選択子（推奨）: `'single_thread'` \| `'multi_thread'` \| `'gpu'`。`'gpu'`はload時にWebGPUを自動有効化（非対応時はCPU fallback）。`thread`より優先 |
+| `thread` | `'auto'` | wasm buildバリアント（高度; `mode`があれば無視）: `'auto'`（cross-origin isolatedなら`'mt'`、そうでなければ`'st'`）\| `'st'` \| `'mt'`。MTはcontrol worker・SharedArrayBuffer・COOP/COEPが必要 |
+| `quality` | `'balanced'` | facade品質tier: `'fast'` \| `'balanced'` \| `'quality'`。別名`'speed'`（=fast）・`'middle'`（=balanced）は`@deprecated`（runtimeは維持）。詳細は下の[品質 tier](#品質-tier) |
+| `throughput` | (未指定) | propagation処理量tier（mt専用）: `'low'`（¼ pool）\| `'medium'`（½）\| `'max'`（full）。`propagationThreadCount`へマッピングされ、それが明示されると無視 |
 | `coreBaseUrl` | package internal `./core` | 自前hosting時は`./core`のように`st/`, `mt/`を含むdirectoryを指定 |
-| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`; `-1`はnative default |
-| `defaultMeshBuild` | native default | native `ExaMeshBuildOption` process-wide mesh build default |
+| `assetBaseUrl` | package internal `./assets` | HRTF・materialなどpackaged assetのbase URL。CDN/copy配信時に指定 |
+| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`。`-1`はnative default、`1`以上はpropagation job thread budget。`throughput`より優先 |
+| `defaultMeshBuild` | native default | native `ExaMeshBuildOption`。`bvhType`, `bvhMaxDepth`, `primPerLeaf`のprocess-wide mesh build default |
+| `coordinateBasis` | (default basis) | 入力座標系の変換オプション |
+| `autoLoadMaterials` | `true` | load時に`soundMaterial*.json`を自動fetch・登録（`addMesh({material:'concrete'})`の名前解決）。`false`ならfetchを省略（offline/統制環境） |
+| `debug` | `false` | load時に`[soundtrace.js] ready (...)`診断ログをconsoleへ出力。defaultは静か（ライブラリがconsoleを汚さない） |
 
 ```ts
 const sound = await SoundTrace.create(ctx, {
@@ -266,6 +320,23 @@ const sound = await SoundTrace.create(ctx, {
 `propagationThreadCount`と`defaultMeshBuild`はnative `exaInit()`前にC APIへ渡されます。
 `thread: 'st' | 'mt'`はbinary selectionとして維持し、BVH/SIMD選択は`BvhType`と
 mesh build optionで制御します。
+
+### 品質 tier
+
+`quality`は1つの値で**propagationコストのレバー**と**audio renderオプション**を
+まとめて設定する単調な（speed↔quality）ラダーです。正式な値は3つで、`'speed'`（=`'fast'`）と
+`'middle'`（=`'balanced'`）は後方互換の`@deprecated`別名です（runtimeは引き続き動作）。
+defaultは`'balanced'`です。
+
+| tier | propagation `maxDepth` | listener ray grid | HRTF | diffuse | late reverb | delay interp |
+|---|---:|---:|---|---|---|---|
+| `fast` (`speed`) | 4 | 16 × 16 | low | off | one-pole | linear |
+| `balanced` (`middle`, default) | 8 | 24 × 24 | medium | medium | tilt | cubic-lagrange |
+| `quality` | 12 | 32 × 32 | high | high | eight-band(per-band) | lagrange6 |
+
+`mode: 'gpu'`ではtierのray grid・render optionはそのまま適用されますが、propagation
+depthはWebGPU backend上限の`8`に固定されます。audio renderオプションだけを個別に
+調整したい場合は、`sound.listener.setRenderOptions(...)`でtierとは独立してoverrideできます。
 
 ### `SoundScene`
 
@@ -303,7 +374,7 @@ sceneにはlistenerを1つだけ置きます。UIで複数listener候補を扱�
 
 | API | 説明 |
 |---|---|
-| `setData(vertices, triangles, opts?)` | geometryとBVHを新しくbuild |
+| `setData(vertices, triangles, opts?)` | geometryとBVHを新しくbuild。triangle index（`a`/`b`/`c`）は`[0, numVerts)`範囲の整数でなければならず、範囲外・負数・非整数はnative呼び出し前にerrorとして拒否されます（`addMesh`も同じ検証） |
 | `updateVertices(vertices)` | vertex bufferだけ更新 |
 | `updateVerticesAndRefit(vertices)` | vertex buffer更新後にmesh refitを実行 |
 | `setMaterial(materialIndex)` | 全triangleのmaterial変更 |

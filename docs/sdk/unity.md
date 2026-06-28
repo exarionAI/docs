@@ -2,6 +2,8 @@
 title: Unity
 ---
 
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
 # SoundTrace SDK for Unity
 
 SoundTrace SDK for Unity는 [STCoreV2](../core/stcorev2.md) 네이티브 엔진을 Unity에서 사용하기 위한 실시간 공간 음향 플러그인입니다. Unity 씬의 메시, 렌더링 머티리얼 슬롯, 음원, 리스너 위치를 SoundTrace 런타임에 전달하고 direct, reflection, diffraction, reverb, transmission path를 계산해 Unity `AudioSource` 출력에 반영합니다.
@@ -218,4 +220,4 @@ WASD로 이동하고 스페이스바/컨트롤로 상승/하강합니다.
 | 음향 퀄리티가 부족함 | `SoundTraceManager`의 `Path Cache Size`를 필요한 만큼 키웁니다. cache가 클수록 더 많은 path 데이터를 저장해 detail이 좋아질 수 있지만 RAM 사용량도 증가합니다. |
 | 여러 음원 소스를 동시에 사용할 때 복수 소스의 싱크가 어긋나 echo/flanging처럼 들림 | 여러 `AudioSource`는 `playOnAwake`나 개별 `Play()` 대신 한 스크립트에서 `AudioSettings.dspTime` 기준 같은 `startDspTime`을 만들고 모두 `AudioSource.PlayScheduled(startDspTime)`로 시작합니다.<br /><br />검증용 audio asset은 Import Settings에서 `Decompress On Load`, `PCM`, `Preserve Sample Rate`, `Preload Audio Data`, `Force To Mono` On, `Normalize` Off로 맞춥니다. |
 
-<img src="/img/unity/ImportSetting.png" alt="Audio Import Settings" width="420" />
+<img src={useBaseUrl('/img/unity/ImportSetting.png')} alt="Audio Import Settings" width="420" />

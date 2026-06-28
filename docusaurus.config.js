@@ -20,11 +20,11 @@ const config = {
   organizationName: 'exarionAI',
   projectName: 'docs',
 
-  onBrokenLinks: 'warn',
+  onBrokenLinks: 'throw',
 
   markdown: {
     hooks: {
-      onBrokenMarkdownLinks: 'warn',
+      onBrokenMarkdownLinks: 'throw',
     },
   },
 

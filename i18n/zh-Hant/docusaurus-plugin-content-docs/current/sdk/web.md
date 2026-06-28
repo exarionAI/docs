@@ -121,6 +121,9 @@ spatialNode.connect(sound.output).connect(ctx.destination);
 player.start();
 ```
 
+選擇 `mode: 'gpu'` 時，所選 `quality` 仍會控制 ray grid 和 render option，
+但 GPU propagation depth 會固定為經過驗證的 WebGPU backend 上限 `8`。
+
 運行時可以用 facade preflight helper 檢查部署支持：
 
 ```ts
@@ -134,6 +137,46 @@ if (!mt.supported) {
 
 ST mode 在 real-time Web Audio 整合中也使用 `AudioWorkletNode`。服務部署時，給 ST/MT
 都應用同一組 COOP/COEP headers 通常最簡單。
+
+### 打包工具整合
+
+`soundtrace.js` 是 deep-import ESM，並透過
+`new Worker(new URL('./control/control-worker.js', import.meta.url))` 建立 MT control worker。
+在打包工具（Vite/webpack/Next）中請注意兩點。
+
+1. **worker 模組圖不會被自動追蹤。** 打包工具會輸出 worker *entry* chunk，但無法追蹤
+   worker 在 runtime 才 import 的同層模組（`control-worker-*.js`、`control-hot-*.js`），
+   導致這些檔案在輸出中遺漏，引發 runtime 404。
+2. **wasm glue 是動態 import。** 請把套件從相依性 pre-bundle 中排除，並確保
+   `dist/core`（wasm）與 `dist/assets`（HRTF）有被 serve，而 MT 需套用 COOP/COEP。
+
+Vite 建議設定：
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  // soundtrace.js 會動態 import wasm glue → 從 pre-bundle 排除
+  optimizeDeps: { exclude: ['soundtrace.js'] },
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+});
+```
+
+`vite build` 之後，需要一個 post-build 步驟把 worker entry 的遞移模組圖複製到產物中
+（Rollup 無法追蹤 worker 的 runtime import）。`three-basic` demo 維護一份參考腳本
+`scripts/copy-worker-module-graph.mjs`，並如下串接。
+
+```jsonc
+// package.json
+"scripts": { "build": "vite build && node scripts/copy-worker-module-graph.mjs" }
+```
+
+webpack/Next 也適用同樣的限制（worker 圖 + wasm asset + COOP/COEP）。若把 asset 目錄
+托管在不同 base，請用 `coreBaseUrl`/`assetBaseUrl` 對齊 runtime 解析。
 
 ## Runtime 結構
 
@@ -237,17 +280,25 @@ engine object 的高級 `thread: 'st'`/direct-native 整合參考。
 | `propagator` | valid path、guide plane、profile 查詢 |
 | `diagnostics` | version、memory trace、ray statistics 查詢 |
 | `createWorkletNode(listener, source, channels = 2)` | 建立所選 ST/MT binary 的 `AudioWorkletNode` |
-| `reset()` | reset core state |
+| `update(dt = 0)` | advance propagation 並回傳 `Promise<number>`。ST 與 MT 都一律 async（facade 隱藏 ST/MT 執行模式）— 請用 `await sound.update(dt)` 呼叫 |
+| `reset()` | reset core state。回傳 `Promise<void>`（ST 與 MT 都一律 async）— 請用 `await sound.reset()` |
 | `dispose()` | disconnect output node 並释放 WASM wrapper 引用 |
 
 `SoundTraceOptions`:
 
 | 字段 | 預設值 | 範圍/注意 |
 |---|---:|---|
-| `thread` | `'st'` | `'st'` 或 `'mt'`。實際服务推荐 MT |
+| `mode` | （未指定） | 執行模式選擇器（建議）：`'single_thread'` \| `'multi_thread'` \| `'gpu'`。`'gpu'` 在 load 時自動啟用 WebGPU（不支援時 fallback 到 CPU）。優先於 `thread` |
+| `thread` | `'auto'` | wasm build 變體（進階；有 `mode` 時忽略）：`'auto'`（cross-origin isolated 時為 `'mt'`，否則為 `'st'`）\| `'st'` \| `'mt'`。MT 需要 control worker、SharedArrayBuffer、COOP/COEP |
+| `quality` | `'balanced'` | facade 品質 tier：`'fast'` \| `'balanced'` \| `'quality'`。別名 `'speed'`（=fast）、`'middle'`（=balanced）為 `@deprecated`（runtime 仍保留）。詳見下方 [品質 tier](#品質-tier) |
+| `throughput` | （未指定） | propagation 吞吐量 tier（僅 mt）：`'low'`（¼ pool）\| `'medium'`（½）\| `'max'`（full）。會映射為 `propagationThreadCount`，若後者明確指定則忽略 |
 | `coreBaseUrl` | package internal `./core` | 自托管時指定包含 `st/`, `mt/` 的目錄，例如 `./core` |
-| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`; `-1` 使用 native default |
-| `defaultMeshBuild` | native default | native `ExaMeshBuildOption` process-wide mesh build default |
+| `assetBaseUrl` | package internal `./assets` | HRTF、material 等 packaged asset 的 base URL。CDN/複製部署時指定 |
+| `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`。`-1` 使用 native default，`1` 以上為 propagation job thread budget。優先於 `throughput` |
+| `defaultMeshBuild` | native default | native `ExaMeshBuildOption`。`bvhType`、`bvhMaxDepth`、`primPerLeaf` 的 process-wide mesh build default |
+| `coordinateBasis` | （預設 basis） | 輸入座標系轉換選項 |
+| `autoLoadMaterials` | `true` | load 時自動 fetch 並註冊 `soundMaterial*.json`（解析 `addMesh({material:'concrete'})` 名稱）。`false` 則略過 fetch（offline/受控環境） |
+| `debug` | `false` | load 時於 console 輸出 `[soundtrace.js] ready (...)` 診斷 log。預設安靜（library 不污染 console） |
 
 ```ts
 const sound = await SoundTrace.create(ctx, {
@@ -261,9 +312,26 @@ const sound = await SoundTrace.create(ctx, {
 });
 ```
 
-`propagationThreadCount` 和 `defaultMeshBuild` 會在 native `exaInit()` 前透過 C API
-傳入。`thread: 'st' | 'mt'` 保持為 binary selection，BVH/SIMD 選擇透過
-`BvhType` 和 mesh build option 控制。
+`propagationThreadCount` 和 `defaultMeshBuild` 會在 WASM 載入後、native `exaInit()` 前
+透過 C API 傳入。在 worker-hosted MT 中，調整細部 BVH option 的公開路徑僅限於 facade
+command surface；direct-native mesh build option 操作請只在 ST/direct-native 整合中使用。
+
+### 品質 tier
+
+`quality` 用單一個值同時設定 **propagation 成本槓桿** 與 **audio render option**，
+是一條單調（speed↔quality）的階梯。正式值有 3 個，`'speed'`（=`'fast'`）與
+`'middle'`（=`'balanced'`）為向後相容的 `@deprecated` 別名（runtime 仍可運作）。
+預設值為 `'balanced'`。
+
+| tier | propagation `maxDepth` | listener ray grid | HRTF | diffuse | late reverb | delay interp |
+|---|---:|---:|---|---|---|---|
+| `fast` (`speed`) | 4 | 16 × 16 | low | off | one-pole | linear |
+| `balanced` (`middle`, 預設) | 8 | 24 × 24 | medium | medium | tilt | cubic-lagrange |
+| `quality` | 12 | 32 × 32 | high | high | eight-band(per-band) | lagrange6 |
+
+在 `mode: 'gpu'` 中，tier 的 ray grid 與 render option 仍會套用，但 propagation
+depth 會固定為 WebGPU backend 上限 `8`。若只想單獨調整 audio render option，可以用
+`sound.listener.setRenderOptions(...)` 與 tier 獨立 override。
 
 ### `SoundScene`
 
@@ -301,7 +369,7 @@ scene 中應只有一個 listener。即使 UI 管理多個 listener 候選，也
 
 | API | 说明 |
 |---|---|
-| `setData(vertices, triangles, opts?)` | 重新建置 geometry 與 BVH |
+| `setData(vertices, triangles, opts?)` | 重新建置 geometry 與 BVH。triangle index（`a`/`b`/`c`）必須是 `[0, numVerts)` 範圍內的整數，超出範圍、負值或非整數會在呼叫 native 前被拒絕並報錯（`addMesh` 也做同樣驗證） |
 | `updateVertices(vertices)` | 只更新 vertex buffer |
 | `updateVerticesAndRefit(vertices)` | 更新 vertex buffer 後執行 mesh refit |
 | `setMaterial(materialIndex)` | 修改全部 triangle 的 material |

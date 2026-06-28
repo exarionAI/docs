@@ -1,6 +1,7 @@
 ---
 sidebar_position: 1
 title: Sound Tracing이란?
+description: 광선 추적 기반 실시간 공간 음향 시뮬레이션(반사·회절·투과·잔향)의 개념 소개.
 ---
 
 # Sound Tracing이란?
