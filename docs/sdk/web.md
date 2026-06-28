@@ -59,25 +59,26 @@ const materialUrl = import.meta.resolve('soundtrace.js/assets/soundMaterial.json
 ## 빠른 시작
 
 ```ts
-import {
-  SoundTrace,
-  workerHostedMtSupport,
-  type MeshTriangle,
-} from 'soundtrace.js';
+import { SoundTrace, type MeshTriangle } from 'soundtrace.js';
 
-// Run this inside a user click/tap handler.
+// 반드시 사용자 클릭/탭 핸들러 안에서 실행합니다(브라우저 자동재생 정책).
+// resume은 핸들러 초반에 호출합니다 — fetch/decode 뒤로 미루면 제스처가 만료돼
+// AudioContext가 suspended로 남아 무음이 됩니다.
 const ctx = new AudioContext();
 await ctx.resume();
 
-const mt = workerHostedMtSupport();
-if (!mt.supported) {
-  throw new Error(`soundtrace.js mode=multi_thread requires ${mt.missing.join(', ')}`);
-}
-
+// 가장 단순한 시작 경로: 단일 스레드(COOP/COEP 같은 특수 헤더 불필요).
+// 프로덕션 멀티스레드 성능은 아래 [스레드 모드](#스레드-모드) 참고.
 const sound = await SoundTrace.create(ctx, {
-  mode: 'multi_thread',
-  throughput: 'max',
+  mode: 'single_thread',
   quality: 'balanced',
+  // Three.js 좌표계 연동: Three.js 카메라는 -Z를 바라봅니다(-Z forward).
+  // 이 basis가 없으면 좌우/전후 방향감이 거울처럼 뒤집힙니다.
+  coordinateBasis: {
+    right: [-1, 0, 0],
+    up: [0, 1, 0],
+    forward: [0, 0, -1],
+  },
 });
 
 // 오디오 옵션은 facade(sound)에서 설정합니다. sampleRate는 AudioContext에서
@@ -88,6 +89,7 @@ sound.setAudioOption({
 });
 sound.listener.setPose({ position: [0, 0, 0], orientation: [0, 0, 0, 1] });
 
+// 바닥 평면 하나를 직접 정의(Three.js BufferGeometry 연동은 아래 참고).
 const vertices = new Float32Array([
   -2, -1, -2,
    2, -1, -2,
@@ -102,7 +104,7 @@ const triangles: MeshTriangle[] = [
 const floor = sound.addMesh({
   vertices,
   triangles,
-  material: 'Concrete',
+  material: 'concrete',
 });
 
 const source = sound.addSource({
@@ -138,6 +140,36 @@ await sound.update(1 / 60);
 
 `mode: 'gpu'`를 선택하면 `quality`의 ray grid와 render option은 그대로 적용되지만,
 GPU propagation depth는 WebGPU backend의 검증된 상한인 `8`로 고정됩니다.
+
+### Three.js 메시 연동
+
+`addMesh`는 flat `vertices`(`[x, y, z, ...]`)와 `indices`(또는 `triangles`)를 받습니다.
+Three.js `BufferGeometry`의 `position` attribute와 `index`를 그대로 넘기고, 오브젝트의
+변환은 `setPose`로 반영합니다. 위에서 `coordinateBasis`를 Three.js 기준으로 설정했으므로
+정점·pose 좌표를 변환 없이 그대로 전달하면 됩니다.
+
+```ts
+// mesh: THREE.Mesh
+function addThreeMesh(sound, mesh, material = 'concrete') {
+  const pos = mesh.geometry.attributes.position;            // flat xyz (Float32Array)
+  const indices = mesh.geometry.index
+    ? mesh.geometry.index.array                             // indexed geometry
+    : Uint32Array.from({ length: pos.count }, (_, i) => i); // non-indexed → 순차 인덱스
+  const collider = sound.addMesh({ vertices: pos.array, indices, material });
+  collider.setPose({
+    position: mesh.position.toArray(),
+    orientation: mesh.quaternion.toArray(),
+    scale: mesh.scale.toArray(),
+  });
+  return collider;
+}
+```
+
+> 엔진은 **일관된 삼각형 winding**을 기대합니다. 방·실내처럼 안쪽에서 듣는 콜라이더는
+> 법선이 안쪽을 향하도록 구성하세요(반사가 약하면 winding을 확인). 부모 계층 변환이 있는
+> 오브젝트는 `position/quaternion/scale` 대신 `mesh.matrixWorld`를 분해해 `setPose`에
+> 넘깁니다. `indices` 경로는 메시 전체가 한 재질이며, 면별 재질은 `triangles`의
+> `materialIndex`로 지정합니다.
 
 ## 런타임 구조
 
