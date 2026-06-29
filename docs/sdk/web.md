@@ -277,6 +277,43 @@ if (!mt.supported) {
 ST 모드도 실시간 Web Audio 통합에서는 `AudioWorkletNode`를 사용합니다. 서비스 배포는
 ST/MT 모두 같은 COOP/COEP 헤더를 적용하는 편이 가장 단순합니다.
 
+#### 프로덕션 헤더
+
+dev 서버뿐 아니라 **실제 호스트**의 모든 HTML 응답에도 같은 두 헤더가 필요합니다.
+일부 정적 호스트는 헤더 커스터마이즈를 지원하지 않으니 배포 전 확인하세요.
+
+```nginx
+# nginx
+add_header Cross-Origin-Opener-Policy   same-origin   always;
+add_header Cross-Origin-Embedder-Policy require-corp  always;
+```
+
+```json
+// Vercel — vercel.json
+{
+  "headers": [{
+    "source": "/(.*)",
+    "headers": [
+      { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+      { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
+    ]
+  }]
+}
+```
+
+```txt
+# Netlify — _headers
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+```
+
+> **COEP `require-corp`와 cross-origin 에셋**: `require-corp`가 켜지면 **다른 오리진**의
+> WASM·worker·HRTF·오디오(MP3) 응답이 `Cross-Origin-Resource-Policy: cross-origin`(또는
+> 유효한 CORS) 없이는 조용히 차단됩니다. `coreBaseUrl`/`assetBaseUrl`로 에셋을 CDN·별도
+> 도메인에 두면 그 응답에도 CORP/CORS를 반드시 붙이세요. 같은 오리진 서빙은 추가 설정이
+> 필요 없습니다.
+
 ### 번들러 통합
 
 `soundtrace.js`는 deep-import ESM이고, MT control worker를
@@ -318,6 +355,28 @@ export default defineConfig({
 webpack/Next도 같은 제약(worker 그래프 + wasm asset + COOP/COEP)이 적용됩니다.
 asset 디렉터리를 다른 base로 호스팅하면 `coreBaseUrl`/`assetBaseUrl`로 런타임 해석을
 맞추세요.
+
+#### Next.js (App Router)
+
+1. **헤더**: `next.config.js`의 `headers()`로 COOP/COEP를 모든 경로에 적용합니다.
+
+```js
+// next.config.js
+const coi = [
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+];
+module.exports = {
+  async headers() {
+    return [{ source: '/:path*', headers: coi }];
+  },
+};
+```
+
+2. **클라이언트 전용**: SDK는 `AudioContext`·worker·WASM에 의존하므로 SSR에서 import하면
+   안 됩니다. 사용하는 컴포넌트를 `'use client'`로 표시하고, SoundTrace 초기화는
+   브라우저에서만 수행합니다(`next/dynamic`의 `ssr: false`, 또는 effect/이벤트 핸들러
+   안). 모듈 최상위에서 `SoundTrace.create(...)`를 호출하지 마세요.
 
 ## Worker-hosted MT 작성 흐름
 
