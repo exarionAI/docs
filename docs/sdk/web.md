@@ -283,6 +283,28 @@ if (!mt.supported) {
 | `crossOriginIsolated` | 페이지가 cross-origin isolated 아님 | HTML 응답에 아래 COOP/COEP 헤더 적용 |
 | `SharedArrayBuffer` | SAB 비활성(보통 isolation 미충족의 결과) | 동일 — 헤더 적용 후 `crossOriginIsolated === true` 확인 |
 
+preflight를 생략해도 안전합니다. `mode:'multi_thread'`(또는 `thread:'mt'`)로
+`create()`/`load()`할 때 전제가 미충족이면 SDK가 **명확한
+`SoundTraceMtUnsupportedError`** 를 던집니다(worker 내부의 저수준 "SharedArrayBuffer
+is required" 에러가 아니라). 직접 ST로 폴백하려면 catch하거나, 처음부터
+`thread:'auto'`(isolated면 mt, 아니면 st)를 쓰세요.
+
+```ts
+import { SoundTrace, SoundTraceMtUnsupportedError } from '@exarionai/soundtrace.js';
+
+let sound: SoundTrace;
+try {
+  sound = await SoundTrace.create(ctx, { mode: 'multi_thread', quality: 'balanced' });
+} catch (e) {
+  if (e instanceof SoundTraceMtUnsupportedError) {
+    // 전제(COOP/COEP cross-origin isolation) 미충족 → 단일 스레드로 폴백
+    sound = await SoundTrace.create(ctx, { mode: 'single_thread', quality: 'balanced' });
+  } else {
+    throw e;
+  }
+}
+```
+
 ST 모드도 실시간 Web Audio 통합에서는 `AudioWorkletNode`를 사용합니다. 서비스 배포는
 ST/MT 모두 같은 COOP/COEP 헤더를 적용하는 편이 가장 단순합니다.
 
@@ -466,7 +488,20 @@ worker-hosted MT에서는
 | `update(dt = 0)` | propagation을 advance하고 `Promise<number>`를 반환. ST·MT 모두 항상 async(facade가 ST/MT 실행 모드를 숨김) — `await sound.update(dt)`로 호출 |
 | `debugSnapshot(options?)` | `mt`에서 valid path count, profile 같은 engine-output-style data를 async로 조회 |
 | `reset()` | 코어 상태 reset. `Promise<void>`를 반환(ST·MT 모두 항상 async) — `await sound.reset()` |
-| `dispose()` | 출력 노드 disconnect, WASM wrapper 참조 해제 |
+| `dispose()` | 출력 노드 disconnect, WASM wrapper 참조 해제(소유한 listener 포함). idempotent |
+
+`SoundTrace`·`Source`·`Mesh`는 `Disposable`이라 명시 `dispose()`도, TS 5.2+ `using`도
+지원합니다(블록 끝에서 자동 해제). `Listener`는 `SoundTrace`가 소유·해제하므로 따로
+dispose하지 않습니다(scene당 1개).
+
+```ts
+{
+  using sound = await SoundTrace.create(ctx, { mode: 'single_thread' });
+  const mesh = sound.addMesh({ vertices, indices, material: 'concrete' });
+  // ... 사용 ...
+  // 블록을 벗어나면 sound[Symbol.dispose]()가 자동 호출돼 WASM 리소스 해제
+}
+```
 
 `SoundTraceOptions`:
 
