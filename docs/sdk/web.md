@@ -23,69 +23,96 @@ TypeScript/WebAssembly 바인딩입니다. 애플리케이션이 소유한 `Audi
 
 ## 설치와 아티팩트
 
-패키지는 ESM으로 배포되며 일반 애플리케이션은 `soundtrace.js` 엔트리의
-facade 표면에서 시작합니다.
+`@exarionai/soundtrace.js`는 ESM으로 배포되며 일반 애플리케이션은 facade 표면에서
+시작합니다. 비공개(closed-source) 패키지로 **GitHub Packages(npm)** 레지스트리에서
+배포되므로 공개 npm·CDN(unpkg/jsdelivr)에는 없습니다.
+
+### 설치 (GitHub Packages)
+
+`@exarionai` 스코프를 GitHub Packages 레지스트리로 보내도록 프로젝트 루트에 `.npmrc`를
+둡니다. 인증은 `read:packages` 권한이 있는 GitHub Personal Access Token(PAT)을 씁니다.
+
+```ini
+# .npmrc
+@exarionai:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+```bash
+# GITHUB_TOKEN은 read:packages 스코프의 PAT (CI에서는 시크릿으로 주입)
+export GITHUB_TOKEN=ghp_xxx
+npm install @exarionai/soundtrace.js
+```
+
+> 토큰을 저장소에 커밋하지 마세요 — 로컬은 환경변수, CI는 시크릿으로 주입합니다.
+> Node 20 이상이 필요합니다(`package.json` engines).
+
+facade 표면은 다음과 같이 시작합니다.
 
 ```ts
 import {
   SoundTrace,
   workerHostedMtSupport,
   type MeshTriangle,
-} from 'soundtrace.js';
+} from '@exarionai/soundtrace.js';
 ```
 
 패키지에는 다음 런타임 파일이 함께 들어갑니다.
 
 | 경로 | 용도 |
 |---|---|
-| `soundtrace.js/core/st/exaSound.js`, `.wasm` | single-thread WASM 코어 |
-| `soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM 코어 |
-| `soundtrace.js/assets/soundMaterial.json` | 기본 사운드 재질 테이블 |
-| `soundtrace.js/assets/hrtf/*.bin` | `loadHrtf()`에서 쓰는 packaged HRTF 테이블 |
+| `@exarionai/soundtrace.js/core/st/exaSound.js`, `.wasm` | single-thread WASM 코어 |
+| `@exarionai/soundtrace.js/core/mt/exaSound.js`, `.wasm` | multi-thread WASM 코어 |
+| `@exarionai/soundtrace.js/assets/soundMaterial.json` | 기본 사운드 재질 테이블 |
+| `@exarionai/soundtrace.js/assets/hrtf/*.bin` | `loadHrtf()`에서 쓰는 packaged HRTF 테이블 |
 
 HRTF는 `loadHrtf('parametric')` 또는 `loadHrtf('convolution')`으로 명시적으로
 로드합니다. 패키지 기본 테이블을 쓰거나, 앱이 URL·`ArrayBuffer`·typed array로
 자체 테이블을 전달할 수 있습니다.
 
-번들러에서 서브패스 파일 URL이 필요할 때는 `new URL(..., import.meta.url)`로
-해결합니다.
+에셋은 패키지 `exports`(`@exarionai/soundtrace.js/assets/*`)에 노출돼 있습니다. 서브패스
+파일 URL이 필요할 때는 bare specifier를 `import.meta.resolve`로 해석합니다.
+(`new URL('@exarionai/soundtrace.js/...', import.meta.url)`는 bare specifier를 모듈 해석하지
+않고 현재 파일 기준 상대경로로 처리하므로 깨집니다.)
 
 ```ts
-const materialUrl = new URL('soundtrace.js/assets/soundMaterial.json', import.meta.url);
+const materialUrl = import.meta.resolve('@exarionai/soundtrace.js/assets/soundMaterial.json');
 ```
 
 ## 빠른 시작
 
 ```ts
-import {
-  SoundTrace,
-  workerHostedMtSupport,
-  type MeshTriangle,
-} from 'soundtrace.js';
+import { SoundTrace, type MeshTriangle } from '@exarionai/soundtrace.js';
 
-// Run this inside a user click/tap handler.
+// 반드시 사용자 클릭/탭 핸들러 안에서 실행합니다(브라우저 자동재생 정책).
+// resume은 핸들러 초반에 호출합니다 — fetch/decode 뒤로 미루면 제스처가 만료돼
+// AudioContext가 suspended로 남아 무음이 됩니다.
 const ctx = new AudioContext();
 await ctx.resume();
 
-const mt = workerHostedMtSupport();
-if (!mt.supported) {
-  throw new Error(`soundtrace.js mode=multi_thread requires ${mt.missing.join(', ')}`);
-}
-
+// 가장 단순한 시작 경로: 단일 스레드(COOP/COEP 같은 특수 헤더 불필요).
+// 프로덕션 멀티스레드 성능은 아래 [스레드 모드](#스레드-모드) 참고.
 const sound = await SoundTrace.create(ctx, {
-  mode: 'multi_thread',
-  throughput: 'max',
+  mode: 'single_thread',
   quality: 'balanced',
+  // Three.js 좌표계 연동: Three.js 카메라는 -Z를 바라봅니다(-Z forward).
+  // 이 basis가 없으면 좌우/전후 방향감이 거울처럼 뒤집힙니다.
+  coordinateBasis: {
+    right: [-1, 0, 0],
+    up: [0, 1, 0],
+    forward: [0, 0, -1],
+  },
 });
 
-sound.listener
-  .setAudioOption({
-    sampleRate: ctx.sampleRate,
-    inputSampleCount: 128,
-    outputChannels: 2,
-  })
-  .setPose({ position: [0, 0, 0], orientation: [0, 0, 0, 1] });
+// 오디오 옵션은 facade(sound)에서 설정합니다. sampleRate는 AudioContext에서
+// 자동으로 맞춰지므로 지정하지 않습니다(SoundTraceAudioOptions에 없음).
+sound.setAudioOption({
+  inputSampleCount: 128,
+  outputChannels: 2,
+});
+sound.listener.setPose({ position: [0, 0, 0], orientation: [0, 0, 0, 1] });
 
+// 바닥 평면 하나를 직접 정의(Three.js BufferGeometry 연동은 아래 참고).
 const vertices = new Float32Array([
   -2, -1, -2,
    2, -1, -2,
@@ -100,7 +127,7 @@ const triangles: MeshTriangle[] = [
 const floor = sound.addMesh({
   vertices,
   triangles,
-  material: 'Concrete',
+  material: 'concrete',
 });
 
 const source = sound.addSource({
@@ -136,6 +163,36 @@ await sound.update(1 / 60);
 
 `mode: 'gpu'`를 선택하면 `quality`의 ray grid와 render option은 그대로 적용되지만,
 GPU propagation depth는 WebGPU backend의 검증된 상한인 `8`로 고정됩니다.
+
+### Three.js 메시 연동
+
+`addMesh`는 flat `vertices`(`[x, y, z, ...]`)와 `indices`(또는 `triangles`)를 받습니다.
+Three.js `BufferGeometry`의 `position` attribute와 `index`를 그대로 넘기고, 오브젝트의
+변환은 `setPose`로 반영합니다. 위에서 `coordinateBasis`를 Three.js 기준으로 설정했으므로
+정점·pose 좌표를 변환 없이 그대로 전달하면 됩니다.
+
+```ts
+// mesh: THREE.Mesh
+function addThreeMesh(sound, mesh, material = 'concrete') {
+  const pos = mesh.geometry.attributes.position;            // flat xyz (Float32Array)
+  const indices = mesh.geometry.index
+    ? mesh.geometry.index.array                             // indexed geometry
+    : Uint32Array.from({ length: pos.count }, (_, i) => i); // non-indexed → 순차 인덱스
+  const collider = sound.addMesh({ vertices: pos.array, indices, material });
+  collider.setPose({
+    position: mesh.position.toArray(),
+    orientation: mesh.quaternion.toArray(),
+    scale: mesh.scale.toArray(),
+  });
+  return collider;
+}
+```
+
+> 엔진은 **일관된 삼각형 winding**을 기대합니다. 방·실내처럼 안쪽에서 듣는 콜라이더는
+> 법선이 안쪽을 향하도록 구성하세요(반사가 약하면 winding을 확인). 부모 계층 변환이 있는
+> 오브젝트는 `position/quaternion/scale` 대신 `mesh.matrixWorld`를 분해해 `setPose`에
+> 넘깁니다. `indices` 경로는 메시 전체가 한 재질이며, 면별 재질은 `triangles`의
+> `materialIndex`로 지정합니다.
 
 ## 런타임 구조
 
@@ -209,7 +266,7 @@ export default defineConfig({
 런타임에서는 facade preflight helper로 다음 조건을 확인할 수 있습니다.
 
 ```ts
-import { workerHostedMtSupport } from 'soundtrace.js';
+import { workerHostedMtSupport } from '@exarionai/soundtrace.js';
 
 const mt = workerHostedMtSupport();
 if (!mt.supported) {
@@ -217,8 +274,76 @@ if (!mt.supported) {
 }
 ```
 
+배경: MT는 worker와 메인스레드가 `SharedArrayBuffer`로 메모리를 공유합니다. 브라우저는
+보안(Spectre) 격리를 위해 이 기능을 **cross-origin isolated** 페이지에서만 허용하며,
+격리는 COOP/COEP 헤더로 켭니다. `mt.missing`가 돌려주는 값과 해결책:
+
+| `missing` 값 | 의미 | 해결 |
+|---|---|---|
+| `crossOriginIsolated` | 페이지가 cross-origin isolated 아님 | HTML 응답에 아래 COOP/COEP 헤더 적용 |
+| `SharedArrayBuffer` | SAB 비활성(보통 isolation 미충족의 결과) | 동일 — 헤더 적용 후 `crossOriginIsolated === true` 확인 |
+
+preflight를 생략해도 안전합니다. `mode:'multi_thread'`(또는 `thread:'mt'`)로
+`create()`/`load()`할 때 전제가 미충족이면 SDK가 **명확한
+`SoundTraceMtUnsupportedError`** 를 던집니다(worker 내부의 저수준 "SharedArrayBuffer
+is required" 에러가 아니라). 직접 ST로 폴백하려면 catch하거나, 처음부터
+`thread:'auto'`(isolated면 mt, 아니면 st)를 쓰세요.
+
+```ts
+import { SoundTrace, SoundTraceMtUnsupportedError } from '@exarionai/soundtrace.js';
+
+let sound: SoundTrace;
+try {
+  sound = await SoundTrace.create(ctx, { mode: 'multi_thread', quality: 'balanced' });
+} catch (e) {
+  if (e instanceof SoundTraceMtUnsupportedError) {
+    // 전제(COOP/COEP cross-origin isolation) 미충족 → 단일 스레드로 폴백
+    sound = await SoundTrace.create(ctx, { mode: 'single_thread', quality: 'balanced' });
+  } else {
+    throw e;
+  }
+}
+```
+
 ST 모드도 실시간 Web Audio 통합에서는 `AudioWorkletNode`를 사용합니다. 서비스 배포는
 ST/MT 모두 같은 COOP/COEP 헤더를 적용하는 편이 가장 단순합니다.
+
+#### 프로덕션 헤더
+
+dev 서버뿐 아니라 **실제 호스트**의 모든 HTML 응답에도 같은 두 헤더가 필요합니다.
+일부 정적 호스트는 헤더 커스터마이즈를 지원하지 않으니 배포 전 확인하세요.
+
+```nginx
+# nginx
+add_header Cross-Origin-Opener-Policy   same-origin   always;
+add_header Cross-Origin-Embedder-Policy require-corp  always;
+```
+
+```json
+// Vercel — vercel.json
+{
+  "headers": [{
+    "source": "/(.*)",
+    "headers": [
+      { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+      { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
+    ]
+  }]
+}
+```
+
+```txt
+# Netlify — _headers
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+```
+
+> **COEP `require-corp`와 cross-origin 에셋**: `require-corp`가 켜지면 **다른 오리진**의
+> WASM·worker·HRTF·오디오(MP3) 응답이 `Cross-Origin-Resource-Policy: cross-origin`(또는
+> 유효한 CORS) 없이는 조용히 차단됩니다. `coreBaseUrl`/`assetBaseUrl`로 에셋을 CDN·별도
+> 도메인에 두면 그 응답에도 CORP/CORS를 반드시 붙이세요. 같은 오리진 서빙은 추가 설정이
+> 필요 없습니다.
 
 ### 번들러 통합
 
@@ -239,7 +364,7 @@ Vite 권장 설정:
 // vite.config.ts
 export default defineConfig({
   // soundtrace.js는 wasm glue를 동적 import → pre-bundle 제외
-  optimizeDeps: { exclude: ['soundtrace.js'] },
+  optimizeDeps: { exclude: ['@exarionai/soundtrace.js'] },
   server: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
@@ -261,6 +386,28 @@ export default defineConfig({
 webpack/Next도 같은 제약(worker 그래프 + wasm asset + COOP/COEP)이 적용됩니다.
 asset 디렉터리를 다른 base로 호스팅하면 `coreBaseUrl`/`assetBaseUrl`로 런타임 해석을
 맞추세요.
+
+#### Next.js (App Router)
+
+1. **헤더**: `next.config.js`의 `headers()`로 COOP/COEP를 모든 경로에 적용합니다.
+
+```js
+// next.config.js
+const coi = [
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+];
+module.exports = {
+  async headers() {
+    return [{ source: '/:path*', headers: coi }];
+  },
+};
+```
+
+2. **클라이언트 전용**: SDK는 `AudioContext`·worker·WASM에 의존하므로 SSR에서 import하면
+   안 됩니다. 사용하는 컴포넌트를 `'use client'`로 표시하고, SoundTrace 초기화는
+   브라우저에서만 수행합니다(`next/dynamic`의 `ssr: false`, 또는 effect/이벤트 핸들러
+   안). 모듈 최상위에서 `SoundTrace.create(...)`를 호출하지 마세요.
 
 ## Worker-hosted MT 작성 흐름
 
@@ -289,7 +436,7 @@ getter를 호출하지 않으며, 필요한 경우 `debugSnapshot()` 기반 asyn
 일반 앱은 위의 facade 흐름(`SoundTrace.create`, `sound.addMesh`, `sound.addSource`,
 `source.play`, `sound.update`)을 기본 경로로 사용합니다. 아래 내용은 기존 엔진
 객체를 직접 다루어야 하는 고급 `thread: 'st'`/direct-native 통합 참고용입니다.
-저수준 클래스와 1:1 native wrapper는 `soundtrace.js/native`에서 계속 사용할 수
+저수준 클래스와 1:1 native wrapper는 `@exarionai/soundtrace.js/native`에서 계속 사용할 수
 있습니다.
 
 worker-hosted MT에서는
@@ -310,6 +457,12 @@ worker-hosted MT에서는
 ## TypeScript API
 
 ### `SoundTrace`
+
+> 일반 앱은 **"ST와 worker-hosted MT에서 사용 가능"** 으로 표시된 facade 메서드
+> (`addMesh`/`addSource`/`listener`/`update`/`setAudioOption` 등)만 사용합니다.
+> **"ST/direct-native only"** 행(`createScene`/`createObject`/`createWorkletNode` 등)은
+> [고급 direct-native reference](#고급-direct-native-reference) 전용이며 facade 표면이
+> 아닙니다 — 메인 엔트리에서 찾지 마세요.
 
 | API | 설명 |
 |---|---|
@@ -335,7 +488,20 @@ worker-hosted MT에서는
 | `update(dt = 0)` | propagation을 advance하고 `Promise<number>`를 반환. ST·MT 모두 항상 async(facade가 ST/MT 실행 모드를 숨김) — `await sound.update(dt)`로 호출 |
 | `debugSnapshot(options?)` | `mt`에서 valid path count, profile 같은 engine-output-style data를 async로 조회 |
 | `reset()` | 코어 상태 reset. `Promise<void>`를 반환(ST·MT 모두 항상 async) — `await sound.reset()` |
-| `dispose()` | 출력 노드 disconnect, WASM wrapper 참조 해제 |
+| `dispose()` | 출력 노드 disconnect, WASM wrapper 참조 해제(소유한 listener 포함). idempotent |
+
+`SoundTrace`·`Source`·`Mesh`는 `Disposable`이라 명시 `dispose()`도, TS 5.2+ `using`도
+지원합니다(블록 끝에서 자동 해제). `Listener`는 `SoundTrace`가 소유·해제하므로 따로
+dispose하지 않습니다(scene당 1개).
+
+```ts
+{
+  using sound = await SoundTrace.create(ctx, { mode: 'single_thread' });
+  const mesh = sound.addMesh({ vertices, indices, material: 'concrete' });
+  // ... 사용 ...
+  // 블록을 벗어나면 sound[Symbol.dispose]()가 자동 호출돼 WASM 리소스 해제
+}
+```
 
 `SoundTraceOptions`:
 
@@ -348,7 +514,6 @@ worker-hosted MT에서는
 | `coreBaseUrl` | 패키지 내부 `./core` | 직접 호스팅할 때 `./core`처럼 `st/`, `mt/`가 있는 디렉터리 지정 |
 | `assetBaseUrl` | 패키지 내부 `./assets` | HRTF·재질 등 packaged asset 베이스 URL. CDN/복사 배포 시 지정 |
 | `propagationThreadCount` | `-1` | native `ExaRuntimeOption.propagationThreadCount`. `-1`은 native default, `1` 이상은 propagation job thread budget. `throughput`보다 우선 |
-| `defaultMeshBuild` | native default | native `ExaMeshBuildOption`. `bvhType`, `bvhMaxDepth`, `primPerLeaf`의 process-wide mesh build default |
 | `coordinateBasis` | (기본 basis) | 입력 좌표계 변환 옵션 |
 | `autoLoadMaterials` | `true` | load 시 `soundMaterial*.json`을 자동 fetch·등록(`addMesh({material:'concrete'})` 이름 해석). `false`면 fetch 생략(offline/통제 환경) |
 | `debug` | `false` | load 시 `[soundtrace.js] ready (...)` 진단 로그를 콘솔에 출력. 기본은 조용(라이브러리가 콘솔을 더럽히지 않음) |
@@ -357,18 +522,17 @@ worker-hosted MT에서는
 const sound = await SoundTrace.create(ctx, {
   thread: 'mt',
   propagationThreadCount: -1,
-  defaultMeshBuild: {
-    bvhType: BvhType.LBVH_SIMD8,
-    bvhMaxDepth: 16,
-    primPerLeaf: 4,
-  },
 });
 ```
 
-`propagationThreadCount`와 `defaultMeshBuild`는 WASM 로드 후 native `exaInit()` 전에
-C API로 전달됩니다. worker-hosted MT에서 세부 BVH 옵션을 바꾸는 공개 경로는 facade
-명령 surface로 제한되며, direct-native mesh build option 조작은 ST/direct-native
-통합에서만 사용하세요.
+`propagationThreadCount`는 WASM 로드 후 native `exaInit()` 전에 C API로 전달됩니다.
+
+> **고급 / native 전용 — 메시 빌드 기본값**: BVH 빌드 기본값
+> (`bvhType`·`bvhMaxDepth`·`primPerLeaf`)을 process-wide로 바꾸는 것은 native 표면의
+> 역할이며 typed facade `SoundTraceOptions`에는 포함되지 않습니다. `bvhType` 값의
+> `BvhType` enum은 메인 엔트리가 아니라 `@exarionai/soundtrace.js/native`에서 import합니다.
+> worker-hosted MT에서 세부 BVH 옵션 변경은 facade 명령 surface로 제한되며, mesh
+> build option 직접 조작은 ST/direct-native 통합에서만 사용하세요.
 
 ### 품질 tier
 
@@ -638,6 +802,22 @@ Web SDK는 앱의 렌더 루프나 시뮬레이션 루프에서 명시적으로 
 모델입니다. ST에서는 scene이 즉시 frame work를 수행하고, MT에서는 SDK가 control
 worker에 frame request를 보내 비동기 결과를 받습니다.
 
+> **매 프레임 호출 주의**: rAF/시뮬레이션 콜백에서 `await sound.update(dt)`를 직접
+> await하면 MT worker 왕복이 그 프레임의 렌더를 블로킹·직렬화할 수 있습니다. 렌더와
+> 음향 프레임을 분리하려면 await 대신 fire-and-forget으로 호출하고, 이전 update가
+> 진행 중이면 건너뛰는 in-flight 가드를 두세요.
+
+```ts
+let updating = false;
+function frame(dt: number) {
+  if (!updating) {
+    updating = true;
+    Promise.resolve(sound.update(dt)).finally(() => { updating = false; });
+  }
+  requestAnimationFrame(() => frame(1 / 60));
+}
+```
+
 ## 사운드 재질 JSON
 
 기본 재질은 `soundMaterial.json`의 `_soundMaterials` 배열입니다. 현재 번들에는
@@ -681,7 +861,7 @@ worker에 frame request를 보내 비동기 결과를 받습니다.
 런타임 로딩 예시:
 
 ```ts
-const res = await fetch(new URL('soundtrace.js/assets/soundMaterial.json', import.meta.url));
+const res = await fetch(import.meta.resolve('@exarionai/soundtrace.js/assets/soundMaterial.json'));
 const { _soundMaterials } = await res.json() as {
   _soundMaterials: Array<{
     materialType: number;

@@ -19,7 +19,7 @@ soundtrace.js는 ray count, depth, source count, geometry/BVH 설정을 높일�
 | Listener | scene당 1개 |
 | Realtime output | stereo/binaural 2ch |
 | 오디오 렌더 경로 | ST/MT 모두 WASM `AudioWorkletProcessor` |
-| Multi-source 오디오 | `createMixerWorkletNode(listener, sources, 2)` 사용 |
+| Multi-source 오디오 | source마다 `source.play(input, 2)` (facade) / ST·direct-native는 `createWorkletNode()` |
 | Native source cap | 116 sources |
 | Ray depth 상한 | 16 |
 | 기본 권장 listener preset | `recommendedSTOption()` = `16 x 16`, depth `3` |
@@ -62,6 +62,13 @@ general ray와 reverb ray 각각 `4 x 4 x 3`, `8 x 8 x 7`, `16 x 16 x 11`,
 | Desktop balanced | ST 또는 MT | `16 x 16` | `8 x 8` | `3` | LBVH_SIMD8 | 데스크탑 기본 기준 | Measurement pending |
 | Desktop quality | MT | `32 x 32` | `16 x 16` | `3..7` | LBVH_SIMD8 | 품질 우선 데스크탑 | Measurement pending |
 | Stress only | MT | `32 x 32` | `32 x 32` | `7..16` | BVH matrix | 한계 측정 전용 | Realtime default 아님 |
+
+> **MT 이득은 측정 전이며 무조건 빠르지 않습니다.** 위 MT preset의 속도 이득은 아직
+> `Measurement pending`입니다. MT는 propagation job을 worker로 분산하므로 **ray 예산과
+> source 수가 클 때**(예: high ray grid·depth, 다수 source) 이득이 나타나고, 작은 씬에서는
+> worker 왕복·메모리 오버헤드 때문에 ST가 더 단순·빠를 수 있습니다. 게다가 MT는
+> cross-origin isolation(COOP/COEP) 배포 비용이 듭니다. 작은 씬·간단한 페이지는 ST로
+> 시작하고, 예산이 큰 씬에서 ST↔MT를 **실측 비교**한 뒤 MT를 택하세요.
 
 공간감이 약하면 source 수를 먼저 늘리지 말고, listener ray와 source reverb ray count/depth를
 분리해서 단계적으로 올려 확인합니다. source 수 증가는 마지막에 측정합니다.
