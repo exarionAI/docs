@@ -113,7 +113,7 @@ C 링키지 API (`exasoundC.h`, **약 120개 export**)로 공개됩니다.
 | Mesh | `exaNewMesh`, `exaMeshSetData`, `exaMeshUpdateVertices`, `exaMeshRefit`, `exaMeshSetMaterial` |
 | Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
 | SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity`, `exaSoundSourceSetRayCount/GetRayCount`, `exaSoundSourceSetDepth/GetDepth`, `exaSoundSourceSetReverbSendDb/GetReverbSendDb`, `exaSoundSourceSetPathEnable/IsPathEnabled` |
-| Listener (기본) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
+| Listener (기본) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth`, `exaListenerSetOption/GetOption` (`sceneRatio` 등), `exaListenerSetCoordinateBasis/GetCoordinateBasis` |
 | Listener (HRTF) | `exaInit`에서 default HRTF를 전역 1회 로드하고 listener renderer가 공유 |
 | Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
 | 결과 조회 | `exaGetValidPathCount`, `exaGetValidPaths`, `exaGetSortedIRDatas` |
@@ -285,6 +285,20 @@ exaInit();        // loads the embedded default HRTF once
 exaNewListener(); // renderer starts with the engine default HRTF
 exaReset();       // releases renderer state and the default HRTF
 ```
+
+### 좌표계 계약
+
+엔진이 받는 위치·방향·메시는 다음 기준 프레임으로 해석됩니다(규범 명세는 `exasoundC.h` 상단 COORDINATE CONTRACT).
+
+- **프레임**: 우수(right-handed), `+Y` up, `-Z` forward(리스너 정면), `+X` right.
+- **단위**: meters. 거리 물리(ISO 9613-1 공기 흡음, `d/343` 지연)가 미터를 전제합니다. 비-미터 단위 host는
+  `ExaSTOption.sceneRatio`(host 길이단위→m, 0=기본 1.0)로 맞추거나 지오메트리를 업로드 전 사전 스케일합니다 — **혼용 금지**(이중 스케일).
+- **메시 winding**: CCW 정점 순서 → 바깥쪽 법선. 법선 부호가 반사/회절 분류를 결정하므로, 손방향(handedness)을
+  바꾸는 host는 업로드 시 winding(정점/인덱스 순서)을 보존해야 합니다.
+
+엔진 프레임이 다른 host는 **`exaListenerSetCoordinateBasis(right, up, forward)`** 로 자기 축을 1회 선언할 수 있습니다.
+basis는 **HRTF 단계에서만** 적용되고(지오메트리는 frame-relative), 반사(det&lt;0, 좌수↔우수)도 허용됩니다. 미호출 시
+기본(identity)이라 기존 동작과 동일합니다.
 
 ### 결과 조회
 
