@@ -436,6 +436,12 @@ worker-hosted MT에서는
 
 ### `SoundTrace`
 
+> 일반 앱은 **"ST와 worker-hosted MT에서 사용 가능"** 으로 표시된 facade 메서드
+> (`addMesh`/`addSource`/`listener`/`update`/`setAudioOption` 등)만 사용합니다.
+> **"ST/direct-native only"** 행(`createScene`/`createObject`/`createWorkletNode` 등)은
+> [고급 direct-native reference](#고급-direct-native-reference) 전용이며 facade 표면이
+> 아닙니다 — 메인 엔트리에서 찾지 마세요.
+
 | API | 설명 |
 |---|---|
 | `new SoundTrace(audioContext, options)` | 인스턴스 생성. 사용 전 `load()` 필요 |
