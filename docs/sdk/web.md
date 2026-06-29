@@ -274,6 +274,15 @@ if (!mt.supported) {
 }
 ```
 
+배경: MT는 worker와 메인스레드가 `SharedArrayBuffer`로 메모리를 공유합니다. 브라우저는
+보안(Spectre) 격리를 위해 이 기능을 **cross-origin isolated** 페이지에서만 허용하며,
+격리는 COOP/COEP 헤더로 켭니다. `mt.missing`가 돌려주는 값과 해결책:
+
+| `missing` 값 | 의미 | 해결 |
+|---|---|---|
+| `crossOriginIsolated` | 페이지가 cross-origin isolated 아님 | HTML 응답에 아래 COOP/COEP 헤더 적용 |
+| `SharedArrayBuffer` | SAB 비활성(보통 isolation 미충족의 결과) | 동일 — 헤더 적용 후 `crossOriginIsolated === true` 확인 |
+
 ST 모드도 실시간 Web Audio 통합에서는 `AudioWorkletNode`를 사용합니다. 서비스 배포는
 ST/MT 모두 같은 COOP/COEP 헤더를 적용하는 편이 가장 단순합니다.
 
@@ -751,6 +760,22 @@ transmission은 `setDistanceAttenuation(PathType.Transmission, value)`로 따로
 Web SDK는 앱의 렌더 루프나 시뮬레이션 루프에서 명시적으로 frame update를 호출하는
 모델입니다. ST에서는 scene이 즉시 frame work를 수행하고, MT에서는 SDK가 control
 worker에 frame request를 보내 비동기 결과를 받습니다.
+
+> **매 프레임 호출 주의**: rAF/시뮬레이션 콜백에서 `await sound.update(dt)`를 직접
+> await하면 MT worker 왕복이 그 프레임의 렌더를 블로킹·직렬화할 수 있습니다. 렌더와
+> 음향 프레임을 분리하려면 await 대신 fire-and-forget으로 호출하고, 이전 update가
+> 진행 중이면 건너뛰는 in-flight 가드를 두세요.
+
+```ts
+let updating = false;
+function frame(dt: number) {
+  if (!updating) {
+    updating = true;
+    Promise.resolve(sound.update(dt)).finally(() => { updating = false; });
+  }
+  requestAnimationFrame(() => frame(1 / 60));
+}
+```
 
 ## 사운드 재질 JSON
 
