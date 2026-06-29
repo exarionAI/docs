@@ -104,8 +104,10 @@ const sound = await SoundTrace.create(ctx, {
   },
 });
 
-// 오디오 옵션은 facade(sound)에서 설정합니다. sampleRate는 AudioContext에서
-// 자동으로 맞춰지므로 지정하지 않습니다(SoundTraceAudioOptions에 없음).
+// (선택) 오디오 옵션. load 시 기본값(inputSampleCount 128, outputChannels 2,
+// sampleRate=ctx.sampleRate)이 ST·MT 모두 자동 적용되므로 이 호출은 override할
+// 때만 필요합니다. sampleRate는 AudioContext에서 자동으로 맞춰져 지정하지 않습니다
+// (SoundTraceAudioOptions에 없음).
 sound.setAudioOption({
   inputSampleCount: 128,
   outputChannels: 2,
@@ -1042,7 +1044,7 @@ path와 BVH box를 그릴 때는 WASM 내부 데이터를 JS로 복사하고 Thr
 | `createWorkletNode` 에러 | `ctx.resume()`이 user gesture 안에서 실행됐는지, worklet core asset 경로가 맞는지 확인 |
 | 소리가 나지 않음 | `ctx.resume()`을 사용자 클릭 안에서 호출했는지, `soundMaterial.json`이 로드되어 material table에 들어갔는지, absorption 배열이 reflection 배열과 똑같이 복붙되지 않았는지 확인 |
 | 반사·회절·흡수 변화가 들리지 않음 | scene에 sound collider가 없으면 direct sound 중심으로만 동작함. geometry와 sound material이 매핑된 collider를 추가 |
-| 방향감이 느껴지지 않음 | listener `setAudioOption`, orientation, source/listener 위치, collider/material 구성이 맞는지 확인 |
+| 방향감이 느껴지지 않음 | listener orientation, source/listener 위치, collider/material 구성, 그리고 `coordinateBasis`가 렌더 좌표계(Three.js는 -Z forward)와 맞는지 확인 |
 | 프레임이 떨어짐 | `Ray Depth`, `Ray Width`, `Ray Height`를 낮춤. 일반 런타임 시작값은 `16 × 16 × depth 3` 권장 |
 | mono 입력이 무음 | worklet node의 channel count는 SDK가 `2`, `explicit`, `speakers`로 고정함. 직접 노드를 만들었다면 동일 설정 필요 |
 | path gizmo가 잔상처럼 보임 | `getValidPaths()`는 반환된 실제 count만 사용해야 함 |
@@ -1072,7 +1074,7 @@ path와 BVH box를 그릴 때는 WASM 내부 데이터를 JS로 복사하고 Thr
 
 1. **SDK wrapper를 사용 중인지 확인합니다.** WASM 파일만 직접 로드하지 말고 facade의 `SoundTrace`, `sound.listener`, `sound.addSource()`, `source.play()`를 `soundtrace.js` 모듈에서 가져옵니다. `SoundListener`, `createWorkletNode`, `recommendedSTOption`, `PathType` 같은 direct-native 조합은 ST/direct-native 통합에서만 사용합니다.
 2. **`AudioContext.resume()`을 사용자 클릭 안에서 즉시 호출합니다.** WASM이나 MP3 fetch가 끝난 뒤에 `resume()`을 미루면 브라우저 정책 때문에 context가 계속 `suspended`로 남을 수 있습니다. 예제처럼 클릭 핸들러 초반에 `const resumeP = ctx.resume()`을 잡고, 마지막에 `await resumeP`로 확인합니다.
-3. **listener audio option을 실제 context와 맞춥니다.** `sampleRate`는 `ctx.sampleRate`, `outputChannels`는 현재 실시간 HRTF 경로 기준 `2`로 설정합니다. `inputSampleCount`는 facade `source.play()`와 ST/direct-native `createWorkletNode()` 경로 모두 `128`을 기준으로 맞춥니다.
+3. **audio option은 기본값이 자동 적용됩니다(override만 필요).** facade는 load 시 ST·MT 모두 `inputSampleCount 128`, `outputChannels 2`, `sampleRate=ctx.sampleRate`를 자동 시드합니다 — 따라서 `setAudioOption` 미호출이 무음 원인이 되지는 않습니다. 값을 바꿀 때만 `sound.setAudioOption({...})`로 override하세요. (ST/direct-native 경로에서 직접 `createWorkletNode()`를 쓸 때만 `128` 정합을 수동 확인.)
 4. **listener pose와 품질 옵션을 예제와 같은 기준으로 시작합니다.** facade에서는 `sound.listener.setPose(...)`, `sound.setQuality(...)`, `sound.setAudioOption(...)`을 사용합니다. ST/direct-native 통합에서만 `listener.setOption(recommendedSTOption())`, `listener.setOrientation(...)`, `listener.setPosition(...)` 조합을 직접 씁니다.
 5. **material table과 collider를 먼저 구성합니다.** facade에서는 `sound.addMesh(...)`로 material과 collider를 추가하고, ST/direct-native 통합에서는 `sound.materials`, `createCollider()`, `scene.addCollider(...)`를 사용합니다. collider가 없으면 direct sound 중심이라 공간 변화가 약하게 느껴질 수 있습니다.
 6. **custom Web Audio graph에서는 stereo 설정을 명시합니다.** facade의 `source.play()`와 ST/direct-native `createWorkletNode()`는 `channelCount = 2`, `channelCountMode = 'explicit'`, `channelInterpretation = 'speakers'`를 설정합니다. 직접 node를 만들거나 별도 graph를 조합한다면 input hub, splitter, merger, worklet/input node에도 같은 기준을 명시합니다.
