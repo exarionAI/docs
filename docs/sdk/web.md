@@ -704,7 +704,7 @@ triangle의 `materialIndex`로 변환합니다. 매칭 순서는 다음과 같�
 | `listenerWidth` | `16` | `1..32` | 수평 ray 해상도 |
 | `listenerHeight` | `16` | `1..32` | 수직 ray 해상도 |
 | `seedValue` | `0` | `0..2^32-1` | 난수/캐시 seed. 현재 C API는 `0`이면 `pathCacheSize`를 `0`으로 강제 |
-| `maxSoundSource` | `116` | `1..116` | scene에서 추적할 수 있는 source 상한 |
+| `maxSoundSource` | `16` | `1..16` | scene에서 추적할 수 있는 source 상한 (`EXA_MAX_SOUNDSOURCE`) |
 | `pathCacheSize` | `16384` | `0..16384` | path cache 용량. 큰 값은 메모리 증가, `seedValue=0`이면 비활성화 |
 | `enableEnergyBasedTermination` | `false` | boolean | 에너지가 충분히 낮은 path를 조기 종료해 깊은 path 비용을 줄임 |
 | `energyThreshold` | `0.001` | `0..1` | EBT 기준. `0.01`은 RT20, `0.001`은 RT30, `0.000001`은 RT60에 가까운 보수적 설정 |
@@ -858,7 +858,11 @@ function frame(dt: number) {
 대체로 `1.0` 근처 또는 이하가 되도록 조정하세요. 일부 측정 기반·튜닝 재질은 작은
 오차가 있을 수 있지만, 큰 초과값은 경로 에너지를 과하게 만들 수 있습니다.
 
-런타임 로딩 예시:
+런타임 로딩 예시 — **ST/direct-native 전용**. `sound.materials`는 typed facade 표면
+(`SoundTraceFacade`)에 없는 저수준 접근자라 TS에서는 캐스팅이 필요하고 ST 모드에서만
+동작합니다(MT에서는 throw). facade의 일반 경로는 packaged 재질 자동 로드
+(`autoLoadMaterials` 기본 `true`, 또는 `sound.loadMaterialAssets()`)이며, 아래는 커스텀
+재질을 ST/direct-native에서 등록하는 예입니다.
 
 ```ts
 const res = await fetch(import.meta.resolve('@exarionai/soundtrace.js/assets/soundMaterial.json'));
