@@ -20,7 +20,8 @@ C/C++ベースのネイティブ音響シミュレーションエンジンです
 Coreエンジンを各プラットフォーム/言語から利用できるようにするバインディング群です。
 
 - [SDK概要](../sdk/overview.md)
-- 予定バインディング: Web、Python、Unity、Unreal Engine
+- 提供中: Web、Unity、Unreal Engine
+- 予定: Python
 
 ## ExaStudio
 

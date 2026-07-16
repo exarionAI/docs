@@ -21,7 +21,7 @@
     "message": "C/C++ネイティブ音響シミュレーションエンジン。STCore（第1世代、FPGAアクセラレーション）とSTCoreV2（モジュール式・lock-free）。"
   },
   "homepage.products.sdk.desc": {
-    "message": "Web、Python、Unity、Unreal向けバインディング群。各プラットフォームからCoreを利用します。"
+    "message": "Web、Unity、Unrealバインディングを提供中。Pythonは予定です。各プラットフォームからCoreを利用します。"
   },
   "homepage.products.exastudio.desc": {
     "message": "音響シーンを視覚的に構成、レンダリング、デバッグするクロスプラットフォームのワークフローツール。"
@@ -51,7 +51,7 @@
     "message": "クロスプラットフォーム"
   },
   "homepage.highlights.crossPlatform.desc": {
-    "message": "Windows、macOS、Linuxネイティブ、WebAssembly、そしてUnity・Unreal Engineバインディング（予定）。"
+    "message": "Windows、macOS、Linuxネイティブ、WebAssembly、Unity・Unreal Engineバインディング。"
   },
   "theme.ErrorPageContent.title": {
     "message": "エラーが発生しました",

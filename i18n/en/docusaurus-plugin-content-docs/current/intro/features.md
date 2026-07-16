@@ -18,7 +18,7 @@ This page is being written. Details for each item will be expanded later.
 ## Integration
 
 - **Multi-platform** — supports macOS, Windows, and Linux
-- **Engine bindings** — Unity, Unreal Engine, Web, and Python planned
+- **Engine bindings** — Web, Unity, and Unreal Engine available; Python planned
 
 ## Tools
 

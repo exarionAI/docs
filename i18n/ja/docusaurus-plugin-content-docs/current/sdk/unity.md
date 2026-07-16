@@ -1,216 +1,190 @@
 ---
 title: Unity
+description: SoundTrace Unity SDK の導入方法と、品質プリセット、Band8/Parametric HRTF、GPU 伝搬、3 つのサンプルシーンについて説明します。
 ---
-
-import useBaseUrl from '@docusaurus/useBaseUrl';
 
 # SoundTrace SDK for Unity
 
-SoundTrace SDK for Unityは、ネイティブエンジン [STCoreV2](../core/stcorev2.md) をUnityで使うためのリアルタイム空間音響プラグインです。Unityシーンのメッシュ、レンダリングmaterial slot、音源、リスナーTransformをSoundTraceランタイムへ渡し、direct、reflection、diffraction、reverb、transmission pathを計算してUnity `AudioSource` の出力へ反映します。
+Unity SDK は、Unity のメッシュ、レンダーマテリアルスロット、音源、リスナーを
+[STCoreV2](../core/stcorev2.md) に接続します。
 
-## Requirements
+## 要件
 
-| 項目 | 要件 |
+| 項目 | 対応 |
 |---|---|
-| Unity | `2022.3.62f2`以上 |
-| プラットフォーム | macOS, Windows, Linux, iOS, Android |
+| Unity | 2022.3 LTS 以降 |
+| デスクトップ | macOS、Windows、Linux |
+| モバイル | iOS、Android |
+| Web | WebGL ST/MT プラグイン |
 
-Webプラットフォームはサポートしていません。
+GPU 伝搬は、インストール済みネイティブプラグインとプラットフォームが対応している
+場合のみ有効になります。未対応構成では CPU 伝搬を継続します。現在、iOS と Android
+は CPU 伝搬を使用します。
 
-## Unity Project Setup
+## インストール
 
-### Unity Audio設定
+Unity Package Manager で `Add package from git URL...` を選択し、次を入力します。
 
-1. `Edit > Project Settings > Audio`を開きます。
-2. `Default Speaker Mode`を`Stereo`に設定します。
-3. `DSP Buffer Size`を`Best latency`に設定します。
+```text
+https://github.com/exarionAI/Unity_SoundTraceSDK.git
+```
 
-![Unity Audio設定画面](/img/unity/Image01_AudioSetting.png)
+認証またはライセンス済みパッケージが必要になる場合があります。直接クローンする
+場合は、SDK を `Packages/` または開発シェルの `Assets/SoundTrace` のどちらか一方に
+配置し、両方には配置しないでください。
 
-## Getting Started
+## Unity Audio 設定
 
-![モデルRead/Write設定](/img/unity/Image02_ModelRW.png)
+1. `Edit > Project Settings > Audio` を開きます。
+2. `Default Speaker Mode` を `Stereo` に設定します。
+3. `DSP Buffer Size` を `Best latency` に設定します。
 
-1. `Read/Write Enabled`を有効にしたメッシュをシーンへ配置し、`SoundTraceObject`を追加します。
+![Unity Audio settings](/img/unity/Image01_AudioSetting.png)
 
-![SoundTraceObjectコンポーネント](/img/unity/Image03_SoundTraceObject.png)
+## 最短セットアップ
 
-2. リスナー役のGameObjectに`SoundTraceListener`を追加します。Unity標準の`AudioListener`と一緒に構成してください。標準Unityシーンでは`AudioListener`がすでにMain Cameraに付いている点に注意してください。
+1. 空の GameObject に `SoundTraceManager` を追加します。
+2. Main Camera に `SoundTraceListener` を追加します。
+3. 音源 GameObject に `SoundTraceSource` を追加し、`AudioSource` のクリップを設定します。
+4. 音響ジオメトリとして使用するメッシュ GameObject に `SoundTraceObject` を追加します。
+5. 必要に応じて Manager GameObject に `SoundTracePathVisualizer` を追加します。
+6. Play Mode に入り、音声と経路を確認します。
 
-![SoundTraceListenerコンポーネント](/img/unity/Image04_Listener.png)
+![SoundTraceManager](/img/unity/Image06_Manager.png)
 
-3. ソース役のGameObjectを作成し、`SoundTraceSource`を追加します。Unity `AudioSource`は自動的に追加されます。
+![SoundTraceListener](/img/unity/Image04_Listener.png)
 
-![SoundTraceSourceコンポーネント](/img/unity/Image05_Source.png)
+![SoundTraceSource](/img/unity/Image05_Source.png)
 
-4. Unity `AudioSource`に再生したいaudio clipを割り当てます。
-5. マネージャー役のGameObjectを作成し、`SoundTraceManager`と`SoundTracePathVisualizer`を追加します。
+![SoundTraceObject](/img/unity/Image03_SoundTraceObject.png)
 
-![SoundTraceManagerとPath Visualizerコンポーネント](/img/unity/Image06_Manager.png)
+## 品質プリセット
 
-6. リスナー、ソース、`SoundTraceObject` geometryの間で反射音響pathが作られる位置へ再配置します。
+最初は `SoundTraceListener > Quality Preset` だけを選択してください。
 
-![リスナー、ソース、ジオメトリの配置](/img/unity/Image07_Positioning.png)
-
-7. Play Modeを実行します。
-8. `SoundTracePathVisualizer`でpath visualizationを有効にします。
-9. リスナー、ソース、オブジェクトの間に反射path lineが表示されれば、基本接続は成功です。
-
-![反射path lineの成功確認](/img/unity/Image08_Success.png)
-
-![Path typeの色](/img/unity/Image11_PathTypes.png)
-
-10. 赤いライン - 直接音（`Direct Path`）<br />オレンジのライン - 反射音（`Reflection Path`）<br />緑のライン - 回折音（`Diffraction Path`）
-11. リスナーまたはソースの位置を動かし、音が物理的に変化するか確認します。
-12. `SoundTraceObject`の`Update Mode`が`Static`の場合、runtime Transform移動はpropagationに反映されず、TLAS refit costも発生しません。
-13. Transform移動をpropagationに反映するオブジェクトには`Dynamic`を使います。
-
-![移動可能オブジェクト設定](/img/unity/Image09_Movable.png)
-
-14. Skinned/animated meshのようにtopologyは維持され、vertex位置だけが変わる場合は`Refit`を使います。この経路もBLAS処理後、現在のTransformでTLASを更新します。
-15. `Rebuild`はtopology、triangle list、BVH option、shape構造が変わる場合だけ使い、毎frame rebuildする構成は避けます。この経路もrebuild後、現在のTransformでTLASを作り直します。
-
-![移動後のpath確認](/img/unity/Image10_Moved.png)
-
-## Main Features
-
-### SoundTraceObject
-
-![SoundTraceObjectインスペクター](/img/unity/Image_20_Object.png)
-
-`SoundTraceObject`はUnity `MeshFilter`/`MeshRenderer`をSoundTrace collision geometryとして登録します。現在`MeshFilter`と`MeshRenderer`ベースのコンポーネントであり、SoundTrace geometryとして使うメッシュはimport settingで`Read/Write Enabled`が必要です。`SkinnedMeshRenderer`のvertex deformationを毎tick自動bakeするものとして想定しないでください。
-
-![子mesh objectへのコンポーネント追加](/img/unity/Image12_ChildObjh.png)
-
-複数の子mesh objectで構成されたimport modelでは、ルートGameObjectに`SoundTraceObject`を追加してから`Add To Child Meshes`を押すことで、meshを持つすべての子オブジェクトへコンポーネントを追加できます。その後、ルートコンポーネントの`MeshFilter`が空であれば、`Remove Root Component(s)`でルートの空コンポーネントを削除します。
-
-レンダリングmaterial自体を変更する機能ではありません。各render material slotをSoundTrace material preset indexへ対応付け、そのindexを該当submesh triangleに付与します。
-
-### SoundTraceMaterialPresetLibrary
-
-| ![Material Preset Library 1](/img/unity/Image_Mat_01.png) | ![Material Preset Library 2](/img/unity/Image_Mat_02.png) |
+| プリセット | 推奨対象 |
 |---|---|
+| `Fast` | モバイル、低消費電力デバイス、多数の音源 |
+| `Middle` | 通常のゲームおよびデスクトップの既定値 |
+| `Quality` | ハイエンドデバイスおよび品質優先デモ |
 
-標準material preset libraryはパッケージ内の`Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`にあります。Unityメニュー`SoundTrace > Material Preset Library`から選択できます。
+プリセットはリスナーレイと HRTF／Diffuse のレンダリング品質をまとめて適用します。
+プリセット管理対象のプロパティを個別編集すると、プリセットは `Custom` に変わります。
+通常の統合では、レイ解像度、深度、経路予算を手動調整せずプリセットを使用してください。
 
-各presetは8-bandの`Reflection`, `Absorption`, `Transmission`と`Scattering`値を持ちます。ScriptableObjectを直接編集してmaterial propertyを変更したり、新しいpresetを追加したりできます。inspector toolbarから`soundMaterial.json`のimport/exportも可能です。
+## HRTF の選択
 
-### Sound material slots
+`SoundTraceListener > HRTF` でモードを選択します。
 
-- `Auto Set`はUnity render material名を読み、最も近いSoundTrace material presetを自動割り当てします。
-- たとえば`Sword`のようなファンタジー剣モデルのmaterial名に`Metal`が含まれる場合、`Steel`系presetへ割り当てられます。
-- 一致する名前がない、またはmaterialが空の場合のfallbackは`Concrete`です。
-- 自動割り当てが違う場合は、各submesh rowのdropdownから手動でpresetを選びます。
-- 反射を強く確認したい場合は`Steel`/`Marble`、吸音を確認したい場合は`Snow`/`Soil`、透過を確認したい場合は`Fabric`でテストすることを推奨します。
-
-### BVH and update mode
-
-| 設定 | 説明 |
+| モード | 動作 |
 |---|---|
-| `HKDTree` | SBVHに近い性格の高ディテール構造です。Raycastが速く、穴のある複雑な静的背景メッシュでprimitive detailを保ちやすいです。代わりにrebuildは遅くなります。 |
-| `LBVH` | buildが速い標準LBVHです。複雑な形状ではgeometryをより粗く近似するため、デザイナーが作った穴が塞がったように動作する場合があります。 |
-| `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16` | LBVH系のSIMD variantです。複雑なシーンほど高いSIMD widthの選択肢が有利になる場合があります。 |
-| `bvhMaxDepth` | BVH最大depthです。大きいほどtraversal pruningの効果を受けやすいため、まず大きめの値からテストする構成を推奨します。 |
-| `primitivesPerLeaf` | 最終leaf nodeに入るtriangle数です。範囲は`1-128`です。小さくするとdetailは上がりますが、build/traversal costが変わります。 |
-| `Static` | 静的collision geometry用です。runtime Transform移動はpropagationに反映されず、TLAS refit costも発生しません。 |
-| `Dynamic` | Transform移動をpropagationに反映します。BLAS refitなしでTLAS instance/boundsだけを更新します。 |
-| `Refit` | Skinned/animated meshのようにvertex位置が変わり、topologyは維持される場合に使います。BLAS refit後、現在のTransformでTLAS instance/boundsも更新します。 |
-| `Rebuild` | topology、triangle list、BVH option、shape構造が変わり、BVHを作り直す必要がある場合だけ使います。Rebuild後、現在のTransformでTLASも作り直します。 |
+| `Band8` | 外部 HRTF テーブルを使わない軽量経路 |
+| `Parametric` | KU100 パラメトリックアセットを使用する計測ベース経路 |
 
-### SoundTraceListener
+現在の Unity ラッパーの既定値は `Parametric` です。`Parametric` は
+`Runtime/Resources/SoundTrace/HRTF/KU100_bprime.bytes` を読み込み、`Band8` は
+アセットの読み込みを必要としません。高度な HRIR モードも存在しますが、主要ガイド
+では Band8 と Parametric に絞ります。
 
-![SoundTraceListenerコンポーネント](/img/unity/Image04_Listener.png)
+## GPU バックエンド
 
-`SoundTraceListener`はシーンのリスナーです。毎frame Transform positionとorientationをネイティブlistenerへ同期し、listener ray設定とpath type enableを保持します。
+GPU 伝搬を要求するには `SoundTraceManager > Use GPU Backend` を有効にします。
 
-| 設定 | 説明 |
+- 初期化に成功すると GPU バックエンドを使用します。
+- 未対応のプラグインまたはデバイスでは CPU フォールバックを継続します。
+- `Propagation Thread Count` はフォールバック用に保持されます。
+- WebGL は STCoreV2 WebGPU ビルドを使用します。
+
+Manager のランタイム状態には `Active`、`Requested / CPU fallback`、`Disabled` の
+いずれかが表示されます。
+
+## 音響マテリアルプリセット
+
+`SoundTraceObject` は Unity のマテリアルスロットを SoundTrace のマテリアル
+プリセットへマッピングします。
+
+1. メッシュのインポート設定で `Read/Write Enabled` を有効にします。
+2. `SoundTraceObject` Inspector で `Auto Set` を実行します。
+3. 誤って割り当てられたサブメッシュだけを修正します。
+
+![Material Preset Library](/img/unity/Image_Mat_01.png)
+
+既定ライブラリは
+`Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset` です。
+まず `Concrete`、`Steel`、`Marble`、`Snow`、`Soil` などのプリセットを使用します。
+8 バンド値の直接編集は、高度なカスタムマテリアル向けワークフローです。
+
+## オブジェクト更新
+
+| モード | 用途 |
 |---|---|
-| `Ray Resolution` | listener guide rayの解像度です。範囲は`1-32`で、1つの値がnative listener widthとheightの両方へ同じように適用されます。値が`16`の場合は`16 x 16` guide rayを使います。 |
-| `Ray Depth` | rayの反射/伝播depthです。範囲は`1-16`です。値が大きいほど残響感と複雑なpath表現は向上しますが、計算量も増えます。 |
-| `Per-path enable` | `Direct`, `Reflection`, `Diffraction`, `Reverb`, `Transmission` pathをtype別に有効化または無効化します。 |
+| `Static` | 移動しない部屋、壁、床 |
+| `Dynamic` | Transform のみ移動するドアや小物 |
+| `Refit` | トポロジーが安定したスキン／アニメーションメッシュ |
+| `Rebuild` | 実際にトポロジーが変化するジオメトリ |
 
-複雑なゲームシーンの初期値は`Ray Resolution 16`、`Ray Depth 4`を推奨します。
+ほとんどのシーンでは `Static` と `Dynamic` だけで十分です。
 
-### SoundTraceSource
-
-![SoundTraceSourceコンポーネント](/img/unity/Image05_Source.png)
-
-`SoundTraceSource`はUnity `AudioSource`を必要とするSoundTrace音源コンポーネントです。Unity audio filter callbackである`OnAudioFilterRead`で入力bufferをSoundTrace spatial outputへin-placeレンダリングします。
-
-| 設定 | 説明 |
-|---|---|
-| `Intensity` | ソースの基本強度です。 |
-| `Gain Boost Db`, `Reverb Send Db`, `Reflection Send Db` | 全体gainとreverb/reflection send levelをdB単位で調整します。 |
-| `Reverb Rays` | ソース側の残響ray設定です。`Ray Resolution`の範囲は`1-32`で、reverb ray widthとheightの両方へ同じように適用されます。`Reverb Ray Depth`の範囲は`1-16`です。listener rayとは別設定です。 |
-| `Per-path enable` | ソース単位でpath typeを有効化または無効化します。 |
-| `Distance Attenuation` | path type別の減衰範囲を調整します。現在のinspector sliderはattenuation constantを制御し、値が大きいほど有効範囲が小さくなります。 |
-| `Distance Attenuation Gizmos` | path type別の減衰範囲をScene Viewのwire sphereで表示します。 |
-| `Bypass` | SoundTrace空間レンダリングをスキップし、元の`AudioSource`出力をそのまま通します。 |
+## 主要コンポーネント
 
 ### SoundTraceManager
 
-![SoundTraceManagerコンポーネント](/img/unity/Image_21_Manager.png)
+シーンごとに 1 つ使用します。ネイティブランタイム、マテリアルプリセット、
+伝搬更新、GPU/CPU バックエンド選択を所有します。
 
-`SoundTraceManager`はシーンごとのSoundTrace runtime ownerです。listener、source、objectはenable時にmanagerへ登録され、managerがscene tickとpropagation updateを実行します。
+### SoundTraceListener
 
-| 設定 | 説明 |
-|---|---|
-| `Propagation Interval Ms` | ray-trace propagation passを実行する間隔です。position sync tickは毎frame実行され、propagationはこの間隔でthrottleされます。 |
-| `Propagate On Start` | `Start()`時点でscene graphを一度flushし、続けてpropagation passとvisualizer updateを即時に一度実行します。次のpropagationは`Propagation Interval Ms`後に実行されます。 |
-| `Load Default Materials On Enable` | パッケージの標準`SoundTraceMaterialPresetLibrary.asset`をnative material tableへ登録します。 |
-| `Propagation Thread Count` | 内部job systemのworker数です。`-1`の場合、STCoreV2がlogical hardware threadを基準に選択します。アプリケーション側でCPU budgetを見て割り当てる必要があり、実運用テストでは3 thread以上から始める構成を推奨します。 |
-| `Path Cache Size` | `0`以下の値ではcache bufferを使用しません。`1`以上の値ではframeごとにpath cacheを保存し、ray数と音響detailを増やします。推奨値は`256`、`512`、`1024`です。 |
+通常は Main Camera に追加します。`Quality Preset` と `HRTF` を選択し、高度な設定は
+既定値のまま使用します。
+
+### SoundTraceSource
+
+同じ GameObject の `AudioSource` を空間化します。複数音源を同期する場合は、
+共通の `AudioSettings.dspTime` と `PlayScheduled()` を使用します。
+
+### SoundTraceObject
+
+`MeshFilter` と `MeshRenderer` のジオメトリを登録します。複数のメッシュ子を持つ
+インポートモデルでは `Add To Child Meshes` を使用します。
 
 ### SoundTracePathVisualizer
 
-![SoundTracePathVisualizerコンポーネント](/img/unity/Image_22_PathVisual.png)
+直接、反射、回折、残響、透過の各経路をデバッグ表示します。出荷時の性能測定では
+無効にしてください。
 
-`SoundTracePathVisualizer`はvalid pathをruntime line rendererとして表示するデバッグコンポーネントです。reflection、diffraction、reverb、transmission pathがシーン内でどう生成されるかを目視確認するために使います。
-
-| 設定 | 説明 |
-|---|---|
-| `Enable Path Visualization` | path line renderingを有効化または無効化します。 |
-| `Max Visualized Paths` | 画面に表示する最大path数です。 |
-| `Path Width` | line widthです。 |
-| `Path Alpha Intensity` | attenuationベースのalpha scaling強度です。 |
-| `Draw Valid Paths`, `Draw Hit Triangles` | Scene View debug drawing optionです。 |
-
-## Samples
+## サンプル
 
 ### SampleScene01
 
 ![SampleScene01](/img/unity/SampleScene01.png)
 
-`SampleScene01`はGetting Startedに近い構成のシンプルなサンプルシーンです。単純なcube geometry room内でSoundTraceの詳細なray演算を体験できます。
+基本的な部屋、音源、リスナー、ジオメトリ、マテリアル、経路可視化。
 
 ### SampleScene02
 
 ![SampleScene02](/img/unity/SampleScene02.png)
 
-`SampleScene02`では、touchまたはmouseでlistenerとsound sourceの位置を直接変更できます。
-
-灰色の円形outlineは単なるUI表示ではなく、実際の`Ico Sphere Dome` geometryです。cube roomとは異なる反射音響を提供します。
-
-1. 分離されたsound sourceを左右へ動かし、outline boundaryの外側にも移動させて、音楽の変化を確認します。
-2. `UIVisible` buttonはsource操作をしやすくするためにUIを非表示にします。
-3. `Reset` buttonは音楽、位置、materialを初期値に戻します。
-4. `Toggle UnitySound` buttonはSoundTrace renderingと標準Unity `AudioSource`出力の差をtoggleします。
-5. 右側のmaterial scroll barで、提供されるSoundTrace material presetを使ってDomeの材質を変更できます。`Steel`、`Marble`、`Snow`、`Soil`は体感差が大きいpresetです。
+音源／リスナーの移動、マテリアルプリセット、Unity Audio と SoundTrace 出力の比較。
 
 ### SampleScene03
 
 ![SampleScene03](/img/unity/Img_25_Sample03.png)
 
-`SampleScene03`は、広い空間を歩き回りながらNPCの会話音を体感できるサンプルシーンです。
+広い空間の NPC 音源、壁による遮蔽、移動リスナーの HRTF 方向、ルームレスポンス。
 
-左側の壁を通過するかどうかによって、会話の残響感と遮蔽感が異なって聞こえます。capsuleの周囲を歩き回ると、HRTFによって誰がどの音を出しているのかを明確に区別できます。
+## トラブルシューティング
 
-WASDで移動し、Space/Ctrlで上昇/下降します。
-
-## Troubleshooting
-
-| 症状 | 確認すること |
+| 症状 | 確認項目 |
 |---|---|
-| 複数のaudio sourceの同期がずれ、echo/flangingのように聞こえる | 複数の`AudioSource`は`playOnAwake`や個別の`Play()`ではなく、1つのscriptから開始します。`AudioSettings.dspTime`を基準に同じ`startDspTime`を作り、すべてのsourceを`AudioSource.PlayScheduled(startDspTime)`で開始します。<br /><br />検証用audio assetはImport Settingsで`Decompress On Load`、`PCM`、`Preserve Sample Rate`、`Preload Audio Data`、`Force To Mono` On、`Normalize` Offに設定します。 |
+| 音が出ない | Stereo／Best latency、AudioSource クリップ、Listener、Manager |
+| ジオメトリが無視される | `Read/Write Enabled`、MeshFilter/MeshRenderer、更新モード |
+| GPU が有効にならない | プラットフォームのプラグイン対応。CPU フォールバック警告は正常 |
+| 性能が低い | `Quality → Middle → Fast` の順で下げ、その後に可視化を無効化 |
+| 方向が正しくない | Main Camera の Transform と AudioListener の重複 |
+| 複数音源がフランジングする | 同じ `AudioSettings.dspTime` から開始 |
 
-<img src={useBaseUrl('/img/unity/ImportSetting.png')} alt="Audio Import Settings" width="420" />
+## 次に読む
+
+- [Web SDK](./web.md)
+- [Unreal Engine SDK](./ue.md)
+- [SDK 概要](./overview.md)

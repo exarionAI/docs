@@ -1,22 +1,67 @@
 ---
-title: デモ一覧
+title: デモ
+description: 公式 Sound-tracing.js 統合ブラウザーデモです。
 ---
+
+import useSharedStaticUrl from '@site/src/hooks/useSharedStaticUrl';
 
 # デモ
 
-## three-basic
+## Sound-tracing.js 統合デモ
 
-`three-basic`はWeb SDKをThree.js sceneにつなぐ公式browser demoです。`simple.ts`は
-scene setup、Web Audio graph、sound collider、material table、source/listenerの移動、
-MT startupをまとめて確認する基準例です。
+以前の `three-basic` 静的デモは、
+[exarionAI/Sound-tracing](https://github.com/exarionAI/Sound-tracing) の最新ビルドへ
+置き換えられました。配信 URL は維持されていますが、内容は Capability、Shoebox、
+Multiroom の各シーンを含む 1 つのアプリケーションです。
 
-| 項目 | 内容 |
+<a href={useSharedStaticUrl('/demos/three-basic/')} target="_blank" rel="noreferrer">
+  デモを新しいウィンドウで開く
+</a>
+
+| シーン | 目的 |
 |---|---|
-| docs内の静的MT demo | `/demos/three-basic/simple.html` |
-| local demo repo | `projects/soundtrace-three-basic` |
-| SDK snapshot sync | `SOUNDTRACE_SDK_DIR=/path/to/soundtrace.js npm run update:sdk` |
-| MT実行条件 | COOP/COEP headers、`SharedArrayBuffer`、`crossOriginIsolated === true` |
+| Capability | ブラウザー、AudioWorklet、WebAssembly、MT、WebGPU の対応状況 |
+| Shoebox | 音源／リスナーの移動、マテリアル、反射、品質プリセット |
+| Multiroom | 複数音源、ドア、遮蔽、部屋間の伝搬 |
 
-`simple.html`で`Backend`を`mt`にすると、demoはWeb SDKのworker-hosted MT経路を
-使います。`source transform`、`listener transform`、`mesh transform`はHOT lane、
-non-transform作業はcommand channelで処理されます。
+## セレクター
+
+| UI | 値 |
+|---|---|
+| Backend | Single Thread、Multi Thread、WebGPU |
+| Quality | Fast、Middle、Quality |
+| Material | シーン固有の SoundTrace マテリアルプリセット |
+
+Band8 と Parametric HRTF の選択については [Web SDK](../sdk/web.md) ガイドを
+参照してください。
+
+## ランタイム要件
+
+- Single Thread: 通常の静的ホスティング
+- Multi Thread: COOP/COEP と `SharedArrayBuffer`
+- WebGPU: `navigator.gpu` とハードウェアアクセラレーション
+- 空間オーディオ評価: ヘッドフォンを推奨
+
+ドキュメントのプレビューサーバーは必要な COOP/COEP ヘッダーを送信します。
+
+```bash
+BASE_URL=/docs/ npm run build
+npm run serve -- --port 3100
+```
+
+## 静的アーティファクトの更新
+
+```bash
+export SOUND_TRACING_DEMO=/path/to/Sound-tracing
+export SOUNDTRACE_DOCS=/path/to/docs
+
+cd "$SOUND_TRACING_DEMO"
+npm run build
+
+rsync -a --delete \
+  "$SOUND_TRACING_DEMO/dist/" \
+  "$SOUNDTRACE_DOCS/static/demos/three-basic/"
+```
+
+埋め込みデモにはライセンス済み SDK ファイルが含まれます。公開前に配布権限と
+ライセンス範囲を確認してください。

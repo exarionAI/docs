@@ -21,7 +21,8 @@ C/C++ 기반의 음향 시뮬레이션 네이티브 엔진입니다.
 Core 엔진을 각 플랫폼/언어에서 사용할 수 있도록 감싸는 바인딩 라인업입니다.
 
 - [SDK 개요](../sdk/overview.md)
-- 바인딩(예정): Web, Python, Unity, Unreal Engine
+- 제공: Web, Unity, Unreal Engine
+- 예정: Python
 
 ## ExaStudio
 

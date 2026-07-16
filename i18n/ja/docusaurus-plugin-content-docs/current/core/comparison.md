@@ -111,7 +111,7 @@ title: STCore vs STCoreV2
 - 新規プロジェクト
 - Web統合（ブラウザ / WebAssembly）
 - macOS・Linuxを含むクロスプラットフォーム配布
-- Python・Unity・Unrealなど複数言語バインディングの計画
+- Web・Unity・Unrealバインディングの活用とPythonバインディングへの拡張
 - 統計的音響伝搬（SSP）モデルの利用
 
 ### STCoreを選ぶ場合 — *特殊ケース*

@@ -115,7 +115,7 @@ For selection guidance, see [Recommended Use Cases](#recommended-use-cases).
 - New projects
 - Web integration (browser / WebAssembly)
 - Cross-platform deployment, including macOS and Linux
-- Plans for language bindings such as Python, Unity, or Unreal
+- Web, Unity, and Unreal bindings, with Python expansion planned
 - Statistical sound propagation (SSP) workflows
 
 ### Choose STCore — *special cases*

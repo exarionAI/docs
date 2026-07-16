@@ -111,7 +111,7 @@ title: STCore vs STCoreV2
 - 新專案
 - Web 整合（瀏覽器 / WebAssembly）
 - 包含 macOS、Linux 的跨平台部署
-- 計畫提供 Python、Unity、Unreal 等語言綁定
+- 使用 Web、Unity、Unreal 綁定，並規劃擴充 Python 綁定
 - 使用統計聲學傳播 (SSP) 模型
 
 ### 選擇 STCore — *特殊場景*

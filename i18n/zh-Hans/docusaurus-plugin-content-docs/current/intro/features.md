@@ -18,7 +18,7 @@ title: 主要功能
 ## 集成
 
 - **多平台** — 支持 macOS、Windows、Linux
-- **引擎绑定** — 计划支持 Unity、Unreal Engine、Web、Python
+- **引擎绑定** — 已提供 Web、Unity、Unreal Engine；Python 计划中
 
 ## 工具
 

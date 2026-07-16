@@ -73,7 +73,7 @@ function getProducts() {
       desc: translate({
         id: 'homepage.products.sdk.desc',
         message:
-          'Web · Python · Unity · Unreal 바인딩 라인업 (예정). Core를 각 플랫폼에서 사용.',
+          'Web · Unity · Unreal 바인딩 제공, Python 예정. Core를 각 플랫폼에서 사용.',
       }),
     },
     {
@@ -162,8 +162,8 @@ function Highlights() {
             </h3>
             <p>
               <Translate id="homepage.highlights.crossPlatform.desc">
-                Windows·macOS·Linux 네이티브, WebAssembly, 그리고 Unity·Unreal
-                Engine 바인딩(예정).
+                Windows·macOS·Linux 네이티브, WebAssembly, Unity·Unreal Engine
+                바인딩.
               </Translate>
             </p>
           </div>

@@ -18,7 +18,7 @@ title: 주요 기능
 ## 통합
 
 - **다중 플랫폼** — macOS, Windows, Linux 지원
-- **엔진 바인딩** — Unity, Unreal Engine, Web, Python (예정)
+- **엔진 바인딩** — Web, Unity, Unreal Engine 제공, Python 예정
 
 ## 도구
 

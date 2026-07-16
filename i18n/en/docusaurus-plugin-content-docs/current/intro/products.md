@@ -20,7 +20,8 @@ Native C/C++ acoustic simulation engines.
 Binding lineup that makes the Core engine usable from each platform and language.
 
 - [SDK Overview](../sdk/overview.md)
-- Planned bindings: Web, Python, Unity, Unreal Engine
+- Available: Web, Unity, Unreal Engine
+- Planned: Python
 
 ## ExaStudio
 

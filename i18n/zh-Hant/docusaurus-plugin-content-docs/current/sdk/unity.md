@@ -1,216 +1,181 @@
 ---
 title: Unity
+description: 安裝 SoundTrace Unity SDK，並使用品質預設、Band8/Parametric HRTF、GPU 傳播與三個範例場景。
 ---
-
-import useBaseUrl from '@docusaurus/useBaseUrl';
 
 # SoundTrace SDK for Unity
 
-SoundTrace SDK for Unity 是用於在 Unity 中使用原生 [STCoreV2](../core/stcorev2.md) 引擎的即時空間音訊外掛。它會把 Unity 場景中的網格、渲染材質槽、聲源和聽者 Transform 傳入 SoundTrace runtime，並將 direct、reflection、diffraction、reverb、transmission path 套用到 Unity `AudioSource` 輸出。
+Unity SDK 將 Unity 網格、渲染材質插槽、音源與聆聽者連接到
+[STCoreV2](../core/stcorev2.md)。
 
-## Requirements
+## 需求
 
-| 項目 | 需求 |
+| 項目 | 支援 |
 |---|---|
-| Unity | `2022.3.62f2` 或更新版本 |
-| 平台 | macOS, Windows, Linux, iOS, Android |
+| Unity | 2022.3 LTS 或更新版本 |
+| 桌面平台 | macOS、Windows、Linux |
+| 行動平台 | iOS、Android |
+| Web | WebGL ST/MT 外掛 |
 
-不支援 Web 平台。
+只有已安裝的原生外掛與平台支援時，GPU 傳播才會啟用。不支援的組態會繼續使用 CPU
+傳播。目前 iOS 與 Android 使用 CPU 傳播。
 
-## Unity Project Setup
+## 安裝
 
-### Unity Audio 設定
+在 Unity Package Manager 中選擇 `Add package from git URL...`，然後輸入：
+
+```text
+https://github.com/exarionAI/Unity_SoundTraceSDK.git
+```
+
+可能需要驗證或授權套件。直接複製儲存庫時，只能將 SDK 安裝到 `Packages/` 或開發環境的
+`Assets/SoundTrace` 其中一處，不要同時安裝到兩處。
+
+## Unity Audio 設定
 
 1. 開啟 `Edit > Project Settings > Audio`。
 2. 將 `Default Speaker Mode` 設為 `Stereo`。
 3. 將 `DSP Buffer Size` 設為 `Best latency`。
 
-![Unity Audio 設定畫面](/img/unity/Image01_AudioSetting.png)
+![Unity Audio settings](/img/unity/Image01_AudioSetting.png)
 
-## Getting Started
+## 最快設定
 
-![模型 Read/Write 設定](/img/unity/Image02_ModelRW.png)
+1. 在空 GameObject 上加入 `SoundTraceManager`。
+2. 在 Main Camera 上加入 `SoundTraceListener`。
+3. 在音源 GameObject 上加入 `SoundTraceSource`，並為 `AudioSource` 指定音訊片段。
+4. 在作為聲學幾何體的網格 GameObject 上加入 `SoundTraceObject`。
+5. 選擇性地在 Manager GameObject 上加入 `SoundTracePathVisualizer`。
+6. 進入 Play Mode，確認音訊與路徑。
 
-1. 在場景中放置已啟用 `Read/Write Enabled` 的網格，並新增 `SoundTraceObject`。
+![SoundTraceManager](/img/unity/Image06_Manager.png)
 
-![SoundTraceObject 元件](/img/unity/Image03_SoundTraceObject.png)
+![SoundTraceListener](/img/unity/Image04_Listener.png)
 
-2. 給聽者角色的 GameObject 新增 `SoundTraceListener`。請與 Unity 內建 `AudioListener` 一起設定。預設 Unity 場景中，`AudioListener` 已經掛在 Main Camera 上，請注意這一點。
+![SoundTraceSource](/img/unity/Image05_Source.png)
 
-![SoundTraceListener 元件](/img/unity/Image04_Listener.png)
+![SoundTraceObject](/img/unity/Image03_SoundTraceObject.png)
 
-3. 建立聲源 GameObject 並新增 `SoundTraceSource`。Unity `AudioSource` 會自動新增。
+## 品質預設
 
-![SoundTraceSource 元件](/img/unity/Image05_Source.png)
+開始時只選擇 `SoundTraceListener > Quality Preset`。
 
-4. 給 Unity `AudioSource` 指定要播放的 audio clip。
-5. 建立管理器 GameObject，並新增 `SoundTraceManager` 和 `SoundTracePathVisualizer`。
-
-![SoundTraceManager 和 Path Visualizer 元件](/img/unity/Image06_Manager.png)
-
-6. 重新放置聽者、聲源和 `SoundTraceObject` geometry，讓它們之間可以形成反射聲學路徑。
-
-![聽者、聲源和幾何體定位](/img/unity/Image07_Positioning.png)
-
-7. 進入 Play Mode。
-8. 在 `SoundTracePathVisualizer` 中啟用 path visualization。
-9. 如果聽者、聲源和物件之間出現反射 path line，基礎連線就已成功。
-
-![反射 path line 成功確認](/img/unity/Image08_Success.png)
-
-![Path type 顏色](/img/unity/Image11_PathTypes.png)
-
-10. 紅色線 - 直接聲（`Direct Path`）<br />橙色線 - 反射聲（`Reflection Path`）<br />綠色線 - 繞射聲（`Diffraction Path`）
-11. 移動聽者或聲源，確認聲音會依物理關係變化。
-12. 如果 `SoundTraceObject` 的 `Update Mode` 是 `Static`，runtime Transform 移動不會反映到 propagation，也不會產生 TLAS refit 成本。
-13. 需要讓 Transform 移動影響 propagation 的物件使用 `Dynamic`。
-
-![可移動物件設定](/img/unity/Image09_Movable.png)
-
-14. 對於 skinned/animated mesh 這類 topology 保持不變、只有 vertex 位置變化的情況，使用 `Refit`。這一路徑也會在 BLAS 處理後，用目前 Transform 更新 TLAS。
-15. `Rebuild` 只在 topology、triangle list、BVH option 或 shape 結構發生變化時使用，避免每 frame rebuild 的設定。這一路徑也會在 rebuild 後，用目前 Transform 重建 TLAS。
-
-![移動後的 path 確認](/img/unity/Image10_Moved.png)
-
-## Main Features
-
-### SoundTraceObject
-
-![SoundTraceObject Inspector](/img/unity/Image_20_Object.png)
-
-`SoundTraceObject` 會把 Unity `MeshFilter`/`MeshRenderer` 註冊為 SoundTrace collision geometry。它目前基於 `MeshFilter` 和 `MeshRenderer`，用作 SoundTrace geometry 的網格需要在 import settings 中啟用 `Read/Write Enabled`。不要假設 `SkinnedMeshRenderer` 的 vertex deformation 會每 tick 自動 bake。
-
-![給子 mesh object 新增元件](/img/unity/Image12_ChildObjh.png)
-
-對於由多個子 mesh object 組成的 import model，可以先在根 GameObject 上新增 `SoundTraceObject`，再點擊 `Add To Child Meshes`，把元件新增到所有包含 mesh 的子物件。之後如果根元件的 `MeshFilter` 為空，請用 `Remove Root Component(s)` 移除根上的空元件。
-
-它不是修改渲染材質本身的功能，而是把每個 render material slot 映射到 SoundTrace material preset index，並把該 index 附加到對應的 submesh triangle。
-
-### SoundTraceMaterialPresetLibrary
-
-| ![Material Preset Library 1](/img/unity/Image_Mat_01.png) | ![Material Preset Library 2](/img/unity/Image_Mat_02.png) |
+| 預設 | 建議目標 |
 |---|---|
+| `Fast` | 行動裝置、低功耗裝置、大量音源 |
+| `Middle` | 一般遊戲與桌面平台的預設選擇 |
+| `Quality` | 高階裝置與品質優先示範 |
 
-預設 material preset library 位於 package 內部的 `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`。可透過 Unity 選單 `SoundTrace > Material Preset Library` 選擇。
+預設會同時套用聆聽者射線與 HRTF／Diffuse 渲染品質。個別編輯受預設控制的屬性會將
+預設切換為 `Custom`。一般整合應使用預設，不要手動調整射線解析度、深度或路徑預算。
 
-每個 preset 都包含 8-band `Reflection`, `Absorption`, `Transmission` 和 `Scattering` 值。可以直接編輯 ScriptableObject 來修改 material property 或新增 preset，也可以在 inspector toolbar 中 import/export `soundMaterial.json`。
+## 選擇 HRTF
 
-### Sound material slots
+在 `SoundTraceListener > HRTF` 下選擇模式。
 
-- `Auto Set` 會讀取 Unity render material 名稱，並自動分配最接近的 SoundTrace material preset。
-- 例如，`Sword` 這樣的幻想劍模型的 material 名稱包含 `Metal` 時，會映射到 `Steel` 系列 preset。
-- 如果沒有匹配名稱，或 material 為空，fallback 是 `Concrete`。
-- 如果自動匹配不正確，請在每個 submesh row 的 dropdown 中手動選擇 preset。
-- 如果想明顯感受反射，建議用 `Steel`/`Marble` 測試；想感受吸音，建議用 `Snow`/`Soil` 測試；想感受透射，建議用 `Fabric` 測試。
-
-### BVH and update mode
-
-| 設定 | 說明 |
+| 模式 | 行為 |
 |---|---|
-| `HKDTree` | 具有 SBVH 類似特性的高細節結構。Raycast 快，且適合保留帶孔洞或複雜靜態背景網格的 primitive detail。缺點是 rebuild 較慢。 |
-| `LBVH` | build 快的預設 LBVH。對於複雜形狀，它可能更粗略地近似 geometry，導致設計師製作的孔洞表現得像被封住。 |
-| `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16` | LBVH 系列的 SIMD variant。場景越複雜，較高 SIMD width 的選項可能越有利。 |
-| `bvhMaxDepth` | BVH 最大 depth。depth 越大，越能受益於 traversal pruning，建議先從較大的值開始測試。 |
-| `primitivesPerLeaf` | 最終 leaf node 內包含的 triangle 數量。範圍是 `1-128`。值越小 detail 越好，但 build/traversal cost 會變化。 |
-| `Static` | 用於靜態 collision geometry。runtime Transform 移動不會反映到 propagation，也不會產生 TLAS refit 成本。 |
-| `Dynamic` | 將 Transform 移動反映到 propagation。它不 refit BLAS，只更新 TLAS instance/bounds。 |
-| `Refit` | 用於 skinned/animated mesh 這類 vertex 位置變化但 topology 保持不變的情況。BLAS refit 後，也會用目前 Transform 更新 TLAS instance/bounds。 |
-| `Rebuild` | 僅在 topology、triangle list、BVH option 或 shape 結構變化到需要重建 BVH 時使用。Rebuild 後，也會用目前 Transform 重建 TLAS。 |
+| `Band8` | 不使用外部 HRTF 表的輕量路徑 |
+| `Parametric` | 使用 KU100 參數資源的測量型路徑 |
 
-### SoundTraceListener
+目前 Unity 封裝預設使用 `Parametric`。`Parametric` 會載入
+`Runtime/Resources/SoundTrace/HRTF/KU100_bprime.bytes`；`Band8` 不需要載入資源。
+SDK 還提供進階 HRIR 模式，但主要指南只介紹 Band8 與 Parametric。
 
-![SoundTraceListener 元件](/img/unity/Image04_Listener.png)
+## GPU 後端
 
-`SoundTraceListener` 是場景聽者。它每 frame 將 Transform position 和 orientation 同步到原生 listener，並擁有 listener ray 設定和 path type enable。
+啟用 `SoundTraceManager > Use GPU Backend` 以要求 GPU 傳播。
 
-| 設定 | 說明 |
+- 初始化成功後使用 GPU 後端。
+- 不支援的外掛或裝置會繼續使用 CPU 回退。
+- `Propagation Thread Count` 會保留供回退使用。
+- WebGL 使用 STCoreV2 WebGPU 建置。
+
+Manager 的執行階段狀態會顯示 `Active`、`Requested / CPU fallback` 或 `Disabled`。
+
+## 聲學材質預設
+
+`SoundTraceObject` 將 Unity 材質插槽對應到 SoundTrace 材質預設。
+
+1. 在網格匯入設定中啟用 `Read/Write Enabled`。
+2. 在 `SoundTraceObject` Inspector 中執行 `Auto Set`。
+3. 只修正錯誤配對的子網格。
+
+![Material Preset Library](/img/unity/Image_Mat_01.png)
+
+預設資料庫為
+`Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`。
+從 `Concrete`、`Steel`、`Marble`、`Snow`、`Soil` 等預設開始。
+直接編輯原始 8 頻段值屬於進階自訂材質流程。
+
+## 物件更新
+
+| 模式 | 用途 |
 |---|---|
-| `Ray Resolution` | listener guide ray 解析度。範圍是 `1-32`，同一個值會同時套用到 native listener width 和 height。值為 `16` 時使用 `16 x 16` guide rays。 |
-| `Ray Depth` | ray 的反射/傳播 depth。範圍是 `1-16`。值越高，殘響感和複雜 path 表現越好，但計算量也越高。 |
-| `Per-path enable` | 按類型啟用或停用 `Direct`, `Reflection`, `Diffraction`, `Reverb`, `Transmission` path。 |
+| `Static` | 不移動的房間、牆面與地板 |
+| `Dynamic` | 僅 Transform 移動的門與道具 |
+| `Refit` | 拓撲穩定的蒙皮或動畫網格 |
+| `Rebuild` | 拓撲實際變化的幾何體 |
 
-複雜遊戲場景的初始值建議使用 `Ray Resolution 16`、`Ray Depth 4`。
+大多數場景只需要 `Static` 與 `Dynamic`。
 
-### SoundTraceSource
-
-![SoundTraceSource 元件](/img/unity/Image05_Source.png)
-
-`SoundTraceSource` 是 SoundTrace 聲源元件，需要 Unity `AudioSource`。它在 Unity audio filter callback `OnAudioFilterRead` 中，將輸入 buffer in-place 渲染為 SoundTrace spatial output。
-
-| 設定 | 說明 |
-|---|---|
-| `Intensity` | 聲源基礎強度。 |
-| `Gain Boost Db`, `Reverb Send Db`, `Reflection Send Db` | 以 dB 調整整體 gain 與 reverb/reflection send level。 |
-| `Reverb Rays` | 聲源側的殘響 ray 設定。`Ray Resolution` 範圍是 `1-32`，會同時套用到 reverb ray width 和 height。`Reverb Ray Depth` 範圍是 `1-16`。它與 listener ray 是獨立設定。 |
-| `Per-path enable` | 按聲源啟用或停用 path type。 |
-| `Distance Attenuation` | 按 path type 控制衰減範圍。當前 inspector slider 控制 attenuation constant；數值越大，有效範圍越小。 |
-| `Distance Attenuation Gizmos` | 在 Scene View 中用 wire sphere 顯示各 path type 的衰減範圍。 |
-| `Bypass` | 跳過 SoundTrace 空間渲染，直接傳遞原始 `AudioSource` 輸出。 |
+## 主要元件
 
 ### SoundTraceManager
 
-![SoundTraceManager 元件](/img/unity/Image_21_Manager.png)
+每個場景使用一個。它擁有原生執行階段、材質預設、傳播更新與 GPU/CPU 後端選擇。
 
-`SoundTraceManager` 是每個場景的 SoundTrace runtime owner。listener、source、object 啟用時會註冊到 manager，manager 負責執行 scene tick 和 propagation update。
+### SoundTraceListener
 
-| 設定 | 說明 |
-|---|---|
-| `Propagation Interval Ms` | ray-trace propagation pass 的執行間隔。position sync tick 每 frame 執行，propagation 會按該間隔 throttle。 |
-| `Propagate On Start` | 在 `Start()` 時先 flush 一次 scene graph，然後立即執行一次 propagation pass 和 visualizer update。下一次 propagation 會在 `Propagation Interval Ms` 之後執行。 |
-| `Load Default Materials On Enable` | 將 package 的預設 `SoundTraceMaterialPresetLibrary.asset` 註冊到 native material table。 |
-| `Propagation Thread Count` | 內部 job system 的 worker 數。`-1` 表示 STCoreV2 按 logical hardware thread 選擇。應用程式開發者應根據整體 CPU budget 分配，實際專案建議從 3 個以上 thread 開始測試。 |
-| `Path Cache Size` | 值為 `0` 或更低時不使用 cache buffer。值為 `1` 或更高時，每 frame 儲存 path cache，增加 ray 數量和聲學 detail。建議值為 `256`、`512`、`1024`。 |
+通常附加到 Main Camera。選擇 `Quality Preset` 與 `HRTF`，進階控制維持預設值。
+
+### SoundTraceSource
+
+空間化同一 GameObject 上的 `AudioSource`。同步多個音源時，使用共用的
+`AudioSettings.dspTime` 與 `PlayScheduled()`。
+
+### SoundTraceObject
+
+註冊 `MeshFilter` 與 `MeshRenderer` 幾何體。匯入模型包含多個網格子物件時，
+使用 `Add To Child Meshes`。
 
 ### SoundTracePathVisualizer
 
-![SoundTracePathVisualizer 元件](/img/unity/Image_22_PathVisual.png)
+顯示直達、反射、繞射、殘響與透射路徑，用於除錯。正式效能測量時應停用。
 
-`SoundTracePathVisualizer` 是將 valid path 以 runtime line renderer 顯示出來的除錯元件。用於目視確認場景中的 reflection、diffraction、reverb、transmission path 如何產生。
-
-| 設定 | 說明 |
-|---|---|
-| `Enable Path Visualization` | 啟用或停用 path line rendering。 |
-| `Max Visualized Paths` | 螢幕上顯示的最大 path 數量。 |
-| `Path Width` | line width。 |
-| `Path Alpha Intensity` | 基於 attenuation 的 alpha scaling 強度。 |
-| `Draw Valid Paths`, `Draw Hit Triangles` | Scene View debug drawing 選項。 |
-
-## Samples
+## 範例
 
 ### SampleScene01
 
 ![SampleScene01](/img/unity/SampleScene01.png)
 
-`SampleScene01` 是一個與 Getting Started 類似的簡單範例場景。可在簡單的 cube geometry room 中體驗 SoundTrace 細緻的 ray 計算。
+基本房間、音源、聆聽者、幾何體、材質與路徑視覺化。
 
 ### SampleScene02
 
 ![SampleScene02](/img/unity/SampleScene02.png)
 
-`SampleScene02` 可透過 touch 或 mouse 直接改變 listener 和 sound source 的位置。
-
-灰色圓形邊框不是單純的 UI 標記，而是真實的 `Ico Sphere Dome` geometry。它會提供不同於 cube room 的反射聲學效果。
-
-1. 將分離的 sound source 左右移動，並嘗試移出邊框邊界，確認音樂如何變化。
-2. `UIVisible` 按鈕會隱藏 UI，方便操作 source。
-3. `Reset` 按鈕會將音樂、位置、material 恢復到初始值。
-4. `Toggle UnitySound` 按鈕會在 SoundTrace rendering 與預設 Unity `AudioSource` 輸出之間切換。
-5. 右側 material scroll bar 可使用提供的 SoundTrace material preset 修改 Dome 材質。測試 `Steel`、`Marble`、`Snow`、`Soil` 時體感效果較明顯。
+音源／聆聽者移動、材質預設，以及 Unity Audio 與 SoundTrace 輸出比較。
 
 ### SampleScene03
 
 ![SampleScene03](/img/unity/Img_25_Sample03.png)
 
-`SampleScene03` 是一個可在寬闊空間中四處移動並體驗 NPC 對話聲音的範例場景。
+較大空間中的 NPC 音源、牆面遮蔽、移動聆聽者的 HRTF 方向與房間響應。
 
-根據聲音是否穿過左側牆體，對話的混響感和遮蔽感會有所不同。繞著 capsule 周圍移動時，可透過 HRTF 清楚分辨是誰在發出哪一種聲音。
+## 疑難排解
 
-使用 WASD 移動，並使用 Space/Ctrl 上升/下降。
-
-## Troubleshooting
-
-| 症狀 | 檢查項 |
+| 症狀 | 檢查項目 |
 |---|---|
-| 多個音源不同步，聽起來像 echo/flanging | 多個 `AudioSource` 不要用 `playOnAwake` 或單獨的 `Play()` 分別啟動，而是由一個 script 統一啟動。基於 `AudioSettings.dspTime` 建立同一個 `startDspTime`，並對所有 source 呼叫 `AudioSource.PlayScheduled(startDspTime)`。<br /><br />驗證用 audio asset 請在 Import Settings 中設定為 `Decompress On Load`、`PCM`、`Preserve Sample Rate`、`Preload Audio Data`、`Force To Mono` On、`Normalize` Off。 |
+| 沒有聲音 | Stereo／Best latency、AudioSource 片段、Listener 與 Manager |
+| 幾何體被忽略 | `Read/Write Enabled`、MeshFilter/MeshRenderer 與更新模式 |
+| GPU 未啟用 | 平台外掛支援；CPU 回退警告是有效狀態 |
+| 效能較低 | 依 `Quality → Middle → Fast` 降級，然後關閉視覺化 |
+| 方向不正確 | Main Camera Transform 與重複的 AudioListener |
+| 多個音源出現鑲邊聲 | 從相同的 `AudioSettings.dspTime` 開始播放 |
 
-<img src={useBaseUrl('/img/unity/ImportSetting.png')} alt="Audio Import Settings" width="420" />
+## 下一步
+
+- [Web SDK](./web.md)
+- [Unreal Engine SDK](./ue.md)
+- [SDK 概覽](./overview.md)

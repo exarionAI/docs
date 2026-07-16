@@ -115,7 +115,7 @@ title: STCore vs STCoreV2
 - 신규 프로젝트
 - 웹 통합 (브라우저 / WebAssembly)
 - 크로스플랫폼 (macOS·Linux 포함) 배포
-- 다양한 언어 바인딩 (Python·Unity·Unreal) 계획
+- Web·Unity·Unreal 바인딩 활용 및 Python 바인딩 확장
 - 통계적 음향 전파(SSP) 모델 활용
 
 ### STCore를 선택하는 경우 — *특수 케이스*

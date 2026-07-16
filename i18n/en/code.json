@@ -21,7 +21,7 @@
     "message": "Native C/C++ acoustic simulation engines: STCore (first generation, FPGA acceleration) and STCoreV2 (modular, lock-free)."
   },
   "homepage.products.sdk.desc": {
-    "message": "Bindings for Web, Python, Unity, and Unreal. Use the Core engine from each platform."
+    "message": "Web, Unity, and Unreal bindings are available; Python is planned. Use the Core engine from each platform."
   },
   "homepage.products.exastudio.desc": {
     "message": "A cross-platform workflow tool for authoring, rendering, and debugging acoustic scenes visually."
@@ -51,7 +51,7 @@
     "message": "Cross-Platform"
   },
   "homepage.highlights.crossPlatform.desc": {
-    "message": "Native Windows, macOS, and Linux builds, WebAssembly, and planned Unity and Unreal Engine bindings."
+    "message": "Native Windows, macOS, and Linux builds, WebAssembly, and Unity and Unreal Engine bindings."
   },
   "theme.ErrorPageContent.title": {
     "message": "This page crashed.",

@@ -21,7 +21,7 @@
     "message": "C/C++ 原生声学仿真引擎。STCore（第一代，FPGA 加速）与 STCoreV2（模块化、lock-free）。"
   },
   "homepage.products.sdk.desc": {
-    "message": "面向 Web、Python、Unity、Unreal 的绑定阵列。可在各平台使用 Core。"
+    "message": "已提供 Web、Unity、Unreal 绑定，Python 计划中。可在各平台使用 Core。"
   },
   "homepage.products.exastudio.desc": {
     "message": "用于可视化构建、渲染和调试声学场景的跨平台工作流工具。"
@@ -51,7 +51,7 @@
     "message": "跨平台"
   },
   "homepage.highlights.crossPlatform.desc": {
-    "message": "Windows、macOS、Linux 原生版本，WebAssembly，以及计划中的 Unity 和 Unreal Engine 绑定。"
+    "message": "Windows、macOS、Linux 原生版本、WebAssembly，以及 Unity 和 Unreal Engine 绑定。"
   },
   "theme.ErrorPageContent.title": {
     "message": "页面已崩溃。",

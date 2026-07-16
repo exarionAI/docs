@@ -20,7 +20,8 @@ Sound Tracing 产品线由 **Core 引擎**、**SDK 绑定**、**studio 工具** 
 让 Core 引擎可在各平台/语言中使用的绑定阵列。
 
 - [SDK 概览](../sdk/overview.md)
-- 计划绑定：Web、Python、Unity、Unreal Engine
+- 已提供：Web、Unity、Unreal Engine
+- 计划中：Python
 
 ## ExaStudio
 

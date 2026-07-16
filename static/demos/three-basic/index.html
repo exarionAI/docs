@@ -1,91 +1,17 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>soundtrace.js — three.js basic example</title>
-    <style>
-      :root {
-        --demo-ui-scale: 0.7;
-        --demo-panel-width: calc(245px * var(--demo-ui-scale));
-        --demo-ui-edge: calc(20px * var(--demo-ui-scale));
-        --demo-panel-gutter: calc(40px * var(--demo-ui-scale));
-      }
-      body { margin: 0; overflow: hidden; background: #111; color: #ddd; font-family: system-ui, sans-serif; }
-      #info {
-        position: absolute;
-        top: 0;
-        left: 0;
-        padding: calc(12px * var(--demo-ui-scale));
-        font-size: calc(12px * var(--demo-ui-scale));
-        line-height: 1.5;
-        pointer-events: none;
-      }
-      #controls {
-        position: absolute;
-        bottom: var(--demo-ui-edge);
-        left: var(--demo-ui-edge);
-        right: calc(var(--demo-panel-width) + var(--demo-panel-gutter));
-        display: flex;
-        flex-wrap: wrap;
-        column-gap: calc(12px * var(--demo-ui-scale));
-        row-gap: calc(8px * var(--demo-ui-scale));
-        align-items: flex-end;
-        justify-content: flex-start;
-      }
-      #controls .grp {
-        display: flex;
-        flex-direction: column;
-        gap: calc(4px * var(--demo-ui-scale));
-      }
-      #controls .lab {
-        font-size: calc(10px * var(--demo-ui-scale));
-        color: #888;
-        text-transform: uppercase;
-        letter-spacing: 0;
-      }
-      #controls select, #controls button {
-        padding: calc(10px * var(--demo-ui-scale)) calc(16px * var(--demo-ui-scale));
-        font-size: calc(14px * var(--demo-ui-scale));
-        font-family: inherit;
-        background: #222;
-        color: #ddd;
-        border: 1px solid #555;
-        border-radius: calc(4px * var(--demo-ui-scale));
-      }
-      #controls button { cursor: pointer; align-self: flex-end; }
-      #controls button:disabled, #controls select:disabled { opacity: 0.6; cursor: default; }
-    </style>
-    <script type="module" crossorigin src="./assets/main-CwuPzLIq.js"></script>
-    <link rel="modulepreload" crossorigin href="./assets/OrbitControls-CV8AHo9e.js">
+    <meta
+      name="description"
+      content="Sound-tracing.js public demo for runtime validation, a Three.js shoebox room, and multiroom door occlusion."
+    />
+    <title>Sound-tracing.js Demo</title>
+    <script type="module" crossorigin src="./assets/index-B9dBUHZf.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-VzABEF7z.css">
   </head>
   <body>
-    <div id="info">
-      soundtrace.js + three.js<br />
-      Pick materials, press <b>Start Audio</b>. Start with the static wall,<br />
-      then toggle Anim to inspect animated BVH refit separately.<br />
-      Blue arrow = listener forward, Red arrow = listener right.
-    </div>
-    <div id="controls">
-      <div class="grp">
-        <span class="lab">Room</span>
-        <select id="roomMat" disabled><option>loading…</option></select>
-      </div>
-      <div class="grp">
-        <span class="lab">Collider</span>
-        <select id="wallMat" disabled><option>loading…</option></select>
-      </div>
-      <div class="grp">
-        <span class="lab">Thread</span>
-        <select id="threadMode">
-          <option value="st">Single</option>
-          <option value="mt">Multi</option>
-        </select>
-      </div>
-      <button id="start" disabled>Start Audio</button>
-      <button id="moveToggle" disabled>Move</button>
-      <button id="wallToggle" disabled>Wall: On</button>
-      <button id="flairToggle" disabled>Anim: Off</button>
-    </div>
+    <div id="root"></div>
   </body>
 </html>

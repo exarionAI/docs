@@ -18,7 +18,7 @@ title: 主要機能
 ## 統合
 
 - **複数プラットフォーム** — macOS、Windows、Linux対応
-- **エンジンバインディング** — Unity、Unreal Engine、Web、Pythonを予定
+- **エンジンバインディング** — Web、Unity、Unreal Engineを提供、Pythonは予定
 
 ## ツール
 

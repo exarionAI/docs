@@ -18,7 +18,7 @@ title: 主要功能
 ## 整合
 
 - **多平台** — 支援 macOS、Windows、Linux
-- **引擎綁定** — 計畫支援 Unity、Unreal Engine、Web、Python
+- **引擎綁定** — 已提供 Web、Unity、Unreal Engine；Python 規劃中
 
 ## 工具
 

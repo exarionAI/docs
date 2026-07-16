@@ -1,26 +1,35 @@
 ---
 sidebar_position: 1
 title: SDK 概览
+description: STCoreV2 空间音频引擎的 Web、Unity、Unreal Engine 和 Python SDK 概览。
 ---
 
 # SDK 概览
 
-**SDK** 是让 [Core 引擎](../core/stcorev2.md) 可在各平台/语言中使用的绑定阵列。关于 C/C++ 原生引擎本身的信息，请参考 [Core](../core/stcorev2.md) 部分。
+SoundTrace SDK 系列让 Web 和游戏引擎能够使用
+[STCoreV2](../core/stcorev2.md)。
 
 ## 绑定
 
 | 名称 | 目标 | 状态 |
 |---|---|---|
-| [Web](./web.md) | 浏览器 (WebAssembly) | 可用，草案文档 |
+| [Web](./web.md) | TypeScript、WebAssembly、Web Audio | 可用 |
+| [Unity](./unity.md) | Unity 2022.3 LTS 或更高版本 | 可用 |
+| [Unreal Engine](./ue.md) | Unreal Engine 5.6 插件 | 可用；演示场景为占位内容 |
 | [Python](./python.md) | 分析和研究 | 计划中 |
-| [Unity](./unity.md) | Unity 游戏引擎 | 计划中 |
-| [Unreal Engine](./ue.md) | Unreal Engine | 计划中 |
 
-所有绑定都以 Core 的 C API (`exasoundC.h`) 作为公共入口。
+## 通用流程
 
-## 从哪里开始
+1. 从 `Fast`、`Middle/Balanced` 或 `Quality` 开始。
+2. 选择 `Band8` 或 `Parametric` HRTF。
+3. 支持时使用 GPU 传播，否则使用 CPU 回退。
+4. 优先使用材质预设，不直接编辑 8 频段值。
+5. 只有在测量到实际问题后，才调节射线深度、宽度和渲染预算。
 
-- 第一次了解 → [Sound Tracing 是什么？](../intro/what-is-soundtracing.md)
-- 浏览器/Three.js 集成 → [Web SDK](./web.md)
-- 原生(C/C++)集成 → [STCoreV2](../core/stcorev2.md)（当前活跃线路）
-- 两代比较 → [STCore vs STCoreV2](../core/comparison.md)
+## 从这里开始
+
+- 浏览器和 Three.js → [Web SDK](./web.md)
+- Unity 游戏 → [Unity SDK](./unity.md)
+- Unreal Engine 游戏 → [Unreal Engine SDK](./ue.md)
+- 浏览器场景 → [演示](../demos/overview.md)
+- 原生 C/C++ → [STCoreV2](../core/stcorev2.md)
