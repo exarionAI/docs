@@ -22,3 +22,4 @@ yarn-error.log*
 # Demo bundle: keep runtime .js/.wasm/.html, exclude editor-only artifacts
 static/demos/**/*.map
 static/demos/**/*.d.ts
+/.omc

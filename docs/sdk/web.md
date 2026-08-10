@@ -11,6 +11,9 @@ import useSharedStaticUrl from '@site/src/hooks/useSharedStaticUrl';
 TypeScript/WebAssembly SDK입니다. Three.js 같은 렌더링 씬의 메시, 재질, 음원,
 리스너를 Sound Tracing 장면으로 연결하고 Web Audio graph에 공간화 출력을 제공합니다.
 
+전체 생성 옵션과 entity API는 [Facade API](./web/facade.md), ST 전용 저수준
+통합은 [Native API](./web/native.md)를 참고하세요.
+
 ## 현재 SDK 핵심
 
 | 항목 | 권장 사용법 |
@@ -252,6 +255,8 @@ sound.addMesh({
 
 ## 다음 문서
 
+- [Facade API](./web/facade.md) — 생성 옵션, 장면·음원·메시 API, 수명주기
+- [Native API](./web/native.md) — single-thread 저수준 통합의 지원 범위
 - [Performance Guide](./performance.md)
 - [Unity SDK](./unity.md)
 - [Unreal Engine SDK](./ue.md)

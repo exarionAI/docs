@@ -26,7 +26,13 @@ const sidebars = {
       collapsed: false,
       items: [
         'sdk/overview',
-        'sdk/web',
+        {
+          type: 'category',
+          label: 'Web',
+          collapsed: false,
+          link: { type: 'doc', id: 'sdk/web' },
+          items: ['sdk/web/facade', 'sdk/web/native'],
+        },
         'sdk/unity',
         'sdk/ue',
         'sdk/python',
