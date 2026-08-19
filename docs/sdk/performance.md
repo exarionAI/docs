@@ -1,0 +1,123 @@
+---
+title: Performance Guide
+---
+
+# Web SDK Performance Guide
+
+soundtrace.js는 ray count, depth, source count, geometry/BVH 설정을 높일수록
+음향 경로의 안정성과 공간감이 좋아질 수 있습니다. 같은 설정은 전파 계산 시간,
+메모리 사용량, 메인 스레드 frame time, AudioWorklet 부하도 함께 올립니다.
+
+이 문서는 SDK 통합자가 옵션을 고를 때 기준으로 삼는 성능/품질 가이드입니다.
+아래 preset은 출발점이며, 실제 권장 source 수와 플랫폼별 한계는 측정 완료 후
+수치 표로 갱신합니다.
+
+## 고정 런타임 계약
+
+| 항목 | 현재 계약 |
+|---|---|
+| Listener | scene당 1개 |
+| Realtime output | stereo/binaural 2ch |
+| 오디오 렌더 경로 | ST/MT 모두 WASM `AudioWorkletProcessor` |
+| Multi-source 오디오 | source마다 `source.play(input, 2)` (facade) / ST·direct-native는 `createWorkletNode()` |
+| Native source cap | 16 sources (`EXA_MAX_SOUNDSOURCE`) |
+| Ray depth 상한 | 16 (`EXA_MAX_DEPTH`) |
+| 기본 품질 preset | `quality: 'balanced'` = listener ray `24 x 24`, depth `8` |
+
+`16`은 native cap이며, 한 scene에 동시에 존재할 수 있는 source 수의 상한입니다.
+고객 앱에서 권장하는 실시간 source 수는 플랫폼, geometry 크기, ray budget, BVH,
+ST/MT 모드에 따라 이 상한 안에서 따로 측정해야 합니다.
+
+품질 preset이 설정하는 listener ray grid와 depth는 다음과 같습니다.
+
+| Preset | Listener ray | Depth |
+|---|---|---|
+| `fast` | `16 x 16` | `4` |
+| `balanced` (기본) | `24 x 24` | `8` |
+| `quality` | `32 x 32` | `12` |
+
+## 주요 옵션과 tradeoff
+
+| 옵션 | 품질 영향 | 성능 영향 |
+|---|---|---|
+| Listener ray width/height | 청취자 기준 경로 발견과 방향 안정성이 좋아짐 | ray grid 면적에 비례해 전파 계산 증가 |
+| Listener depth | 더 깊은 reflection/diffraction/reverb 경로 허용 | path search, cache pressure 증가 |
+| Source reverb ray width/height | source-side late reverb coverage와 material 반응 안정성 개선 | source 수와 ray grid 면적에 비례해 비용 증가 |
+| Source reverb depth | source-side late reverb 추적 깊이 증가 | depth가 커질수록 path search와 cache pressure 증가 |
+| Source count | 동시에 공간화되는 emitter 수 증가 | propagation과 AudioWorklet mixer 비용 증가 |
+| BVH type | traversal/build 특성 변경 | geometry와 update 방식에 따라 build/refit/traversal 비용 차이 |
+| BVH max depth | tree 깊이 제어 | 너무 얕으면 traversal 비효율, 너무 깊으면 build/memory 비용 증가 |
+| Prims per leaf | leaf 단위 triangle 수 제어 | scene 구조에 따라 traversal/build 균형점이 달라짐 |
+| Animated/refit geometry | 움직이는 collider 반영 | refit/rebuild 비용 증가. stress 항목으로 분리 측정 |
+| Thread mode | MT는 propagation job을 worker thread로 분산 가능 | cross-origin isolation 필요, thread/memory overhead 증가 |
+
+## Reverb ray budget
+
+Reverb ray는 listener ray를 복제해서 쓰는 값이 아닙니다. source-side late reverb는
+`source count × width × height × depth`로 비용이 커지므로, production 기본값은
+listener ray와 분리해서 장면별로 올립니다. QA 기준 sweep은 source `[4, 8, 12, 16]`,
+general ray와 reverb ray 각각 `4 x 4 x 3`, `8 x 8 x 7`, `16 x 16 x 11`,
+`32 x 32 x 16` 단계, path cache `[256, 512, 1024]`입니다.
+
+## 시작 preset
+
+실측 테이블이 채워지기 전까지는 아래 값을 시작점으로 사용하고, 앱의 목표 FPS와
+청감 품질에 맞춰 조정합니다.
+
+| Preset | Thread | Listener rays | Reverb rays | Depth | BVH | 용도 | 측정 상태 |
+|---|---|---:|---:|---:|---|---|---|
+| Mobile conservative | ST | `16 x 16` | `4 x 4` 또는 `8 x 8` | `4` | LBVH 또는 platform default | 모바일 최소 기준 | Measurement pending |
+| Desktop balanced | ST 또는 MT | `24 x 24` | `8 x 8` | `8` | LBVH_SIMD8 | 데스크탑 기본 기준 | Measurement pending |
+| Desktop quality | MT | `32 x 32` | `16 x 16` | `12` | LBVH_SIMD8 | 품질 우선 데스크탑 | Measurement pending |
+| Stress only | MT | `32 x 32` | `32 x 32` | `7..16` | BVH matrix | 한계 측정 전용 | Realtime default 아님 |
+
+> **MT 이득은 측정 전이며 무조건 빠르지 않습니다.** 위 MT preset의 속도 이득은 아직
+> `Measurement pending`입니다. MT는 propagation job을 worker로 분산하므로 **ray 예산과
+> source 수가 클 때**(예: high ray grid·depth, 다수 source) 이득이 나타나고, 작은 씬에서는
+> worker 왕복·메모리 오버헤드 때문에 ST가 더 단순·빠를 수 있습니다. 게다가 MT는
+> cross-origin isolation(COOP/COEP) 배포 비용이 듭니다. 작은 씬·간단한 페이지는 ST로
+> 시작하고, 예산이 큰 씬에서 ST↔MT를 **실측 비교**한 뒤 MT를 택하세요.
+
+공간감이 약하면 source 수를 먼저 늘리지 말고, listener ray와 source reverb ray count/depth를
+분리해서 단계적으로 올려 확인합니다. source 수 증가는 마지막에 측정합니다.
+
+## 측정해야 하는 지표
+
+고객 문서에 수치를 넣을 때는 같은 scenario를 같은 duration/warmup 조건에서 반복
+측정하고, raw log가 아니라 요약값만 공개합니다.
+
+| 그룹 | 지표 |
+|---|---|
+| Browser frame | 평균 FPS, frame time p50/p95/p99, worst frame, dropped frame count |
+| Main-thread stall | `PerformanceObserver` longtask count/total/worst, 사용 가능 브라우저 한정 |
+| Engine propagation | `scene.tick()` + `scene.updatePropagation()` 시간 p50/p95/p99/worst |
+| Native job timing | propagation job timing frame, worker 분산/대기 시간 |
+| Path quality | valid path count 평균/최대, material/path 변화 청감 메모 |
+| Audio | `AudioContext.sampleRate`, `baseLatency`, `outputLatency`, state, setup time |
+| Memory | native memory trace snapshot, JS heap snapshot |
+| Manual observation | drop-out, localization weakness, thermal, fan/noise, battery 체감 |
+
+브라우저 JavaScript만으로는 플랫폼 공통의 전력/thermal 수치를 신뢰성 있게 얻기 어렵습니다.
+전력과 thermal은 자동 수치로 확정하지 말고 manual observation 또는 별도 장비 측정값으로
+분리합니다.
+
+## 측정 matrix
+
+| Matrix | 값 |
+|---|---|
+| Baseline | ST/MT 각각 1 source, listener `16 x 16 x 3`, source `16 x 8 x 3`, static small geometry |
+| Quality scale | listener `16 x 16`, `32 x 32`; source reverb `4 x 4`, `8 x 8`, `16 x 16`, `32 x 32`; depth `3`, `7`, `11`, `16` |
+| Source scale | `1`, `2`, `4`, `8`, `12`, `16` sources (native cap `16`) |
+| Reverb ray scale | source `[4, 8, 12, 16]`, general ray step `4 x 4 x 3` → `8 x 8 x 7` → `16 x 16 x 11` → `32 x 32 x 16`, reverb ray도 같은 step, path cache `[256, 512, 1024]` |
+| Geometry/BVH | small/medium/large geometry, HKDtree, LBVH, LBVH_SIMD4/8/16, LBVH_NWAY4/8/16 |
+| Stress only | animated/refit, rebuild-heavy, native source cap, high ray budget |
+
+## 공개 기준
+
+| 항목 | 기준 |
+|---|---|
+| 실측 완료 값 | platform, browser, SDK commit, STCoreV2 commit, scenario를 함께 표기 |
+| 미측정 값 | 숫자를 추정하지 않고 `Measurement pending`으로 표기 |
+| Source cap | native cap `16`과 실제 권장 source 수를 분리 |
+| Stress 결과 | realtime 권장값이 아니라 한계/회귀 탐지 목적으로 분리 |
+| Raw log | 고객 문서에 그대로 넣지 않고 요약 table과 해석만 공개 |
