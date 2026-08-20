@@ -122,7 +122,7 @@ const config = {
       prism: {
         theme: prismThemes.github,
         darkTheme: prismThemes.dracula,
-        additionalLanguages: ['cpp', 'c', 'cmake', 'bash'],
+        additionalLanguages: ['cpp', 'c', 'csharp', 'cmake', 'bash'],
       },
     }),
 };

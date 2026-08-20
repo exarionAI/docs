@@ -83,15 +83,27 @@ scene.addCollider(collider);
 | Change | API | Update type |
 |---|---|---|
 | Transform only | `object.setPosition(...)` and friends | Updated to match the object's state |
-| Vertices only | `mesh.updateVertices(...)` | `UpdateType.Refit` |
+| Vertices only | `mesh.updateVerticesAndRefit(...)` | `UpdateType.Refit` |
 | Topology or BVH options | `mesh.setData(...)` | `UpdateType.Rebuild` |
 
-Use refit for animated geometry that keeps its topology, together with a
-refit-capable LBVH family.
+Use refit for animated geometry that keeps its topology — skinned animation and procedural
+deformation — together with a refit-capable LBVH family.
+
+A vertex update is the core's `exaMeshUpdateVertices` → `exaMeshRefit` two-call protocol.
+`mesh.updateVertices()` only uploads the vertices and does not refit the BVH, so call
+`mesh.updateVerticesAndRefit()`, which does both, or follow up with `mesh.refit()` yourself. The
+vertex count must exactly match the count the mesh was built with.
 
 ```ts
-mesh.updateVertices(vertices);
+mesh.updateVerticesAndRefit(vertices);  // updateVertices + refit
 object.setUpdateType(UpdateType.Refit);
+scene.tick(dt);
+```
+
+`SoundCollider` folds both steps into one call.
+
+```ts
+collider.refitVertices(vertices);  // updateVerticesAndRefit + setUpdateType(Refit)
 scene.tick(dt);
 ```
 
@@ -102,6 +114,8 @@ mesh.setData(vertices, triangles, buildOptions);
 object.setUpdateType(UpdateType.Rebuild);
 scene.tick(dt);
 ```
+
+`collider.rebuild(vertices, triangles, buildOptions)` performs the same combination.
 
 ## BVH selection
 

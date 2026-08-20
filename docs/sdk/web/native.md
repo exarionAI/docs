@@ -79,15 +79,27 @@ scene.addCollider(collider);
 | 변경 | API | update type |
 |---|---|---|
 | transform만 변경 | `object.setPosition(...)` 등 | object 상태에 맞게 갱신 |
-| vertex만 변경 | `mesh.updateVertices(...)` | `UpdateType.Refit` |
+| vertex만 변경 | `mesh.updateVerticesAndRefit(...)` | `UpdateType.Refit` |
 | topology 또는 BVH 옵션 변경 | `mesh.setData(...)` | `UpdateType.Rebuild` |
 
-Refit은 topology가 유지되는 애니메이션 geometry에 사용합니다. 이 경로는
-refit 가능한 LBVH 계열과 함께 사용하세요.
+Refit은 topology가 유지되는 애니메이션 geometry(skinned animation, procedural 변형)에
+사용합니다. 이 경로는 refit 가능한 LBVH 계열과 함께 사용하세요.
+
+vertex 갱신은 core에서 `exaMeshUpdateVertices` → `exaMeshRefit`의 2-call protocol입니다.
+`mesh.updateVertices()`는 vertex만 올리고 BVH를 refit하지 않으므로, 두 호출을 함께 수행하는
+`mesh.updateVerticesAndRefit()`를 쓰거나 직접 `mesh.refit()`을 호출해야 합니다. vertex 개수는
+build 시점과 정확히 같아야 합니다.
 
 ```ts
-mesh.updateVertices(vertices);
+mesh.updateVerticesAndRefit(vertices);  // updateVertices + refit
 object.setUpdateType(UpdateType.Refit);
+scene.tick(dt);
+```
+
+`SoundCollider`를 쓰면 두 단계를 한 번에 처리합니다.
+
+```ts
+collider.refitVertices(vertices);  // updateVerticesAndRefit + setUpdateType(Refit)
 scene.tick(dt);
 ```
 
@@ -98,6 +110,8 @@ mesh.setData(vertices, triangles, buildOptions);
 object.setUpdateType(UpdateType.Rebuild);
 scene.tick(dt);
 ```
+
+`collider.rebuild(vertices, triangles, buildOptions)`가 같은 조합을 수행합니다.
 
 ## BVH 선택
 

@@ -41,6 +41,12 @@ SoundTrace Unity SDK 包和安装说明通过已签约的评估或许可证交�
 
 如果这些设置不一致，Manager 和 Listener Inspector 会显示警告。
 
+## Audio Asset Import 设置
+
+以使用单声道音源为前提，音频剪辑设置为 PCM 格式。
+
+![Audio Asset Import 设置](/img/unity/ImportSetting.png)
+
 ## 最快设置
 
 1. 在空 GameObject 上添加 `SoundTraceManager`。
@@ -64,6 +70,8 @@ SoundTrace Unity SDK 包和安装说明通过已签约的评估或许可证交�
 | `SoundTracePathVisualizer` | 调试显示有效 path 和 hit triangle | 与 Manager 相同的 GameObject |
 
 ## SoundTraceManager
+
+![SoundTraceManager Inspector](/img/unity/Img_STManager.png)
 
 ### Inspector
 
@@ -101,6 +109,8 @@ SoundTrace Unity SDK 包和安装说明通过已签约的评估或许可证交�
 
 ## SoundTraceListener
 
+![SoundTraceListener Inspector](/img/unity/Img_STListener.png)
+
 通常添加到 Main Camera。
 
 ### Inspector
@@ -136,6 +146,8 @@ Asset 从 `Runtime/Resources/SoundTrace/HRTF/` 加载。如果所需 asset 不�
 Listener 初始化会失败，并且不会自动切换到其他模式。
 
 ## SoundTraceSource
+
+![SoundTraceSource Inspector](/img/unity/Img_STSource.png)
 
 `SoundTraceSource` 处理同一 GameObject 上的 `AudioSource` 输出。启用时，会将
 `AudioSource.spatialBlend` 和 `AudioSource.dopplerLevel` 设为 `0`，让 SoundTrace
@@ -181,10 +193,14 @@ Render Tuning 应用于 source-listener 配对。`Path Hold = 0` 会关闭 hold�
 
 ## SoundTraceObject
 
+![SoundTraceObject Inspector](/img/unity/Img_STObj.png)
+
 `SoundTraceObject` 注册 `MeshFilter.sharedMesh` 和 Renderer 的 submesh 材质槽。
 由于 Build 中需要读取网格数据，请在 Import Settings 中启用 `Read/Write Enabled`。
 
 ### Geometry 与 BVH
+
+![Scene View 中显示的 BVH](/img/unity/Img_STObjDome.png)
 
 | 字段 | 默认值 | 说明 |
 |---|---:|---|
@@ -199,22 +215,102 @@ Render Tuning 应用于 source-listener 配对。`Path Hold = 0` 会关闭 hold�
 |---|---|
 | `HKDTree` | 使用基于 KD 划分的 traversal。它支持 Refit，但 Refit 后会切换为 BVH-style fallback traversal。不支持 GPU backend。 |
 | `LBVH` | 基于 Morton code，rebuild 速度比 HKDTree 更快，并支持 Refit。通过底层 API 上传 vertex 后进行 Refit，可用于 SkinnedMesh 或 procedural mesh 变形。标量格式不支持 GPU backend。 |
-| `LBVH_SIMD4` | 以 4 个一组的 SIMD batch 并行处理 LBVH leaf intersection。支持 Refit 和 GPU backend。 |
-| `LBVH_SIMD8` | 以 8 个一组的 SIMD batch 并行处理 LBVH leaf intersection。它是当前默认值，并支持 Refit 和 GPU backend。 |
-| `LBVH_SIMD16` | 以 16 个一组的 SIMD batch 并行处理 LBVH leaf intersection。支持 Refit 和 GPU backend。 |
+| `LBVH_SIMD4` | 以 4 个一组的 SIMD batch 并行处理 LBVH leaf intersection。支持 Refit 及支持 GPU Backend。 |
+| `LBVH_SIMD8` | 以 8 个一组的 SIMD batch 并行处理 LBVH leaf intersection，为当前默认值。支持 Refit 及支持 GPU Backend。 |
+| `LBVH_SIMD16` | 以 16 个一组的 SIMD batch 并行处理 LBVH leaf intersection。支持 Refit 及支持 GPU Backend。 |
 
 如果在请求 GPU 的 scene 中选择 `HKDTree` 或标量 `LBVH`，Inspector 会显示警告。
 
-| Update Mode | 当前组件契约 |
-|---|---|
-| `Static` | 用于不移动的 mesh。 |
-| `Dynamic` | 用于 Transform 会变化的 object。 |
-| `Refit` | 在底层 API 更新 vertex 时使用的 native update 策略。 |
-| `Rebuild` | 在底层 API 重新提供 geometry 时使用的 native update 策略。 |
+#### Update Mode
 
-`SoundTraceObject` MonoBehaviour 会自动反映 Transform 变化，但不会自动上传运行时 Unity
-Mesh 的 vertex 或 topology 变化。因此，仅选择 `Refit` 或 `Rebuild` 并不会自动反映
-SkinnedMesh 或 procedural mesh 的变形。
+| Update Mode | STCoreV2 update policy | 含义 |
+|---|---|---|
+| `Static` | `EXA_OBJECT_UPDATE_STATIC` (0) | 运行时不更新 TLAS/BLAS。用于不移动的 level geometry。 |
+| `Refit` | `EXA_OBJECT_UPDATE_REFIT` (1) | 形变（deformation）策略：refit mesh BLAS 并刷新 TLAS bounds。适用于 topology 保持不变的 skinned 与 procedural mesh。 |
+| `Rebuild` | `EXA_OBJECT_UPDATE_REBUILD` (2) | 用于 topology 会改变的 geometry，会重新构建 BVH。 |
+| `Dynamic` | `EXA_OBJECT_UPDATE_DYNAMIC` (3) | 仅 Transform 变化时，只刷新 TLAS instance。 |
+
+#### Refit 与 vertex 上传
+
+`Refit` 是 STCoreV2 中**用于 vertex 形变（skinned animation）的 update policy**。但 core
+不会自行决定何时上传 vertex：mesh 更新采用 `exaMeshUpdateVertices` → `exaMeshRefit` 的
+2-call protocol，而 object 上的 `Refit` 是让该结果反映到 BLAS 与 TLAS bounds 的策略开关。
+也就是说，**上传 vertex 的一方是 host SDK**。
+
+目前 Unity 的 `SoundTraceObject` MonoBehaviour 只自动同步 Transform，不会调用 vertex 上传。
+它要求 `MeshFilter`/`MeshRenderer`，因此不会直接绑定 `SkinnedMeshRenderer`，并且 mesh
+geometry 只在 `OnEnable` 时快照一次。所以要在 Unity 中让 skinned 或 procedural 形变体现在
+声音上，请将 `Update Mode` 设为 `Refit`，并如下所示通过 `MeshCore` 自行上传 vertex。UE 插件的
+`SoundTracingObjectComponent` 会为 skeletal mesh 自动完成这一上传。
+
+```csharp
+using Exarion.SoundTrace;
+using Exarion.SoundTrace.Core;
+using Exarion.SoundTrace.Native;
+using UnityEngine;
+
+[RequireComponent(typeof(SoundTraceObject))]
+public sealed class SoundTraceSkinnedRefit : MonoBehaviour
+{
+    [SerializeField] private SkinnedMeshRenderer skin;
+
+    private SoundTraceObject _object;
+    private Mesh _baked;
+    private ExaVec3f[] _vertices;
+
+    private void Awake()
+    {
+        _object = GetComponent<SoundTraceObject>();
+        _baked = new Mesh();
+    }
+
+    private void LateUpdate()
+    {
+        SoundMeshCore mesh = _object.MeshCore;
+        if (mesh == null || !mesh.IsValid)
+            return;
+
+        // 1) bake 当前 pose 并读取 vertex。这是 Unity Mesh API，必须在 main thread 上执行。
+        skin.BakeMesh(_baked);
+        Vector3[] baked = _baked.vertices;
+        if (_vertices == null || _vertices.Length != baked.Length)
+            _vertices = new ExaVec3f[baked.Length];
+        for (int i = 0; i < baked.Length; ++i)
+            _vertices[i] = new ExaVec3f(baked[i].x, baked[i].y, baked[i].z);
+
+        // 2) 上传与 refit 在 control thread 上以 2-call protocol 执行。
+        ExaVec3f[] vertices = _vertices;
+        SoundTraceControlThread.Invoke(() =>
+        {
+            if (mesh.UpdateVertices(vertices))
+                mesh.Refit();
+        });
+    }
+
+    private void OnDestroy()
+    {
+        if (_baked != null)
+            Destroy(_baked);
+    }
+}
+```
+
+注意事项：
+
+- vertex 数量必须与构建时**完全一致**。数量不匹配时 `exaMeshUpdateVertices` 会返回
+  `EXA_ERR_INVALID_ARG` 并拒绝。请把 `SkinnedMeshRenderer` 的 bind pose mesh 放入
+  `MeshFilter.sharedMesh`，使数量对齐。
+- vertex 以 mesh 局部坐标系原样上传。object 的 position、rotation、scale 由
+  `SoundTraceObject` 单独同步，因此 `BakeMesh` 也应使用不施加 scale 的形式。
+- native mesh 由 `SoundTraceMeshCache` 以 Mesh asset、material slot 与 BVH 设置为键进行
+  refcount 共享。当多个 object 使用相同组合时，refit 其中一个会让它们全部产生相同形变。
+  若需各自独立形变，请为每个 object 使用不同的 Mesh instance。
+- `SoundTraceControlThread.Invoke` 是阻塞调用。每帧对大量 object 调用会让 main thread 排在
+  control thread 的 propagation frame 之后等待，请把 refit 对象限制在少量 object 上。
+- BVH Type 请使用可 refit 的 `LBVH` 系列。`HKDTree` 也能 refit，但之后 traversal 会切换为
+  BVH-style fallback。
+- triangle index 改变的 topology 变化无法用 refit 处理。请通过 `MeshCore.SetData(...)`
+  重新构建，并将 `Update Mode` 设为 `Rebuild`。
 
 ### 公开方法
 
@@ -243,8 +339,12 @@ SkinnedMesh 或 procedural mesh 的变形。
 - 编辑 Scattering 以及 8 频段 Reflection、Absorption、Transmission 图表
 - 选择 `Transmission Model`
 
+![Material Preset Library](/img/unity/Image_Mat_01.png)
+
 频段中心为 `67.5`、`125`、`250`、`500`、`1000`、`2000`、`4000`、
 `8000 Hz`。材质顺序必须与表索引一致。
+
+![按频段编辑材质图表](/img/unity/Image_Mat_02.png)
 
 ### Transmission Model
 
@@ -262,6 +362,8 @@ SkinnedMesh 或 procedural mesh 的变形。
 导出为 `Surface` 时会省略此字段，而不是写入 `null` 或空数组。
 
 ## SoundTracePathVisualizer
+
+![SoundTracePathVisualizer Inspector](/img/unity/Img_STPathVisual.png)
 
 只能在与 Manager 相同的 GameObject 上添加一个。
 

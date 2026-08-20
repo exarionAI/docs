@@ -43,6 +43,12 @@ To import the samples, select SoundTrace SDK in Package Manager and choose
 
 The Manager and Listener Inspectors display a warning when these settings do not match.
 
+## Audio asset import settings
+
+Mono sound sources are assumed, and audio clips are set to the PCM format.
+
+![Audio asset import settings](/img/unity/ImportSetting.png)
+
 ## Fastest setup
 
 1. Add `SoundTraceManager` to an empty GameObject.
@@ -67,6 +73,8 @@ Multiple Listeners may register, but Source rendering uses the first registered
 | `SoundTracePathVisualizer` | Debug display for valid paths and hit triangles | Same GameObject as the Manager |
 
 ## SoundTraceManager
+
+![SoundTraceManager Inspector](/img/unity/Img_STManager.png)
 
 ### Inspector
 
@@ -104,6 +112,8 @@ Multiple Listeners may register, but Source rendering uses the first registered
 
 ## SoundTraceListener
 
+![SoundTraceListener Inspector](/img/unity/Img_STListener.png)
+
 Add this component to the Main Camera in most projects.
 
 ### Inspector
@@ -139,6 +149,8 @@ Assets are loaded from `Runtime/Resources/SoundTrace/HRTF/`. If a required asset
 empty, Listener initialization fails; SoundTrace does not switch to another mode automatically.
 
 ## SoundTraceSource
+
+![SoundTraceSource Inspector](/img/unity/Img_STSource.png)
 
 `SoundTraceSource` processes the output of the `AudioSource` on the same GameObject. When
 enabled, it sets `AudioSource.spatialBlend` and `AudioSource.dopplerLevel` to `0` so SoundTrace
@@ -185,10 +197,14 @@ To synchronize multiple `AudioSource` instances, call `PlayScheduled()` against 
 
 ## SoundTraceObject
 
+![SoundTraceObject Inspector](/img/unity/Img_STObj.png)
+
 `SoundTraceObject` registers `MeshFilter.sharedMesh` and the Renderer submesh material slots.
 Enable `Read/Write Enabled` in Import Settings because builds must read the mesh data.
 
 ### Geometry and BVH
+
+![BVH shown in the Scene View](/img/unity/Img_STObjDome.png)
 
 | Field | Default | Description |
 |---|---:|---|
@@ -203,22 +219,107 @@ Enable `Read/Write Enabled` in Import Settings because builds must read the mesh
 |---|---|
 | `HKDTree` | Uses KD-partition traversal. It supports Refit, but switches to BVH-style fallback traversal after a Refit. The GPU backend does not support it. |
 | `LBVH` | Uses Morton codes, rebuilds faster than HKDTree, and supports Refit. After uploading vertices through the low-level API, it can be refit for SkinnedMesh or procedural-mesh deformation. The scalar format does not support the GPU backend. |
-| `LBVH_SIMD4` | Processes LBVH leaf intersections in SIMD batches of 4. It supports Refit and the GPU backend. |
-| `LBVH_SIMD8` | Processes LBVH leaf intersections in SIMD batches of 8. This is the current default and supports both Refit and the GPU backend. |
-| `LBVH_SIMD16` | Processes LBVH leaf intersections in SIMD batches of 16. It supports Refit and the GPU backend. |
+| `LBVH_SIMD4` | Processes LBVH leaf intersections in SIMD batches of 4. Refit supported and GPU Backend supported. |
+| `LBVH_SIMD8` | Processes LBVH leaf intersections in SIMD batches of 8. This is the current default. Refit supported and GPU Backend supported. |
+| `LBVH_SIMD16` | Processes LBVH leaf intersections in SIMD batches of 16. Refit supported and GPU Backend supported. |
 
 The Inspector displays a warning when `HKDTree` or scalar `LBVH` is selected in a scene that requests the GPU backend.
 
-| Update Mode | Current component contract |
-|---|---|
-| `Static` | Use for meshes that do not move. |
-| `Dynamic` | Use for objects whose Transform changes. |
-| `Refit` | Native update strategy used when vertices are updated through the low-level API. |
-| `Rebuild` | Native update strategy used when geometry is supplied again through the low-level API. |
+#### Update Mode
 
-The `SoundTraceObject` MonoBehaviour automatically applies Transform changes, but it does not
-upload Unity Mesh vertex or topology changes at runtime. Selecting `Refit` or `Rebuild` alone
-therefore does not automatically apply SkinnedMesh or procedural-mesh deformation.
+| Update Mode | STCoreV2 update policy | Meaning |
+|---|---|---|
+| `Static` | `EXA_OBJECT_UPDATE_STATIC` (0) | No runtime TLAS/BLAS updates. Use it for level geometry that does not move. |
+| `Refit` | `EXA_OBJECT_UPDATE_REFIT` (1) | The deformation policy: it refits the mesh BLAS and refreshes the TLAS bounds. Target it at skinned and procedural meshes whose topology stays fixed. |
+| `Rebuild` | `EXA_OBJECT_UPDATE_REBUILD` (2) | Rebuilds the BVH. Use it for geometry whose topology changes. |
+| `Dynamic` | `EXA_OBJECT_UPDATE_DYNAMIC` (3) | Transform-only: refreshes the TLAS instance. |
+
+#### Refit and vertex upload
+
+`Refit` is STCoreV2's **update policy for vertex deformation (skinned animation)**. The core
+does not decide on its own when vertices are uploaded: a mesh update is the
+`exaMeshUpdateVertices` → `exaMeshRefit` two-call protocol, and the object's `Refit` setting is
+the policy switch that makes the result reach the BLAS and the TLAS bounds. **The host SDK owns
+the upload.**
+
+The Unity `SoundTraceObject` MonoBehaviour currently syncs only the Transform; it never calls the
+vertex upload. It requires `MeshFilter`/`MeshRenderer`, so it does not bind a
+`SkinnedMeshRenderer` directly, and the mesh geometry is snapshotted once in `OnEnable`. To make
+skinned or procedural deformation audible in Unity, set `Update Mode` to `Refit` and push the
+vertices yourself through `MeshCore`, as shown below. The UE plugin's
+`SoundTracingObjectComponent` performs this upload automatically for skeletal meshes.
+
+```csharp
+using Exarion.SoundTrace;
+using Exarion.SoundTrace.Core;
+using Exarion.SoundTrace.Native;
+using UnityEngine;
+
+[RequireComponent(typeof(SoundTraceObject))]
+public sealed class SoundTraceSkinnedRefit : MonoBehaviour
+{
+    [SerializeField] private SkinnedMeshRenderer skin;
+
+    private SoundTraceObject _object;
+    private Mesh _baked;
+    private ExaVec3f[] _vertices;
+
+    private void Awake()
+    {
+        _object = GetComponent<SoundTraceObject>();
+        _baked = new Mesh();
+    }
+
+    private void LateUpdate()
+    {
+        SoundMeshCore mesh = _object.MeshCore;
+        if (mesh == null || !mesh.IsValid)
+            return;
+
+        // 1) Bake the current pose and read the vertices. This is the Unity Mesh
+        //    API, so it must happen on the main thread.
+        skin.BakeMesh(_baked);
+        Vector3[] baked = _baked.vertices;
+        if (_vertices == null || _vertices.Length != baked.Length)
+            _vertices = new ExaVec3f[baked.Length];
+        for (int i = 0; i < baked.Length; ++i)
+            _vertices[i] = new ExaVec3f(baked[i].x, baked[i].y, baked[i].z);
+
+        // 2) Run the upload and the refit as the two-call protocol on the control thread.
+        ExaVec3f[] vertices = _vertices;
+        SoundTraceControlThread.Invoke(() =>
+        {
+            if (mesh.UpdateVertices(vertices))
+                mesh.Refit();
+        });
+    }
+
+    private void OnDestroy()
+    {
+        if (_baked != null)
+            Destroy(_baked);
+    }
+}
+```
+
+Things to watch for:
+
+- The vertex count must **exactly match** the count the mesh was built with.
+  `exaMeshUpdateVertices` rejects a mismatch with `EXA_ERR_INVALID_ARG`. Put the
+  `SkinnedMeshRenderer` bind-pose mesh into `MeshFilter.sharedMesh` so the counts line up.
+- Vertices are uploaded in mesh local space. `SoundTraceObject` syncs the object's position,
+  rotation, and scale separately, so bake without applying the scale.
+- The native mesh is refcount-shared by `SoundTraceMeshCache`, keyed on the Mesh asset, the
+  material slots, and the BVH settings. When several objects use the same combination, refitting
+  one deforms all of them. Give each object its own Mesh instance if they must deform
+  independently.
+- `SoundTraceControlThread.Invoke` is a blocking call. Calling it every frame for many objects
+  stalls the main thread behind the control thread's propagation frame, so keep the set of
+  refit objects small.
+- Use a refit-capable `LBVH` family BVH Type. `HKDTree` also refits, but traversal switches to
+  the BVH-style fallback afterwards.
+- A topology change — different triangle indices — cannot be handled by a refit. Rebuild through
+  `MeshCore.SetData(...)` and set `Update Mode` to `Rebuild`.
 
 ### Public methods
 
@@ -247,8 +348,12 @@ Use `SoundTrace > Material Preset Library` to:
 - Edit Scattering and the 8-band Reflection, Absorption, and Transmission graphs
 - Select the `Transmission Model`
 
+![Material Preset Library](/img/unity/Image_Mat_01.png)
+
 The frequency-band centers are `67.5`, `125`, `250`, `500`, `1000`, `2000`, `4000`, and
 `8000 Hz`. Material order and table indices must match.
+
+![Per-band material graph editing](/img/unity/Image_Mat_02.png)
 
 ### Transmission Model
 
@@ -267,6 +372,8 @@ as exactly eight finite, non-negative values selects `Solid Distance`. When expo
 the field is omitted instead of being written as `null` or an empty array.
 
 ## SoundTracePathVisualizer
+
+![SoundTracePathVisualizer Inspector](/img/unity/Img_STPathVisual.png)
 
 Add one to the same GameObject as the Manager.
 

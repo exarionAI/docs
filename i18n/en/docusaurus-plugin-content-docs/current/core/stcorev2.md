@@ -270,10 +270,26 @@ exaReset();       // releases renderer state and the default HRTF
 ### Object Update Type
 
 ```c
-exaObjectSetUpdateType(objID, eUpdateTypeData);  // 0=Static, 1=Refit, 2=Rebuild
+exaObjectSetUpdateType(objID, updateType);
+// 0 = EXA_OBJECT_UPDATE_STATIC   : no runtime TLAS/BLAS updates
+// 1 = EXA_OBJECT_UPDATE_REFIT    : deformation - refit BLAS + TLAS bounds
+// 2 = EXA_OBJECT_UPDATE_REBUILD  : topology changes - rebuild
+// 3 = EXA_OBJECT_UPDATE_DYNAMIC  : transform-only - refresh TLAS instance
 ```
 
 Static objects avoid per-frame BVH refit cost.
+
+`Refit` is the policy for geometry whose vertices move while the topology stays fixed, such as
+skinned animation. The vertices themselves are uploaded through the mesh-side two-call protocol.
+
+```c
+exaMeshUpdateVertices(meshID, vertices, numVertices);  // CPU skinning path
+exaMeshRefit(meshID);                                  // refit the mesh BVH
+```
+
+`numVertices` must exactly equal the vertex count passed to `exaMeshSetData`; a mismatch is
+rejected with `EXA_ERR_INVALID_ARG`. When the topology (triangle indices) changes, refit does not
+apply: rebuild through `exaMeshSetData` and set the object update type to `Rebuild`.
 
 ## Diagnostics and Statistics
 

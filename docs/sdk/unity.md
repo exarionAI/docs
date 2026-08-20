@@ -41,6 +41,12 @@ SoundTrace Unity SDK 패키지와 설치 안내는 계약된 평가·라이선�
 
 Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니다.
 
+## Audio Asset Import 설정
+
+모노 사운드 소스 사용을 전제로 하며, 오디오 클립은 PCM 포맷으로 설정합니다.
+
+![Audio Asset Import 설정](/img/unity/ImportSetting.png)
+
 ## 가장 빠른 설정
 
 1. 빈 GameObject에 `SoundTraceManager`를 추가합니다.
@@ -65,6 +71,8 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 | `SoundTracePathVisualizer` | 유효 path와 hit triangle 디버그 표시 | Manager와 같은 GameObject |
 
 ## SoundTraceManager
+
+![SoundTraceManager Inspector](/img/unity/Img_STManager.png)
 
 ### Inspector
 
@@ -102,6 +110,8 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 
 ## SoundTraceListener
 
+![SoundTraceListener Inspector](/img/unity/Img_STListener.png)
+
 보통 Main Camera에 추가합니다.
 
 ### Inspector
@@ -137,6 +147,8 @@ Asset은 `Runtime/Resources/SoundTrace/HRTF/`에서 로드됩니다. 필요한 a
 있으면 Listener 초기화가 실패하며 다른 모드로 자동 전환되지 않습니다.
 
 ## SoundTraceSource
+
+![SoundTraceSource Inspector](/img/unity/Img_STSource.png)
 
 `SoundTraceSource`는 같은 GameObject의 `AudioSource` 출력을 처리합니다. 활성화할 때
 SoundTrace가 공간화와 Doppler를 담당하도록 `AudioSource.spatialBlend`와
@@ -183,10 +195,14 @@ Render Tuning은 source-listener 쌍에 적용됩니다. `Path Hold = 0`은 hold
 
 ## SoundTraceObject
 
+![SoundTraceObject Inspector](/img/unity/Img_STObj.png)
+
 `SoundTraceObject`는 `MeshFilter.sharedMesh`와 Renderer의 submesh 재질 슬롯을 등록합니다.
 Build에서 메시 데이터를 읽어야 하므로 Import Settings의 `Read/Write Enabled`를 켜십시오.
 
 ### Geometry와 BVH
+
+![Scene View에 표시한 BVH](/img/unity/Img_STObjDome.png)
 
 | 필드 | 기본값 | 설명 |
 |---|---:|---|
@@ -201,22 +217,106 @@ Build에서 메시 데이터를 읽어야 하므로 Import Settings의 `Read/Wri
 |---|---|
 | `HKDTree` | KD 분할 기반 traversal입니다. Refit을 지원하지만 Refit 뒤에는 BVH-style fallback traversal로 전환됩니다. GPU backend는 지원하지 않습니다. |
 | `LBVH` | Morton code 기반으로 HKDTree보다 rebuild가 빠르고 Refit을 지원합니다. 저수준 API로 vertex를 업로드한 뒤 Refit하여 SkinnedMesh나 procedural mesh 변형에 적용할 수 있습니다. Scalar 형식은 GPU backend를 지원하지 않습니다. |
-| `LBVH_SIMD4` | LBVH leaf intersection을 4개 단위로 SIMD 병렬 처리합니다. Refit을 지원하며 GPU backend에서 사용할 수 있습니다. |
-| `LBVH_SIMD8` | LBVH leaf intersection을 8개 단위로 SIMD 병렬 처리합니다. Refit과 GPU backend를 지원하는 현재 기본값입니다. |
-| `LBVH_SIMD16` | LBVH leaf intersection을 16개 단위로 SIMD 병렬 처리합니다. Refit을 지원하며 GPU backend에서 사용할 수 있습니다. |
+| `LBVH_SIMD4` | LBVH leaf intersection을 4개 단위로 SIMD 병렬 처리합니다. Refit 지원 및 GPU Backend 지원. |
+| `LBVH_SIMD8` | LBVH leaf intersection을 8개 단위로 SIMD 병렬 처리하는 현재 기본값입니다. Refit 지원 및 GPU Backend 지원. |
+| `LBVH_SIMD16` | LBVH leaf intersection을 16개 단위로 SIMD 병렬 처리합니다. Refit 지원 및 GPU Backend 지원. |
 
 GPU를 요청한 scene에서 `HKDTree` 또는 scalar `LBVH`를 선택하면 Inspector가 경고합니다.
 
-| Update Mode | 현재 컴포넌트 계약 |
-|---|---|
-| `Static` | 움직이지 않는 mesh에 사용합니다. |
-| `Dynamic` | Transform이 변하는 object에 사용합니다. |
-| `Refit` | 저수준 API에서 vertex가 갱신될 때 사용할 native update 전략입니다. |
-| `Rebuild` | 저수준 API에서 geometry가 다시 제공될 때 사용할 native update 전략입니다. |
+#### Update Mode
 
-`SoundTraceObject` MonoBehaviour는 Transform 변경은 자동 반영하지만, 실행 중 Unity Mesh의
-vertex나 topology 변경을 자동 업로드하지 않습니다. 따라서 `Refit`이나 `Rebuild`를
-선택하는 것만으로 SkinnedMesh 또는 procedural mesh 변형이 자동 반영되지는 않습니다.
+| Update Mode | STCoreV2 update policy | 의미 |
+|---|---|---|
+| `Static` | `EXA_OBJECT_UPDATE_STATIC` (0) | 런타임 TLAS/BLAS 갱신이 없습니다. 움직이지 않는 level geometry에 사용합니다. |
+| `Refit` | `EXA_OBJECT_UPDATE_REFIT` (1) | Deformation용 정책입니다. mesh BLAS를 refit하고 TLAS bounds를 갱신합니다. topology가 유지되는 skinned·procedural mesh가 대상입니다. |
+| `Rebuild` | `EXA_OBJECT_UPDATE_REBUILD` (2) | Topology가 바뀌는 geometry에 사용하며 BVH를 다시 빌드합니다. |
+| `Dynamic` | `EXA_OBJECT_UPDATE_DYNAMIC` (3) | Transform만 바뀔 때 TLAS instance만 갱신합니다. |
+
+#### Refit과 vertex 업로드
+
+`Refit`은 STCoreV2에서 **vertex 변형(skinned animation)을 위한 update policy**입니다.
+다만 core는 vertex를 언제 올릴지 스스로 정하지 않습니다. mesh 갱신은
+`exaMeshUpdateVertices` → `exaMeshRefit`의 2-call protocol이고, object의 `Refit`은 그
+결과가 BLAS와 TLAS bounds에 반영되도록 하는 정책 스위치입니다. 즉 **vertex를 올리는 주체는
+host SDK**입니다.
+
+현재 Unity의 `SoundTraceObject` MonoBehaviour는 Transform만 자동으로 동기화하고 vertex
+업로드는 호출하지 않습니다. `MeshFilter`/`MeshRenderer`를 요구하므로 `SkinnedMeshRenderer`를
+직접 바인딩하지 않고, mesh geometry는 `OnEnable` 시점에 한 번 스냅샷됩니다. 따라서 Unity에서
+skinned·procedural 변형을 사운드에 반영하려면 `Update Mode`를 `Refit`으로 두고 아래처럼
+`MeshCore`로 vertex를 직접 올리십시오. UE 플러그인의 `SoundTracingObjectComponent`는 이
+업로드를 skeletal mesh에 대해 자동으로 수행합니다.
+
+```csharp
+using Exarion.SoundTrace;
+using Exarion.SoundTrace.Core;
+using Exarion.SoundTrace.Native;
+using UnityEngine;
+
+[RequireComponent(typeof(SoundTraceObject))]
+public sealed class SoundTraceSkinnedRefit : MonoBehaviour
+{
+    [SerializeField] private SkinnedMeshRenderer skin;
+
+    private SoundTraceObject _object;
+    private Mesh _baked;
+    private ExaVec3f[] _vertices;
+
+    private void Awake()
+    {
+        _object = GetComponent<SoundTraceObject>();
+        _baked = new Mesh();
+    }
+
+    private void LateUpdate()
+    {
+        SoundMeshCore mesh = _object.MeshCore;
+        if (mesh == null || !mesh.IsValid)
+            return;
+
+        // 1) 현재 pose를 굽고 vertex를 읽습니다. Unity Mesh API이므로 main thread입니다.
+        skin.BakeMesh(_baked);
+        Vector3[] baked = _baked.vertices;
+        if (_vertices == null || _vertices.Length != baked.Length)
+            _vertices = new ExaVec3f[baked.Length];
+        for (int i = 0; i < baked.Length; ++i)
+            _vertices[i] = new ExaVec3f(baked[i].x, baked[i].y, baked[i].z);
+
+        // 2) 업로드와 refit은 control thread에서 2-call protocol로 수행합니다.
+        ExaVec3f[] vertices = _vertices;
+        SoundTraceControlThread.Invoke(() =>
+        {
+            if (mesh.UpdateVertices(vertices))
+                mesh.Refit();
+        });
+    }
+
+    private void OnDestroy()
+    {
+        if (_baked != null)
+            Destroy(_baked);
+    }
+}
+```
+
+주의할 점입니다.
+
+- vertex 개수는 build 시점과 **정확히 일치**해야 합니다. `exaMeshUpdateVertices`는 개수가
+  다르면 `EXA_ERR_INVALID_ARG`로 거부합니다. `MeshFilter.sharedMesh`에 `SkinnedMeshRenderer`의
+  bind pose mesh를 넣어 count를 맞추십시오.
+- vertex는 mesh local 좌표계 그대로 올립니다. object의 position·rotation·scale은
+  `SoundTraceObject`가 별도로 동기화하므로 `BakeMesh`도 scale을 적용하지 않은 형태를
+  사용하십시오.
+- native mesh는 `SoundTraceMeshCache`가 Mesh asset·material slot·BVH 설정을 키로 refcount
+  공유합니다. 같은 조합을 쓰는 object가 여럿이면 하나를 refit할 때 전부 같은 변형을 받습니다.
+  개체별로 다르게 변형하려면 object마다 별도 Mesh instance를 사용하십시오.
+- `SoundTraceControlThread.Invoke`는 blocking 호출입니다. 매 프레임 다수의 object에 대해
+  호출하면 main thread가 control thread의 propagation frame 뒤에서 대기합니다. refit 대상은
+  소수의 object로 제한하십시오.
+- BVH Type은 refit 가능한 `LBVH` 계열을 사용하십시오. `HKDTree`도 refit되지만 이후 traversal이
+  BVH-style fallback으로 전환됩니다.
+- triangle index가 바뀌는 topology 변경은 refit으로 처리할 수 없습니다. `MeshCore.SetData(...)`로
+  다시 빌드하고 `Update Mode`를 `Rebuild`로 두십시오.
 
 ### 공개 메서드
 
@@ -245,8 +345,12 @@ mesh가 없고 child가 geometry를 소유하면 `Add To Child Meshes`를 사용
 - Scattering과 8-band Reflection, Absorption, Transmission 그래프 편집
 - `Transmission Model` 선택
 
+![Material Preset Library](/img/unity/Image_Mat_01.png)
+
 주파수 대역 중심은 `67.5`, `125`, `250`, `500`, `1000`, `2000`, `4000`,
 `8000 Hz`입니다. 재질 순서와 table index는 일치해야 합니다.
+
+![재질 대역별 그래프 편집](/img/unity/Image_Mat_02.png)
 
 ### Transmission Model
 
@@ -264,6 +368,8 @@ JSON에서 `transmissionDistanceToMinus30DbMeters`가 없으면 `Surface`, 정�
 `null`이나 빈 배열이 아니라 생략됩니다.
 
 ## SoundTracePathVisualizer
+
+![SoundTracePathVisualizer Inspector](/img/unity/Img_STPathVisual.png)
 
 Manager와 같은 GameObject에 하나만 추가합니다.
 

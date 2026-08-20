@@ -80,15 +80,27 @@ scene.addCollider(collider);
 | 変更 | API | update type |
 |---|---|---|
 | transform のみ変更 | `object.setPosition(...)` など | object の状態に合わせて更新 |
-| 頂点のみ変更 | `mesh.updateVertices(...)` | `UpdateType.Refit` |
+| 頂点のみ変更 | `mesh.updateVerticesAndRefit(...)` | `UpdateType.Refit` |
 | トポロジーまたは BVH オプションの変更 | `mesh.setData(...)` | `UpdateType.Rebuild` |
 
-refit はトポロジーが保たれるアニメーションジオメトリに使用します。このパスは
-refit 可能な LBVH 系と組み合わせてください。
+refit はトポロジーが保たれるアニメーションジオメトリ（skinned animation、procedural 変形）に
+使用します。このパスは refit 可能な LBVH 系と組み合わせてください。
+
+頂点の更新は core の `exaMeshUpdateVertices` → `exaMeshRefit` という 2-call protocol です。
+`mesh.updateVertices()` は頂点をアップロードするだけで BVH を refit しないため、両方を行う
+`mesh.updateVerticesAndRefit()` を使うか、自分で `mesh.refit()` を呼んでください。頂点数は
+build 時と完全に一致している必要があります。
 
 ```ts
-mesh.updateVertices(vertices);
+mesh.updateVerticesAndRefit(vertices);  // updateVertices + refit
 object.setUpdateType(UpdateType.Refit);
+scene.tick(dt);
+```
+
+`SoundCollider` を使うと 2 つのステップを 1 回で処理できます。
+
+```ts
+collider.refitVertices(vertices);  // updateVerticesAndRefit + setUpdateType(Refit)
 scene.tick(dt);
 ```
 
@@ -99,6 +111,8 @@ mesh.setData(vertices, triangles, buildOptions);
 object.setUpdateType(UpdateType.Rebuild);
 scene.tick(dt);
 ```
+
+`collider.rebuild(vertices, triangles, buildOptions)` が同じ組み合わせを実行します。
 
 ## BVH の選択
 

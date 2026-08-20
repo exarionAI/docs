@@ -270,10 +270,26 @@ exaReset();       // 释放 renderer state 和 default HRTF
 ### Object Update Type
 
 ```c
-exaObjectSetUpdateType(objID, eUpdateTypeData);  // 0=Static, 1=Refit, 2=Rebuild
+exaObjectSetUpdateType(objID, updateType);
+// 0 = EXA_OBJECT_UPDATE_STATIC   : 运行时不更新 TLAS/BLAS
+// 1 = EXA_OBJECT_UPDATE_REFIT    : 形变 - refit BLAS 并更新 TLAS bounds
+// 2 = EXA_OBJECT_UPDATE_REBUILD  : topology 变化 - 重新构建
+// 3 = EXA_OBJECT_UPDATE_DYNAMIC  : 仅 transform 变化 - 刷新 TLAS instance
 ```
 
 静态 object 可以避免每帧 BVH refit 成本。
+
+`Refit` 用于 topology 保持不变、仅 vertex 移动的 geometry，例如 skinned animation。vertex
+本身通过 mesh 侧的 2-call protocol 上传。
+
+```c
+exaMeshUpdateVertices(meshID, vertices, numVertices);  // CPU skinning 路径
+exaMeshRefit(meshID);                                  // refit mesh BVH
+```
+
+`numVertices` 必须与 `exaMeshSetData` 时的 vertex 数量完全一致，不一致会以
+`EXA_ERR_INVALID_ARG` 拒绝。若 topology（triangle index）发生变化，则不能使用 refit：请通过
+`exaMeshSetData` 重新构建，并将 object update type 设为 `Rebuild`。
 
 ## 诊断与统计
 

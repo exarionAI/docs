@@ -314,10 +314,26 @@ basis는 **HRTF 단계에서만** 적용되고(지오메트리는 frame-relative
 ### Object Update Type
 
 ```c
-exaObjectSetUpdateType(objID, eUpdateTypeData);  // 0=Static, 1=Refit, 2=Rebuild
+exaObjectSetUpdateType(objID, updateType);
+// 0 = EXA_OBJECT_UPDATE_STATIC   : 런타임 TLAS/BLAS 갱신 없음
+// 1 = EXA_OBJECT_UPDATE_REFIT    : deformation - BLAS refit + TLAS bounds 갱신
+// 2 = EXA_OBJECT_UPDATE_REBUILD  : topology 변경 - 재빌드
+// 3 = EXA_OBJECT_UPDATE_DYNAMIC  : transform만 변경 - TLAS instance 갱신
 ```
 
 정적 오브젝트는 매 프레임 BVH refit 비용을 피할 수 있습니다.
+
+`Refit`은 skinned animation처럼 topology가 유지된 채 vertex만 움직이는 geometry를 위한
+정책입니다. vertex 자체는 mesh 쪽 2-call protocol로 올립니다.
+
+```c
+exaMeshUpdateVertices(meshID, vertices, numVertices);  // CPU skinning 경로
+exaMeshRefit(meshID);                                  // mesh BVH refit
+```
+
+`numVertices`는 `exaMeshSetData` 시점의 vertex 개수와 정확히 같아야 하며, 다르면
+`EXA_ERR_INVALID_ARG`로 거부됩니다. topology(triangle index)가 바뀌면 refit이 아니라
+`exaMeshSetData`로 다시 빌드하고 object update type을 `Rebuild`로 두십시오.
 
 ## 진단·통계
 

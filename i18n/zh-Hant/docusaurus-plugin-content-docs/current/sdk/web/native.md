@@ -79,14 +79,26 @@ scene.addCollider(collider);
 | 變更 | API | update type |
 |---|---|---|
 | 僅 transform 變更 | `object.setPosition(...)` 等 | 依 object 狀態更新 |
-| 僅頂點變更 | `mesh.updateVertices(...)` | `UpdateType.Refit` |
+| 僅頂點變更 | `mesh.updateVerticesAndRefit(...)` | `UpdateType.Refit` |
 | 拓撲或 BVH 選項變更 | `mesh.setData(...)` | `UpdateType.Rebuild` |
 
-Refit 用於維持拓撲的動畫幾何體，請與可 refit 的 LBVH 系列搭配使用。
+Refit 用於維持拓撲的動畫幾何體（skinned animation、procedural 形變），請與可 refit 的
+LBVH 系列搭配使用。
+
+頂點更新在 core 中是 `exaMeshUpdateVertices` → `exaMeshRefit` 的 2-call protocol。
+`mesh.updateVertices()` 只會上傳頂點而不會 refit BVH，因此請使用同時完成兩步的
+`mesh.updateVerticesAndRefit()`，或自行再呼叫 `mesh.refit()`。頂點數量必須與建置時完全一致。
 
 ```ts
-mesh.updateVertices(vertices);
+mesh.updateVerticesAndRefit(vertices);  // updateVertices + refit
 object.setUpdateType(UpdateType.Refit);
+scene.tick(dt);
+```
+
+使用 `SoundCollider` 可以一次完成這兩個步驟。
+
+```ts
+collider.refitVertices(vertices);  // updateVerticesAndRefit + setUpdateType(Refit)
 scene.tick(dt);
 ```
 
@@ -97,6 +109,8 @@ mesh.setData(vertices, triangles, buildOptions);
 object.setUpdateType(UpdateType.Rebuild);
 scene.tick(dt);
 ```
+
+`collider.rebuild(vertices, triangles, buildOptions)` 會執行相同的組合。
 
 ## BVH 選擇
 
