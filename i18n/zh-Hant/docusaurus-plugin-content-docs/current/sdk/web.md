@@ -64,7 +64,7 @@ const sound = await SoundTrace.create(audioContext, {
   mode: 'single_thread',
   quality: 'balanced',
   coordinateBasis: {
-    right: [-1, 0, 0],
+    right: [1, 0, 0],
     up: [0, 1, 0],
     forward: [0, 0, -1],
   },
@@ -88,8 +88,11 @@ sound.listener.setPose({
 await sound.update(0);
 ```
 
-Three.js 相機朝向 `-Z`，因此應使用上面的座標基底。如果座標基底錯誤，HRTF 的左右
-或前後方向會被鏡像。
+Three.js 相機朝向 `-Z`，因此應使用上面的座標基底
+（`{ right: [1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }`）。座標基底是一次性
+宣告宿主 right/up/forward 軸對應關係的常數；聆聽者 orientation 直接傳入
+`camera.quaternion` 即可——無需在宿主側做軸翻轉或偏航補償。如果座標基底錯誤，
+HRTF 的左右或前後方向會被鏡像。
 
 ## 選擇 HRTF
 

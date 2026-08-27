@@ -64,7 +64,7 @@ const sound = await SoundTrace.create(audioContext, {
   mode: 'single_thread',
   quality: 'balanced',
   coordinateBasis: {
-    right: [-1, 0, 0],
+    right: [1, 0, 0],
     up: [0, 1, 0],
     forward: [0, 0, -1],
   },
@@ -88,8 +88,11 @@ sound.listener.setPose({
 await sound.update(0);
 ```
 
-Three.js 相机朝向 `-Z`，因此应使用上面的坐标基。如果坐标基错误，HRTF 的左右或前后
-方向会被镜像。
+Three.js 相机朝向 `-Z`，因此应使用上面的坐标基
+（`{ right: [1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }`）。坐标基是一次性
+声明宿主 right/up/forward 轴对应关系的常量；监听者 orientation 直接传入
+`camera.quaternion` 即可——无需在宿主侧做轴翻转或偏航补偿。如果坐标基错误，
+HRTF 的左右或前后方向会被镜像。
 
 ## 选择 HRTF
 
