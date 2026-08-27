@@ -66,7 +66,7 @@ const sound = await SoundTrace.create(audioContext, {
   mode: 'single_thread',
   quality: 'balanced',
   coordinateBasis: {
-    right: [-1, 0, 0],
+    right: [1, 0, 0],
     up: [0, 1, 0],
     forward: [0, 0, -1],
   },
@@ -90,8 +90,11 @@ sound.listener.setPose({
 await sound.update(0);
 ```
 
-Three.js のカメラは `-Z` を向くため、上記の座標基底を使用します。基底が正しくないと、
-HRTF の左右または前後方向が反転します。
+Three.js のカメラは `-Z` を向くため、上記の座標基底
+（`{ right: [1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }`）を使用します。
+基底はホストの right/up/forward 軸の対応を一度だけ宣言する定数で、リスナーの
+orientation は `camera.quaternion` をそのまま渡します — ホスト側の軸反転や
+ヨー補正は不要です。基底が正しくないと、HRTF の左右または前後方向が反転します。
 
 ## HRTF の選択
 

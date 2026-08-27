@@ -67,7 +67,7 @@ const sound = await SoundTrace.create(audioContext, {
   mode: 'single_thread',
   quality: 'balanced',
   coordinateBasis: {
-    right: [-1, 0, 0],
+    right: [1, 0, 0],
     up: [0, 1, 0],
     forward: [0, 0, -1],
   },
@@ -91,9 +91,12 @@ sound.listener.setPose({
 await sound.update(0);
 ```
 
-Three.js cameras look toward `-Z`, so use the coordinate basis shown above.
-Without the correct basis, left/right or front/back HRTF direction can be
-mirrored.
+Three.js cameras look toward `-Z`, so use the coordinate basis shown above
+(`{ right: [1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }`). The basis is a
+one-time constant declaring where the host's right/up/forward axes sit; pass
+the listener orientation (`camera.quaternion`) as-is — no host-side axis flips
+or yaw corrections are needed. Without the correct basis, left/right or
+front/back HRTF direction can be mirrored.
 
 ## HRTF selection
 

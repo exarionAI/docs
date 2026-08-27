@@ -52,7 +52,7 @@ Three.js 的相機朝向 `-Z`，因此可以從下列 basis 開始。
 const sound = await SoundTrace.create(audioContext, {
   mode: 'single_thread',
   coordinateBasis: {
-    right: [-1, 0, 0],
+    right: [1, 0, 0],
     up: [0, 1, 0],
     forward: [0, 0, -1],
   },

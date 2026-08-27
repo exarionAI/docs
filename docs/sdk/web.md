@@ -67,7 +67,7 @@ const sound = await SoundTrace.create(audioContext, {
   mode: 'single_thread',
   quality: 'balanced',
   coordinateBasis: {
-    right: [-1, 0, 0],
+    right: [1, 0, 0],
     up: [0, 1, 0],
     forward: [0, 0, -1],
   },
@@ -91,8 +91,13 @@ sound.listener.setPose({
 await sound.update(0);
 ```
 
-Three.js는 카메라가 `-Z`를 바라보므로 위 `coordinateBasis`를 사용합니다. 좌표 basis를
-생략하면 좌우 또는 전후 HRTF 방향이 뒤집혀 들릴 수 있습니다.
+Three.js는 카메라가 `-Z`를 바라보므로 위 `coordinateBasis`
+(`{ right: [1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }`)를 사용합니다.
+basis는 호스트의 right/up/forward 축이 어디에 앉는지를 선언하는 상수 1회
+선언이고, 리스너 orientation은 `camera.quaternion`을 그대로 전달합니다 —
+축 반전이나 요(yaw) 보정 같은 호스트 측 워크어라운드는 필요 없습니다.
+좌표 basis를 생략하거나 잘못 선언하면 좌우 또는 전후 HRTF 방향이 뒤집혀
+들릴 수 있습니다.
 
 ## HRTF 선택
 
