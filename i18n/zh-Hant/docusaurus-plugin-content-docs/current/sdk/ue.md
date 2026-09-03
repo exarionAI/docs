@@ -79,7 +79,7 @@ SDK sample project 使用以下 Windows audio 值作為起點：
 |---|---:|
 | Audio Sample Rate | `48000` Hz |
 | Callback Buffer Frame Size | `1024` |
-| Buffers To Enqueue | `1` |
+| Buffers To Enqueue | `2` |
 
 這些是 sample 值，不是 plugin 的硬性需求。若專案的 audio budget 不同，請先以這些值確認
 功能，再調整 callback 與 buffer size。
@@ -122,7 +122,17 @@ SDK sample project 使用以下 Windows audio 值作為起點：
 | `Propagation Thread Count` | `-1` | `-1..64`。`-1` 讓 STCoreV2 使用邏輯 core 數減一；`0` 或 `1` 為 serial。GPU 模式停用。需要重啟 |
 | `Use GPU Backend` | 關閉 | 要求 Dawn/WebGPU 初始化，失敗時 fallback 到 CPU。需要重啟 |
 | `Path Cache Size` | `256` | `0..1024`。所有 active source 共用的 cache budget。`0` 停用 cache |
-| `Propagation Interval (ms)` | `0` | `0..500`。`0` 表示每個 game tick 要求一次；上一個 frame 執行中會合併要求 |
+| `Propagation Interval (ms)` | `0` | `0..500`。`0` 表示每個 game tick 要求一次；上一個 frame 執行中會合併要求。Unity sample scene 皆使用 `50` |
+
+### Sources
+
+| 欄位 | 預設值 | 說明 |
+|---|---:|---|
+| `Source Ray Resolution Cap` | `0` | `0..32`。所有 source 的 reverb ray grid 上限。`0` 保留 source asset 的值。source 較多時最先調低的值。Unity sample scene 在 1~2 個 source 時用 `8`，8 個時用 `24` |
+| `Source Ray Depth Cap` | `0` | `0..16`。所有 source 的 reverb ray depth 上限。`0` 保留 source asset 的值 |
+
+兩個上限疊加在 source asset 的 `Ray Preset` / `Ray Resolution` 之上；設為 `0`（繼承 Listener）的 source 依 Listener grid 裁切。
+在 Project Settings 中修改後會立即套用到正在播放的 source。
 
 ### Listener、Attenuation 與 Materials
 
@@ -132,8 +142,8 @@ SDK sample project 使用以下 Windows audio 值作為起點：
 | `Default Source Attenuation Strengths` | 每個 path `1.0` | Source asset 不覆寫 project attenuation 時使用。範圍 `0.5..1.5` |
 | `Material Preset Library` | 空 | 空時使用內建 `SoundTraceMaterialPresetLibrary`。選擇其他 library 後需要重啟 |
 
-SDK sample project 的 `DefaultGame.ini` 為示範 override 成 `Middle` 並啟用 GPU。Plugin 本身的
-預設值如上表。
+SDK sample project 的 `DefaultGame.ini` 為示範 override 成 `Middle`、啟用 GPU、`Propagation Interval` `50 ms`、
+Source Ray Cap `16` / depth `4`。Plugin 本身的預設值如上表。
 
 ## SoundTracingListenerComponent
 
@@ -213,6 +223,7 @@ source 應共用一個 asset，不必為每個 Audio Component 複製。
 | `Gain Boost Db` | `0 dB` | `-24..24 dB`。在 Intensity 之上增加的 gain |
 | `Reverb Send Db` | `0 dB` | `-24..24 dB`。Late reverb send |
 | `Reflection Send Db` | `0 dB` | `-24..24 dB`。Early reflection send |
+| `Ray Preset` | `Custom` | `Custom`、`Fast`（8×8，depth 4）、`Middle`（16×16，depth 4）、`Quality`（24×24，depth 4）。非 `Custom` 時以 preset 值覆寫下面兩個值。對應 Unity `SoundTraceSource` 的 `Reverb Ray Resolution`，套用於共用該 asset 的所有 source |
 | `Ray Resolution` | `24` | `0..32`。`0` 繼承 Listener grid；其他值使用 `N × N` source reverb ray |
 | `Ray Depth` | `4` | `0..16`。`0` 繼承 Listener depth |
 | `Direct/Reflection/Diffraction/Reverb/Transmission` | 全部開啟 | 依 Source 啟用 path family |
@@ -425,8 +436,25 @@ project 的 Content，只複製 `Plugins/SoundTracing` 時不會包含。
 | GPU fallback 到 CPU | `webgpu_dawn.dll`、支援 GPU 的 native build、adapter/device、Output Log、`SoundTracing.DumpGpuPropagationStats` |
 | 看不到 Path | Niagara plugin、Visualizer enable、max path 數、Source/Listener path enable |
 | Teleport 後 pitch 跳變 | 移動後立即呼叫 Listener Component 或 Subsystem 的 `ResetMotionState()` |
-| 多 Source 時 dropout | HRTF Path Budget `1`、`Merged4`、較低 quality preset、callback/buffer 設定 |
+| 多 Source 時 dropout | 依下方 [多 Source 時斷續](#多-source-時斷續) 清單順序檢查 |
 | Editor 結束時 stack overflow | 使用包含 control-thread shutdown fix 的最終 0.2.0 plugin |
+
+### 多 Source 時斷續
+
+以下順序可把負載對齊到 Unity sample scene。每次只改一項，並用 `SoundTracing.Status` 確認。
+
+1. 把 `Propagation Interval (ms)` 提高到 `50`。為 `0` 時每個 game tick 都會跑一次 propagation frame，持續佔用 CPU。Unity sample scene 皆為 `50`。
+2. 把 `Source Ray Resolution Cap` 設為 `8..16`，或把 source asset 的 `Ray Preset` 改為 `Fast`。每個 source 都會發射自己的 reverb ray，開銷隨 source 數量成長。
+3. 把 Listener preset 降到 `Fast`。HRTF Path Budget `1` 與 `Merged4` 保持預設。
+4. 把 `Propagation Thread Count` 明確設為 `2..3`。`-1` 會把除一個之外的所有邏輯 core 交給 propagation，而 Unreal 的 game/render/RHI/audio thread 已經在佔用 core。Unity sample scene 使用 `2..3`。
+5. 把 `Project Settings > Platforms > Windows > Audio` 的 `Buffers To Enqueue` 保持在 `2` 以上。為 `1` 時 callback 只要晚一次就會 dropout。
+6. 執行兩次 `SoundTracing.Status`。第二次輸出的 audio-thread probe 會給出兩次呼叫之間 `exaRenderSound` 的平均/最大耗時及其佔 wall time 的比例。若相對 block budget（1024 frames @ 48 kHz = 21.3 ms）偏高，繼續調低第 2、3 項。
+7. 執行 `SoundTracing.DumpConfig`，確認 `simdTarget` 為 `AVX2` 或更高。若為 `SSE2`，表示 `exaSound.dll` 沒有 SIMD runtime dispatch，需要重新建置 STCoreV2 dev。
+8. 關閉 `Use GPU Backend`，與純 CPU 執行比較。Unity sample scene 使用 CPU backend。
+
+STCoreV2 `3fb0dccf`（2026-08-31）把 fallback delay policy 從 `D` 回退為 `A`，early settle 從 `6` 回退為 `0.5`。
+Unity SDK 附帶的 DLL（`3d9ddf83`）早於該回退，audio thread 的 render 開銷約低 26%。
+在啟動 Editor 前設定環境變數 `EXA_FALLBACK_DELAY_POLICY=D` 與 `EXA_EARLY_SETTLE_SAMPLES=6`，即可用同一 DLL 做 A/B 比較。該值只在 DLL 載入時讀取一次。
 
 ## 下一步
 

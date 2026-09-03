@@ -83,7 +83,7 @@ The SDK sample project uses these Windows audio values as a starting point:
 |---|---:|
 | Audio Sample Rate | `48000` Hz |
 | Callback Buffer Frame Size | `1024` |
-| Buffers To Enqueue | `1` |
+| Buffers To Enqueue | `2` |
 
 These are sample values, not hard plugin requirements. If your project has a different audio
 budget, verify functionality with these values first, then tune callback and buffer sizes.
@@ -128,7 +128,18 @@ listener and uses Default Listener Settings from Project Settings.
 | `Propagation Thread Count` | `-1` | `-1..64`. `-1` lets STCoreV2 use logical cores minus one. `0` or `1` is serial. Disabled while GPU mode is selected. Restart required |
 | `Use GPU Backend` | Off | Requests Dawn/WebGPU initialization and falls back to CPU on failure. Restart required |
 | `Path Cache Size` | `256` | `0..1024`. Shared cache budget for all active sources. `0` disables the cache |
-| `Propagation Interval (ms)` | `0` | `0..500`. `0` requests one frame per game tick; requests coalesce while a frame is running |
+| `Propagation Interval (ms)` | `0` | `0..500`. `0` requests one frame per game tick; requests coalesce while a frame is running. Every Unity sample scene uses `50` |
+
+### Sources
+
+| Field | Default | Description |
+|---|---:|---|
+| `Source Ray Resolution Cap` | `0` | `0..32`. Upper bound for every source's reverb-ray grid. `0` leaves the source assets alone. Lower this first when many sources play; the Unity sample scenes use `8` with one or two sources and `24` with eight |
+| `Source Ray Depth Cap` | `0` | `0..16`. Upper bound for every source's reverb-ray depth. `0` leaves the source assets alone |
+
+Both caps apply on top of the source asset's `Ray Preset` / `Ray Resolution`; a source set to `0`
+(inherit) is clamped against the Listener grid. Changing them in Project Settings re-applies to
+playing sources immediately.
 
 ### Listener, Attenuation, and Materials
 
@@ -138,8 +149,9 @@ listener and uses Default Listener Settings from Project Settings.
 | `Default Source Attenuation Strengths` | `1.0` per path | Used by Source assets that do not override project attenuation. Range `0.5..1.5` |
 | `Material Preset Library` | Empty | Uses the bundled `SoundTraceMaterialPresetLibrary` when empty. Restart after selecting another library |
 
-The SDK sample project's `DefaultGame.ini` overrides these defaults with `Middle` and GPU
-enabled for demonstration. The plugin defaults are listed above.
+The SDK sample project's `DefaultGame.ini` overrides these defaults with `Middle`, GPU enabled,
+a `50 ms` propagation interval, and a source ray cap of `16` / depth `4` for demonstration. The
+plugin defaults are listed above.
 
 ## SoundTracingListenerComponent
 
@@ -219,6 +231,7 @@ Share one asset between sources with the same role instead of duplicating it per
 | `Gain Boost Db` | `0 dB` | `-24..24 dB`. Additional gain above Intensity |
 | `Reverb Send Db` | `0 dB` | `-24..24 dB`. Late-reverb send |
 | `Reflection Send Db` | `0 dB` | `-24..24 dB`. Early-reflection send |
+| `Ray Preset` | `Custom` | `Custom`, `Fast` (8×8, depth 4), `Middle` (16×16, depth 4), `Quality` (24×24, depth 4). Anything but `Custom` overwrites the two values below. This is the Unity `SoundTraceSource` `Reverb Ray Resolution` and applies to every source sharing the asset |
 | `Ray Resolution` | `24` | `0..32`. `0` inherits the Listener grid; otherwise uses an `N × N` source reverb grid |
 | `Ray Depth` | `4` | `0..16`. `0` inherits Listener depth |
 | `Direct/Reflection/Diffraction/Reverb/Transmission` | All on | Enables each path family per source |
@@ -436,8 +449,28 @@ host project's Content and is not included when only `Plugins/SoundTracing` is c
 | GPU falls back to CPU | `webgpu_dawn.dll`, GPU-enabled native build, adapter/device, Output Log, and `SoundTracing.DumpGpuPropagationStats` |
 | Paths are not visible | Niagara plugin, Visualizer enabled, max path count, and Source/Listener path enables |
 | Pitch jumps after teleport | Call `ResetMotionState()` on the Listener Component or Subsystem immediately after moving |
-| Dropouts with many sources | HRTF Path Budget `1`, `Merged4`, a lower quality preset, then callback/buffer settings |
+| Dropouts with many sources | Follow the [Dropouts with many sources](#dropouts-with-many-sources) checklist below |
 | Stack overflow when Editor exits | Use the final 0.2.0 plugin containing the control-thread shutdown fix |
+
+### Dropouts with many sources
+
+This is the order that brings the load profile in line with the Unity sample scenes. Change one
+step at a time and confirm with `SoundTracing.Status`.
+
+1. Raise `Propagation Interval (ms)` to `50`. At `0` a propagation frame runs every game tick and keeps the CPU busy. Every Unity sample scene uses `50`.
+2. Set `Source Ray Resolution Cap` to `8..16`, or switch the source asset's `Ray Preset` to `Fast`. Each source traces its own reverb rays, so the cost scales with the source count.
+3. Drop the Listener preset to `Fast`. Keep HRTF Path Budget `1` and `Merged4` at their defaults.
+4. Set `Propagation Thread Count` explicitly to `2..3`. `-1` hands every logical core but one to propagation while Unreal's game, render, RHI, and audio threads already need cores. The Unity sample scenes use `2..3`.
+5. Keep `Buffers To Enqueue` in `Project Settings > Platforms > Windows > Audio` at `2` or more. With `1` a single late callback is an audible dropout.
+6. Run `SoundTracing.Status` twice. The second output's audio-thread probe reports the mean/max `exaRenderSound` time and its share of wall time between the two calls. Lower steps 2 and 3 further when the share approaches the block budget (1024 frames @ 48 kHz = 21.3 ms).
+7. Run `SoundTracing.DumpConfig` and check that `simdTarget` is `AVX2` or better. `SSE2` means an `exaSound.dll` without SIMD runtime dispatch; rebuild STCoreV2 dev.
+8. Turn `Use GPU Backend` off to compare with a CPU-only run. The Unity sample scenes use the CPU backend.
+
+STCoreV2 `3fb0dccf` (2026-08-31) rolled the fallback delay policy back from `D` to `A` and the early
+settle window from `6` to `0.5`. The DLL shipped with the Unity SDK (`3d9ddf83`) predates that rollback
+and renders roughly 26% cheaper on the audio thread. Set the environment variables
+`EXA_FALLBACK_DELAY_POLICY=D` and `EXA_EARLY_SETTLE_SAMPLES=6` before launching the Editor to A/B the
+two behaviours with the same DLL; they are read once when the DLL loads.
 
 ## Next
 

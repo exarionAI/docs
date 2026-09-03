@@ -83,7 +83,7 @@ SDK sample project は次の Windows audio 設定を開始点として使用し�
 |---|---:|
 | Audio Sample Rate | `48000` Hz |
 | Callback Buffer Frame Size | `1024` |
-| Buffers To Enqueue | `1` |
+| Buffers To Enqueue | `2` |
 
 これらは plugin の固定要件ではなく sample 値です。既存プロジェクトの audio budget が
 異なる場合は、まずこの値で動作を確認してから callback と buffer size を調整してください。
@@ -127,7 +127,17 @@ listener を追跡し、Project Settings の Default Listener Settings を使用
 | `Propagation Thread Count` | `-1` | `-1..64`。`-1` は STCoreV2 が論理 core 数 - 1 を選択。`0` または `1` は serial。GPU 使用中は無効。再起動が必要 |
 | `Use GPU Backend` | オフ | Dawn/WebGPU の初期化を要求し、失敗時は CPU に fallback。再起動が必要 |
 | `Path Cache Size` | `256` | `0..1024`。全 active source が共有する cache budget。`0` は cache 無効 |
-| `Propagation Interval (ms)` | `0` | `0..500`。`0` は game tick ごとに要求し、実行中の frame があれば要求を統合 |
+| `Propagation Interval (ms)` | `0` | `0..500`。`0` は game tick ごとに要求し、実行中の frame があれば要求を統合。Unity sample scene はすべて `50` |
+
+### Sources
+
+| フィールド | 既定値 | 説明 |
+|---|---:|---|
+| `Source Ray Resolution Cap` | `0` | `0..32`。全 source の reverb ray grid の上限。`0` は source asset の値をそのまま使用。source が多いときに最初に下げる値。Unity sample scene は source 1〜2 個で `8`、8 個で `24` |
+| `Source Ray Depth Cap` | `0` | `0..16`。全 source の reverb ray depth の上限。`0` は source asset の値をそのまま使用 |
+
+両方の上限は source asset の `Ray Preset` / `Ray Resolution` の上に適用され、`0`(Listener 継承)の source は
+Listener grid を基準に制限されます。Project Settings で変更すると再生中の source にも即時反映されます。
 
 ### Listener、Attenuation、Materials
 
@@ -137,8 +147,8 @@ listener を追跡し、Project Settings の Default Listener Settings を使用
 | `Default Source Attenuation Strengths` | path ごとに `1.0` | Source asset が project attenuation を使用する場合に適用。範囲 `0.5..1.5` |
 | `Material Preset Library` | 空 | 空の場合は同梱 `SoundTraceMaterialPresetLibrary` を使用。別 library を指定した後は再起動 |
 
-SDK sample project の `DefaultGame.ini` はデモ用に `Middle` と GPU 有効を override します。
-Plugin 自体の既定値は上表のとおりです。
+SDK sample project の `DefaultGame.ini` はデモ用に `Middle`、GPU 有効、`Propagation Interval` `50 ms`、
+Source Ray Cap `16` / depth `4` を override します。Plugin 自体の既定値は上表のとおりです。
 
 ## SoundTracingListenerComponent
 
@@ -219,6 +229,7 @@ Content Browser の
 | `Gain Boost Db` | `0 dB` | `-24..24 dB`。Intensity に追加する gain |
 | `Reverb Send Db` | `0 dB` | `-24..24 dB`。Late reverb send |
 | `Reflection Send Db` | `0 dB` | `-24..24 dB`。Early reflection send |
+| `Ray Preset` | `Custom` | `Custom`、`Fast`(8×8、depth 4)、`Middle`(16×16、depth 4)、`Quality`(24×24、depth 4)。`Custom` 以外は下の 2 値を preset 値で上書き。Unity `SoundTraceSource` の `Reverb Ray Resolution` に相当し、asset を共有する全 source に適用 |
 | `Ray Resolution` | `24` | `0..32`。`0` は Listener grid を継承。それ以外は `N × N` source reverb ray |
 | `Ray Depth` | `4` | `0..16`。`0` は Listener depth を継承 |
 | `Direct/Reflection/Diffraction/Reverb/Transmission` | すべてオン | Source ごとの path family enable |
@@ -437,8 +448,25 @@ integration の場合だけ、この contract を手動で適用してくださ�
 | GPU が CPU に fallback | `webgpu_dawn.dll`、GPU 対応 native build、adapter/device、Output Log、`SoundTracing.DumpGpuPropagationStats` |
 | Path が見えない | Niagara plugin、Visualizer enable、max path 数、Source/Listener path enable |
 | Teleport 後に pitch が跳ねる | 移動直後に Listener Component または Subsystem の `ResetMotionState()` を呼ぶ |
-| Source が多いと dropout | HRTF Path Budget `1`、`Merged4`、低い quality preset、callback/buffer 設定の順に確認 |
+| Source が多いと dropout | 下の [Source が多いときの途切れ](#source-が多いときの途切れ) チェックリストの順に確認 |
 | Editor 終了時 stack overflow | Control-thread shutdown fix を含む最終 0.2.0 plugin を使用 |
+
+### Source が多いときの途切れ
+
+Unity sample scene と同じ負荷プロファイルに合わせる順序です。1 段階ずつ変更し、`SoundTracing.Status` で確認してください。
+
+1. `Propagation Interval (ms)` を `50` に上げます。`0` では game tick ごとに propagation frame が走り CPU を占有し続けます。Unity sample scene はすべて `50` です。
+2. `Source Ray Resolution Cap` を `8..16` にするか、source asset の `Ray Preset` を `Fast` にします。source ごとに reverb ray を飛ばすため、コストは source 数に比例します。
+3. Listener preset を `Fast` に下げます。HRTF Path Budget `1` と `Merged4` は既定値のままにします。
+4. `Propagation Thread Count` を `2..3` に明示します。`-1` は論理 core を 1 つ残して全部 propagation に使いますが、Unreal は game/render/RHI/audio thread が既に core を使っています。Unity sample scene は `2..3` です。
+5. `Project Settings > Platforms > Windows > Audio` の `Buffers To Enqueue` を `2` 以上にします。`1` では callback が一度遅れるだけで dropout になります。
+6. `SoundTracing.Status` を 2 回実行します。2 回目の出力の audio-thread probe が、2 回の呼び出し間の `exaRenderSound` 平均/最大時間と wall-time 占有率を示します。block budget(1024 frames @ 48 kHz = 21.3 ms)に対して高ければ 2〜3 をさらに下げます。
+7. `SoundTracing.DumpConfig` で `simdTarget` が `AVX2` 以上か確認します。`SSE2` なら SIMD runtime dispatch のない `exaSound.dll` なので STCoreV2 dev を再ビルドしてください。
+8. `Use GPU Backend` を切って CPU のみで比較します。Unity sample scene は CPU backend です。
+
+STCoreV2 `3fb0dccf`(2026-08-31)は fallback delay policy を `D` から `A` に、early settle を `6` から `0.5` に戻しました。
+Unity SDK が配布する DLL(`3d9ddf83`)はその前の値で、audio thread の render コストが約 26% 低くなります。
+Editor 起動前に環境変数 `EXA_FALLBACK_DELAY_POLICY=D` と `EXA_EARLY_SETTLE_SAMPLES=6` を設定すると同じ DLL で A/B 比較できます。値は DLL load 時に一度だけ読まれます。
 
 ## 次に読む
 

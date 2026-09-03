@@ -83,7 +83,7 @@ SDK 샘플 프로젝트는 다음 Windows audio 설정을 시작점으로 사용
 |---|---:|
 | Audio Sample Rate | `48000` Hz |
 | Callback Buffer Frame Size | `1024` |
-| Buffers To Enqueue | `1` |
+| Buffers To Enqueue | `2` |
 
 이 값은 플러그인의 고정 요구 사항이 아니라 샘플 기준입니다. 기존 프로젝트의 audio
 budget이 다르면 먼저 위 설정으로 동작을 확인한 뒤 callback 크기와 buffer 수를 조정하십시오.
@@ -127,7 +127,17 @@ Project Settings의 Default Listener Settings를 사용합니다.
 | `Propagation Thread Count` | `-1` | `-1..64`. `-1`은 STCoreV2가 논리 core 수에서 하나를 뺀 값을 선택합니다. `0` 또는 `1`은 serial입니다. GPU 사용 중에는 비활성화됩니다. 재시작 필요 |
 | `Use GPU Backend` | 꺼짐 | Dawn/WebGPU 초기화를 요청합니다. 실패하면 CPU로 fallback합니다. 재시작 필요 |
 | `Path Cache Size` | `256` | `0..1024`. 모든 active source가 공유하는 path cache budget입니다. `0`은 cache를 끕니다. |
-| `Propagation Interval (ms)` | `0` | `0..500`. `0`은 game tick마다 요청하며, 이전 frame이 실행 중이면 요청을 합칩니다. |
+| `Propagation Interval (ms)` | `0` | `0..500`. `0`은 game tick마다 요청하며, 이전 frame이 실행 중이면 요청을 합칩니다. Unity 샘플 씬은 모두 `50`을 사용합니다. |
+
+### Sources
+
+| 필드 | 기본값 | 설명 |
+|---|---:|---|
+| `Source Ray Resolution Cap` | `0` | `0..32`. 모든 source의 reverb ray grid 상한입니다. `0`은 source asset 값을 그대로 둡니다. Source가 많을 때 가장 먼저 낮추는 값입니다. Unity 샘플 씬은 source 1~2개에 `8`, 8개에 `24`를 씁니다. |
+| `Source Ray Depth Cap` | `0` | `0..16`. 모든 source의 reverb ray depth 상한입니다. `0`은 source asset 값을 그대로 둡니다. |
+
+두 값은 source asset의 `Ray Preset`/`Ray Resolution` 위에 적용되며, `0`(Listener 상속)인 source는
+Listener grid를 기준으로 잘립니다. Project Settings에서 바꾸면 재생 중인 source에도 즉시 반영됩니다.
 
 ### Listener, Attenuation과 Materials
 
@@ -137,8 +147,8 @@ Project Settings의 Default Listener Settings를 사용합니다.
 | `Default Source Attenuation Strengths` | path별 `1.0` | Source asset이 project attenuation을 사용하도록 설정했을 때 적용합니다. 범위는 `0.5..1.5`입니다. |
 | `Material Preset Library` | 비어 있음 | 비어 있으면 plugin의 `SoundTraceMaterialPresetLibrary`를 사용합니다. 다른 library를 지정하면 재시작해야 합니다. |
 
-SDK 샘플 프로젝트의 `DefaultGame.ini`는 데모용으로 `Middle`, GPU backend 켜짐을
-override합니다. Plugin 자체의 기본값은 위 표와 같습니다.
+SDK 샘플 프로젝트의 `DefaultGame.ini`는 데모용으로 `Middle`, GPU backend 켜짐, `Propagation Interval`
+`50 ms`, Source Ray Cap `16` / depth `4`를 override합니다. Plugin 자체의 기본값은 위 표와 같습니다.
 
 ## SoundTracingListenerComponent
 
@@ -218,6 +228,7 @@ Content Browser에서 `Sounds > SoundTracing > SoundTracing Audio Spatialization
 | `Gain Boost Db` | `0 dB` | `-24..24 dB`. Intensity 위에 적용하는 추가 gain |
 | `Reverb Send Db` | `0 dB` | `-24..24 dB`. Late reverb send |
 | `Reflection Send Db` | `0 dB` | `-24..24 dB`. Early reflection send |
+| `Ray Preset` | `Custom` | `Custom`, `Fast`(8×8, depth 4), `Middle`(16×16, depth 4), `Quality`(24×24, depth 4). `Custom`이 아니면 아래 두 값을 preset 값으로 덮어씁니다. Unity `SoundTraceSource`의 `Reverb Ray Resolution`에 해당하며, asset을 공유하는 모든 source에 적용됩니다. |
 | `Ray Resolution` | `24` | `0..32`. `0`은 Listener의 ray grid를 상속하고 그 외 값은 `N × N` source reverb ray를 사용 |
 | `Ray Depth` | `4` | `0..16`. `0`은 Listener의 depth를 상속 |
 | `Direct/Reflection/Diffraction/Reverb/Transmission` | 모두 켜짐 | Source별 path family enable |
@@ -436,8 +447,26 @@ listener basis: right=(1,0,0), up=(0,1,0), forward=(0,0,-1)
 | GPU가 CPU로 fallback | `webgpu_dawn.dll`, GPU 포함 native build, adapter/device, Output Log와 `SoundTracing.DumpGpuPropagationStats` 확인 |
 | Path가 보이지 않음 | Niagara plugin, Visualizer의 enable 상태, max path 수와 source/listener path enable 확인 |
 | Teleport 뒤 pitch가 튐 | 이동 직후 Listener Component 또는 Subsystem의 `ResetMotionState()` 호출 |
-| Source가 많을 때 dropout | HRTF Path Budget `1`, `Merged4`, 낮은 quality preset, callback/buffer 설정 순서로 확인 |
+| Source가 많을 때 dropout | 아래 [Source가 많을 때 끊김](#source가-많을-때-끊김) 체크리스트 순서로 확인 |
 | Editor 종료 시 stack overflow | Control thread shutdown fix가 포함된 최종 0.2.0 plugin인지 확인 |
+
+### Source가 많을 때 끊김
+
+Unity 샘플 씬과 같은 부하 프로파일로 맞추는 순서입니다. 한 단계씩 바꾸고 `SoundTracing.Status`로 확인하십시오.
+
+1. `Propagation Interval (ms)`를 `50`으로 올립니다. `0`이면 매 game tick마다 propagation frame이 돌아 CPU를 계속 점유합니다. Unity 샘플 씬은 모두 `50`입니다.
+2. `Source Ray Resolution Cap`을 `8..16`으로 두거나 source asset의 `Ray Preset`을 `Fast`로 바꿉니다. Source마다 자체 reverb ray를 쏘므로 source 수에 비례해 비용이 늘어납니다.
+3. Listener preset을 `Fast`로 내립니다. HRTF Path Budget `1`, `Merged4`는 기본값 그대로 둡니다.
+4. `Propagation Thread Count`를 `2..3`으로 명시합니다. `-1`은 논리 core 수에서 하나만 남기고 전부 propagation에 쓰는데, Unreal은 game/render/RHI/audio thread가 이미 core를 쓰고 있습니다. Unity 샘플 씬은 `2..3`을 씁니다.
+5. `Project Settings > Platforms > Windows > Audio`의 `Buffers To Enqueue`를 `2` 이상으로 둡니다. `1`이면 callback이 한 번만 늦어도 바로 dropout이 납니다.
+6. `SoundTracing.Status`를 두 번 실행합니다. 두 번째 출력의 audio-thread probe가 두 호출 사이의 `exaRenderSound` 평균/최대 시간과 wall-time 점유율을 보여 줍니다. block budget(1024 frames @ 48 kHz = 21.3 ms) 대비 점유율이 높으면 2~3번을 더 내립니다.
+7. `SoundTracing.DumpConfig`로 `simdTarget`이 `AVX2` 이상인지 확인합니다. `SSE2`이면 SIMD runtime dispatch가 빠진 `exaSound.dll`이므로 STCoreV2 dev를 다시 빌드해야 합니다.
+8. `Use GPU Backend`를 꺼서 CPU만으로 비교합니다. Unity 샘플 씬은 CPU backend를 씁니다.
+
+STCoreV2 `3fb0dccf`(2026-08-31)는 fallback delay policy를 `D`에서 `A`로, early settle을 `6`에서 `0.5`로 되돌렸습니다.
+Unity SDK가 배포하는 DLL(`3d9ddf83`)은 되돌리기 전 값이라 audio thread render 비용이 약 26% 낮습니다.
+Editor를 실행하기 전에 환경 변수 `EXA_FALLBACK_DELAY_POLICY=D`와 `EXA_EARLY_SETTLE_SAMPLES=6`을 설정하면
+같은 DLL로 A/B 비교를 할 수 있습니다. 값은 DLL load 시 한 번만 읽습니다.
 
 ## 다음 문서
 
