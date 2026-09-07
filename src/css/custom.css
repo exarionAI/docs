@@ -28,3 +28,9 @@
   --ifm-color-primary-lightest: #4fddbf;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
 }
+
+/* Keep SDK API identifiers readable inside narrow reference tables. */
+[class~='docs-doc-id-sdk/unity'] .theme-doc-markdown table code,
+[class~='docs-doc-id-sdk/ue'] .theme-doc-markdown table code {
+  overflow-wrap: anywhere;
+}

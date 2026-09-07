@@ -9,15 +9,12 @@ The SoundTrace Unity SDK is a real-time spatial audio plugin that connects Unity
 Renderer material slots, audio sources, and listeners to
 [STCoreV2](../core/stcorev2.md).
 
-This page documents the public components and Inspector contract of the current Unity SDK.
-
 ## Requirements and platforms
 
-| Area | Current package status |
+| Item | Requirements / support |
 |---|---|
 | Unity | 2022.3 LTS or newer |
-| Bundled native plugins | macOS, Windows x64, iOS, Android |
-| Linux | The current package does not include a binary; build it separately on a Linux host |
+| Supported platforms | Windows x64, macOS, Linux, iOS, Android |
 | Unity WebGL | Unsupported. The `OnAudioFilterRead`-based DSP path is unavailable on Unity WebGL |
 
 `Use GPU Backend` requests the WebGPU compute provider for reflection and reverb propagation.
@@ -43,13 +40,13 @@ To import the samples, select SoundTrace SDK in Package Manager and choose
 
 The Manager and Listener Inspectors display a warning when these settings do not match.
 
-## Audio asset import settings
+## Audio asset import settings — mono
 
 Mono sound sources are assumed, and audio clips are set to the PCM format.
 
 ![Audio asset import settings](/img/unity/ImportSetting.png)
 
-## Fastest setup
+## Quick start
 
 1. Add `SoundTraceManager` to an empty GameObject.
 2. Add `SoundTraceListener` to the Main Camera.
@@ -70,6 +67,7 @@ Multiple Listeners may register, but Source rendering uses the first registered
 | `SoundTraceListener` | Manages the listener transform, ray quality, output, and HRTF settings | Active Manager |
 | `SoundTraceSource` | Spatializes `AudioSource` output and configures each path type | `AudioSource` on the same GameObject and an active Listener |
 | `SoundTraceObject` | Registers a Mesh and its submesh materials in the acoustic scene | `MeshFilter`, `MeshRenderer` |
+| `SoundTraceMaterialPresetLibrary` | Material presets and per-band acoustic coefficients | Material Preset Library asset |
 | `SoundTracePathVisualizer` | Debug display for valid paths and hit triangles | Same GameObject as the Manager |
 
 ## SoundTraceManager
@@ -86,9 +84,15 @@ Multiple Listeners may register, but Source rendering uses the first registered
 | `bool useGpuBackend` | `false` | Runs propagation on GPU compute shaders instead of job multithreading. |
 | `int pathCacheSize` | `256` | Cache-buffer size for generated paths, with a minimum of `0` and a maximum of `1024`. Higher values improve the spatial-audio effect but also increase computation. Depending on device performance, we recommend starting below the default value of `256`. |
 
+### Public methods
+
+| Method | Behavior |
+|---|---|
+| `ResetMotionState()` | Resets motion history for all registered listeners and sources after a teleport, respawn, or scene transition. |
+
 ### Public properties
 
-| Property | Type / access | Exact meaning |
+| Property | Type / access | Description |
 |---|---|---|
 | `Instance` | `static SoundTraceManager` / `get; private set;` | Singleton Manager used across all loaded scenes, or `null` when none is enabled. |
 | `DefaultMaterialsLoaded` | `int` / `get; private set;` | Number of bundled materials registered automatically in `OnEnable()`. It is `0` when automatic loading is disabled or the asset is missing. |
@@ -99,16 +103,10 @@ Multiple Listeners may register, but Source rendering uses the first registered
 | `ObjectCount` | `int` / `get` | Number of Objects currently registered with the Manager. |
 | `LastValidPathCount` | `int` / `get; private set;` | Valid-path count from the most recently completed propagation result. It is `0` when propagation cannot run. |
 | `LastNativeError` | `string` / `get; private set;` | Most recent scene-graph or propagation error; an empty string means no current error. |
-| `PropagationThreadCount` | `int` / `get` | Number of execution threads used by propagation jobs. `-1` means the maximum. |
+| `PropagationThreadCount` | `int` / `get` | Configured propagation thread count. `-1` selects automatic configuration; this property does not report the actual count selected automatically. |
 | `IsGpuPropagate` | `bool` / `get; private set;` | Whether `exaPropagatorInitGpu()` succeeded and activated the GPU propagation provider. |
 | `GpuBackendStatus` | `string` / `get; private set;` | GPU backend initialization result: `GPU active` or `CPU fallback (<ExaResult>): <error>`. |
 | `PathCacheSize` | `int` / `get` | Cache-buffer size for generated paths. |
-
-### Public methods
-
-| Method | Behavior |
-|---|---|
-| `public void ResetMotionState()` | Clears motion history for every registered Listener and Source immediately after a teleport, respawn, or scene transition. |
 
 ## SoundTraceListener
 
@@ -125,6 +123,7 @@ Add this component to the Main Camera in most projects.
 | `Ray Depth` | `4` | `1..16` |
 | `Output Mode` | `Headset` | `Headset`, `Speaker` |
 | `HRTF` | `HRIR Interpolated` | The three modes below |
+| `Delay Interpolation` | From preset | `Linear`, `Cubic Lagrange`, or `Lagrange 6`. Interpolates delay changes during motion; editable in `Custom`. |
 
 Selecting `Fast`, `Middle`, or `Quality` applies the ray values and associated rendering-quality
 settings together, and disables the ray fields in the Inspector. Select `Custom` before editing
@@ -137,7 +136,7 @@ the values directly. Switching from a preset back to `Custom` preserves the last
 | `Middle` | `24` | `8` | General games and desktop |
 | `Quality` | `32` | `12` | Apps where audio is a major focus and other workloads are light |
 
-### HRTF and output modes
+#### HRTF and output mode
 
 | Mode | Required asset | Description |
 |---|---|---|
@@ -147,6 +146,21 @@ the values directly. Switching from a preset back to `Custom` preserves the last
 
 Assets are loaded from `Runtime/Resources/SoundTrace/HRTF/`. If a required asset is missing or
 empty, Listener initialization fails; SoundTrace does not switch to another mode automatically.
+
+### Public methods
+
+| Method | Behavior |
+|---|---|
+| `ResetMotionState()` | Uses the current Transform as the motion origin and resets velocity. Call immediately after teleporting or respawning. |
+
+### Public properties
+
+| Property | Type / access | Description |
+|---|---|---|
+| `Core` | `SoundListenerCore` / read-only | Low-level listener API object. `null` before initialization or when disabled. |
+| `AudioSampleRate` | `int` / read-only | Audio sample rate applied to the listener, in Hz. |
+| `AudioInputSampleCount` | `int` / read-only | Input audio block sample count applied to the listener. |
+| `AudioOutputChannels` | `int` / read-only | Output channel count applied to the listener. |
 
 ## SoundTraceSource
 
@@ -195,6 +209,14 @@ Render Tuning applies to a source-listener pair. `Path Hold = 0` disables path h
 To synchronize multiple `AudioSource` instances, call `PlayScheduled()` against the same
 `AudioSettings.dspTime` reference.
 
+### Public properties
+
+| Property | Type / access | Description |
+|---|---|---|
+| `Core` | `SoundSourceCore` / read-only | Low-level source API object. `null` before initialization or when disabled. |
+| `NativeSourceId` | `int` / read-only | Registered native source ID. `-1` before registration or after removal. |
+| `Bypass` | `bool` / read/write | `true` passes through the original AudioSource output. Controls the same setting as `SetBypass()`. |
+
 ## SoundTraceObject
 
 ![SoundTraceObject Inspector](/img/unity/Img_STObj.png)
@@ -202,7 +224,18 @@ To synchronize multiple `AudioSource` instances, call `PlayScheduled()` against 
 `SoundTraceObject` registers `MeshFilter.sharedMesh` and the Renderer submesh material slots.
 Enable `Read/Write Enabled` in Import Settings because builds must read the mesh data.
 
-### Geometry and BVH
+### Inspector
+
+| Field / button | Description |
+|---|---|
+| `Mesh Filter` | Selects the mesh to register as acoustic geometry. |
+| `Target Renderer` | Selects the Renderer used to read render materials for each submesh. |
+| `Sound Materials` | Selects an acoustic material preset for each submesh. |
+| `Auto Set` | Matches presets automatically using Renderer material names. |
+| `Add To Child Meshes` | Adds SoundTraceObject to child mesh GameObjects. |
+| `Draw Native Triangles` | Displays native mesh triangles in the Scene View. |
+
+#### Geometry and BVH
 
 ![BVH shown in the Scene View](/img/unity/Img_STObjDome.png)
 
@@ -213,7 +246,7 @@ Enable `Read/Write Enabled` in Import Settings because builds must read the mesh
 | `Primitives Per Leaf` | `16` | `1..128` |
 | `Update Mode` | `Static` | `Static`, `Dynamic`, `Refit`, `Rebuild` |
 
-#### BVH Type
+##### BVH Type
 
 | BVH Type | Description |
 |---|---|
@@ -225,7 +258,7 @@ Enable `Read/Write Enabled` in Import Settings because builds must read the mesh
 
 The Inspector displays a warning when `HKDTree` or scalar `LBVH` is selected in a scene that requests the GPU backend.
 
-#### Update Mode
+##### Update Mode
 
 | Update Mode | STCoreV2 update policy | Meaning |
 |---|---|---|
@@ -234,7 +267,7 @@ The Inspector displays a warning when `HKDTree` or scalar `LBVH` is selected in 
 | `Rebuild` | `EXA_OBJECT_UPDATE_REBUILD` (2) | Rebuilds the BVH. Use it for geometry whose topology changes. |
 | `Dynamic` | `EXA_OBJECT_UPDATE_DYNAMIC` (3) | Transform-only: refreshes the TLAS instance. |
 
-#### Refit and vertex upload
+##### Refit and vertex upload
 
 `Refit` is STCoreV2's **update policy for vertex deformation (skinned animation)**. The core
 does not decide on its own when vertices are uploaded: a mesh update is the
@@ -337,7 +370,28 @@ root has no mesh and its children own the geometry, use `Add To Child Meshes`.
 | `GetTriangleCount()` | Sums the index counts of all submeshes and returns the triangle count. Returns `0` when no mesh is assigned. |
 | `static IsGpuCompatibleBvhType(BvhType value)` | Returns `true` for `LBVH_SIMD4`, `LBVH_SIMD8`, and `LBVH_SIMD16`. |
 
+### Public properties
+
+| Property | Type / access | Description |
+|---|---|---|
+| `ObjectCore` | `SoundObjectCore` / read-only | Registered low-level object. `null` before initialization or when disabled. |
+| `MeshCore` | `SoundMeshCore` / read-only | Shared low-level mesh. `null` if no mesh is registered. |
+| `NativeObjectId` | `int` / read-only | Native object ID; `-1` when unregistered. |
+| `NativeMeshId` | `int` / read-only | Native mesh ID; `-1` when unregistered. |
+| `SlotCount` | `int` / read-only | Number of acoustic material slots. |
+| `SharedMesh` | `Mesh` / read-only | Shared mesh referenced by MeshFilter. `null` if no MeshFilter is assigned. |
+| `IsReadyForPropagation` | `bool` / read-only | Whether scene registration is complete and both the object and mesh are valid. |
+| `EditorBvhType` | `BvhType` / read-only, Editor only | Validated BVH type. |
+| `EditorBvhMaxDepth` | `int` / read-only, Editor only | BVH maximum depth clamped to `1..32`. |
+| `EditorPrimitivesPerLeaf` | `int` / read-only, Editor only | Primitives per leaf clamped to `1..128`. |
+
 ## Acoustic materials and Transmission
+
+![Material Preset Library](/img/unity/Image_Mat_01.png)
+
+![Per-band material graph editing](/img/unity/Image_Mat_02.png)
+
+### Inspector
 
 The default authoring asset is
 `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`.
@@ -348,16 +402,22 @@ Use `SoundTrace > Material Preset Library` to:
 - Edit Scattering and the 8-band Reflection, Absorption, and Transmission graphs
 - Select the `Transmission Model`
 
-![Material Preset Library](/img/unity/Image_Mat_01.png)
-
 The frequency-band centers are `67.5`, `125`, `250`, `500`, `1000`, `2000`, `4000`, and
 `8000 Hz`. Material order and table indices must match.
 
-![Per-band material graph editing](/img/unity/Image_Mat_02.png)
+| Field | Description |
+|---|---|
+| `Presets` | Acoustic material list. Add, remove, and reorder presets here. |
+| `Display Name` | Name shown in the object's material selection list. |
+| `Material Index` | Index used in the native material table. |
+| `Scattering` | `0..1`. Controls the balance between specular reflection and scattering. |
+| `Reflection`, `Absorption`, `Transmission` | Reflection, absorption, and transmission energy coefficients for eight frequency bands. Each value is in `0..1`. |
+| `Transmission Model` | Selects `Surface` or `Solid Distance`. |
+| `Thickness to -30 dB (m)` | Per-band attenuation reference distance for `Solid Distance`. |
 
-### Transmission Model
+#### Transmission Model
 
-| Model | Input | Geometry requirements |
+| Model | Input | Geometry requirement |
 |---|---|---|
 | `Surface` | Per-band transmitted-energy coefficient remaining after crossing a surface, `0..1` | May be used with open faces and thin surfaces |
 | `Solid Distance` | Per-band material reference distance (m) at which transmitted energy reaches `-30 dB`; `0` or greater | Requires a closed volume with consistent face winding |
@@ -371,11 +431,38 @@ In JSON, the absence of `transmissionDistanceToMinus30DbMeters` selects `Surface
 as exactly eight finite, non-negative values selects `Solid Distance`. When exporting `Surface`,
 the field is omitted instead of being written as `null` or an empty array.
 
+### Public methods
+
+These APIs belong to `SoundTraceMaterialPresetLibrary`.
+
+| Method | Behavior |
+|---|---|
+| `static LoadDefault()` | Loads the default library. Creates it from bundled JSON if the asset is missing or empty. |
+| `GetPreset(int index)` | Clamps the index to the valid range and returns a preset. Returns `null` for an empty list. |
+| `GetPresetNames()` | Returns an array of preset names for selection lists. |
+| `FindBestPresetIndex(Material renderMaterial)` | Finds a preset matching the render material name. |
+| `FindPresetIndex(string token, int fallback)` | Finds a preset whose name contains the token, or uses the fallback index. |
+| `RegisterAll(MaterialTable table)` | Registers all presets in the native material table and returns the number registered. |
+| `ReplaceWithJson(string json)` | Replaces presets from JSON. Throws `ArgumentException` if no valid material entries exist. |
+| `ToJson()` | Returns the current library in `soundMaterial.json` format. |
+| `Normalize()` | Normalizes preset indices, band arrays, and coefficient ranges. |
+| `static GetFrequencyBandCenterHz(int index)` | Returns the center frequency of the specified band, in Hz. |
+
+### Public properties
+
+| Property | Type / access | Description |
+|---|---|---|
+| `Presets` | `IReadOnlyList<SoundTraceMaterialPreset>` / read-only | Presets stored in the library. |
+| `Count` | `int` / read-only | Number of presets. |
+| `FrequencyBandCount` | `static int` / read-only | Number of frequency bands: `8`. |
+
 ## SoundTracePathVisualizer
 
 ![SoundTracePathVisualizer Inspector](/img/unity/Img_STPathVisual.png)
 
 Add one to the same GameObject as the Manager.
+
+### Inspector
 
 | Inspector field | Default | Description |
 |---|---:|---|
@@ -384,15 +471,37 @@ Add one to the same GameObject as the Manager.
 | `Max Visualized Paths` | `1024` | Maximum number of paths to display. |
 | `Path Width` | `0.08` | Line width. |
 | `Path Alpha Intensity` | `0.5` | Display intensity. |
+| `Path Depth Mode` | `Always On Top` | `Depth Test` checks geometry depth; `Always On Top` draws paths in front. |
+| `Sorting Layer Name` | `Default` | Sorting Layer for the path mesh. |
+| `Sorting Order` | `10` | Render order within the Sorting Layer. |
 | `Draw Hit Triangles` | Disabled | Displays hit triangles in the Scene view. |
 
 Direct, Reflection, Diffraction, Reverb, and Transmission use distinct path colors. This
 component is for debugging; disable it during performance measurements and in release builds.
 
-The main public members are `Instance`, the settings and count properties, `Render()`, and
-`Clear()`.
+### Public methods
 
-## Samples
+| Method | Behavior |
+|---|---|
+| `Render(SoundTraceManager manager, bool force = false)` | Updates the display mesh from the latest valid paths. `force = true` bypasses the refresh interval. Clears the display if visualization is disabled or the Manager is invalid. |
+| `Clear()` | Clears the path mesh, hides the renderer, and resets path and segment counts. |
+
+### Public properties
+
+| Property | Type / access | Description |
+|---|---|---|
+| `Active` | `static SoundTracePathVisualizer` / read-only | Currently active visualizer component, or `null` if none exists. |
+| `PathVisualizationEnabled` | `bool` / read-only | Whether path visualization is enabled. |
+| `RefreshIntervalMs` | `float` / read-only | Minimum visualization refresh interval in milliseconds. |
+| `MaxVisualizedPaths` | `int` / read-only | Maximum number of paths to display. |
+| `PathWidth` | `float` / read-only | Path line width. |
+| `PathAlphaIntensity` | `float` / read-only | Path display intensity. |
+| `ActivePathCount` | `int` / read-only | Valid path count read during the latest visualization update. |
+| `ActiveSegmentCount` | `int` / read-only | Number of segments forming the actual display mesh. |
+| `PoolSize` | `int` / read-only | Returns the same segment count as `ActiveSegmentCount`. |
+| `DrawHitTrianglesInSceneView` | `bool` / read-only, Editor only | Whether hit triangles are displayed in the Scene View. |
+
+## Sample demos
 
 ### ST_SampleScene01
 
@@ -414,7 +523,7 @@ original Unity audio and SoundTrace output.
 Demonstrates multiple sources in a large space, wall occlusion, HRTF directionality while moving,
 and room response.
 
-## Troubleshooting
+## Troubleshooting tips
 
 | Symptom | Check |
 |---|---|

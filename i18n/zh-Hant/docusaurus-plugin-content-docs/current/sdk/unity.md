@@ -8,15 +8,12 @@ description: SoundTrace Unity SDK 安裝、主要元件 API、HRTF、GPU/BVH、S
 SoundTrace Unity SDK 是一款即時空間音訊外掛，用於將 Unity 的網格、Renderer 材質插槽、音源與聆聽者連接到
 [STCoreV2](../core/stcorev2.md)。
 
-本頁以目前 Unity SDK 的公開元件與 Inspector 契約為準。
+## 需求與平台
 
-## 要求與平台
-
-| 項目 | 目前套件狀態 |
+| 項目 | 要求 / 支援範圍 |
 |---|---|
 | Unity | 2022.3 LTS 或更新版本 |
-| 隨附原生外掛 | macOS、Windows x64、iOS、Android |
-| Linux | 目前套件不含二進位檔，需在 Linux 主機上另行建置 |
+| 支援平台 | Windows x64, macOS, Linux, iOS, Android |
 | Unity WebGL | 不支援。Unity WebGL 無法使用以 `OnAudioFilterRead` 為基礎的 DSP 處理 |
 
 `Use GPU Backend` 會為 reflection 與 reverb propagation 要求 WebGPU compute provider。
@@ -41,13 +38,13 @@ SoundTrace Unity SDK 套件與安裝說明會透過已簽約的評估或授權�
 
 如果這些設定不一致，Manager 與 Listener Inspector 會顯示警告。
 
-## Audio Asset Import 設定
+## 音訊資產匯入設定 — 單聲道
 
 以使用單聲道音源為前提，音訊剪輯設定為 PCM 格式。
 
 ![Audio Asset Import 設定](/img/unity/ImportSetting.png)
 
-## 最快設定
+## 快速開始
 
 1. 在空白 GameObject 上加入 `SoundTraceManager`。
 2. 在 Main Camera 上加入 `SoundTraceListener`。
@@ -67,6 +64,7 @@ SoundTrace Unity SDK 套件與安裝說明會透過已簽約的評估或授權�
 | `SoundTraceListener` | Listener transform、ray 品質、輸出/HRTF 設定 | 啟用中的 Manager |
 | `SoundTraceSource` | 將 `AudioSource` 輸出空間化並設定各類 path | 同一 GameObject 上的 `AudioSource`、啟用中的 Listener |
 | `SoundTraceObject` | 將 Mesh 與 submesh 材質註冊到聲學 scene | `MeshFilter`、`MeshRenderer` |
+| `SoundTraceMaterialPresetLibrary` | 管理材質預設和各頻帶聲學係數 | Material Preset Library 資產 |
 | `SoundTracePathVisualizer` | 偵錯顯示有效 path 與 hit triangle | 與 Manager 相同的 GameObject |
 
 ## SoundTraceManager
@@ -83,9 +81,15 @@ SoundTrace Unity SDK 套件與安裝說明會透過已簽約的評估或授權�
 | `bool useGpuBackend` | `false` | propagation 不使用 job 多執行緒，而是透過 GPU compute shader 計算。 |
 | `int pathCacheSize` | `256` | 生成 path 的 cache buffer size，最小值為 `0`，最大值為 `1024`。數值越高，空間音訊效果越好，但計算量也會隨之增加。建議依裝置效能，從低於預設值 `256` 的設定開始。 |
 
+### 公開方法
+
+| 方法 | 行為 |
+|---|---|
+| `ResetMotionState()` | 在傳送、重生或場景切換後，重設所有已註冊聆聽器和音源的運動歷史。 |
+
 ### 公開屬性
 
-| 屬性 | 型別/存取方式 | 準確含義 |
+| 屬性 | 型別 / 存取 | 說明 |
 |---|---|---|
 | `Instance` | `static SoundTraceManager` / `get; private set;` | 所有已載入 scene 共用的單例 Manager；沒有啟用中的 Manager 時為 `null`。 |
 | `DefaultMaterialsLoaded` | `int` / `get; private set;` | 在 `OnEnable()` 中自動註冊的隨附材質數量。關閉自動載入或 asset 遺失時為 `0`。 |
@@ -96,16 +100,10 @@ SoundTrace Unity SDK 套件與安裝說明會透過已簽約的評估或授權�
 | `ObjectCount` | `int` / `get` | 目前註冊到 Manager 的 Object 數量。 |
 | `LastValidPathCount` | `int` / `get; private set;` | 最近完成的 propagation 結果中的有效 path 數量。無法執行 propagation 時為 `0`。 |
 | `LastNativeError` | `string` / `get; private set;` | 最近的 scene graph 或 propagation 錯誤；沒有錯誤時為空字串。 |
-| `PropagationThreadCount` | `int` / `get` | propagation job 的執行執行緒數量。`-1` 表示最大值。 |
+| `PropagationThreadCount` | `int` / `get` | 設定的傳播執行緒數。`-1` 表示自動設定，此屬性不會傳回自動選擇的實際執行緒數。 |
 | `IsGpuPropagate` | `bool` / `get; private set;` | `exaPropagatorInitGpu()` 是否成功並啟用了 GPU propagation provider。 |
 | `GpuBackendStatus` | `string` / `get; private set;` | GPU Backend 初始化結果：`GPU active` 或 `CPU fallback (<ExaResult>): <error>`。 |
 | `PathCacheSize` | `int` / `get` | 生成 path 的 cache buffer size。 |
-
-### 公開方法
-
-| 方法 | 行為 |
-|---|---|
-| `public void ResetMotionState()` | 在 teleport、respawn 或 scene 切換後，立即重設所有已註冊 Listener 與 Source 的 motion history。 |
 
 ## SoundTraceListener
 
@@ -122,6 +120,7 @@ SoundTrace Unity SDK 套件與安裝說明會透過已簽約的評估或授權�
 | `Ray Depth` | `4` | `1..16` |
 | `Output Mode` | `Headset` | `Headset`、`Speaker` |
 | `HRTF` | `HRIR Interpolated` | 以下三種模式 |
+| `Delay Interpolation` | 由預設決定 | `Linear`、`Cubic Lagrange` 或 `Lagrange 6`。用於運動時的延遲插值，可在 `Custom` 下編輯。 |
 
 選擇 `Fast`、`Middle` 或 `Quality` 時，會同時套用 ray 值與相關的 render 品質值，
 ray 欄位也會在 Inspector 中停用。若要直接編輯這些值，請先選擇 `Custom`。
@@ -134,7 +133,7 @@ ray 欄位也會在 Inspector 中停用。若要直接編輯這些值，請先�
 | `Middle` | `24` | `8` | 一般遊戲與桌面平台 |
 | `Quality` | `32` | `12` | 音訊比重較高、其他處理負載較低的應用程式 |
 
-### HRTF 與輸出模式
+#### HRTF 與輸出模式
 
 | 模式 | 所需 asset | 說明 |
 |---|---|---|
@@ -144,6 +143,21 @@ ray 欄位也會在 Inspector 中停用。若要直接編輯這些值，請先�
 
 Asset 從 `Runtime/Resources/SoundTrace/HRTF/` 載入。如果所需 asset 不存在或為空，
 Listener 初始化會失敗，且不會自動切換到其他模式。
+
+### 公開方法
+
+| 方法 | 行為 |
+|---|---|
+| `ResetMotionState()` | 將目前的 Transform 作為運動基準並重設速度。在傳送或重生後立即呼叫。 |
+
+### 公開屬性
+
+| 屬性 | 型別 / 存取 | 說明 |
+|---|---|---|
+| `Core` | `SoundListenerCore` / 唯讀 | 聆聽器的底層 API 物件。初始化前或停用時為 `null`。 |
+| `AudioSampleRate` | `int` / 唯讀 | 套用至聆聽器的音訊取樣率，單位 Hz。 |
+| `AudioInputSampleCount` | `int` / 唯讀 | 套用至聆聽器的輸入音訊區塊取樣數。 |
+| `AudioOutputChannels` | `int` / 唯讀 | 套用至聆聽器的輸出聲道數。 |
 
 ## SoundTraceSource
 
@@ -183,13 +197,21 @@ Render Tuning 套用於 source-listener 配對。`Path Hold = 0` 會關閉 hold�
 
 ### 公開方法
 
-| 方法 | 動作 |
+| 方法 | 行為 |
 |---|---|
 | `SetBypass(bool enabled)` | 為 `true` 時跳過 SoundTrace spatial rendering，並直接傳遞原始 `AudioSource` 輸出；為 `false` 時重新套用 SoundTrace rendering。 |
 | `ResetMotionState()` | 將目前 Transform 重新設為 motion 基準點，並以速度 `0` 反映，避免 teleport 或 respawn 後出現 Doppler spike。 |
 
 若要同步多個 `AudioSource` 的播放時機，請以相同的 `AudioSettings.dspTime` 為基準呼叫
 `PlayScheduled()`。
+
+### 公開屬性
+
+| 屬性 | 型別 / 存取 | 說明 |
+|---|---|---|
+| `Core` | `SoundSourceCore` / 唯讀 | 音源的底層 API 物件。初始化前或停用時為 `null`。 |
+| `NativeSourceId` | `int` / 唯讀 | 已註冊的原生音源 ID。註冊前或移除後為 `-1`。 |
+| `Bypass` | `bool` / 讀寫 | 為 `true` 時直接傳遞原始 AudioSource 輸出，與 `SetBypass()` 控制同一設定。 |
 
 ## SoundTraceObject
 
@@ -198,7 +220,18 @@ Render Tuning 套用於 source-listener 配對。`Path Hold = 0` 會關閉 hold�
 `SoundTraceObject` 會註冊 `MeshFilter.sharedMesh` 與 Renderer 的 submesh 材質插槽。
 由於 Build 中需要讀取網格資料，請在 Import Settings 中啟用 `Read/Write Enabled`。
 
-### Geometry 與 BVH
+### Inspector
+
+| 欄位 / 按鈕 | 說明 |
+|---|---|
+| `Mesh Filter` | 指定要註冊為聲學幾何的網格。 |
+| `Target Renderer` | 指定用於讀取各子網格繪製材質的 Renderer。 |
+| `Sound Materials` | 為每個子網格選擇聲學材質預設。 |
+| `Auto Set` | 根據 Renderer 材質名稱自動比對預設。 |
+| `Add To Child Meshes` | 為子網格 GameObject 新增 SoundTraceObject。 |
+| `Draw Native Triangles` | 在 Scene View 中顯示原生網格三角形。 |
+
+#### Geometry 與 BVH
 
 ![Scene View 中顯示的 BVH](/img/unity/Img_STObjDome.png)
 
@@ -209,7 +242,7 @@ Render Tuning 套用於 source-listener 配對。`Path Hold = 0` 會關閉 hold�
 | `Primitives Per Leaf` | `16` | `1..128` |
 | `Update Mode` | `Static` | `Static`、`Dynamic`、`Refit`、`Rebuild` |
 
-#### BVH Type
+##### BVH Type
 
 | BVH Type | 說明 |
 |---|---|
@@ -221,7 +254,7 @@ Render Tuning 套用於 source-listener 配對。`Path Hold = 0` 會關閉 hold�
 
 如果在要求 GPU 的 scene 中選擇 `HKDTree` 或純量 `LBVH`，Inspector 會顯示警告。
 
-#### Update Mode
+##### Update Mode
 
 | Update Mode | STCoreV2 update policy | 含意 |
 |---|---|---|
@@ -230,7 +263,7 @@ Render Tuning 套用於 source-listener 配對。`Path Hold = 0` 會關閉 hold�
 | `Rebuild` | `EXA_OBJECT_UPDATE_REBUILD` (2) | 用於 topology 會改變的 geometry，會重新建置 BVH。 |
 | `Dynamic` | `EXA_OBJECT_UPDATE_DYNAMIC` (3) | 僅 Transform 變化時，只更新 TLAS instance。 |
 
-#### Refit 與 vertex 上傳
+##### Refit 與 vertex 上傳
 
 `Refit` 是 STCoreV2 中**用於 vertex 形變（skinned animation）的 update policy**。但 core
 不會自行決定何時上傳 vertex：mesh 更新採用 `exaMeshUpdateVertices` → `exaMeshRefit` 的
@@ -317,7 +350,7 @@ public sealed class SoundTraceSkinnedRefit : MonoBehaviour
 `Auto Set` 會將 Renderer material 名稱與隨附 preset 配對。如果 imported model root
 上沒有 mesh，而是由 child 持有 geometry，請使用 `Add To Child Meshes`。
 
-| 方法 | 動作 |
+| 方法 | 行為 |
 |---|---|
 | `AutoSetMaterialSlots()` | 走訪所有 submesh，將 Renderer material 名稱與隨附 preset 自動配對，並更新插槽設定。 |
 | `GetMaterialPresetIndex(int slotIndex)` | 傳回指定插槽的 preset index。沒有插槽或插槽 index 無效時傳回 `0`。 |
@@ -328,7 +361,28 @@ public sealed class SoundTraceSkinnedRefit : MonoBehaviour
 | `GetTriangleCount()` | 加總所有 submesh 的 index 數並傳回 triangle 數。沒有 mesh 時傳回 `0`。 |
 | `static IsGpuCompatibleBvhType(BvhType value)` | 當值為 `LBVH_SIMD4`、`LBVH_SIMD8` 或 `LBVH_SIMD16` 時傳回 `true`。 |
 
+### 公開屬性
+
+| 屬性 | 型別 / 存取 | 說明 |
+|---|---|---|
+| `ObjectCore` | `SoundObjectCore` / 唯讀 | 已註冊的底層物件。初始化前或停用時為 `null`。 |
+| `MeshCore` | `SoundMeshCore` / 唯讀 | 共用的底層網格。沒有已註冊網格時為 `null`。 |
+| `NativeObjectId` | `int` / 唯讀 | 原生物件 ID，未註冊時為 `-1`。 |
+| `NativeMeshId` | `int` / 唯讀 | 原生網格 ID，未註冊時為 `-1`。 |
+| `SlotCount` | `int` / 唯讀 | 聲學材質槽數量。 |
+| `SharedMesh` | `Mesh` / 唯讀 | MeshFilter 引用的共用網格。沒有 MeshFilter 時為 `null`。 |
+| `IsReadyForPropagation` | `bool` / 唯讀 | 表示場景註冊是否完成，以及物件和網格是否均有效。 |
+| `EditorBvhType` | `BvhType` / 唯讀，僅 Editor | 經過有效性檢查的 BVH 類型。 |
+| `EditorBvhMaxDepth` | `int` / 唯讀，僅 Editor | 限制在 `1..32` 的 BVH 最大深度。 |
+| `EditorPrimitivesPerLeaf` | `int` / 唯讀，僅 Editor | 限制在 `1..128` 的每個葉節點圖元數。 |
+
 ## 聲學材質與 Transmission
+
+![Material Preset Library](/img/unity/Image_Mat_01.png)
+
+![依頻帶編輯材質圖表](/img/unity/Image_Mat_02.png)
+
+### Inspector
 
 預設創作資產為
 `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`。
@@ -339,16 +393,22 @@ public sealed class SoundTraceSkinnedRefit : MonoBehaviour
 - 編輯 Scattering 與 8 頻帶 Reflection、Absorption、Transmission 圖表
 - 選擇 `Transmission Model`
 
-![Material Preset Library](/img/unity/Image_Mat_01.png)
-
 頻帶中心為 `67.5`、`125`、`250`、`500`、`1000`、`2000`、`4000`、
 `8000 Hz`。材質順序必須與資料表索引一致。
 
-![依頻帶編輯材質圖表](/img/unity/Image_Mat_02.png)
+| 欄位 | 說明 |
+|---|---|
+| `Presets` | 聲學材質清單，可新增、刪除和重新排序預設。 |
+| `Display Name` | 顯示在物件材質選擇清單中的名稱。 |
+| `Material Index` | 在原生材質表中使用的索引。 |
+| `Scattering` | `0..1`，控制鏡面反射與散射的比例。 |
+| `Reflection`, `Absorption`, `Transmission` | 8 個頻帶的反射、吸收和透射能量係數，各值範圍為 `0..1`。 |
+| `Transmission Model` | 選擇 `Surface` 或 `Solid Distance`。 |
+| `Thickness to -30 dB (m)` | `Solid Distance` 各頻帶的衰減參考距離。 |
 
-### Transmission Model
+#### Transmission Model
 
-| 模型 | 輸入 | 幾何體條件 |
+| 模型 | 輸入 | Geometry 條件 |
 |---|---|---|
 | `Surface` | 每個頻帶中穿過表面後保留的透射能量係數 `0..1` | 可用於開放面與薄表面 |
 | `Solid Distance` | 每個頻帶中透射能量達到 `-30 dB` 時的材質參考距離（m），不得小於 `0` | 需要封閉體積與一致的面方向 |
@@ -361,11 +421,38 @@ public sealed class SoundTraceSkinnedRefit : MonoBehaviour
 如果此欄位包含恰好 8 個有限且不小於 0 的值，則使用 `Solid Distance`。
 匯出為 `Surface` 時會省略此欄位，而不是寫入 `null` 或空陣列。
 
+### 公開方法
+
+以下為 `SoundTraceMaterialPresetLibrary` 的 API。
+
+| 方法 | 行為 |
+|---|---|
+| `static LoadDefault()` | 載入預設程式庫。資產遺失或為空時，從內建 JSON 建立。 |
+| `GetPreset(int index)` | 將索引限制在有效範圍後傳回預設，清單為空時傳回 `null`。 |
+| `GetPresetNames()` | 傳回供選擇清單使用的預設名稱陣列。 |
+| `FindBestPresetIndex(Material renderMaterial)` | 尋找與繪製材質名稱相符的預設。 |
+| `FindPresetIndex(string token, int fallback)` | 尋找名稱包含指定詞的預設，未找到時使用 fallback 索引。 |
+| `RegisterAll(MaterialTable table)` | 將所有預設註冊至原生材質表並傳回註冊數量。 |
+| `ReplaceWithJson(string json)` | 使用 JSON 取代預設。沒有有效材質項目時擲回 `ArgumentException`。 |
+| `ToJson()` | 以 `soundMaterial.json` 格式傳回目前的程式庫。 |
+| `Normalize()` | 正規化預設索引、頻帶陣列和係數範圍。 |
+| `static GetFrequencyBandCenterHz(int index)` | 傳回指定頻帶的中心頻率，單位 Hz。 |
+
+### 公開屬性
+
+| 屬性 | 型別 / 存取 | 說明 |
+|---|---|---|
+| `Presets` | `IReadOnlyList<SoundTraceMaterialPreset>` / 唯讀 | 程式庫中儲存的預設清單。 |
+| `Count` | `int` / 唯讀 | 預設數量。 |
+| `FrequencyBandCount` | `static int` / 唯讀 | 頻帶數量，值為 `8`。 |
+
 ## SoundTracePathVisualizer
 
 ![SoundTracePathVisualizer Inspector](/img/unity/Img_STPathVisual.png)
 
 只能在與 Manager 相同的 GameObject 上加入一個。
+
+### Inspector
 
 | Inspector 欄位 | 預設值 | 說明 |
 |---|---:|---|
@@ -374,14 +461,37 @@ public sealed class SoundTraceSkinnedRefit : MonoBehaviour
 | `Max Visualized Paths` | `1024` | 最多顯示的 path 數量 |
 | `Path Width` | `0.08` | 線寬 |
 | `Path Alpha Intensity` | `0.5` | 顯示強度 |
+| `Path Depth Mode` | `Always On Top` | `Depth Test` 檢查幾何深度，`Always On Top` 將路徑繪製在最前方。 |
+| `Sorting Layer Name` | `Default` | 路徑網格的 Sorting Layer。 |
+| `Sorting Order` | `10` | 在 Sorting Layer 內的繪製順序。 |
 | `Draw Hit Triangles` | 關閉 | 在 Scene View 中顯示 hit triangle |
 
 Direct、Reflection、Diffraction、Reverb 與 Transmission 會依 path 類型使用不同顏色顯示。
 此元件用於偵錯，在效能測量與 release build 中應停用。
 
-主要公開成員為 `Instance`、設定/計數屬性、`Render()` 與 `Clear()`。
+### 公開方法
 
-## 範例
+| 方法 | 行為 |
+|---|---|
+| `Render(SoundTraceManager manager, bool force = false)` | 根據最新有效路徑更新顯示網格。`force = true` 跳過重新整理間隔限制。視覺化關閉或 Manager 無效時清除顯示。 |
+| `Clear()` | 清除路徑網格、隱藏繪製器，並重設路徑和線段計數。 |
+
+### 公開屬性
+
+| 屬性 | 型別 / 存取 | 說明 |
+|---|---|---|
+| `Active` | `static SoundTracePathVisualizer` / 唯讀 | 目前啟用的視覺化元件，不存在時為 `null`。 |
+| `PathVisualizationEnabled` | `bool` / 唯讀 | 是否啟用路徑視覺化。 |
+| `RefreshIntervalMs` | `float` / 唯讀 | 視覺化重新整理的最小間隔，單位毫秒。 |
+| `MaxVisualizedPaths` | `int` / 唯讀 | 顯示路徑數量的上限。 |
+| `PathWidth` | `float` / 唯讀 | 路徑線寬。 |
+| `PathAlphaIntensity` | `float` / 唯讀 | 路徑顯示強度。 |
+| `ActivePathCount` | `int` / 唯讀 | 最近一次視覺化更新讀取的有效路徑數。 |
+| `ActiveSegmentCount` | `int` / 唯讀 | 構成實際顯示網格的線段數。 |
+| `PoolSize` | `int` / 唯讀 | 傳回與 `ActiveSegmentCount` 相同的線段數。 |
+| `DrawHitTrianglesInSceneView` | `bool` / 唯讀，僅 Editor | 是否在 Scene View 中顯示命中三角形。 |
+
+## 範例展示
 
 ### ST_SampleScene01
 
@@ -402,7 +512,7 @@ SoundTrace 輸出的比較。
 
 用於檢查大型空間中的多個音源、牆面遮蔽、移動期間的 HRTF 方向感與房間響應。
 
-## 疑難排解
+## 疑難排解提示
 
 | 症狀 | 檢查項目 |
 |---|---|
@@ -416,7 +526,7 @@ SoundTrace 輸出的比較。
 | 效能不足 | 依 `Quality → Middle → Fast` 順序檢查，縮小 path cache buffer，然後停用路徑視覺化 |
 | 多個音源聽起來像梳狀濾波 | 使用相同的 `AudioSettings.dspTime` 呼叫 `PlayScheduled()` |
 
-## 後續文件
+## 下一步
 
 - [SDK 概覽](./overview.md)
 - [Web SDK](./web.md)

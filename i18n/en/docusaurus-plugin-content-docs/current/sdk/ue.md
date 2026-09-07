@@ -1,47 +1,18 @@
 ---
 title: Unreal Engine
-description: Install SoundTracing Unreal Engine plugin 0.2.0 and configure its Unity-style components, HRTF, geometry, materials, GPU backend, and Blueprint API.
+description: SoundTrace Unreal Engine SDK installation, mono audio import, plugin settings, Detail Properties, and public APIs.
 ---
 
 # SoundTrace SDK for Unreal Engine
 
-The SoundTrace Unreal SDK connects [STCoreV2](../core/stcorev2.md) through Unreal Audio
-Extension Plugins and Actor Components. Version 0.2.0 uses the STCoreV2 v0.7 C-ABI 4 and
-provides the same Manager, Listener, Source, Object, and PathVisualizer organization as the
-Unity SDK.
-
-This guide covers the native Unreal audio integration. FMOD and Wwise must be configured as
-separate integration builds, not enabled alongside the native integration in the same build.
+The SoundTrace Unreal Engine SDK is a real-time spatial audio plugin connecting Unreal audio sources, listeners, and meshes to [STCoreV2](../core/stcorev2.md). Configure acoustic paths, materials, HRTF, and GPU processing through project-wide settings and Actor Components.
 
 ## Requirements and platforms
 
-| Item | Current version/range |
+| Item | Requirements / support |
 |---|---|
-| Unreal Engine | `5.6` |
-| SoundTracing plugin | `0.2.0` Beta |
-| STCoreV2 | `v0.7`, C-ABI `4` |
-| Declared target platforms | Win64, macOS, Linux, Android, iOS |
-| Prebuilt binaries in the current SDK checkout | Win64 Release |
-| Source channels | Mono or Stereo, up to 2 channels |
-| Additional plugin | Niagara, enabled by `SoundTracing.uplugin` |
-
-The current Win64 package contains these files:
-
-```text
-Plugins/SoundTracing/ThirdParty/STCoreV2/
-├─ Binaries/Win64/Release/exaSound.dll
-├─ Binaries/Win64/Release/webgpu_dawn.dll
-└─ Lib/Win64/Release/exaSound.lib
-```
-
-To build another target, add that platform's `exaSound` runtime and link artifacts under the
-same ThirdParty layout. A platform entry in `SupportedTargetPlatforms` does not create its
-native binaries.
-
-:::warning ABI 4 only
-SoundTracing 0.2.0 is not compatible with an ABI 3 or older `exaSound` binary. Mixing an old
-DLL into the package stops initialization with `STCoreV2 export table is incomplete`.
-:::
+| Unreal Engine | `5.6` or newer |
+| Supported platforms | Windows x64, macOS, Linux, Android, iOS |
 
 ## Installation
 
@@ -63,102 +34,132 @@ YourProject/
 Keep `Content/STData` and `ThirdParty/STCoreV2` when distributing the plugin folder. Material
 presets, custom HRTF data, and the native runtime use these paths.
 
-## Unreal Audio settings
+## Unreal Editor settings
 
-For the native Unreal audio integration, select both plugins in the Audio settings for each
-target platform:
+1. Open the target platform's `Audio` settings under `Edit > Project Settings > Platforms`.
+2. Set `Spatialization Plugin` to `SoundTracing`.
+3. Set `Source Data Override Plugin` to `SoundTracing`.
+4. Restart the editor.
+5. Open `Project Settings > Plugins > SoundTracing` and review the global settings.
 
-```text
-Spatialization Plugin: SoundTracing
-Source Data Override Plugin: SoundTracing
-```
+![Selecting SoundTracing in Project Settings](/img/unreal/ST_Listener_Setting_Editor01.png)
 
-Restart the Editor after changing these settings. Also enable Spatialization on each
-`Audio Component` or `Sound Attenuation` asset and assign a
-`SoundTracing Audio Spatialization Settings` asset.
+For Windows projects, start with the values below and adjust them to suit the audio workload.
 
-The SDK sample project uses these Windows audio values as a starting point:
-
-| Setting | Sample value |
+| Setting | Starting value |
 |---|---:|
-| Audio Sample Rate | `48000` Hz |
-| Callback Buffer Frame Size | `1024` |
-| Buffers To Enqueue | `2` |
+| `Audio Sample Rate` | `48000 Hz` |
+| `Callback Buffer Frame Size` | `1024` |
+| `Buffers To Enqueue` | `2` |
 
-These are sample values, not hard plugin requirements. If your project has a different audio
-budget, verify functionality with these values first, then tune callback and buffer sizes.
+## Audio asset import settings — mono
 
-## Fastest setup
+![Regular and mono Sound Wave assets](/img/unreal/MonoSoundImport.png)
 
-1. Review Runtime Options and Default Listener Settings under
-   `Project Settings > Plugins > SoundTracing`.
-2. Create a `SoundTracing Audio Spatialization Settings` asset from
-   `Sounds > SoundTracing` in the Content Browser.
-3. Assign the asset to Spatialization Plugin Settings on an `Audio Component` or
-   `Sound Attenuation` asset.
-4. Add a `SoundTracingObjectComponent` as a direct child of every
-   `StaticMeshComponent` or `SkinnedMeshComponent` used as acoustic geometry.
-5. Run `Auto Set Materials` on the Object Component and correct only mismatched slots.
-6. Start PIE and run `SoundTracing.Status` to inspect the native runtime, backend, listener,
-   and path count.
+Prepare audio sources for SoundTrace spatialization as mono (one channel).
 
-The plugin works without a Listener Component. In that case it follows the Unreal audio-device
-listener and uses Default Listener Settings from Project Settings.
+1. Export the original audio as a mono PCM WAV file from an audio editor.
+2. Use `Import` in the Content Browser. Unreal creates a `Sound Wave` asset.
+3. Confirm that the Sound Wave has `1` channel.
+4. Assign the asset to the Audio Component's `Sound` field.
+
+Mono describes the input source channels. SoundTrace renders headphone directionality relative to the listener. See [Unreal audio import documentation](https://dev.epicgames.com/documentation/en-us/unreal-engine/importing-audio-files?application_version=5.6) for the basic import workflow.
+
+## Quick start
+
+1. Start with `Quality Preset = Fast` in `Project Settings > Plugins > SoundTracing`.
+2. Create a source settings asset from `Sounds > SoundTracing > SoundTracing Audio Spatialization Settings` in the Content Browser.
+3. Create a `Sound Attenuation` asset and enable `Enable Spatialization`. Set `Spatialization Method` to `Plugin-Spatialized` and add the source settings asset to the `Spatialization Plugin Settings` array.
+4. Assign a mono Sound Wave to the Audio Component. Enable `Allow Spatialization`, disable `Override Attenuation`, and assign the Sound Attenuation asset to `Attenuation Settings`.
+5. Add `SoundTracingObjectComponent` as an immediate child of the `StaticMeshComponent` or `SkinnedMeshComponent` used for acoustic geometry.
+6. Run `Auto Set Materials` on the object and adjust material slots as needed.
+7. Start PIE and play the Audio Component. Check runtime readiness and path counts with `SoundTracing.Status`.
+8. Add `SoundTracingPathVisualizerComponent` to an Actor to display paths.
+
+Manage global configuration in SoundTracing Plugin Settings and query runtime state through `SoundTracingSubsystem`. Without a Listener Component, the plugin uses the Unreal audio listener transform and the project's default listener settings.
 
 ## Component overview
 
-| Unity SDK | Unreal Engine SDK | Role |
+| Component | Unreal Engine SDK | Role |
 |---|---|---|
-| `SoundTraceManager` | `Project Settings > Plugins > SoundTracing` | Native runtime, threads, GPU, cache, and default Listener settings |
-| `SoundTraceListener` | `SoundTracingListenerComponent` | Per-level Listener profile and optional transform override |
-| `SoundTraceSource` | `SoundTracing Audio Spatialization Settings` | Per-source emission, rays, paths, attenuation, and render tuning |
-| `SoundTraceObject` | `SoundTracingObjectComponent` | Static/Skinned geometry, BVH, and material-slot registration |
-| `SoundTracePathVisualizer` | `SoundTracingPathVisualizerComponent` | Niagara-based propagation-path display |
-| Manager runtime panel | `SoundTracingSubsystem` | Blueprint access to runtime state and the latest propagation result |
+| SoundTracing Plugin Settings | `SoundTracingSettings`, `SoundTracingSubsystem` | Project configuration and runtime state queries and control |
+| Listener | `SoundTracingListenerComponent` | Listener quality, output settings, and transform overrides |
+| Source | `SoundTracingSourceSettings` + `Audio Component` | Per-source emission, acoustic paths, and attenuation |
+| Sound Object | `SoundTracingObjectComponent` | Registers meshes, BVH, and material slots |
+| Acoustic Materials | `SoundTracingMaterialPresetLibrary` | Material presets and per-band reflection, absorption, and transmission |
+| Sound Path Visualizer | `SoundTracingPathVisualizerComponent` | Displays acoustic paths with Niagara |
 
-## Project Settings
+## SoundTracing Plugin Settings
 
-`Project Settings > Plugins > SoundTracing` is the Unreal counterpart of Unity's
-`SoundTraceManager`.
+<span id="project-settings" />
 
-### Runtime Options
+<span id="soundtracingsubsystem" />
 
-| Field | Default | Range/behavior |
-|---|---:|---|
-| `Propagation Thread Count` | `-1` | `-1..64`. `-1` lets STCoreV2 use logical cores minus one. `0` or `1` is serial. Disabled while GPU mode is selected. Restart required |
-| `Use GPU Backend` | Off | Requests Dawn/WebGPU initialization and falls back to CPU on failure. Restart required |
-| `Path Cache Size` | `256` | `0..1024`. Shared cache budget for all active sources. `0` disables the cache |
-| `Propagation Interval (ms)` | `0` | `0..500`. `0` requests one frame per game tick; requests coalesce while a frame is running. Every Unity sample scene uses `50` |
+![SoundTracing runtime and default listener settings](/img/unreal/ST_Listener_Setting_Editor02.png)
 
-### Sources
+![SoundTracing source caps, attenuation, materials, and paths](/img/unreal/ST_Listener_Setting_Editor03.png)
+
+### Detail Properties
+
+`SoundTracingSettings` manages global settings; `SoundTracingSubsystem` controls the runtime. Edit global configuration in `Project Settings > Plugins > SoundTracing`. Tables show SDK defaults; the images show example configurations.
 
 | Field | Default | Description |
 |---|---:|---|
-| `Source Ray Resolution Cap` | `0` | `0..32`. Upper bound for every source's reverb-ray grid. `0` leaves the source assets alone. Lower this first when many sources play; the Unity sample scenes use `8` with one or two sources and `24` with eight |
-| `Source Ray Depth Cap` | `0` | `0..16`. Upper bound for every source's reverb-ray depth. `0` leaves the source assets alone |
+| `Propagation Thread Count` | `-1` | `-1..64`. `-1` configures threads automatically from logical core count; `0` and `1` use a single thread. Restart after changing. |
+| `Use GPU Backend` | Disabled | Requests GPU processing, with CPU fallback if initialization fails. Restart after changing. |
+| `Path Cache Size` | `256` | `0..1024`. Path cache shared by active sources. `0` disables caching. |
+| `Propagation Interval (ms)` | `0` | `0..500`. Minimum interval between propagation requests. `0` requests on each game tick; requests coalesce while processing is in progress. |
+| `Quality Preset`, `Listener Rays`, `HRTF`, `Render Quality` | `Fast` | Default listener profile. Each field is described in the listener Detail Properties table below. |
+| `Source Ray Resolution Cap` | `0` | `0..32`. Global cap for per-source reverb ray resolution. `0` adds no limit. |
+| `Source Ray Depth Cap` | `0` | `0..16`. Global cap for per-source reverb ray depth. `0` adds no limit. |
+| Per-path `Strength` | each `1.0` | Attenuation strengths for `Direct`, `Reflection`, `Diffraction`, `Reverb`, and `Transmission`, in `0.5..1.5`. Applies to sources using project attenuation. Higher values attenuate faster at the same distance. |
+| `Material Preset Library` | Unassigned | Uses the bundled library when unassigned. Restart after selecting another library. |
+| `Paths`, `Air Absorption` | Enabled | Path families and air absorption for the default listener. |
 
-Both caps apply on top of the source asset's `Ray Preset` / `Ray Resolution`; a source set to `0`
-(inherit) is clamped against the Listener grid. Changing them in Project Settings re-applies to
-playing sources immediately.
+### Public methods
 
-### Listener, Attenuation, and Materials
+In Blueprint, use `Get World Subsystem` to obtain `SoundTracingSubsystem`. In C++, use `USoundTracingSubsystem::Get(WorldContextObject)`.
 
-| Field | Default | Description |
-|---|---:|---|
-| `Default Listener Settings` | `Fast` | Used when no Listener Component overrides the level |
-| `Default Source Attenuation Strengths` | `1.0` per path | Used by Source assets that do not override project attenuation. Range `0.5..1.5` |
-| `Material Preset Library` | Empty | Uses the bundled `SoundTraceMaterialPresetLibrary` when empty. Restart after selecting another library |
+| Method | Return value / behavior |
+|---|---|
+| `Get(const UObject* WorldContextObject)` | Static C++ method returning the subsystem for the specified World. |
+| `IsNativeRuntimeReady()` | `bool`. Whether the native library, scene, and listener are ready. |
+| `IsGpuPropagationActive()` | `bool`. Whether GPU propagation is actually active. |
+| `GetGpuBackendStatus()` | `FString`: `GPU active`, `CPU`, or `CPU fallback (...)` with a reason. Returns `Unavailable` if the runtime cannot be accessed. |
+| `GetLastValidPathCount()` | `int32`. Valid path count from the most recently completed propagation frame. |
+| `GetLastNativeError()` | `FString`. Most recent native error; empty if the latest frame succeeded. |
+| `GetNativeVersion()` | `FString`. Native library version in `major.minor.revision` format. |
+| `GetRegisteredObjectCount()` | `int32`. Number of objects registered in the current World. |
+| `GetActiveListenerSettings()` | `FSoundTracingListenerSettings`. Listener settings currently applied. |
+| `ResetMotionState()` | Resets listener and source motion history after teleporting or changing levels. |
+| `RequestPropagationFrame()` | Requests propagation outside the regular update cadence. |
 
-The SDK sample project's `DefaultGame.ini` overrides these defaults with `Middle`, GPU enabled,
-a `50 ms` propagation interval, and a source ray cap of `16` / depth `4` for demonstration. The
-plugin defaults are listed above.
+### Public properties
 
-## SoundTracingListenerComponent
+These are the C++ configuration members of `USoundTracingSettings`. Read project settings with `GetDefault<USoundTracingSettings>()`.
 
-Add this component to a Pawn or Camera to override the project Listener profile for a level, or
-to drive the native listener from the component instead of the Unreal audio-device listener.
+| Property | Type | Description |
+|---|---|---|
+| `PropagationThreadCount` | `int32` | Configured propagation thread count. |
+| `bEnableGpuPropagation` | `bool` | GPU request flag. Check actual activation with `IsGpuPropagationActive()`. |
+| `PathCacheSize` | `int32` | Path cache size. |
+| `PropagationIntervalMs` | `int32` | Minimum propagation request interval in milliseconds. |
+| `DefaultListenerSettings` | `FSoundTracingListenerSettings` | Project default listener profile. |
+| `SourceRayResolutionCap`, `SourceRayDepthCap` | `int32` | Global resolution and depth caps for source rays. |
+| `DefaultSourceAttenuationStrengths` | `FSoundTracingAttenuationStrengths` | Default distance attenuation strength for each path family. |
+| `MaterialPresetLibrary` | `TSoftObjectPtr<USoundTracingMaterialPresetLibrary>` | Material library to register at startup. |
 
-### Inspector
+## Listener
+
+<span id="soundtracinglistenercomponent" />
+
+![Default listener profile](/img/unreal/ST_Listener_Setting_Editor02.png)
+
+Add `SoundTracingListenerComponent` to a Pawn or Camera to override the project's listener profile per level, or to use this component's transform instead of the Unreal audio-device listener.
+
+### Detail Properties
+
+Project Settings and Listener Component share the listener profile fields. The image above shows the project's default profile. The component also exposes the override options below.
 
 | Field | Default | Behavior |
 |---|---:|---|
@@ -169,7 +170,25 @@ to drive the native listener from the component instead of the Unreal audio-devi
 Only one Listener Component drives the active listener in a World. If another component begins
 play, it replaces the previous component and writes a warning to the Output Log.
 
-### Quality preset
+| Listener profile field | Default | Description |
+|---|---:|---|
+| `Quality Preset` | `Fast` | Selects `Custom`, `Fast`, `Middle`, or `Quality`. |
+| `Ray Resolution`, `Ray Depth` | `16`, `4` | `1..32` and `1..16`, respectively. Path tracing resolution and depth, editable in `Custom`. |
+| `Output Mode` | `Headphones` | Selects headphone or speaker output. |
+| `Hrtf Mode` | `HRIR Interpolated` | See the HRTF table below. |
+| `Custom HRTF Relative Path` | Empty string | Custom HRTF path relative to plugin Content. Empty uses the embedded table. |
+| `HRTF Path Budget` | `1` | `1..32`. Number of top paths receiving directional HRTF processing. |
+| `Diffuse Enabled`, `Diffuse Quality` | Disabled, `Low` | Controls early scattered sound and its quality. `Low/Medium/High` retains up to `128/512/1024` scattered paths. |
+| `Delay Interpolation` | `Linear` | Selects `Linear`, `Cubic Lagrange`, or `Lagrange 6` delay interpolation. |
+| `Early Path Budget` | `128` | `0..4096`. Early indirect paths receiving full moving-delay processing. `0` removes the limit. |
+| `Render Band Tier` | `Merged4` | Selects the render band count with `Merged4` or `Full8`. |
+| Per-path `Enable … Path` | All enabled | Enables or disables `Direct`, `Reflection`, `Diffraction`, `Reverb`, and `Transmission` paths individually. |
+| `Air Absorption Enabled` | Enabled | Applies attenuation from air absorption. |
+| `Temperature Celsius` | `20` | `-40..60 °C`. Air temperature. |
+| `Relative Humidity Percent` | `50` | `0..100%`. Relative humidity. |
+| `Pressure Pa` | `101325` | `50000..120000 Pa`. Air pressure. |
+
+#### Quality Preset
 
 `Fast`, `Middle`, and `Quality` apply the ray and advanced render-quality values together.
 Select `Custom` to edit them manually.
@@ -185,7 +204,7 @@ Select `Custom` to edit them manually.
 HRTF voice. Every built-in preset keeps it at `1` for audio-thread headroom. Raising it in
 Custom mode can cause dropouts in scenes with many sources.
 
-### HRTF and output mode
+#### HRTF and output mode
 
 | HRTF mode | Required asset | Description |
 |---|---|---|
@@ -193,9 +212,7 @@ Custom mode can cause dropouts in scenes with many sources.
 | `HRIR` | STCoreV2 embedded table | Uses the nearest measured HRIR direction |
 | `HRIR Interpolated` | STCoreV2 embedded table | Interpolates measured HRIRs by direction; the default |
 
-The 0.1.0 `Parametric`, `Convolution`, and `SteamAudio` modes were removed in 0.2.0.
-`Custom HRTF Relative Path` accepts an `MPI1`, `SAH1`, or `BPH1` table path relative to the
-plugin `Content` directory. Leave it empty to use the STCoreV2 embedded table.
+Set `Custom HRTF Relative Path` to an `MPI1`, `SAH1`, or `BPH1` table path relative to plugin `Content`. Leave it empty to use the table embedded in STCoreV2.
 
 | Output Mode | Description |
 |---|---|
@@ -206,24 +223,37 @@ The recommended advanced `Render Band Tier` is `Merged4`; `Full8` increases per-
 audio-thread band processing. Air Absorption defaults to `20 °C`, `50%` relative humidity,
 and `101325 Pa` for ISO 9613-1 attenuation.
 
-### Blueprint methods
+### Public methods
 
 | Method | Behavior |
 |---|---|
-| `ApplyListenerSettings()` | Reapplies current Inspector values to the native listener |
+| `ApplyListenerSettings()` | Reapplies current Detail Properties values to the native listener |
 | `SetQualityPreset(Preset)` | Changes and immediately applies the quality preset |
 | `SetHrtfMode(Mode)` | Changes and immediately applies the HRTF mode |
 | `SetOutputMode(Mode)` | Switches Headphones/Speaker and applies it |
 | `ResetMotionState()` | Clears listener/source velocity history after a teleport or respawn |
 | `GetListenerSettings()` | Returns the component's current listener settings |
+| `static GetActiveListener(const UWorld* World)` | Returns the active Listener Component for the World in C++. |
 
-## SoundTracing Audio Spatialization Settings
+### Public properties
+
+| Property | Type / access | Description |
+|---|---|---|
+| `bOverrideProjectListenerSettings` | `bool` / read/write | Whether to use this component's listener profile. |
+| `ListenerSettings` | `FSoundTracingListenerSettings` / read/write | Component quality, output, and path settings. Call `ApplyListenerSettings()` after modifying them directly at runtime. |
+| `bDriveListenerTransform` | `bool` / read/write | Whether the component's position and orientation drive the listener. |
+
+## Source
+
+<span id="soundtracing-audio-spatialization-settings" />
+
+![Source settings asset Detail Properties](/img/unreal/STSettingAssets_SourceSetups.png)
 
 Create this asset from
 `Sounds > SoundTracing > SoundTracing Audio Spatialization Settings` in the Content Browser.
 Share one asset between sources with the same role instead of duplicating it per Audio Component.
 
-### Inspector
+### Detail Properties
 
 | Field | Default | Range/behavior |
 |---|---:|---|
@@ -234,7 +264,7 @@ Share one asset between sources with the same role instead of duplicating it per
 | `Ray Preset` | `Custom` | `Custom`, `Fast` (8×8, depth 4), `Middle` (16×16, depth 4), `Quality` (24×24, depth 4). Anything but `Custom` overwrites the two values below. This is the Unity `SoundTraceSource` `Reverb Ray Resolution` and applies to every source sharing the asset |
 | `Ray Resolution` | `24` | `0..32`. `0` inherits the Listener grid; otherwise uses an `N × N` source reverb grid |
 | `Ray Depth` | `4` | `0..16`. `0` inherits Listener depth |
-| `Direct/Reflection/Diffraction/Reverb/Transmission` | All on | Enables each path family per source |
+| Per-path `… Path Enabled` | All enabled | Enables or disables `Direct`, `Reflection`, `Diffraction`, `Reverb`, and `Transmission` per source. |
 | `Override Project Attenuation Strengths` | On | When off, uses the Project Settings attenuation values |
 | Per-path `Strength` | `1.0` | `0.5..1.5`. Higher values attenuate faster at the same distance |
 | `Max Delay Seconds` | `1.0 s` | `0.01..5 s`. Maximum propagation delay retained by the renderer |
@@ -243,17 +273,38 @@ Share one asset between sources with the same role instead of duplicating it per
 | `Max Delay Rate` | `0.1` | `0.001..0.999`. Maximum delay change per sample |
 | `Bypass` | Off | Passes input through without SoundTrace spatial rendering |
 
-Since 0.2.0, the spatializer updates each source directly from
-`FAudioPluginSourceInputData::SpatializationParams` on every audio block. If a source remains
-at native `(0,0,0)`, verify that the 0.2.0 plugin module and binaries were deployed together.
+#### Connect to an Audio Component
 
-## SoundTracingObjectComponent
+Assign the source settings asset to Sound Attenuation, then assign that Attenuation asset to the Audio Component. Sources of the same kind can share both assets.
+
+![Source settings assigned in Sound Attenuation's Spatialization Plugin Settings](/img/unreal/ST_AttenAsset_PutSettingAssetHere.png)
+
+Enable `Enable Spatialization` and select plugin spatialization. Add the `SoundTracing Audio Spatialization Settings` asset to the `Spatialization Plugin Settings` array.
+
+![Sound Attenuation assigned to the Audio Component's Attenuation Settings](/img/unreal/ST_Source_PutAssetHere.png)
+
+Enable `Allow Spatialization` and disable `Override Attenuation` on the Audio Component. Assign the previously created Sound Attenuation to `Attenuation Settings`.
+
+### Public methods
+
+These are C++ methods on `USoundTracingSourceSettings`. Use the Audio Component's `Play()` and `Stop()` to control playback.
+
+| Method | Return value / behavior |
+|---|---|
+| `GetEffectiveAttenuationStrengths()` | `FSoundTracingAttenuationStrengths`. Returns source or project strengths according to the override setting. |
+| `ApplyRayPreset()` | Updates `RayResolution` and `RayDepth` from `RayPreset`. Leaves values unchanged in `Custom`. |
+
+## Sound Object
+
+<span id="soundtracingobjectcomponent" />
+
+![SoundTracingObjectComponent Detail Properties](/img/unreal/STObj_01.png)
 
 `SoundTracingObjectComponent` registers its immediate parent `StaticMeshComponent` or
 `SkinnedMeshComponent` as acoustic geometry. Add it directly below the target mesh component,
 not at an arbitrary place in the Actor hierarchy.
 
-### Inspector
+### Detail Properties
 
 | Field | Default | Description |
 |---|---:|---|
@@ -267,11 +318,13 @@ not at an arbitrary place in the Actor hierarchy.
 | `Sync Skinned Vertices On Tick` | Off | Uploads the current skeletal pose each tick in `Refit` mode |
 | `Sound Material Slots` | Generated | Maps render-material slots to SoundTrace presets |
 | `Visualize BVH` | Off | Draws BVH lines with the Editor component visualizer |
+| `BVH Visualization Color` | Cyan | BVH display color. |
+| `Native Object Id`, `Native Mesh Id` | `-1` | Registered native IDs. Read-only; `-1` when unregistered. |
 
 A Static Mesh uses Forced LOD when set, otherwise LOD 0. A Skinned Mesh also prefers Forced LOD
 and uploads the current pose vertices.
 
-### Geometry and BVH
+#### Geometry and BVH
 
 | BVH Type | Refit | GPU backend | Description |
 |---|---|---|---|
@@ -300,7 +353,7 @@ Objects with the same Static Mesh, LOD, material mapping, and BVH settings share
 The Skinned Mesh cache key includes the component path, so distinct poses do not overwrite the
 same native mesh.
 
-### Blueprint methods
+### Public methods
 
 | Method | Behavior |
 |---|---|
@@ -308,15 +361,26 @@ same native mesh.
 | `UnregisterNativeObject()` | Removes the native object registration |
 | `SyncNativeTransform()` | Immediately applies the parent transform |
 | `RefreshNativeMesh()` | Reuploads geometry after a mesh or material change |
-| `Auto Set Materials` | Matches presets by parent render-material names and aliases |
+| `SyncMaterialsFromParent()` (`Auto Set Materials`) | Automatically matches presets using parent render material names and aliases. |
 | `SetMaterialPresetIndex(Slot, Preset)` | Changes one slot's preset index |
 | `SetMaterialPresetForAllSlots(Preset)` | Applies one preset to every slot |
 | `SetUpdateType(Type)` | Changes the native object update policy |
 | `GetResolvedMeshLodIndex()` | Returns the LOD index actually uploaded |
 | `GetUploadedTriangleCount()` | Returns the triangle count from the last upload |
 | `IsRegistered()` | Returns whether both native object and mesh are valid |
+| `GetNativeObjectId()`, `GetNativeMeshId()` | Returns registered native IDs; `-1` when unregistered. |
+| `GetTargetMeshComponent()` | Returns the immediate parent mesh component used for registration. |
+| `static IsGpuCompatibleBvhType(ESoundTracingBvhType InBvhType)` | Returns `true` for SIMD LBVH variants. |
+| `GetBvhMaxDepth()`, `GetPrimitivesPerLeafNode()`, `GetBvhType()` | Queries BVH settings in C++. |
+| `GetSoundMaterialSlots()` | Returns a read-only reference to acoustic material slots in C++. |
+| `BuildNativeBvhDebugLineSegments(TArray<FVector>& OutLocalLinePoints)` | Retrieves BVH debug segments in local coordinates from C++. |
+| `ShouldVisualizeBvh()`, `GetBvhVisualizationColor()` | Editor-only C++ methods for querying BVH visibility and color. |
 
 ## Acoustic materials and Transmission
+
+![SoundTracing Material Preset Library Detail Properties](/img/unreal/ST_Material_Graph.png)
+
+### Detail Properties
 
 The default library is
 `Content/STData/Material/SoundTraceMaterialPresetLibrary.uasset` in the plugin. It currently
@@ -327,18 +391,21 @@ Create a custom library from
 asset copies the active default library. Select it under `Material Preset Library` in Project
 Settings and restart the Editor.
 
-Each preset contains:
-
-- Display name and render-material name aliases
-- Scattering `0..1`
-- 8-band Reflection, Absorption, and Transmission `0..1`
-- Transmission Model
-- Eight `Thickness to -30 dB (m)` values for `Solid Distance`
+| Field | Description |
+|---|---|
+| `Presets` | Acoustic material list. |
+| `Display Name`, `Aliases` | Display name and aliases used to match render materials automatically. |
+| `Material Index` | Native material index, maintained in library list order. |
+| `Scattering` | `0..1`. Balance between specular reflection and scattering. |
+| `Reflection`, `Absorption`, `Transmission` | Eight-band reflection, absorption, and transmission energy coefficients, each in `0..1`. |
+| `Transmission Model` | Selects `Surface` or `Solid Distance`. |
+| `Thickness to -30 dB (m)` | Per-band attenuation reference distance for `Solid Distance`. |
+| `ResetToBundledJson` | Restores the preset list from bundled JSON. |
 
 Band centers are `67.5`, `125`, `250`, `500`, `1000`, `2000`, `4000`, and `8000 Hz`.
 Click or drag the Editor band graph to edit values.
 
-### Transmission Model
+#### Transmission Model
 
 | Model | Input | Geometry requirement |
 |---|---|---|
@@ -353,10 +420,51 @@ blocks the band.
 `soundMaterial.json` format. A missing `transmissionDistanceToMinus30DbMeters` means
 `Surface`; eight valid values mean `Solid Distance`.
 
-## SoundTracingPathVisualizerComponent
+### Public methods
+
+| Method | Return value / behavior |
+|---|---|
+| `NormalizePresets()` | Normalizes preset indices and per-band values. |
+| `GetPresetCount()` | Returns the number of presets. |
+| `FindBestPresetIndexByName(const FString& RenderMaterialName)` | Finds a preset index matching the render material name or aliases. |
+| `GetPresetDisplayName(int32 PresetIndex)` | Returns the preset's display name. |
+| `ResetToBundledJson()` | Replaces the list with bundled JSON. Call through the editor button or C++. |
+| `ExportToJson()` | Returns a string in `soundMaterial.json` format. |
+| `ImportFromJson(const FString& JsonText)` | Replaces the list from JSON. Returns `false` if no materials can be parsed. |
+| `FindBestPresetIndex(const UMaterialInterface* RenderMaterial)` | Finds a preset matching the render material in C++. |
+| `FindPresetIndexByToken(const FString& Token, int32 FallbackIndex)` | Finds a preset by token in C++, using the fallback index if no match exists. |
+| `static GetFrequencyBandCentersHz()` | Returns a read-only reference to the eight center frequencies in C++. |
+| `static LoadDefaultLibrary()` | Loads the project-selected or default library in C++. |
+| `static MakeFallbackPresets()` | Creates the fallback preset array in C++. |
+| `static ParseSoundMaterialJson(const FString& JsonText, TArray<FSoundTracingMaterialPreset>& OutPresets)` | Parses JSON into a preset array in C++. |
+| `static SerializeSoundMaterialJson(const TArray<FSoundTracingMaterialPreset>& InPresets)` | Serializes a preset array to a JSON string in C++. |
+| `static LoadBundledJson(FString& OutJson)` | Reads bundled JSON into a string and returns success in C++. |
+
+### Public properties
+
+| Property | Type / access | Description |
+|---|---|---|
+| `Presets` | `TArray<FSoundTracingMaterialPreset>` / read/write | Preset array stored in the library. |
+| `FrequencyBandCount` | `static constexpr int32` / constant | Number of frequency bands: `8`. |
+
+## Sound Path Visualizer
+
+<span id="soundtracingpathvisualizercomponent" />
+
+![Sound Tracing Path Visualizer in Add Component search results](/img/unreal/PathVisualizer_01.png)
+
+Search for `Sound Tracing Path Visualizer` in the Actor's `Add Component` menu and add it. This C++ component creates the Niagara component needed for path rendering.
+
+![Detail Properties of the Niagara component using NS_Arrow](/img/unreal/PathVisualizer_02.png)
 
 Add `SoundTracingPathVisualizerComponent` to an Actor to display the latest propagation frame
 as Niagara line segments.
+
+:::note Bundled NS_Arrow asset paths
+`Niagara System Asset` uses the plugin's bundled `NS_Arrow` asset. Its default path is `/SoundTracing/FX/NS_Arrow.NS_Arrow`. The associated material is `/SoundTracing/Materials/MAT_ArrowLine`. Keep both `Content/FX` and `Content/Materials` when installing or moving the plugin, and check that the Niagara system and material references remain valid.
+:::
+
+### Detail Properties
 
 | Field | Default | Description |
 |---|---:|---|
@@ -366,111 +474,64 @@ as Niagara line segments.
 | `Path Alpha Intensity` | `0.5` | Segment alpha strength, range `0.01..2.0` |
 | `Niagara System` | Empty | Uses the plugin's default Niagara system when empty |
 
-Colors are Direct=red, Reflection=orange, Diffraction=green, Transmission=cyan, and
-Reverb=purple. Use `SetVisualizationEnabled(bool)` to control it at runtime and
-`GetActivePathCount()` to read the current path count. Disable it for shipping performance
-measurements.
+Colors are Direct=red, Reflection=orange, Diffraction=green, Transmission=cyan, and Reverb=purple. Disable visualization for performance measurements.
 
-## SoundTracingSubsystem
+### Public methods
 
-`SoundTracingSubsystem` is a `WorldSubsystem` equivalent to the Unity Manager runtime panel.
-It exposes these states and commands to Blueprint:
-
-| Method | Behavior |
+| Method | Return value / behavior |
 |---|---|
-| `IsNativeRuntimeReady()` | Reports whether the library, native init, scene, and listener are ready |
-| `IsGpuPropagationActive()` | Reports whether a GPU device was actually acquired |
-| `GetGpuBackendStatus()` | Returns `GPU active`, `CPU`, or `CPU fallback (...)` |
-| `GetLastValidPathCount()` | Returns valid paths from the latest propagation frame |
-| `GetLastNativeError()` | Returns the control thread's latest native error, or an empty string |
-| `GetNativeVersion()` | Returns native version `major.minor.revision` |
-| `GetRegisteredObjectCount()` | Returns registered objects in the current World |
-| `GetActiveListenerSettings()` | Returns settings currently applied to the native listener |
-| `ResetMotionState()` | Clears Listener and Source motion history |
-| `RequestPropagationFrame()` | Requests a propagation frame outside the regular cadence |
+| `SetVisualizationEnabled(bool bEnabled)` | Enables or disables path display at runtime. |
+| `GetActivePathCount()` | `int32`. Returns the current number of paths retained by the visualizer. |
 
-## GPU backend
+## Sample demos
 
-Enable `Use GPU Backend` and restart the Editor to request the Dawn/WebGPU backend through
-`exaPropagatorInitGpu`.
+### Test
 
-- Initialization succeeds: `GPU active`
-- Native build has no GPU add-on: `CPU fallback (this exaSound build has no GPU backend)`
-- Adapter/device initialization fails: `CPU fallback (...)` with the reason
-- GPU was not requested: `CPU`
+![Unreal Test demo image placeholder](/img/unreal/demo-placeholder.svg)
 
-For Win64, stage `webgpu_dawn.dll` from the same artifact directory as `exaSound.dll`. The
-plugin Build.cs registers DLLs in this directory as runtime dependencies.
+Open `Content/FirstPerson/Test.umap` in the SDK sample project to inspect mesh registration, BVH, and acoustic material slots.
 
-Inspect the actual state with Blueprint `GetGpuBackendStatus()` or these console commands:
+1. Select a level mesh and inspect the parent attachment and material slots of `SoundTracingObjectComponent`.
+2. Play a sound in PIE and move the listener to hear directionality and occlusion changes.
+3. Change material presets to compare reflection, absorption, and transmission.
+4. Enable the Path Visualizer to compare audible changes with acoustic paths.
+
+The sample map is included in the SDK sample project's Content. For projects that only have the plugin installed, migrate the required sample assets together with their dependencies.
+
+## Troubleshooting tips
+
+| Symptom | Check |
+|---|---|
+| Plugin missing from Audio selection | Check SoundTracing activation, the C++ module build, target-platform Audio settings, and editor restart. |
+| Native library load or ABI error | Use the plugin and native library from the same SDK distribution, and ensure ThirdParty files are packaged. |
+| No sound or no spatialization | Check the mono Sound Wave, Audio Component playback, both global Audio plugins, Spatialization activation, and asset assignments. |
+| Source settings not applied | Check the `Audio Component → Sound Attenuation → SoundTracing Source Settings` chain and `Override Attenuation`. |
+| Unexpected listener position | With `Drive Listener Transform` enabled, the component drives the position; otherwise, the Unreal audio listener is used. |
+| Listener replacement warning | Keep one active Listener Component per World. |
+| Geometry not reflected in audio | Check that the Object Component is an immediate child of a supported mesh and that mesh data and triangles exist. |
+| Skinned animation not reflected | Check `Update Type = Refit`, `Sync Skinned Vertices On Tick = true`, and LOD. |
+| GPU not active | Check `GetGpuBackendStatus()` and Output Log. On Windows, deploy `exaSound.dll` and `webgpu_dawn.dll` together. |
+| Paths not visible | Check Niagara activation, `Visualization Enabled`, source/listener path settings, and `GetLastValidPathCount()`. |
+| Pitch spike after teleporting | Call the Listener or Subsystem's `ResetMotionState()` immediately after changing position. |
+| Dropouts with many sources | Adjust propagation and audio buffers in the order below. |
+
+### Dropouts with many sources
+
+1. Set `Propagation Interval (ms)` to `50` to reduce propagation request frequency.
+2. Lower `Source Ray Resolution Cap` to `8..16`, or set the source's `Ray Preset` to `Fast`.
+3. Start with listener settings `Quality Preset = Fast`, `HRTF Path Budget = 1`, and `Render Band Tier = Merged4`.
+4. Set `Propagation Thread Count` to `2..3` and restart to leave execution time for game, render, and audio threads.
+5. Set `Buffers To Enqueue` to at least `2`. Adjust `Callback Buffer Frame Size` if needed.
+6. Disable path visualization and change one setting at a time when comparing results.
+
+### Runtime status
 
 ```text
 SoundTracing.Status
 SoundTracing.DumpGpuPropagationStats
 ```
 
-`SoundTracing.Status` prints native version, readiness, backend, object/path counts, and the
-Listener profile. `SoundTracing.DumpGpuPropagationStats` prints GPU dispatch, ready, and CPU
-fallback counters.
-
-## Coordinate system
-
-Plugin components perform coordinate conversion automatically. SoundTracing 0.2.0 sends Unreal
-coordinates to STCoreV2 as follows:
-
-```text
-position / vertex / velocity = (UE.Y, UE.Z, UE.X) × 0.01 m
-sceneRatio = 1
-listener basis: right=(1,0,0), up=(0,1,0), forward=(0,0,-1)
-```
-
-The listener basis follows ADR-0001 and fixes the HRTF front/back inversion in the previous
-version. Apply this contract yourself only in a custom native integration.
-
-## Sample project
-
-The current SDK source project includes `Content/FirstPerson/Test.umap`, where you can inspect
-`SoundTracingObjectComponent` geometry, BVH, and material-slot setup. This map belongs to the
-host project's Content and is not included when only `Plugins/SoundTracing` is copied.
-
-## Troubleshooting
-
-| Symptom | Check |
-|---|---|
-| `STCoreV2 export table is incomplete` | Deploy plugin 0.2.0 with an STCoreV2 v0.7 ABI 4 binary and remove ABI 3 DLLs |
-| Plugin is absent from Audio lists | Plugin enabled, C++ module built, target Audio settings selected, Editor restarted |
-| Native library fails to load | Target-specific `ThirdParty/STCoreV2` runtime/link artifacts and package staging |
-| Source is not spatialized | Global Spatialization/Source Data Override plugins, source Spatialization enabled, SoundTracing settings asset assigned |
-| Source remains at the origin | Ensure the 0.2.0 module and binaries were deployed together; 0.2.0 reads spatialization params per audio block |
-| Listener position is wrong | `Drive Listener Transform`; when off, the Unreal audio-device listener is used |
-| Listener replacement warning | Keep one active `SoundTracingListenerComponent` per World |
-| Geometry has no effect | Object Component is the immediate child of a supported mesh with render data and triangles |
-| Skinned animation has no effect | `Update Type = Refit`, `Sync Skinned Vertices On Tick = true`, stable LOD and vertex count |
-| GPU falls back to CPU | `webgpu_dawn.dll`, GPU-enabled native build, adapter/device, Output Log, and `SoundTracing.DumpGpuPropagationStats` |
-| Paths are not visible | Niagara plugin, Visualizer enabled, max path count, and Source/Listener path enables |
-| Pitch jumps after teleport | Call `ResetMotionState()` on the Listener Component or Subsystem immediately after moving |
-| Dropouts with many sources | Follow the [Dropouts with many sources](#dropouts-with-many-sources) checklist below |
-| Stack overflow when Editor exits | Use the final 0.2.0 plugin containing the control-thread shutdown fix |
-
-### Dropouts with many sources
-
-This is the order that brings the load profile in line with the Unity sample scenes. Change one
-step at a time and confirm with `SoundTracing.Status`.
-
-1. Raise `Propagation Interval (ms)` to `50`. At `0` a propagation frame runs every game tick and keeps the CPU busy. Every Unity sample scene uses `50`.
-2. Set `Source Ray Resolution Cap` to `8..16`, or switch the source asset's `Ray Preset` to `Fast`. Each source traces its own reverb rays, so the cost scales with the source count.
-3. Drop the Listener preset to `Fast`. Keep HRTF Path Budget `1` and `Merged4` at their defaults.
-4. Set `Propagation Thread Count` explicitly to `2..3`. `-1` hands every logical core but one to propagation while Unreal's game, render, RHI, and audio threads already need cores. The Unity sample scenes use `2..3`.
-5. Keep `Buffers To Enqueue` in `Project Settings > Platforms > Windows > Audio` at `2` or more. With `1` a single late callback is an audible dropout.
-6. Run `SoundTracing.Status` twice. The second output's audio-thread probe reports the mean/max `exaRenderSound` time and its share of wall time between the two calls. Lower steps 2 and 3 further when the share approaches the block budget (1024 frames @ 48 kHz = 21.3 ms).
-7. Run `SoundTracing.DumpConfig` and check that `simdTarget` is `AVX2` or better. `SSE2` means an `exaSound.dll` without SIMD runtime dispatch; rebuild STCoreV2 dev.
-8. Turn `Use GPU Backend` off to compare with a CPU-only run. The Unity sample scenes use the CPU backend.
-
-STCoreV2 `3fb0dccf` (2026-08-31) rolled the fallback delay policy back from `D` to `A` and the early
-settle window from `6` to `0.5`. The DLL shipped with the Unity SDK (`3d9ddf83`) predates that rollback
-and renders roughly 26% cheaper on the audio thread. Set the environment variables
-`EXA_FALLBACK_DELAY_POLICY=D` and `EXA_EARLY_SETTLE_SAMPLES=6` before launching the Editor to A/B the
-two behaviours with the same DLL; they are read once when the DLL loads.
+`SoundTracing.Status` reports the native version, readiness, processing backend, object/path counts, and listener settings. `SoundTracing.DumpGpuPropagationStats` reports GPU execution and CPU fallback statistics.
 
 ## Next
 

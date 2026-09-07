@@ -8,15 +8,12 @@ description: SoundTrace Unity SDK 설치, 주요 컴포넌트 API, HRTF, GPU/BVH
 SoundTrace Unity SDK는 Unity의 메시, Renderer 재질 슬롯, 음원, 리스너를
 [STCoreV2](../core/stcorev2.md)에 연결하는 실시간 공간 음향 플러그인입니다.
 
-이 페이지는 현재 Unity SDK의 공개 컴포넌트와 Inspector 계약을 기준으로 합니다.
-
 ## 요구 사항과 플랫폼
 
-| 항목 | 현재 패키지 기준 |
+| 항목 | 요구 사항 / 지원 범위 |
 |---|---|
 | Unity | 2022.3 LTS 이상 |
-| 번들 네이티브 플러그인 | macOS, Windows x64, iOS, Android |
-| Linux | 현재 패키지에 바이너리가 없으므로 Linux 호스트에서 별도 빌드 필요 |
+| 지원 플랫폼 | Windows x64, macOS, Linux, iOS, Android |
 | Unity WebGL | 미지원. Unity WebGL에서는 `OnAudioFilterRead` 기반 DSP 처리를 사용할 수 없음 |
 
 `Use GPU Backend`는 propagation의 반사·리버브 연산에 WebGPU compute provider를
@@ -41,13 +38,13 @@ SoundTrace Unity SDK 패키지와 설치 안내는 계약된 평가·라이선�
 
 Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니다.
 
-## Audio Asset Import 설정
+## 오디오 에셋 임포트 설정 — 모노
 
 모노 사운드 소스 사용을 전제로 하며, 오디오 클립은 PCM 포맷으로 설정합니다.
 
 ![Audio Asset Import 설정](/img/unity/ImportSetting.png)
 
-## 가장 빠른 설정
+## 가장 빠른 시작
 
 1. 빈 GameObject에 `SoundTraceManager`를 추가합니다.
 2. Main Camera에 `SoundTraceListener`를 추가합니다.
@@ -68,6 +65,7 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 | `SoundTraceListener` | Listener transform, ray 품질, 출력/HRTF 설정 | 활성 Manager |
 | `SoundTraceSource` | `AudioSource` 출력 공간화, path별 설정 | 같은 GameObject의 `AudioSource`, 활성 Listener |
 | `SoundTraceObject` | Mesh와 submesh 재질을 음향 scene에 등록 | `MeshFilter`, `MeshRenderer` |
+| `SoundTraceMaterialPresetLibrary` | 재질 프리셋과 대역별 음향 계수 관리 | Material Preset Library 에셋 |
 | `SoundTracePathVisualizer` | 유효 path와 hit triangle 디버그 표시 | Manager와 같은 GameObject |
 
 ## SoundTraceManager
@@ -84,9 +82,15 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 | `bool useGpuBackend` | `false` | propagation을 job 멀티스레드가 아닌 GPU compute shader로 계산합니다. |
 | `int pathCacheSize` | `256` | 최소 `0`, 최대 `1024`인 생성 path의 cache buffer size입니다. 값이 높을수록 공간 음향감은 좋아지지만 계산량도 함께 증가합니다. 기기 성능에 따라 기본값 `256`보다 낮게 설정하여 시작하는 것을 권장합니다. |
 
+### 공개 메서드
+
+| 메서드 | 동작 |
+|---|---|
+| `ResetMotionState()` | 순간이동, 리스폰, 씬 전환 직후 모든 등록 Listener와 Source의 이동 이력을 초기화합니다. |
+
 ### 공개 프로퍼티
 
-| 프로퍼티 | 타입 / 접근 | 정확한 의미 |
+| 프로퍼티 | 타입 / 접근 | 설명 |
 |---|---|---|
 | `Instance` | `static SoundTraceManager` / `get; private set;` | 동시에 로드된 scene 전체에서 사용하는 싱글턴 Manager입니다. 없으면 `null`입니다. |
 | `DefaultMaterialsLoaded` | `int` / `get; private set;` | `OnEnable()`에서 자동 등록된 번들 재질 수입니다. 자동 로드를 끄거나 asset이 없으면 `0`입니다. |
@@ -97,16 +101,10 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 | `ObjectCount` | `int` / `get` | 현재 Manager에 등록된 Object 수입니다. |
 | `LastValidPathCount` | `int` / `get; private set;` | 가장 최근에 완료된 propagation 결과의 유효 path 수입니다. propagation을 실행할 수 없으면 `0`입니다. |
 | `LastNativeError` | `string` / `get; private set;` | 최근 scene graph 또는 propagation 오류입니다. 오류가 없으면 빈 문자열입니다. |
-| `PropagationThreadCount` | `int` / `get` | 프로파게이션 잡쓰레드의 실행 쓰레드 개수입니다. `-1`은 최대치를 의미합니다. |
+| `PropagationThreadCount` | `int` / `get` | 설정된 propagation 스레드 수입니다. `-1`은 자동 설정이며, 자동 선택된 실제 스레드 수를 반환하는 값은 아닙니다. |
 | `IsGpuPropagate` | `bool` / `get; private set;` | `exaPropagatorInitGpu()`가 성공해 GPU propagation provider가 활성화되었는지 나타냅니다. |
 | `GpuBackendStatus` | `string` / `get; private set;` | GPU Backend 초기화 결과입니다: `GPU active` 또는 `CPU fallback (<ExaResult>): <error>`. |
 | `PathCacheSize` | `int` / `get` | 생성 path의 cache buffer size입니다. |
-
-### 공개 메서드
-
-| 메서드 | 동작 |
-|---|---|
-| `public void ResetMotionState()` | teleport, respawn, scene 전환 직후 모든 등록 Listener와 Source의 motion history를 초기화합니다. |
 
 ## SoundTraceListener
 
@@ -123,6 +121,7 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 | `Ray Depth` | `4` | `1..16` |
 | `Output Mode` | `Headset` | `Headset`, `Speaker` |
 | `HRTF` | `HRIR Interpolated` | 아래 세 모드 |
+| `Delay Interpolation` | 프리셋에 따라 적용 | `Linear`, `Cubic Lagrange`, `Lagrange 6`. 이동에 따른 지연 시간 보간 방식이며 `Custom`에서 편집합니다. |
 
 `Fast`, `Middle`, `Quality`를 선택하면 ray 값과 연결된 render 품질 값이 함께 적용되고
 ray 필드는 Inspector에서 비활성화됩니다. 값을 직접 편집하려면 먼저 `Custom`을
@@ -135,7 +134,7 @@ ray 필드는 Inspector에서 비활성화됩니다. 값을 직접 편집하려�
 | `Middle` | `24` | `8` | 일반 게임과 데스크톱 |
 | `Quality` | `32` | `12` | 음향 비중이 크고 기타 비중이 적은 앱 |
 
-### HRTF와 출력 모드
+#### HRTF와 출력 모드
 
 | 모드 | 필요한 asset | 설명 |
 |---|---|---|
@@ -145,6 +144,21 @@ ray 필드는 Inspector에서 비활성화됩니다. 값을 직접 편집하려�
 
 Asset은 `Runtime/Resources/SoundTrace/HRTF/`에서 로드됩니다. 필요한 asset이 없거나 비어
 있으면 Listener 초기화가 실패하며 다른 모드로 자동 전환되지 않습니다.
+
+### 공개 메서드
+
+| 메서드 | 동작 |
+|---|---|
+| `ResetMotionState()` | 현재 Transform을 이동 기준점으로 설정하고 속도를 초기화합니다. 순간이동이나 리스폰 직후 호출합니다. |
+
+### 공개 프로퍼티
+
+| 프로퍼티 | 타입 / 접근 | 설명 |
+|---|---|---|
+| `Core` | `SoundListenerCore` / 읽기 전용 | 리스너의 저수준 API 객체입니다. 초기화되지 않았거나 비활성화되면 `null`입니다. |
+| `AudioSampleRate` | `int` / 읽기 전용 | 리스너에 적용된 오디오 샘플 레이트(Hz)입니다. |
+| `AudioInputSampleCount` | `int` / 읽기 전용 | 리스너에 적용된 입력 오디오 블록의 샘플 수입니다. |
+| `AudioOutputChannels` | `int` / 읽기 전용 | 리스너에 적용된 출력 채널 수입니다. |
 
 ## SoundTraceSource
 
@@ -193,6 +207,14 @@ Render Tuning은 source-listener 쌍에 적용됩니다. `Path Hold = 0`은 hold
 여러 `AudioSource`의 재생 시점을 맞출 때는 동일한 `AudioSettings.dspTime`을 기준으로
 `PlayScheduled()`를 호출하십시오.
 
+### 공개 프로퍼티
+
+| 프로퍼티 | 타입 / 접근 | 설명 |
+|---|---|---|
+| `Core` | `SoundSourceCore` / 읽기 전용 | 소스의 저수준 API 객체입니다. 초기화되지 않았거나 비활성화되면 `null`입니다. |
+| `NativeSourceId` | `int` / 읽기 전용 | 등록된 네이티브 소스 ID입니다. 등록 전이나 해제 후에는 `-1`입니다. |
+| `Bypass` | `bool` / 읽기·쓰기 | `true`이면 원본 AudioSource 출력을 통과시킵니다. `SetBypass()`와 같은 설정입니다. |
+
 ## SoundTraceObject
 
 ![SoundTraceObject Inspector](/img/unity/Img_STObj.png)
@@ -200,7 +222,18 @@ Render Tuning은 source-listener 쌍에 적용됩니다. `Path Hold = 0`은 hold
 `SoundTraceObject`는 `MeshFilter.sharedMesh`와 Renderer의 submesh 재질 슬롯을 등록합니다.
 Build에서 메시 데이터를 읽어야 하므로 Import Settings의 `Read/Write Enabled`를 켜십시오.
 
-### Geometry와 BVH
+### Inspector
+
+| 필드 / 버튼 | 설명 |
+|---|---|
+| `Mesh Filter` | 음향 지오메트리로 등록할 메시를 지정합니다. |
+| `Target Renderer` | submesh별 렌더 재질을 읽을 Renderer를 지정합니다. |
+| `Sound Materials` | 각 submesh에 적용할 사운드 재질 프리셋을 선택합니다. |
+| `Auto Set` | Renderer 재질 이름으로 프리셋을 자동 매칭합니다. |
+| `Add To Child Meshes` | 하위 메시 GameObject에 SoundTraceObject를 추가합니다. |
+| `Draw Native Triangles` | Scene View에서 네이티브 메시의 삼각형을 표시합니다. |
+
+#### Geometry와 BVH
 
 ![Scene View에 표시한 BVH](/img/unity/Img_STObjDome.png)
 
@@ -211,7 +244,7 @@ Build에서 메시 데이터를 읽어야 하므로 Import Settings의 `Read/Wri
 | `Primitives Per Leaf` | `16` | `1..128` |
 | `Update Mode` | `Static` | `Static`, `Dynamic`, `Refit`, `Rebuild` |
 
-#### BVH Type
+##### BVH Type
 
 | BVH Type | 설명 |
 |---|---|
@@ -223,7 +256,7 @@ Build에서 메시 데이터를 읽어야 하므로 Import Settings의 `Read/Wri
 
 GPU를 요청한 scene에서 `HKDTree` 또는 scalar `LBVH`를 선택하면 Inspector가 경고합니다.
 
-#### Update Mode
+##### Update Mode
 
 | Update Mode | STCoreV2 update policy | 의미 |
 |---|---|---|
@@ -232,7 +265,7 @@ GPU를 요청한 scene에서 `HKDTree` 또는 scalar `LBVH`를 선택하면 Insp
 | `Rebuild` | `EXA_OBJECT_UPDATE_REBUILD` (2) | Topology가 바뀌는 geometry에 사용하며 BVH를 다시 빌드합니다. |
 | `Dynamic` | `EXA_OBJECT_UPDATE_DYNAMIC` (3) | Transform만 바뀔 때 TLAS instance만 갱신합니다. |
 
-#### Refit과 vertex 업로드
+##### Refit과 vertex 업로드
 
 `Refit`은 STCoreV2에서 **vertex 변형(skinned animation)을 위한 update policy**입니다.
 다만 core는 vertex를 언제 올릴지 스스로 정하지 않습니다. mesh 갱신은
@@ -334,7 +367,28 @@ mesh가 없고 child가 geometry를 소유하면 `Add To Child Meshes`를 사용
 | `GetTriangleCount()` | 모든 submesh의 index 수를 합산해 triangle 수를 반환합니다. mesh가 없으면 `0`입니다. |
 | `static IsGpuCompatibleBvhType(BvhType value)` | `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16`이면 `true`를 반환합니다. |
 
+### 공개 프로퍼티
+
+| 프로퍼티 | 타입 / 접근 | 설명 |
+|---|---|---|
+| `ObjectCore` | `SoundObjectCore` / 읽기 전용 | 등록된 저수준 오브젝트입니다. 초기화되지 않았거나 비활성화되면 `null`입니다. |
+| `MeshCore` | `SoundMeshCore` / 읽기 전용 | 공유하는 저수준 메시입니다. 등록된 메시가 없으면 `null`입니다. |
+| `NativeObjectId` | `int` / 읽기 전용 | 네이티브 오브젝트 ID입니다. 미등록 상태에서는 `-1`입니다. |
+| `NativeMeshId` | `int` / 읽기 전용 | 네이티브 메시 ID입니다. 미등록 상태에서는 `-1`입니다. |
+| `SlotCount` | `int` / 읽기 전용 | 사운드 재질 슬롯 수입니다. |
+| `SharedMesh` | `Mesh` / 읽기 전용 | MeshFilter가 참조하는 공유 메시입니다. MeshFilter가 없으면 `null`입니다. |
+| `IsReadyForPropagation` | `bool` / 읽기 전용 | 씬 등록이 완료되고 오브젝트와 메시가 모두 유효한지 나타냅니다. |
+| `EditorBvhType` | `BvhType` / 읽기 전용, Editor 전용 | 유효성을 확인한 BVH 종류입니다. |
+| `EditorBvhMaxDepth` | `int` / 읽기 전용, Editor 전용 | `1..32`로 제한한 BVH 최대 깊이입니다. |
+| `EditorPrimitivesPerLeaf` | `int` / 읽기 전용, Editor 전용 | `1..128`로 제한한 leaf당 primitive 수입니다. |
+
 ## 사운드 재질과 Transmission
+
+![Material Preset Library](/img/unity/Image_Mat_01.png)
+
+![재질 대역별 그래프 편집](/img/unity/Image_Mat_02.png)
+
+### Inspector
 
 기본 authoring asset은
 `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`입니다.
@@ -345,14 +399,20 @@ mesh가 없고 child가 geometry를 소유하면 `Add To Child Meshes`를 사용
 - Scattering과 8-band Reflection, Absorption, Transmission 그래프 편집
 - `Transmission Model` 선택
 
-![Material Preset Library](/img/unity/Image_Mat_01.png)
-
 주파수 대역 중심은 `67.5`, `125`, `250`, `500`, `1000`, `2000`, `4000`,
 `8000 Hz`입니다. 재질 순서와 table index는 일치해야 합니다.
 
-![재질 대역별 그래프 편집](/img/unity/Image_Mat_02.png)
+| 필드 | 설명 |
+|---|---|
+| `Presets` | 사운드 재질 목록입니다. 추가·삭제·순서를 편집합니다. |
+| `Display Name` | 오브젝트의 재질 선택 목록에 표시할 이름입니다. |
+| `Material Index` | 네이티브 재질 테이블에서 사용할 인덱스입니다. |
+| `Scattering` | `0..1`. 정반사와 산란의 비율을 조절합니다. |
+| `Reflection`, `Absorption`, `Transmission` | 8개 주파수 대역의 반사·흡수·투과 에너지 계수입니다. 각 값의 범위는 `0..1`입니다. |
+| `Transmission Model` | `Surface` 또는 `Solid Distance`를 선택합니다. |
+| `Thickness to -30 dB (m)` | `Solid Distance`의 대역별 감쇠 기준 거리입니다. |
 
-### Transmission Model
+#### Transmission Model
 
 | 모델 | 입력 | Geometry 조건 |
 |---|---|---|
@@ -367,11 +427,38 @@ JSON에서 `transmissionDistanceToMinus30DbMeters`가 없으면 `Surface`, 정�
 0 이상 값으로 존재하면 `Solid Distance`입니다. `Surface`로 export할 때 이 필드는
 `null`이나 빈 배열이 아니라 생략됩니다.
 
+### 공개 메서드
+
+`SoundTraceMaterialPresetLibrary`의 API입니다.
+
+| 메서드 | 동작 |
+|---|---|
+| `static LoadDefault()` | 기본 라이브러리를 로드합니다. 에셋이 없거나 비어 있으면 번들 JSON으로 생성합니다. |
+| `GetPreset(int index)` | 인덱스를 유효 범위로 제한한 뒤 프리셋을 반환합니다. 목록이 비어 있으면 `null`입니다. |
+| `GetPresetNames()` | 선택 목록에 사용할 프리셋 이름 배열을 반환합니다. |
+| `FindBestPresetIndex(Material renderMaterial)` | 렌더 재질 이름에 맞는 프리셋을 찾습니다. |
+| `FindPresetIndex(string token, int fallback)` | 이름에 토큰이 포함된 프리셋을 찾고, 없으면 fallback 인덱스를 사용합니다. |
+| `RegisterAll(MaterialTable table)` | 모든 프리셋을 네이티브 재질 테이블에 등록하고 등록 수를 반환합니다. |
+| `ReplaceWithJson(string json)` | JSON으로 프리셋을 교체합니다. 유효한 재질 항목이 없으면 `ArgumentException`이 발생합니다. |
+| `ToJson()` | 현재 라이브러리를 `soundMaterial.json` 형식으로 반환합니다. |
+| `Normalize()` | 프리셋 인덱스, 대역 배열과 계수 범위를 정규화합니다. |
+| `static GetFrequencyBandCenterHz(int index)` | 지정한 대역의 중심 주파수(Hz)를 반환합니다. |
+
+### 공개 프로퍼티
+
+| 프로퍼티 | 타입 / 접근 | 설명 |
+|---|---|---|
+| `Presets` | `IReadOnlyList<SoundTraceMaterialPreset>` / 읽기 전용 | 라이브러리의 프리셋 목록입니다. |
+| `Count` | `int` / 읽기 전용 | 프리셋 수입니다. |
+| `FrequencyBandCount` | `static int` / 읽기 전용 | 주파수 대역 수이며 `8`입니다. |
+
 ## SoundTracePathVisualizer
 
 ![SoundTracePathVisualizer Inspector](/img/unity/Img_STPathVisual.png)
 
 Manager와 같은 GameObject에 하나만 추가합니다.
+
+### Inspector
 
 | Inspector 필드 | 기본값 | 설명 |
 |---|---:|---|
@@ -380,14 +467,37 @@ Manager와 같은 GameObject에 하나만 추가합니다.
 | `Max Visualized Paths` | `1024` | 표시할 최대 path 수 |
 | `Path Width` | `0.08` | 선 폭 |
 | `Path Alpha Intensity` | `0.5` | 표시 강도 |
+| `Path Depth Mode` | `Always On Top` | `Depth Test`는 지오메트리의 깊이를 검사하고, `Always On Top`은 경로를 앞에 표시합니다. |
+| `Sorting Layer Name` | `Default` | 경로 메시의 Sorting Layer입니다. |
+| `Sorting Order` | `10` | Sorting Layer 안에서의 렌더 순서입니다. |
 | `Draw Hit Triangles` | 꺼짐 | Scene View에서 hit triangle 표시 |
 
 Direct, Reflection, Diffraction, Reverb, Transmission을 path 종류별 색으로 표시합니다.
 이 컴포넌트는 디버그용이며 성능 측정과 release build에서는 비활성화하십시오.
 
-주요 공개 멤버는 `Instance`, 설정/카운트 프로퍼티, `Render()`, `Clear()`입니다.
+### 공개 메서드
 
-## 샘플
+| 메서드 | 동작 |
+|---|---|
+| `Render(SoundTraceManager manager, bool force = false)` | 최근 유효 경로로 표시 메시를 갱신합니다. `force = true`이면 갱신 간격 제한을 건너뜁니다. 표시가 꺼졌거나 Manager가 유효하지 않으면 표시를 지웁니다. |
+| `Clear()` | 경로 메시를 지우고 렌더러를 숨기며 경로·선분 카운트를 초기화합니다. |
+
+### 공개 프로퍼티
+
+| 프로퍼티 | 타입 / 접근 | 설명 |
+|---|---|---|
+| `Active` | `static SoundTracePathVisualizer` / 읽기 전용 | 현재 활성 시각화 컴포넌트입니다. 없으면 `null`입니다. |
+| `PathVisualizationEnabled` | `bool` / 읽기 전용 | 경로 표시 설정입니다. |
+| `RefreshIntervalMs` | `float` / 읽기 전용 | 시각화 갱신 최소 간격(ms)입니다. |
+| `MaxVisualizedPaths` | `int` / 읽기 전용 | 표시할 최대 경로 수입니다. |
+| `PathWidth` | `float` / 읽기 전용 | 경로 선 폭입니다. |
+| `PathAlphaIntensity` | `float` / 읽기 전용 | 경로 표시 강도입니다. |
+| `ActivePathCount` | `int` / 읽기 전용 | 최근 시각화 갱신에서 읽은 유효 경로 수입니다. |
+| `ActiveSegmentCount` | `int` / 읽기 전용 | 실제 표시 메시를 구성하는 선분 수입니다. |
+| `PoolSize` | `int` / 읽기 전용 | `ActiveSegmentCount`와 같은 선분 수를 반환합니다. |
+| `DrawHitTrianglesInSceneView` | `bool` / 읽기 전용, Editor 전용 | Scene View에서 충돌 삼각형을 표시하는지 나타냅니다. |
+
+## 샘플 데모 설명
 
 ### ST_SampleScene01
 
@@ -408,7 +518,7 @@ source/listener 이동, material preset 변경, Unity 원본 audio와 SoundTrace
 
 넓은 공간의 여러 source, wall occlusion, 이동 중 HRTF 방향감과 room response를 확인합니다.
 
-## 문제 해결
+## 트러블슈팅 팁
 
 | 증상 | 확인할 것 |
 |---|---|

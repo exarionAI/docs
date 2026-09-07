@@ -1,45 +1,18 @@
 ---
 title: Unreal Engine
-description: SoundTracing Unreal Engine 插件 0.2.0 的安装、Unity 风格组件、HRTF、几何体、材质、GPU 后端和 Blueprint API。
+description: SoundTrace Unreal Engine SDK 安装、单声道音频导入、插件设置、Detail Properties 和公开 API。
 ---
 
 # SoundTrace SDK for Unreal Engine
 
-SoundTrace Unreal SDK 通过 Unreal Audio Extension Plugin 和 Actor Component 连接
-[STCoreV2](../core/stcorev2.md)。0.2.0 使用 STCoreV2 v0.7 的 C-ABI 4，并提供与 Unity SDK
-一致的 Manager、Listener、Source、Object 和 PathVisualizer 结构。
-
-本文介绍 Unreal native audio integration。FMOD 和 Wwise 应分别构建为独立的 integration，
-不能在同一个 build 中与 native integration 同时启用。
+SoundTrace Unreal Engine SDK 是实时空间音频插件，将 Unreal 的声源、监听器和网格连接到 [STCoreV2](../core/stcorev2.md)。通过项目全局设置和 Actor Component 配置声学路径、材质、HRTF 和 GPU 运算。
 
 ## 要求与平台
 
-| 项目 | 当前版本／范围 |
+| 项目 | 要求 / 支持范围 |
 |---|---|
-| Unreal Engine | `5.6` |
-| SoundTracing plugin | `0.2.0` Beta |
-| STCoreV2 | `v0.7`，C-ABI `4` |
-| 声明支持的 target platform | Win64、macOS、Linux、Android、iOS |
-| 当前 SDK checkout 中的 prebuilt binary | Win64 Release |
-| Source channel | Mono 或 Stereo，最多 2 channels |
-| 附加 plugin | Niagara，由 `SoundTracing.uplugin` 自动启用 |
-
-当前 Win64 package 包含：
-
-```text
-Plugins/SoundTracing/ThirdParty/STCoreV2/
-├─ Binaries/Win64/Release/exaSound.dll
-├─ Binaries/Win64/Release/webgpu_dawn.dll
-└─ Lib/Win64/Release/exaSound.lib
-```
-
-构建其他 target 时，必须把对应 platform 的 `exaSound` runtime 和 link artifact 放入同样的
-ThirdParty 结构。`SupportedTargetPlatforms` 中的声明不会自动生成 native binary。
-
-:::warning 仅支持 ABI 4
-SoundTracing 0.2.0 不兼容 ABI 3 或更早版本的 `exaSound`。混用旧 DLL 时，初始化会以
-`STCoreV2 export table is incomplete` 错误终止。
-:::
+| Unreal Engine | `5.6` 及以上 |
+| 支持平台 | Windows x64, macOS, Linux, Android, iOS |
 
 ## 安装
 
@@ -61,96 +34,132 @@ YourProject/
 仅分发 Plugin 文件夹时，也要保留 `Content/STData` 和 `ThirdParty/STCoreV2`。Material
 preset、custom HRTF 和 native runtime 会使用这些路径。
 
-## Unreal Audio 设置
+## Unreal 编辑器设置
 
-Native Unreal audio integration 需要在每个 target platform 的 Audio 设置中选择：
+1. 在 `Edit > Project Settings > Platforms` 中打开目标平台的 `Audio` 设置。
+2. 将 `Spatialization Plugin` 设为 `SoundTracing`。
+3. 将 `Source Data Override Plugin` 设为 `SoundTracing`。
+4. 重启编辑器。
+5. 打开 `Project Settings > Plugins > SoundTracing`，检查全局设置。
 
-```text
-Spatialization Plugin: SoundTracing
-Source Data Override Plugin: SoundTracing
-```
+![在 Project Settings 中选择 SoundTracing](/img/unreal/ST_Listener_Setting_Editor01.png)
 
-修改后重新启动 Editor。还要在每个 `Audio Component` 或 `Sound Attenuation` asset 中
-启用 Spatialization，并指定 `SoundTracing Audio Spatialization Settings` asset。
+Windows 项目可从以下值开始，再根据音频负载调整。
 
-SDK sample project 使用以下 Windows audio 值作为起点：
-
-| 设置 | Sample 值 |
+| 设置 | 起始值 |
 |---|---:|
-| Audio Sample Rate | `48000` Hz |
-| Callback Buffer Frame Size | `1024` |
-| Buffers To Enqueue | `2` |
+| `Audio Sample Rate` | `48000 Hz` |
+| `Callback Buffer Frame Size` | `1024` |
+| `Buffers To Enqueue` | `2` |
 
-这些是 sample 值，不是 plugin 的硬性要求。如果项目的 audio budget 不同，请先用这些值
-确认功能，再调整 callback 和 buffer size。
+## 音频资源导入设置 — 单声道
 
-## 最快设置
+![普通和单声道 Sound Wave 资源](/img/unreal/MonoSoundImport.png)
 
-1. 检查 `Project Settings > Plugins > SoundTracing` 中的 Runtime Options 和
-   Default Listener Settings。
-2. 在 Content Browser 的 `Sounds > SoundTracing` 中创建
-   `SoundTracing Audio Spatialization Settings` asset。
-3. 将 asset 分配给 `Audio Component` 或 `Sound Attenuation` 的
-   Spatialization Plugin Settings。
-4. 在作为声学 geometry 的 `StaticMeshComponent` 或 `SkinnedMeshComponent` 正下方添加
-   `SoundTracingObjectComponent` child component。
-5. 执行 Object Component 的 `Auto Set Materials`，只修正匹配错误的 slot。
-6. 启动 PIE，运行 `SoundTracing.Status` 检查 native runtime、backend、listener 和 path 数量。
+用于 SoundTrace 空间化的音源应准备为单声道（1 个声道）。
 
-没有 Listener Component 时 plugin 仍可工作。此时它跟随 Unreal audio-device listener，
-并使用 Project Settings 中的 Default Listener Settings。
+1. 在音频编辑工具中将原始音频导出为单声道 PCM WAV 文件。
+2. 使用 Content Browser 的 `Import` 导入，生成 `Sound Wave` 资源。
+3. 确认 Sound Wave 的声道数为 `1`。
+4. 将该资源指定到 Audio Component 的 `Sound` 字段。
+
+单声道描述的是输入音源的声道配置。SoundTrace 根据监听器位置渲染耳机方向感。基本导入流程请参阅 [Unreal 音频导入指南](https://dev.epicgames.com/documentation/en-us/unreal-engine/importing-audio-files?application_version=5.6)。
+
+## 快速开始
+
+1. 在 `Project Settings > Plugins > SoundTracing` 中从 `Quality Preset = Fast` 开始。
+2. 在 Content Browser 的 `Sounds > SoundTracing > SoundTracing Audio Spatialization Settings` 中创建声源设置资源。
+3. 创建 `Sound Attenuation` 资源并启用 `Enable Spatialization`。将 `Spatialization Method` 设为 `Plugin-Spatialized`，把声源设置资源加入 `Spatialization Plugin Settings` 数组。
+4. 为 Audio Component 指定单声道 Sound Wave。启用 `Allow Spatialization`，关闭 `Override Attenuation`，将 Sound Attenuation 资源指定到 `Attenuation Settings`。
+5. 在用于声学几何的 `StaticMeshComponent` 或 `SkinnedMeshComponent` 下直接添加子组件 `SoundTracingObjectComponent`。
+6. 执行 Object 的 `Auto Set Materials` 并按需调整材质槽。
+7. 启动 PIE 并播放 Audio Component。使用 `SoundTracing.Status` 检查运行时就绪状态和路径数。
+8. 为 Actor 添加 `SoundTracingPathVisualizerComponent` 以显示路径。
+
+在 SoundTracing 插件设置中管理全局配置，通过 `SoundTracingSubsystem` 查询运行时状态。不添加 Listener Component 时，使用 Unreal 音频监听器的位置及项目默认监听器设置。
 
 ## 组件概览
 
-| Unity SDK | Unreal Engine SDK | 作用 |
+| 组件 | Unreal Engine SDK | 作用 |
 |---|---|---|
-| `SoundTraceManager` | `Project Settings > Plugins > SoundTracing` | Native runtime、thread、GPU、cache 和默认 Listener 设置 |
-| `SoundTraceListener` | `SoundTracingListenerComponent` | Level 级 Listener profile 和可选 transform override |
-| `SoundTraceSource` | `SoundTracing Audio Spatialization Settings` | Source 级 emission、ray、path、attenuation 和 render tuning |
-| `SoundTraceObject` | `SoundTracingObjectComponent` | Static/Skinned geometry、BVH 和 material slot 注册 |
-| `SoundTracePathVisualizer` | `SoundTracingPathVisualizerComponent` | 基于 Niagara 的 propagation path 显示 |
-| Manager runtime panel | `SoundTracingSubsystem` | 通过 Blueprint 读取 runtime 状态和最近 propagation 结果 |
+| SoundTracing 插件设置 | `SoundTracingSettings`, `SoundTracingSubsystem` | 项目配置及运行时状态查询和控制 |
+| 监听器 | `SoundTracingListenerComponent` | 监听器质量、输出设置和位置覆盖 |
+| 声源 | `SoundTracingSourceSettings` + `Audio Component` | 各声源的辐射强度、声学路径和衰减 |
+| 声音对象 | `SoundTracingObjectComponent` | 注册网格、BVH 和材质槽 |
+| 声学材质 | `SoundTracingMaterialPresetLibrary` | 材质预设及各频带的反射、吸收和透射 |
+| 声音路径可视化 | `SoundTracingPathVisualizerComponent` | 使用 Niagara 显示声学路径 |
 
-## Project Settings
+## SoundTracing 插件设置
 
-`Project Settings > Plugins > SoundTracing` 对应 Unity 的 `SoundTraceManager`。
+<span id="project-settings" />
 
-### Runtime Options
+<span id="soundtracingsubsystem" />
 
-| 字段 | 默认值 | 范围／行为 |
-|---|---:|---|
-| `Propagation Thread Count` | `-1` | `-1..64`。`-1` 让 STCoreV2 使用逻辑 core 数减一；`0` 或 `1` 为 serial。GPU 模式下禁用。需要重启 |
-| `Use GPU Backend` | 关闭 | 请求 Dawn/WebGPU 初始化，失败时 fallback 到 CPU。需要重启 |
-| `Path Cache Size` | `256` | `0..1024`。所有 active source 共享的 cache budget。`0` 禁用 cache |
-| `Propagation Interval (ms)` | `0` | `0..500`。`0` 表示每个 game tick 请求一次；前一 frame 运行时会合并请求。Unity sample scene 均使用 `50` |
+![SoundTracing 运行时和默认监听器设置](/img/unreal/ST_Listener_Setting_Editor02.png)
 
-### Sources
+![SoundTracing 声源上限、衰减、材质和路径设置](/img/unreal/ST_Listener_Setting_Editor03.png)
 
-| 字段 | 默认值 | 说明 |
-|---|---:|---|
-| `Source Ray Resolution Cap` | `0` | `0..32`。所有 source 的 reverb ray grid 上限。`0` 保留 source asset 的值。source 较多时最先降低的值。Unity sample scene 在 1~2 个 source 时用 `8`，8 个时用 `24` |
-| `Source Ray Depth Cap` | `0` | `0..16`。所有 source 的 reverb ray depth 上限。`0` 保留 source asset 的值 |
+### Detail Properties
 
-两个上限叠加在 source asset 的 `Ray Preset` / `Ray Resolution` 之上；设为 `0`（继承 Listener）的 source 按 Listener grid 裁剪。
-在 Project Settings 中修改后会立即应用到正在播放的 source。
-
-### Listener、Attenuation 与 Materials
+`SoundTracingSettings` 管理全局设置，`SoundTracingSubsystem` 控制运行时。在 `Project Settings > Plugins > SoundTracing` 中编辑全局配置。表格列出 SDK 默认值，图片展示配置示例。
 
 | 字段 | 默认值 | 说明 |
 |---|---:|---|
-| `Default Listener Settings` | `Fast` | Level 中没有 Listener Component override 时使用 |
-| `Default Source Attenuation Strengths` | 每个 path `1.0` | Source asset 不覆盖 project attenuation 时使用。范围 `0.5..1.5` |
-| `Material Preset Library` | 空 | 空时使用内置 `SoundTraceMaterialPresetLibrary`。选择其他 library 后需要重启 |
+| `Propagation Thread Count` | `-1` | `-1..64`。`-1` 根据逻辑核心数自动配置，`0` 和 `1` 使用单线程。修改后重启。 |
+| `Use GPU Backend` | 禁用 | 请求 GPU 运算，初始化失败时回退到 CPU。修改后重启。 |
+| `Path Cache Size` | `256` | `0..1024`，活动声源共享的路径缓存大小。`0` 关闭缓存。 |
+| `Propagation Interval (ms)` | `0` | `0..500`，传播请求的最小间隔。`0` 表示每个游戏 tick 请求一次，运行中的请求会合并。 |
+| `Quality Preset`, `Listener Rays`, `HRTF`, `Render Quality` | `Fast` | 默认监听器配置。各字段详见下方监听器的 Detail Properties 表。 |
+| `Source Ray Resolution Cap` | `0` | `0..32`，各声源混响射线分辨率的全局上限。`0` 不施加额外限制。 |
+| `Source Ray Depth Cap` | `0` | `0..16`，各声源混响射线深度的全局上限。`0` 不施加额外限制。 |
+| 各路径 `Strength` | 各 `1.0` | `Direct`、`Reflection`、`Diffraction`、`Reverb` 和 `Transmission` 的衰减强度，范围 `0.5..1.5`。应用于使用项目衰减设置的声源；值越大，相同距离下衰减越快。 |
+| `Material Preset Library` | 未指定 | 未指定时使用内置库。选择其他库后重启。 |
+| `Paths`, `Air Absorption` | 启用 | 默认监听器的路径类型和空气吸收设置。 |
 
-SDK sample project 的 `DefaultGame.ini` 为演示 override 为 `Middle`、启用 GPU、`Propagation Interval` `50 ms`、
-Source Ray Cap `16` / depth `4`。Plugin 本身的默认值如上表所示。
+### 公开方法
 
-## SoundTracingListenerComponent
+在 Blueprint 中使用 `Get World Subsystem` 获取 `SoundTracingSubsystem`。C++ 可使用 `USoundTracingSubsystem::Get(WorldContextObject)`。
 
-把该组件添加到 Pawn 或 Camera，可按 Level 覆盖 Project Settings 中的 Listener profile，
-或用该 component 的 transform 代替 Unreal audio-device listener。
+| 方法 | 返回值 / 行为 |
+|---|---|
+| `Get(const UObject* WorldContextObject)` | C++ 静态方法，返回对应 World 的 Subsystem。 |
+| `IsNativeRuntimeReady()` | `bool`，原生库、场景和监听器是否就绪。 |
+| `IsGpuPropagationActive()` | `bool`，GPU 传播是否实际启用。 |
+| `GetGpuBackendStatus()` | `FString`：`GPU active`、`CPU` 或包含原因的 `CPU fallback (...)`。无法访问运行时时返回 `Unavailable`。 |
+| `GetLastValidPathCount()` | `int32`，最近完成的传播帧的有效路径数。 |
+| `GetLastNativeError()` | `FString`，最近的原生错误。最新帧成功时为空。 |
+| `GetNativeVersion()` | `FString`，以 `major.minor.revision` 格式表示的原生库版本。 |
+| `GetRegisteredObjectCount()` | `int32`，当前 World 中注册的对象数。 |
+| `GetActiveListenerSettings()` | `FSoundTracingListenerSettings`，当前实际应用的监听器设置。 |
+| `ResetMotionState()` | 在传送或切换关卡后重置监听器和声源的运动历史。 |
+| `RequestPropagationFrame()` | 在常规更新周期之外请求传播计算。 |
 
-### Inspector
+### 公开属性
+
+以下为 `USoundTracingSettings` 的 C++ 配置成员。使用 `GetDefault<USoundTracingSettings>()` 读取项目设置。
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `PropagationThreadCount` | `int32` | 配置的传播线程数。 |
+| `bEnableGpuPropagation` | `bool` | GPU 使用请求标志。通过 `IsGpuPropagationActive()` 检查实际启用状态。 |
+| `PathCacheSize` | `int32` | 路径缓存大小。 |
+| `PropagationIntervalMs` | `int32` | 传播请求最小间隔，单位毫秒。 |
+| `DefaultListenerSettings` | `FSoundTracingListenerSettings` | 项目默认监听器配置。 |
+| `SourceRayResolutionCap`, `SourceRayDepthCap` | `int32` | 声源射线分辨率和深度的全局上限。 |
+| `DefaultSourceAttenuationStrengths` | `FSoundTracingAttenuationStrengths` | 各路径类型的默认距离衰减强度。 |
+| `MaterialPresetLibrary` | `TSoftObjectPtr<USoundTracingMaterialPresetLibrary>` | 启动时注册的材质库。 |
+
+## 监听器
+
+<span id="soundtracinglistenercomponent" />
+
+![默认监听器配置](/img/unreal/ST_Listener_Setting_Editor02.png)
+
+将 `SoundTracingListenerComponent` 添加到 Pawn 或 Camera，可以按关卡覆盖项目监听器配置，或使用该组件的 Transform 替代 Unreal 音频设备监听器。
+
+### Detail Properties
+
+Project Settings 和 Listener Component 共用监听器配置字段。上图为项目默认配置，组件还提供以下覆盖选项。
 
 | 字段 | 默认值 | 行为 |
 |---|---:|---|
@@ -161,7 +170,25 @@ Source Ray Cap `16` / depth `4`。Plugin 本身的默认值如上表所示。
 一个 World 中只有一个 Listener Component 能驱动 active listener。另一个 component 开始
 Begin Play 时会替换前一个，并在 Output Log 中写入警告。
 
-### Quality preset
+| 监听器配置字段 | 默认值 | 说明 |
+|---|---:|---|
+| `Quality Preset` | `Fast` | 选择 `Custom`、`Fast`、`Middle` 或 `Quality`。 |
+| `Ray Resolution`, `Ray Depth` | `16`, `4` | 分别为 `1..32` 和 `1..16`。路径追踪分辨率和深度，可在 `Custom` 下编辑。 |
+| `Output Mode` | `Headphones` | 选择耳机或扬声器输出。 |
+| `Hrtf Mode` | `HRIR Interpolated` | 参阅下方 HRTF 表。 |
+| `Custom HRTF Relative Path` | 空字符串 | 相对于插件 Content 的自定义 HRTF 路径。留空使用内置表。 |
+| `HRTF Path Budget` | `1` | `1..32`，应用方向性 HRTF 处理的优先路径数。 |
+| `Diffuse Enabled`, `Diffuse Quality` | 禁用, `Low` | 控制早期散射声及其质量。`Low/Medium/High` 最多保留 `128/512/1024` 条散射路径。 |
+| `Delay Interpolation` | `Linear` | 选择 `Linear`、`Cubic Lagrange` 或 `Lagrange 6` 延迟插值。 |
+| `Early Path Budget` | `128` | `0..4096`，应用完整移动延迟处理的早期间接路径数。`0` 取消限制。 |
+| `Render Band Tier` | `Merged4` | 通过 `Merged4` 或 `Full8` 选择渲染频带数。 |
+| 各路径 `Enable … Path` | 全部启用 | 分别启用或关闭 `Direct`、`Reflection`、`Diffraction`、`Reverb` 和 `Transmission` 路径。 |
+| `Air Absorption Enabled` | 启用 | 应用空气吸收造成的衰减。 |
+| `Temperature Celsius` | `20` | `-40..60 °C`，空气温度。 |
+| `Relative Humidity Percent` | `50` | `0..100%`，相对湿度。 |
+| `Pressure Pa` | `101325` | `50000..120000 Pa`，气压。 |
+
+#### Quality Preset
 
 `Fast`、`Middle`、`Quality` 会同时应用 ray 和高级 render 品质值。需要手动编辑时选择
 `Custom`。
@@ -177,7 +204,7 @@ Begin Play 时会替换前一个，并在 Output Log 中写入警告。
 都保持为 `1`，为 audio thread 留出余量。在 Custom 中提高它可能导致多 source scene 出现
 dropout。
 
-### HRTF 与输出模式
+#### HRTF 与输出模式
 
 | HRTF 模式 | 所需 asset | 说明 |
 |---|---|---|
@@ -185,9 +212,7 @@ dropout。
 | `HRIR` | STCoreV2 embedded table | 使用最近方向的测量 HRIR |
 | `HRIR Interpolated` | STCoreV2 embedded table | 按方向插值测量 HRIR；默认模式 |
 
-0.1.0 的 `Parametric`、`Convolution`、`SteamAudio` 已在 0.2.0 中移除。
-`Custom HRTF Relative Path` 可指定相对于 plugin `Content` 的 `MPI1`、`SAH1` 或
-`BPH1` table 路径。留空时使用 STCoreV2 embedded table。
+`Custom HRTF Relative Path` 可指定相对于插件 `Content` 的 `MPI1`、`SAH1` 或 `BPH1` 表路径。留空使用 STCoreV2 内置表。
 
 | Output Mode | 说明 |
 |---|---|
@@ -198,24 +223,37 @@ dropout。
 band 处理。Air Absorption 默认值为 `20 °C`、相对湿度 `50%`、`101325 Pa`，用于
 ISO 9613-1 衰减。
 
-### Blueprint 方法
+### 公开方法
 
 | 方法 | 行为 |
 |---|---|
-| `ApplyListenerSettings()` | 将当前 Inspector 值重新应用到 native listener |
+| `ApplyListenerSettings()` | 将当前 Detail Properties 值重新应用到 native listener |
 | `SetQualityPreset(Preset)` | 更改并立即应用 quality preset |
 | `SetHrtfMode(Mode)` | 更改并立即应用 HRTF mode |
 | `SetOutputMode(Mode)` | 切换 Headphones/Speaker 并立即应用 |
 | `ResetMotionState()` | Teleport、respawn 后清除 listener/source velocity history |
 | `GetListenerSettings()` | 返回 component 当前的 listener settings |
+| `static GetActiveListener(const UWorld* World)` | 在 C++ 中返回对应 World 的活动 Listener Component。 |
 
-## SoundTracing Audio Spatialization Settings
+### 公开属性
+
+| 属性 | 类型 / 访问 | 说明 |
+|---|---|---|
+| `bOverrideProjectListenerSettings` | `bool` / 读写 | 是否使用该组件的监听器配置。 |
+| `ListenerSettings` | `FSoundTracingListenerSettings` / 读写 | 组件的质量、输出和路径设置。运行时直接修改后，调用 `ApplyListenerSettings()` 应用。 |
+| `bDriveListenerTransform` | `bool` / 读写 | 是否使用组件的位置和方向驱动监听器。 |
+
+## 声源
+
+<span id="soundtracing-audio-spatialization-settings" />
+
+![声源设置资源的 Detail Properties](/img/unreal/STSettingAssets_SourceSetups.png)
 
 在 Content Browser 的
 `Sounds > SoundTracing > SoundTracing Audio Spatialization Settings` 中创建。相同用途的
 source 应共享一个 asset，无需为每个 Audio Component 复制。
 
-### Inspector
+### Detail Properties
 
 | 字段 | 默认值 | 范围／行为 |
 |---|---:|---|
@@ -226,7 +264,7 @@ source 应共享一个 asset，无需为每个 Audio Component 复制。
 | `Ray Preset` | `Custom` | `Custom`、`Fast`（8×8，depth 4）、`Middle`（16×16，depth 4）、`Quality`（24×24，depth 4）。非 `Custom` 时用 preset 值覆盖下面两个值。对应 Unity `SoundTraceSource` 的 `Reverb Ray Resolution`，应用于共享该 asset 的所有 source |
 | `Ray Resolution` | `24` | `0..32`。`0` 继承 Listener grid；其他值使用 `N × N` source reverb ray |
 | `Ray Depth` | `4` | `0..16`。`0` 继承 Listener depth |
-| `Direct/Reflection/Diffraction/Reverb/Transmission` | 全部开启 | 按 Source 启用 path family |
+| 各路径 `… Path Enabled` | 全部启用 | 按声源启用或关闭 `Direct`、`Reflection`、`Diffraction`、`Reverb` 和 `Transmission`。 |
 | `Override Project Attenuation Strengths` | 开启 | 关闭时使用 Project Settings attenuation |
 | 每种 path 的 `Strength` | `1.0` | `0.5..1.5`。值越大，同距离下衰减越快 |
 | `Max Delay Seconds` | `1.0 s` | `0.01..5 s`。Renderer 保留的最大 propagation delay |
@@ -235,17 +273,38 @@ source 应共享一个 asset，无需为每个 Audio Component 复制。
 | `Max Delay Rate` | `0.1` | `0.001..0.999`。每个 sample 的最大 delay 变化 |
 | `Bypass` | 关闭 | 跳过 SoundTrace spatial rendering，直接传递输入 |
 
-从 0.2.0 起，spatializer 在每个 audio block 中直接读取
-`FAudioPluginSourceInputData::SpatializationParams` 更新 source。如果 source 仍停留在
-native `(0,0,0)`，请确认 0.2.0 plugin module 和 binary 已一起部署。
+#### 连接到 Audio Component
 
-## SoundTracingObjectComponent
+将声源设置资源连接到 Sound Attenuation，再将该 Attenuation 资源指定给 Audio Component。同类声源可共用这两个资源。
+
+![在 Sound Attenuation 的 Spatialization Plugin Settings 中指定声源设置](/img/unreal/ST_AttenAsset_PutSettingAssetHere.png)
+
+启用 `Enable Spatialization` 并选择插件空间化方式。在 `Spatialization Plugin Settings` 数组中添加 `SoundTracing Audio Spatialization Settings` 资源。
+
+![在 Audio Component 的 Attenuation Settings 中指定 Sound Attenuation](/img/unreal/ST_Source_PutAssetHere.png)
+
+启用 Audio Component 的 `Allow Spatialization`，关闭 `Override Attenuation`。将之前创建的 Sound Attenuation 指定到 `Attenuation Settings`。
+
+### 公开方法
+
+以下为 `USoundTracingSourceSettings` 提供的 C++ 方法。使用 Audio Component 的 `Play()` 和 `Stop()` 控制播放。
+
+| 方法 | 返回值 / 行为 |
+|---|---|
+| `GetEffectiveAttenuationStrengths()` | `FSoundTracingAttenuationStrengths`，根据覆盖设置返回声源或项目的衰减强度。 |
+| `ApplyRayPreset()` | 根据 `RayPreset` 更新 `RayResolution` 和 `RayDepth`，`Custom` 下保持原值。 |
+
+## 声音对象
+
+<span id="soundtracingobjectcomponent" />
+
+![SoundTracingObjectComponent Detail Properties](/img/unreal/STObj_01.png)
 
 `SoundTracingObjectComponent` 将 immediate parent 的 `StaticMeshComponent` 或
 `SkinnedMeshComponent` 注册为声学 geometry。它必须直接放在目标 mesh component 下方，
 不能放在 Actor 层级中的任意位置。
 
-### Inspector
+### Detail Properties
 
 | 字段 | 默认值 | 说明 |
 |---|---:|---|
@@ -259,11 +318,13 @@ native `(0,0,0)`，请确认 0.2.0 plugin module 和 binary 已一起部署。
 | `Sync Skinned Vertices On Tick` | 关闭 | 在 `Refit` 模式下每 tick 上传当前 skeletal pose |
 | `Sound Material Slots` | 自动生成 | Render material slot 到 SoundTrace preset 的 mapping |
 | `Visualize BVH` | 关闭 | 使用 Editor component visualizer 绘制 BVH line |
+| `BVH Visualization Color` | 青色 | BVH 显示颜色。 |
+| `Native Object Id`, `Native Mesh Id` | `-1` | 已注册的原生 ID，只读，未注册时为 `-1`。 |
 
 Static Mesh 设置 Forced LOD 时使用该 LOD，否则使用 LOD 0。Skinned Mesh 也优先 Forced LOD，
 并上传当前 pose vertex。
 
-### Geometry 与 BVH
+#### Geometry 与 BVH
 
 | BVH Type | Refit | GPU backend | 说明 |
 |---|---|---|---|
@@ -290,7 +351,7 @@ Static Mesh 设置 Forced LOD 时使用该 LOD，否则使用 LOD 0。Skinned Me
 相同 Static Mesh、LOD、material mapping 和 BVH 设置的 object 共享一个 native BVH。
 Skinned Mesh 的 cache key 包含 component path，不同 pose 不会覆盖同一个 native mesh。
 
-### Blueprint 方法
+### 公开方法
 
 | 方法 | 行为 |
 |---|---|
@@ -298,15 +359,26 @@ Skinned Mesh 的 cache key 包含 component path，不同 pose 不会覆盖同�
 | `UnregisterNativeObject()` | 删除 native object 注册 |
 | `SyncNativeTransform()` | 立即应用当前 parent transform |
 | `RefreshNativeMesh()` | Mesh 或 material 变化后重新上传 geometry |
-| `Auto Set Materials` | 按 Parent render material 名称和 alias 自动匹配 preset |
+| `SyncMaterialsFromParent()` (`Auto Set Materials`) | 根据父组件的渲染材质名称和别名自动匹配预设。 |
 | `SetMaterialPresetIndex(Slot, Preset)` | 更改一个 slot 的 preset index |
 | `SetMaterialPresetForAllSlots(Preset)` | 对所有 slot 应用同一 preset |
 | `SetUpdateType(Type)` | 更改 native object update policy |
 | `GetResolvedMeshLodIndex()` | 返回实际上传的 LOD index |
 | `GetUploadedTriangleCount()` | 返回上次上传的 triangle 数量 |
 | `IsRegistered()` | 返回 native object 和 mesh 是否均有效 |
+| `GetNativeObjectId()`, `GetNativeMeshId()` | 返回已注册的原生 ID，未注册时为 `-1`。 |
+| `GetTargetMeshComponent()` | 返回用于注册的直接父网格组件。 |
+| `static IsGpuCompatibleBvhType(ESoundTracingBvhType InBvhType)` | 属于 SIMD LBVH 系列时返回 `true`。 |
+| `GetBvhMaxDepth()`, `GetPrimitivesPerLeafNode()`, `GetBvhType()` | 在 C++ 中查询 BVH 设置。 |
+| `GetSoundMaterialSlots()` | 在 C++ 中返回声学材质槽数组的只读引用。 |
+| `BuildNativeBvhDebugLineSegments(TArray<FVector>& OutLocalLinePoints)` | 在 C++ 中获取局部坐标下的 BVH 调试线段。 |
+| `ShouldVisualizeBvh()`, `GetBvhVisualizationColor()` | 仅 Editor 可用的 C++ 方法，用于查询 BVH 显示状态和颜色。 |
 
 ## 声学材质与 Transmission
+
+![SoundTracing Material Preset Library Detail Properties](/img/unreal/ST_Material_Graph.png)
+
+### Detail Properties
 
 默认 library 位于 plugin 的
 `Content/STData/Material/SoundTraceMaterialPresetLibrary.uasset`，当前包含与 Unity/Web SDK
@@ -317,18 +389,21 @@ Skinned Mesh 的 cache key 包含 component path，不同 pose 不会覆盖同�
 新 asset 会复制当前默认 library。在 Project Settings 的 `Material Preset Library` 中选择
 后重新启动 Editor。
 
-每个 preset 包含：
-
-- Display name 和 render material name alias
-- Scattering `0..1`
-- 8-band Reflection、Absorption、Transmission `0..1`
-- Transmission Model
-- `Solid Distance` 使用的 8-band `Thickness to -30 dB (m)`
+| 字段 | 说明 |
+|---|---|
+| `Presets` | 声学材质列表。 |
+| `Display Name`, `Aliases` | 选择列表中的显示名称及自动匹配渲染材质的别名。 |
+| `Material Index` | 原生材质索引，按库中的列表顺序维护。 |
+| `Scattering` | `0..1`，镜面反射与散射的比例。 |
+| `Reflection`, `Absorption`, `Transmission` | 8 个频带的反射、吸收和透射能量系数，各值为 `0..1`。 |
+| `Transmission Model` | 选择 `Surface` 或 `Solid Distance`。 |
+| `Thickness to -30 dB (m)` | `Solid Distance` 各频带的衰减参考距离。 |
+| `ResetToBundledJson` | 从内置 JSON 恢复预设列表。 |
 
 频带中心为 `67.5`、`125`、`250`、`500`、`1000`、`2000`、`4000`、`8000 Hz`。
 可在 Editor band graph 上点击或拖动来编辑。
 
-### Transmission Model
+#### Transmission Model
 
 | 模型 | 输入 | Geometry 条件 |
 |---|---|---|
@@ -342,10 +417,51 @@ Skinned Mesh 的 cache key 包含 component path，不同 pose 不会覆盖同�
 `soundMaterial.json` 格式。没有 `transmissionDistanceToMinus30DbMeters` 表示 `Surface`；
 存在 8 个有效值表示 `Solid Distance`。
 
-## SoundTracingPathVisualizerComponent
+### 公开方法
+
+| 方法 | 返回值 / 行为 |
+|---|---|
+| `NormalizePresets()` | 规范化预设索引和各频带值。 |
+| `GetPresetCount()` | 返回预设数量。 |
+| `FindBestPresetIndexByName(const FString& RenderMaterialName)` | 查找与渲染材质名称或别名匹配的预设索引。 |
+| `GetPresetDisplayName(int32 PresetIndex)` | 返回预设的显示名称。 |
+| `ResetToBundledJson()` | 用内置 JSON 替换列表，可通过编辑器按钮或 C++ 调用。 |
+| `ExportToJson()` | 返回 `soundMaterial.json` 格式的字符串。 |
+| `ImportFromJson(const FString& JsonText)` | 使用 JSON 替换列表，没有可解析的材质时返回 `false`。 |
+| `FindBestPresetIndex(const UMaterialInterface* RenderMaterial)` | 在 C++ 中查找匹配渲染材质的预设。 |
+| `FindPresetIndexByToken(const FString& Token, int32 FallbackIndex)` | 在 C++ 中按词查找预设，未找到时使用 fallback 索引。 |
+| `static GetFrequencyBandCentersHz()` | 在 C++ 中返回 8 个中心频率数组的只读引用。 |
+| `static LoadDefaultLibrary()` | 在 C++ 中加载项目指定的库或默认库。 |
+| `static MakeFallbackPresets()` | 在 C++ 中创建备用预设数组。 |
+| `static ParseSoundMaterialJson(const FString& JsonText, TArray<FSoundTracingMaterialPreset>& OutPresets)` | 在 C++ 中将 JSON 解析为预设数组。 |
+| `static SerializeSoundMaterialJson(const TArray<FSoundTracingMaterialPreset>& InPresets)` | 在 C++ 中将预设数组转换为 JSON 字符串。 |
+| `static LoadBundledJson(FString& OutJson)` | 在 C++ 中读取内置 JSON 字符串并返回是否成功。 |
+
+### 公开属性
+
+| 属性 | 类型 / 访问 | 说明 |
+|---|---|---|
+| `Presets` | `TArray<FSoundTracingMaterialPreset>` / 读写 | 库中保存的预设数组。 |
+| `FrequencyBandCount` | `static constexpr int32` / 常量 | 频带数量，值为 `8`。 |
+
+## 声音路径可视化
+
+<span id="soundtracingpathvisualizercomponent" />
+
+![Add Component 搜索结果中的 Sound Tracing Path Visualizer](/img/unreal/PathVisualizer_01.png)
+
+在 Actor 的 `Add Component` 中搜索并添加 `Sound Tracing Path Visualizer`。该组件由 C++ 实现，会创建路径渲染所需的 Niagara 组件。
+
+![使用 NS_Arrow 的 Niagara 组件的 Detail Properties](/img/unreal/PathVisualizer_02.png)
 
 在 Actor 上添加 `SoundTracingPathVisualizerComponent`，可用 Niagara line segment 显示
 最近一次 propagation frame。
+
+:::note NS_Arrow 内置资源路径
+`Niagara System Asset` 使用插件内置的 `NS_Arrow`。默认路径为 `/SoundTracing/FX/NS_Arrow.NS_Arrow`，关联材质位于 `/SoundTracing/Materials/MAT_ArrowLine`。安装或移动插件时，请同时保留 `Content/FX` 和 `Content/Materials`，并检查 Niagara 系统及材质引用是否有效。
+:::
+
+### Detail Properties
 
 | 字段 | 默认值 | 说明 |
 |---|---:|---|
@@ -355,106 +471,64 @@ Skinned Mesh 的 cache key 包含 component path，不同 pose 不会覆盖同�
 | `Path Alpha Intensity` | `0.5` | Segment alpha 强度，范围 `0.01..2.0` |
 | `Niagara System` | 空 | 空时使用 plugin 默认 Niagara system |
 
-颜色为 Direct=red、Reflection=orange、Diffraction=green、Transmission=cyan、
-Reverb=purple。用 `SetVisualizationEnabled(bool)` 控制 runtime 显示，用
-`GetActivePathCount()` 读取当前 path 数。Shipping 性能测试时应关闭。
+颜色分别为 Direct=红色、Reflection=橙色、Diffraction=绿色、Transmission=青色、Reverb=紫色。性能测量时请关闭可视化。
 
-## SoundTracingSubsystem
+### 公开方法
 
-`SoundTracingSubsystem` 是对应 Unity Manager runtime panel 的 `WorldSubsystem`，向
-Blueprint 提供：
-
-| 方法 | 行为 |
+| 方法 | 返回值 / 行为 |
 |---|---|
-| `IsNativeRuntimeReady()` | Library、native init、scene、listener 是否就绪 |
-| `IsGpuPropagationActive()` | 是否实际取得 GPU device |
-| `GetGpuBackendStatus()` | 返回 `GPU active`、`CPU` 或 `CPU fallback (...)` |
-| `GetLastValidPathCount()` | 最近 propagation frame 的 valid path 数 |
-| `GetLastNativeError()` | Control thread 最近 native error；无错误时为空字符串 |
-| `GetNativeVersion()` | Native version `major.minor.revision` |
-| `GetRegisteredObjectCount()` | 当前 World 注册的 object 数 |
-| `GetActiveListenerSettings()` | Native listener 当前实际使用的设置 |
-| `ResetMotionState()` | 清除 Listener 和 source motion history |
-| `RequestPropagationFrame()` | 在常规周期外请求 propagation frame |
+| `SetVisualizationEnabled(bool bEnabled)` | 在运行时启用或关闭路径显示。 |
+| `GetActivePathCount()` | `int32`，返回可视化组件当前保留的路径数。 |
 
-## GPU 后端
+## 示例演示
 
-启用 `Use GPU Backend` 并重新启动 Editor 后，通过 `exaPropagatorInitGpu` 请求
-Dawn/WebGPU backend。
+### Test
 
-- 初始化成功：`GPU active`
-- Native build 不含 GPU add-on：`CPU fallback (this exaSound build has no GPU backend)`
-- Adapter/device 初始化失败：带原因的 `CPU fallback (...)`
-- 未请求 GPU：`CPU`
+![Unreal Test 演示图片占位符](/img/unreal/demo-placeholder.svg)
 
-Win64 分发必须把与 `exaSound.dll` 同一 artifact directory 中的 `webgpu_dawn.dll` 一起
-stage。Plugin Build.cs 会把该目录的 DLL 注册为 runtime dependency。
+打开 SDK 示例项目中的 `Content/FirstPerson/Test.umap`，查看网格注册、BVH 和声学材质槽设置。
 
-可通过 Blueprint 的 `GetGpuBackendStatus()` 或以下 console command 检查实际状态：
+1. 选择关卡网格，检查 `SoundTracingObjectComponent` 的父组件连接和材质槽。
+2. 在 PIE 中播放声音并移动监听器，体验方向感和遮挡变化。
+3. 切换材质预设，比较反射、吸收和透射差异。
+4. 启用 Path Visualizer，将听感变化与声学路径对照。
+
+示例地图包含在 SDK 示例项目的 Content 中。仅安装插件的项目应使用 Migrate，将所需示例资源及其依赖一起迁移。
+
+## 故障排除提示
+
+| 症状 | 检查项 |
+|---|---|
+| Audio 列表中没有插件 | 检查 SoundTracing 是否启用、C++ 模块是否构建、目标平台 Audio 设置及编辑器是否已重启。 |
+| 原生库加载或 ABI 错误 | 使用同一 SDK 发行包中的插件和原生库，并确认打包包含 ThirdParty 文件。 |
+| 没有声音或未空间化 | 检查单声道 Sound Wave、Audio Component 播放、两个全局 Audio 插件、Spatialization 启用状态和资源连接。 |
+| 声源设置未生效 | 检查 `Audio Component → Sound Attenuation → SoundTracing Source Settings` 连接和 `Override Attenuation` 设置。 |
+| 监听器位置不符 | 启用 `Drive Listener Transform` 时使用组件位置，否则使用 Unreal 音频监听器位置。 |
+| 监听器替换警告 | 每个 World 只保留一个活动 Listener Component。 |
+| 几何体未反映到音频 | 检查 Object Component 是否为受支持网格的直接子组件，以及是否存在网格数据和三角形。 |
+| 蒙皮动画未生效 | 检查 `Update Type = Refit`、`Sync Skinned Vertices On Tick = true` 和 LOD。 |
+| GPU 未启用 | 检查 `GetGpuBackendStatus()` 和 Output Log。Windows 上需同时部署 `exaSound.dll` 和 `webgpu_dawn.dll`。 |
+| 路径不可见 | 检查 Niagara 是否启用、`Visualization Enabled`、声源和监听器的路径设置及 `GetLastValidPathCount()`。 |
+| 传送后音高突变 | 修改位置后立即调用 Listener 或 Subsystem 的 `ResetMotionState()`。 |
+| 声源较多时断音 | 按下方顺序调整传播计算和音频缓冲区。 |
+
+### 声源较多时断音
+
+1. 将 `Propagation Interval (ms)` 设为 `50`，降低传播请求频率。
+2. 将 `Source Ray Resolution Cap` 降到 `8..16`，或将声源的 `Ray Preset` 设为 `Fast`。
+3. 监听器从 `Quality Preset = Fast`、`HRTF Path Budget = 1` 和 `Render Band Tier = Merged4` 开始。
+4. 将 `Propagation Thread Count` 设为 `2..3` 并重启，为游戏、渲染和音频线程留出执行时间。
+5. 将 `Buffers To Enqueue` 设为至少 `2`，必要时调整 `Callback Buffer Frame Size`。
+6. 关闭路径可视化，每次仅修改一个设置进行对比。
+
+### 运行时状态
 
 ```text
 SoundTracing.Status
 SoundTracing.DumpGpuPropagationStats
 ```
 
-`SoundTracing.Status` 输出 native version、ready 状态、backend、object/path 数和 Listener
-profile。`SoundTracing.DumpGpuPropagationStats` 输出 GPU dispatch、ready、CPU fallback
-counter。
-
-## 坐标系
-
-使用 Plugin component 时无需手动转换坐标。0.2.0 将 Unreal 坐标按以下方式传给 STCoreV2：
-
-```text
-position / vertex / velocity = (UE.Y, UE.Z, UE.X) × 0.01 m
-sceneRatio = 1
-listener basis: right=(1,0,0), up=(0,1,0), forward=(0,0,-1)
-```
-
-Listener basis 遵循 ADR-0001，修复了旧版本 HRTF 前后反转的问题。只有 custom native
-integration 才需要自行应用该 contract。
-
-## 示例项目
-
-当前 SDK source project 的 `Content/FirstPerson/Test.umap` 可用于查看
-`SoundTracingObjectComponent` 的 geometry、BVH 和 material slot 设置。该 map 位于 host
-project 的 Content 中，仅复制 `Plugins/SoundTracing` 时不会包含。
-
-## 故障排除
-
-| 症状 | 检查项 |
-|---|---|
-| `STCoreV2 export table is incomplete` | 将 Plugin 0.2.0 与 STCoreV2 v0.7 ABI 4 binary 一起部署，删除 ABI 3 DLL |
-| Audio 列表中没有 Plugin | Plugin enable、C++ module 编译、target Audio 设置、Editor 重启 |
-| Native library 加载失败 | 对应 target 的 `ThirdParty/STCoreV2` runtime/link artifact 与 package staging |
-| Source 没有空间化 | 全局 Spatialization/Source Data Override、source Spatialization、SoundTracing settings asset |
-| Source 停留在原点 | 确认 0.2.0 module 与 binary 一起部署；0.2.0 每个 audio block 读取 spatialization params |
-| Listener 位置错误 | `Drive Listener Transform`；关闭时使用 Unreal audio-device listener |
-| Listener 替换警告 | 每个 World 只保留一个 active `SoundTracingListenerComponent` |
-| Geometry 不生效 | Object Component 是否为支持 mesh 的 immediate child，是否有 render data 和 triangle |
-| Skinned animation 不生效 | `Update Type = Refit`、`Sync Skinned Vertices On Tick = true`、固定 LOD 与 vertex count |
-| GPU fallback 到 CPU | `webgpu_dawn.dll`、支持 GPU 的 native build、adapter/device、Output Log、`SoundTracing.DumpGpuPropagationStats` |
-| 看不到 Path | Niagara plugin、Visualizer enable、max path 数、Source/Listener path enable |
-| Teleport 后 pitch 跳变 | 移动后立即调用 Listener Component 或 Subsystem 的 `ResetMotionState()` |
-| 多 Source 时 dropout | 按下方 [多 Source 时断续](#多-source-时断续) 清单顺序检查 |
-| Editor 退出时 stack overflow | 使用包含 control-thread shutdown fix 的最终 0.2.0 plugin |
-
-### 多 Source 时断续
-
-以下顺序可把负载对齐到 Unity sample scene。每次只改一项，并用 `SoundTracing.Status` 确认。
-
-1. 把 `Propagation Interval (ms)` 提高到 `50`。为 `0` 时每个 game tick 都会跑一次 propagation frame，持续占用 CPU。Unity sample scene 均为 `50`。
-2. 把 `Source Ray Resolution Cap` 设为 `8..16`，或把 source asset 的 `Ray Preset` 改为 `Fast`。每个 source 都会发射自己的 reverb ray，开销随 source 数量增长。
-3. 把 Listener preset 降到 `Fast`。HRTF Path Budget `1` 与 `Merged4` 保持默认。
-4. 把 `Propagation Thread Count` 明确设为 `2..3`。`-1` 会把除一个之外的所有逻辑 core 交给 propagation，而 Unreal 的 game/render/RHI/audio thread 已经在占用 core。Unity sample scene 使用 `2..3`。
-5. 把 `Project Settings > Platforms > Windows > Audio` 的 `Buffers To Enqueue` 保持在 `2` 以上。为 `1` 时 callback 只要晚一次就会 dropout。
-6. 执行两次 `SoundTracing.Status`。第二次输出的 audio-thread probe 给出两次调用之间 `exaRenderSound` 的平均/最大耗时及其占 wall time 的比例。若相对 block budget（1024 frames @ 48 kHz = 21.3 ms）偏高，继续降低第 2、3 项。
-7. 执行 `SoundTracing.DumpConfig`，确认 `simdTarget` 为 `AVX2` 或更高。若为 `SSE2`，说明 `exaSound.dll` 没有 SIMD runtime dispatch，需要重新构建 STCoreV2 dev。
-8. 关闭 `Use GPU Backend`，与纯 CPU 运行对比。Unity sample scene 使用 CPU backend。
-
-STCoreV2 `3fb0dccf`（2026-08-31）把 fallback delay policy 从 `D` 回退为 `A`，early settle 从 `6` 回退为 `0.5`。
-Unity SDK 附带的 DLL（`3d9ddf83`）早于该回退，audio thread 的 render 开销约低 26%。
-在启动 Editor 前设置环境变量 `EXA_FALLBACK_DELAY_POLICY=D` 与 `EXA_EARLY_SETTLE_SAMPLES=6`，即可用同一 DLL 做 A/B 对比。该值只在 DLL 加载时读取一次。
+`SoundTracing.Status` 输出原生版本、就绪状态、运算后端、对象和路径数以及监听器设置。`SoundTracing.DumpGpuPropagationStats` 输出 GPU 执行和 CPU 回退统计。
 
 ## 下一步
 

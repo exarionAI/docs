@@ -8,15 +8,12 @@ description: SoundTrace Unity SDK のインストール、主要コンポーネ�
 SoundTrace Unity SDK は、Unity のメッシュ、Renderer のマテリアルスロット、音源、リスナーを
 [STCoreV2](../core/stcorev2.md) に接続するリアルタイム空間オーディオプラグインです。
 
-このページは、現在の Unity SDK の公開コンポーネントと Inspector の仕様に基づいています。
-
 ## 要件とプラットフォーム
 
-| 項目 | 現在のパッケージ基準 |
+| 項目 | 要件 / 対応範囲 |
 |---|---|
 | Unity | 2022.3 LTS 以降 |
-| バンドル済みネイティブプラグイン | macOS、Windows x64、iOS、Android |
-| Linux | 現在のパッケージにはバイナリがないため、Linux ホストで別途ビルドが必要 |
+| 対応プラットフォーム | Windows x64, macOS, Linux, iOS, Android |
 | Unity WebGL | 未対応。Unity WebGL では `OnAudioFilterRead` ベースの DSP 処理を使用できません |
 
 `Use GPU Backend` は、reflection と reverb propagation に WebGPU compute provider を
@@ -41,13 +38,13 @@ SoundTrace Unity SDK パッケージとインストール手順は、契約済�
 
 この設定が異なる場合、Manager と Listener の Inspector に警告が表示されます。
 
-## Audio Asset Import 設定
+## オーディオアセットのインポート設定 — モノラル
 
 モノラルのサウンドソースの使用を前提とし、オーディオクリップは PCM フォーマットに設定します。
 
 ![Audio Asset Import 設定](/img/unity/ImportSetting.png)
 
-## 最短セットアップ
+## クイックスタート
 
 1. 空の GameObject に `SoundTraceManager` を追加します。
 2. Main Camera に `SoundTraceListener` を追加します。
@@ -68,6 +65,7 @@ SoundTrace Unity SDK パッケージとインストール手順は、契約済�
 | `SoundTraceListener` | Listener transform、ray 品質、出力/HRTF 設定 | 有効な Manager |
 | `SoundTraceSource` | `AudioSource` 出力の空間化、path ごとの設定 | 同じ GameObject の `AudioSource`、有効な Listener |
 | `SoundTraceObject` | Mesh と submesh のマテリアルを音響 scene に登録 | `MeshFilter`、`MeshRenderer` |
+| `SoundTraceMaterialPresetLibrary` | マテリアルプリセットと帯域別音響係数の管理 | Material Preset Library アセット |
 | `SoundTracePathVisualizer` | 有効な path と hit triangle のデバッグ表示 | Manager と同じ GameObject |
 
 ## SoundTraceManager
@@ -76,7 +74,7 @@ SoundTrace Unity SDK パッケージとインストール手順は、契約済�
 
 ### Inspector
 
-| フィールド | デフォルト値 | 動作 |
+| フィールド | 既定値 | 動作 |
 |---|---:|---|
 | `bool propagateOnStart` | `true` | `Start()` で初期 scene graph と transform を同期した後、最初の propagation を要求します。 |
 | `bool loadDefaultMaterialsOnEnable` | `true` | `OnEnable()` でバンドル済み Material Preset Library をネイティブ material table に登録します。 |
@@ -84,9 +82,15 @@ SoundTrace Unity SDK パッケージとインストール手順は、契約済�
 | `bool useGpuBackend` | `false` | propagation を job マルチスレッドではなく GPU compute shader で計算します。 |
 | `int pathCacheSize` | `256` | 生成される path の cache buffer size で、最小値は `0`、最大値は `1024` です。値を大きくすると空間オーディオの効果が向上しますが、計算量も増加します。デバイス性能に応じて、デフォルト値の `256` より低い値から始めることを推奨します。 |
 
+### 公開メソッド
+
+| メソッド | 動作 |
+|---|---|
+| `ResetMotionState()` | テレポート、リスポーン、シーン切り替え後に、登録された全リスナーとソースの移動履歴を初期化します。 |
+
 ### 公開プロパティ
 
-| プロパティ | 型 / アクセス | 正確な意味 |
+| プロパティ | 型 / アクセス | 説明 |
 |---|---|---|
 | `Instance` | `static SoundTraceManager` / `get; private set;` | 同時にロードされているすべての scene で使用するシングルトン Manager です。有効な Manager がない場合は `null` です。 |
 | `DefaultMaterialsLoaded` | `int` / `get; private set;` | `OnEnable()` で自動登録されたバンドル済みマテリアル数です。自動ロードが無効、または asset がない場合は `0` です。 |
@@ -97,16 +101,10 @@ SoundTrace Unity SDK パッケージとインストール手順は、契約済�
 | `ObjectCount` | `int` / `get` | Manager に現在登録されている Object の数です。 |
 | `LastValidPathCount` | `int` / `get; private set;` | 最後に完了した propagation 結果の有効 path 数です。propagation を実行できない場合は `0` です。 |
 | `LastNativeError` | `string` / `get; private set;` | 直近の scene graph または propagation エラーです。エラーがない場合は空文字列です。 |
-| `PropagationThreadCount` | `int` / `get` | propagation job の実行スレッド数です。`-1` は最大値を意味します。 |
+| `PropagationThreadCount` | `int` / `get` | 設定された伝播スレッド数です。`-1` は自動設定を表し、自動選択された実際のスレッド数を返す値ではありません。 |
 | `IsGpuPropagate` | `bool` / `get; private set;` | `exaPropagatorInitGpu()` が成功し、GPU propagation provider が有効になったかを表します。 |
 | `GpuBackendStatus` | `string` / `get; private set;` | GPU Backend の初期化結果です：`GPU active` または `CPU fallback (<ExaResult>): <error>`。 |
 | `PathCacheSize` | `int` / `get` | 生成される path の cache buffer size です。 |
-
-### 公開メソッド
-
-| メソッド | 動作 |
-|---|---|
-| `public void ResetMotionState()` | teleport、respawn、scene 遷移の直後に、登録済みのすべての Listener と Source の motion history を初期化します。 |
 
 ## SoundTraceListener
 
@@ -123,6 +121,7 @@ SoundTrace Unity SDK パッケージとインストール手順は、契約済�
 | `Ray Depth` | `4` | `1..16` |
 | `Output Mode` | `Headset` | `Headset`, `Speaker` |
 | `HRTF` | `HRIR Interpolated` | 以下の 3 モード |
+| `Delay Interpolation` | プリセットに従う | `Linear`、`Cubic Lagrange`、`Lagrange 6`。移動中の遅延変化を補間します。`Custom` で編集できます。 |
 
 `Fast`、`Middle`、`Quality` を選択すると、ray 値と関連する render 品質値がまとめて
 適用され、Inspector の ray フィールドは無効になります。値を直接編集するには、先に
@@ -135,7 +134,7 @@ SoundTrace Unity SDK パッケージとインストール手順は、契約済�
 | `Middle` | `24` | `8` | 一般的なゲームとデスクトップ |
 | `Quality` | `32` | `12` | 音響の比重が大きく、その他の処理負荷が小さいアプリ |
 
-### HRTF と出力モード
+#### HRTF と出力モード
 
 | モード | 必要な asset | 説明 |
 |---|---|---|
@@ -145,6 +144,21 @@ SoundTrace Unity SDK パッケージとインストール手順は、契約済�
 
 Asset は `Runtime/Resources/SoundTrace/HRTF/` から読み込まれます。必要な asset が存在しない、
 または空の場合、Listener の初期化は失敗し、別のモードへ自動的に切り替わることはありません。
+
+### 公開メソッド
+
+| メソッド | 動作 |
+|---|---|
+| `ResetMotionState()` | 現在の Transform を移動の基準点にし、速度を初期化します。テレポートやリスポーンの直後に呼び出します。 |
+
+### 公開プロパティ
+
+| プロパティ | 型 / アクセス | 説明 |
+|---|---|---|
+| `Core` | `SoundListenerCore` / 読み取り専用 | リスナーの低レベル API オブジェクトです。初期化前または無効時は `null` です。 |
+| `AudioSampleRate` | `int` / 読み取り専用 | リスナーに適用されたオーディオサンプルレート（Hz）です。 |
+| `AudioInputSampleCount` | `int` / 読み取り専用 | リスナーに適用された入力オーディオブロックのサンプル数です。 |
+| `AudioOutputChannels` | `int` / 読み取り専用 | リスナーに適用された出力チャンネル数です。 |
 
 ## SoundTraceSource
 
@@ -156,7 +170,7 @@ SoundTrace が空間化と Doppler を担当するように `AudioSource.spatial
 
 ### Inspector
 
-| フィールド | デフォルト値 | 動作 |
+| フィールド | 既定値 | 動作 |
 |---|---:|---|
 | `Intensity` | `1` | Source の放射強度です。範囲は `0..10` です。 |
 | `Ray Resolution` | `24` | Reverb ray の水平・垂直解像度に同じ値を適用します。範囲は `1..32` です。 |
@@ -193,6 +207,14 @@ Render Tuning は source-listener の組に適用されます。`Path Hold = 0` 
 複数の `AudioSource` の再生タイミングを合わせる場合は、同じ `AudioSettings.dspTime` を基準に
 `PlayScheduled()` を呼び出してください。
 
+### 公開プロパティ
+
+| プロパティ | 型 / アクセス | 説明 |
+|---|---|---|
+| `Core` | `SoundSourceCore` / 読み取り専用 | ソースの低レベル API オブジェクトです。初期化前または無効時は `null` です。 |
+| `NativeSourceId` | `int` / 読み取り専用 | 登録されたネイティブソース ID です。登録前または解除後は `-1` です。 |
+| `Bypass` | `bool` / 読み書き | `true` で元の AudioSource 出力を通過させます。`SetBypass()` と同じ設定です。 |
+
 ## SoundTraceObject
 
 ![SoundTraceObject Inspector](/img/unity/Img_STObj.png)
@@ -200,18 +222,29 @@ Render Tuning は source-listener の組に適用されます。`Path Hold = 0` 
 `SoundTraceObject` は、`MeshFilter.sharedMesh` と Renderer の submesh マテリアルスロットを登録します。
 Build でメッシュデータを読み取る必要があるため、Import Settings の `Read/Write Enabled` を有効にしてください。
 
-### Geometry と BVH
+### Inspector
+
+| フィールド / ボタン | 説明 |
+|---|---|
+| `Mesh Filter` | 音響ジオメトリとして登録するメッシュを指定します。 |
+| `Target Renderer` | サブメッシュごとの描画マテリアルを読み取る Renderer を指定します。 |
+| `Sound Materials` | 各サブメッシュに適用する音響マテリアルプリセットを選択します。 |
+| `Auto Set` | Renderer のマテリアル名からプリセットを自動照合します。 |
+| `Add To Child Meshes` | 子メッシュの GameObject に SoundTraceObject を追加します。 |
+| `Draw Native Triangles` | Scene View にネイティブメッシュの三角形を表示します。 |
+
+#### Geometry と BVH
 
 ![Scene View に表示した BVH](/img/unity/Img_STObjDome.png)
 
-| フィールド | デフォルト値 | 説明 |
+| フィールド | 既定値 | 説明 |
 |---|---:|---|
 | `BVH Type` | `LBVH_SIMD8` | `HKDTree`, `LBVH`, `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16` |
 | `BVH Max Depth` | `12` | `1..32` |
 | `Primitives Per Leaf` | `16` | `1..128` |
 | `Update Mode` | `Static` | `Static`, `Dynamic`, `Refit`, `Rebuild` |
 
-#### BVH Type
+##### BVH Type
 
 | BVH Type | 説明 |
 |---|---|
@@ -223,7 +256,7 @@ Build でメッシュデータを読み取る必要があるため、Import Sett
 
 GPU を要求した scene で `HKDTree` または scalar `LBVH` を選択すると、Inspector に警告が表示されます。
 
-#### Update Mode
+##### Update Mode
 
 | Update Mode | STCoreV2 update policy | 意味 |
 |---|---|---|
@@ -232,7 +265,7 @@ GPU を要求した scene で `HKDTree` または scalar `LBVH` を選択する�
 | `Rebuild` | `EXA_OBJECT_UPDATE_REBUILD` (2) | Topology が変わる geometry に使用し、BVH を再ビルドします。 |
 | `Dynamic` | `EXA_OBJECT_UPDATE_DYNAMIC` (3) | Transform のみ変化する場合に TLAS instance だけを更新します。 |
 
-#### Refit と vertex アップロード
+##### Refit と vertex アップロード
 
 `Refit` は STCoreV2 における **vertex 変形（skinned animation）のための update policy** です。
 ただし core は vertex をいつアップロードするかを自分では決めません。mesh の更新は
@@ -335,7 +368,28 @@ mesh がなく、child が geometry を所有している場合は `Add To Child
 | `GetTriangleCount()` | すべての submesh の index 数を合計し、triangle 数を返します。mesh がない場合は `0` です。 |
 | `static IsGpuCompatibleBvhType(BvhType value)` | `LBVH_SIMD4`、`LBVH_SIMD8`、`LBVH_SIMD16` の場合に `true` を返します。 |
 
-## サウンドマテリアルと Transmission
+### 公開プロパティ
+
+| プロパティ | 型 / アクセス | 説明 |
+|---|---|---|
+| `ObjectCore` | `SoundObjectCore` / 読み取り専用 | 登録された低レベルオブジェクトです。初期化前または無効時は `null` です。 |
+| `MeshCore` | `SoundMeshCore` / 読み取り専用 | 共有する低レベルメッシュです。未登録の場合は `null` です。 |
+| `NativeObjectId` | `int` / 読み取り専用 | ネイティブオブジェクト ID です。未登録時は `-1` です。 |
+| `NativeMeshId` | `int` / 読み取り専用 | ネイティブメッシュ ID です。未登録時は `-1` です。 |
+| `SlotCount` | `int` / 読み取り専用 | 音響マテリアルスロット数です。 |
+| `SharedMesh` | `Mesh` / 読み取り専用 | MeshFilter が参照する共有メッシュです。MeshFilter がない場合は `null` です。 |
+| `IsReadyForPropagation` | `bool` / 読み取り専用 | シーン登録が完了し、オブジェクトとメッシュの両方が有効かを示します。 |
+| `EditorBvhType` | `BvhType` / 読み取り専用、Editor 専用 | 検証済みの BVH 種類です。 |
+| `EditorBvhMaxDepth` | `int` / 読み取り専用、Editor 専用 | `1..32` に制限した BVH 最大深度です。 |
+| `EditorPrimitivesPerLeaf` | `int` / 読み取り専用、Editor 専用 | `1..128` に制限したリーフごとのプリミティブ数です。 |
+
+## 音響マテリアルと Transmission
+
+![Material Preset Library](/img/unity/Image_Mat_01.png)
+
+![帯域別のマテリアルグラフ編集](/img/unity/Image_Mat_02.png)
+
+### Inspector
 
 デフォルトの authoring asset は
 `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset` です。
@@ -346,16 +400,22 @@ mesh がなく、child が geometry を所有している場合は `Add To Child
 - Scattering と 8-band Reflection、Absorption、Transmission グラフの編集
 - `Transmission Model` の選択
 
-![Material Preset Library](/img/unity/Image_Mat_01.png)
-
 周波数帯域の中心は `67.5`、`125`、`250`、`500`、`1000`、`2000`、`4000`、
 `8000 Hz` です。マテリアルの順序と table index は一致させる必要があります。
 
-![帯域別のマテリアルグラフ編集](/img/unity/Image_Mat_02.png)
+| フィールド | 説明 |
+|---|---|
+| `Presets` | 音響マテリアル一覧です。プリセットの追加、削除、並べ替えを行います。 |
+| `Display Name` | オブジェクトのマテリアル選択一覧に表示する名前です。 |
+| `Material Index` | ネイティブマテリアルテーブルで使用するインデックスです。 |
+| `Scattering` | `0..1`。鏡面反射と散乱の比率を調整します。 |
+| `Reflection`, `Absorption`, `Transmission` | 8 周波数帯域の反射・吸収・透過エネルギー係数です。各値の範囲は `0..1` です。 |
+| `Transmission Model` | `Surface` または `Solid Distance` を選択します。 |
+| `Thickness to -30 dB (m)` | `Solid Distance` の帯域別減衰基準距離です。 |
 
-### Transmission Model
+#### Transmission Model
 
-| モデル | 入力 | Geometry の条件 |
+| モデル | 入力 | Geometry 条件 |
 |---|---|---|
 | `Surface` | 各帯域で表面を通過した後に残る伝送エネルギー係数 `0..1` | 開いた面と薄い surface で使用可能 |
 | `Solid Distance` | 各帯域で伝送エネルギーが `-30 dB` になるマテリアル基準距離 (m)、`0` 以上 | 閉じたボリュームと一貫した面の向きが必要 |
@@ -368,11 +428,38 @@ JSON に `transmissionDistanceToMinus30DbMeters` が存在しない場合は `Su
 0 以上の値が正確に 8 個存在する場合は `Solid Distance` です。`Surface` として export する場合、
 このフィールドは `null` や空配列ではなく省略されます。
 
+### 公開メソッド
+
+以下は `SoundTraceMaterialPresetLibrary` の API です。
+
+| メソッド | 動作 |
+|---|---|
+| `static LoadDefault()` | 既定のライブラリを読み込みます。アセットがない、または空の場合は同梱 JSON から生成します。 |
+| `GetPreset(int index)` | インデックスを有効範囲に制限してプリセットを返します。一覧が空の場合は `null` です。 |
+| `GetPresetNames()` | 選択一覧に使用するプリセット名の配列を返します。 |
+| `FindBestPresetIndex(Material renderMaterial)` | 描画マテリアル名に一致するプリセットを探します。 |
+| `FindPresetIndex(string token, int fallback)` | 名前にトークンを含むプリセットを探し、見つからなければ fallback インデックスを使用します。 |
+| `RegisterAll(MaterialTable table)` | 全プリセットをネイティブマテリアルテーブルに登録し、登録数を返します。 |
+| `ReplaceWithJson(string json)` | JSON でプリセットを置き換えます。有効なマテリアル項目がない場合は `ArgumentException` が発生します。 |
+| `ToJson()` | 現在のライブラリを `soundMaterial.json` 形式で返します。 |
+| `Normalize()` | プリセットのインデックス、帯域配列、係数範囲を正規化します。 |
+| `static GetFrequencyBandCenterHz(int index)` | 指定した帯域の中心周波数（Hz）を返します。 |
+
+### 公開プロパティ
+
+| プロパティ | 型 / アクセス | 説明 |
+|---|---|---|
+| `Presets` | `IReadOnlyList<SoundTraceMaterialPreset>` / 読み取り専用 | ライブラリのプリセット一覧です。 |
+| `Count` | `int` / 読み取り専用 | プリセット数です。 |
+| `FrequencyBandCount` | `static int` / 読み取り専用 | 周波数帯域数で、値は `8` です。 |
+
 ## SoundTracePathVisualizer
 
 ![SoundTracePathVisualizer Inspector](/img/unity/Img_STPathVisual.png)
 
 Manager と同じ GameObject に 1 つだけ追加します。
+
+### Inspector
 
 | Inspector フィールド | デフォルト値 | 説明 |
 |---|---:|---|
@@ -381,14 +468,37 @@ Manager と同じ GameObject に 1 つだけ追加します。
 | `Max Visualized Paths` | `1024` | 表示する path の最大数 |
 | `Path Width` | `0.08` | 線幅 |
 | `Path Alpha Intensity` | `0.5` | 表示強度 |
+| `Path Depth Mode` | `Always On Top` | `Depth Test` はジオメトリの深度を判定し、`Always On Top` はパスを手前に表示します。 |
+| `Sorting Layer Name` | `Default` | パスメッシュの Sorting Layer です。 |
+| `Sorting Order` | `10` | Sorting Layer 内での描画順です。 |
 | `Draw Hit Triangles` | オフ | Scene View に hit triangle を表示 |
 
 Direct、Reflection、Diffraction、Reverb、Transmission を path 種別ごとの色で表示します。
 このコンポーネントはデバッグ用です。性能測定時と release build では無効にしてください。
 
-主要な公開メンバーは `Instance`、設定/カウントプロパティ、`Render()`、`Clear()` です。
+### 公開メソッド
 
-## サンプル
+| メソッド | 動作 |
+|---|---|
+| `Render(SoundTraceManager manager, bool force = false)` | 最新の有効パスから表示メッシュを更新します。`force = true` は更新間隔を無視します。表示が無効、または Manager が無効な場合は表示を消去します。 |
+| `Clear()` | パスメッシュを消去し、レンダラーを非表示にして、パス数と線分数を初期化します。 |
+
+### 公開プロパティ
+
+| プロパティ | 型 / アクセス | 説明 |
+|---|---|---|
+| `Active` | `static SoundTracePathVisualizer` / 読み取り専用 | 現在有効な可視化コンポーネントです。存在しない場合は `null` です。 |
+| `PathVisualizationEnabled` | `bool` / 読み取り専用 | パス表示の有効・無効を示します。 |
+| `RefreshIntervalMs` | `float` / 読み取り専用 | 可視化更新の最小間隔（ms）です。 |
+| `MaxVisualizedPaths` | `int` / 読み取り専用 | 表示するパス数の上限です。 |
+| `PathWidth` | `float` / 読み取り専用 | パスの線幅です。 |
+| `PathAlphaIntensity` | `float` / 読み取り専用 | パスの表示強度です。 |
+| `ActivePathCount` | `int` / 読み取り専用 | 最後の可視化更新で読み取った有効パス数です。 |
+| `ActiveSegmentCount` | `int` / 読み取り専用 | 実際の表示メッシュを構成する線分数です。 |
+| `PoolSize` | `int` / 読み取り専用 | `ActiveSegmentCount` と同じ線分数を返します。 |
+| `DrawHitTrianglesInSceneView` | `bool` / 読み取り専用、Editor 専用 | Scene View にヒットした三角形を表示するかを示します。 |
+
+## サンプルデモ
 
 ### ST_SampleScene01
 
@@ -409,9 +519,9 @@ source/listener の移動、material preset の変更、Unity の元の audio �
 
 広い空間の複数 source、wall occlusion、移動中の HRTF 方向感と room response を確認します。
 
-## トラブルシューティング
+## トラブルシューティングのヒント
 
-| 症状 | 確認事項 |
+| 症状 | 確認項目 |
 |---|---|
 | 音が出ない | Console の最初の Manager 初期化エラー、Stereo/Best latency、AudioSource clip、Manager/Listener の有無 |
 | Source/Listener/Object が Manager を要求する | cascade エラーより先に記録された `Failed to initialize SoundTraceManager` の原因を確認 |
@@ -423,7 +533,7 @@ source/listener の移動、material preset の変更、Unity の元の audio �
 | 性能が不足する | `Quality → Middle → Fast` の順で変更し、path cache buffer を減らしてから path visualizer を無効化して確認 |
 | 複数の音源が comb filtering のように聞こえる | 同じ `AudioSettings.dspTime` で `PlayScheduled()` を実行 |
 
-## 次のドキュメント
+## 次に読む
 
 - [SDK 概要](./overview.md)
 - [Web SDK](./web.md)
