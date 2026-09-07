@@ -482,18 +482,78 @@ Skinned Mesh 的 cache key 包含 component path，不同 pose 不会覆盖同�
 
 ## 示例演示
 
-### Test
+Unity SDK 的三个示例也以 Unreal 关卡和蓝图的形式提供，保留相同的场景构成。
+在 Content Browser 中启用 `Settings > Show Plugin Content`，打开
+`SoundTracing Content > Samples > Maps` 下的关卡，然后点击 `Play`。
+每个关卡均已配置专用 GameMode 和摄像机，运行后会自动播放音频。
 
-![Unreal Test 演示图片占位符](/img/unreal/demo-placeholder.svg)
+三个演示共用以下 UI：
 
-打开 SDK 示例项目中的 `Content/FirstPerson/Test.umap`，查看网格注册、BVH 和声学材质槽设置。
+| 按钮 | 键盘 | 操作 |
+|---|---|---|
+| `Play` | `P` | 从头播放音乐或对话。 |
+| `Pause / Resume` | `Space` | 暂停或继续播放。 |
+| `Stop` | `X` | 停止播放。 |
+| `Reset` | `R` | 重新开始演示。02 还会重置位置和声学材质。 |
+| `Show / hide UI` | — | 隐藏或显示左侧控制面板。 |
 
-1. 选择关卡网格，检查 `SoundTracingObjectComponent` 的父组件连接和材质槽。
-2. 在 PIE 中播放声音并移动监听器，体验方向感和遮挡变化。
-3. 切换材质预设，比较反射、吸收和透射差异。
-4. 启用 Path Visualizer，将听感变化与声学路径对照。
+关卡位于 `/SoundTracing/Samples/Maps`，行为和 UI 蓝图位于
+`/SoundTracing/Samples/Blueprints`，各声源的设置可在
+`/SoundTracing/Samples/Audio/Settings` 中编辑。
 
-示例地图包含在 SDK 示例项目的 Content 中。仅安装插件的项目应使用 Migrate，将所需示例资源及其依赖一起迁移。
+### ST_SampleScene01
+
+![ST_SampleScene01 — 房间内的单个声源和监听器](/img/unreal/ST_Sample01.png)
+
+在 10 m 的房间内，通过一个声源和固定监听器体验基本空间音频。
+聆听音乐，了解房间几何体、声学材质以及可视化路径与声音的关系。
+
+使用 `SoundTrace / Unreal dry` 按钮切换 SoundTrace 输出和 Unreal 常规输出。
+两路输出保持播放位置同步，因此可以连续聆听同一段音乐，比较空间感和混响。
+
+行为蓝图为 `BP_Sample01`，UI 为 `WBP_Sample01`。
+
+### ST_SampleScene02
+
+![ST_SampleScene02 — 可拖动乐器声源和监听器的俯视演示](/img/unreal/ST_Sample02.png)
+
+在俯视图中移动吉他、贝斯、鼓和合成器的左右八个声源，以及耳机形状的监听器。
+Quartz 同步播放音乐，可通过改变位置和声学材质来比较方向感与空间响应。
+
+| 控件 | 操作 |
+|---|---|
+| 拖动图标 | 使用鼠标左键或第一个触点移动声源、监听器，保持其高度及初始抓取位置的偏移。 |
+| `Mirror: ON / OFF` | 拖动声源时，使另一侧配对声源左右对称移动。启用时不会立即重新对齐位置。 |
+| `SoundTrace / Unreal dry` | 保持播放位置，切换 SoundTrace 输出和 Unreal 常规输出。 |
+| `Acoustic material (floor + dome)` | 同时更改地板和穹顶的声学材质。初始预设为 `Glass`，该设置独立于视觉材质。 |
+| `Reset` / `R` | 恢复声源、监听器的位置、`Mirror: ON` 和 `Glass` 声学材质，并重新播放。 |
+| `Record / save` / `F9` | 开始录制输出。录制中再次按下会保存 WAV 并结束录制。 |
+| `Save WAV` / `F10` | 将当前录音保存为 WAV 并结束录制。 |
+
+录音文件以唯一文件名保存在项目的 `Saved/BouncedWavFiles` 中。
+Unreal 保存 WAV 时会结束当前录制，操作方式与 Unity 在录制中导出快照不同。
+从 UI 上或屏幕边缘 24 px 范围内开始的拖动会被忽略，请从图标内部开始拖动。
+
+行为蓝图为 `BP_Sample02`，UI 为 `WBP_Sample02`。
+
+### ST_SampleScene03
+
+![ST_SampleScene03 — 墙壁和隔板之间的男女语音演示](/img/unreal/ST_Sample03.png)
+
+在有墙壁和隔板的空间中，男性、女性两个声源交替循环播放八段语音。
+随摄像机移动监听器，体验墙壁遮挡、反射、HRTF 方向感和空间混响的变化。
+
+| 控件 | 操作 |
+|---|---|
+| `WASD` | 向前、后、左、右移动。 |
+| `Q / E` | 下降、上升。 |
+| 移动鼠标 | 旋转视角。 |
+| `Esc` | 释放视角控制以操作 UI。在编辑器 PIE 中，使用 `Shift+F1` 释放光标。 |
+| 鼠标右键 | 恢复视角控制。 |
+| `Reset` / `R` | 在当前摄像机位置从头播放对话。 |
+
+在编辑器 PIE 中，`Esc` 用于结束运行。
+行为蓝图为 `BP_Sample03`，UI 为 `WBP_Sample03`。
 
 ## 故障排除提示
 

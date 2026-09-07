@@ -485,18 +485,78 @@ Colors are Direct=red, Reflection=orange, Diffraction=green, Transmission=cyan, 
 
 ## Sample demos
 
-### Test
+The three Unity SDK samples are also available as Unreal levels and Blueprints.
+In the Content Browser, enable `Settings > Show Plugin Content`, open a level under
+`SoundTracing Content > Samples > Maps`, and press `Play`.
+Each level has its own GameMode and camera, and audio starts automatically.
 
-![Unreal Test demo image placeholder](/img/unreal/demo-placeholder.svg)
+All three demos share these controls:
 
-Open `Content/FirstPerson/Test.umap` in the SDK sample project to inspect mesh registration, BVH, and acoustic material slots.
+| Button | Keyboard | Action |
+|---|---|---|
+| `Play` | `P` | Plays the music or conversation from the beginning. |
+| `Pause / Resume` | `Space` | Pauses or resumes playback. |
+| `Stop` | `X` | Stops playback. |
+| `Reset` | `R` | Restarts the demo. Sample 02 also resets positions and the acoustic material. |
+| `Show / hide UI` | — | Hides or shows the control panel on the left. |
 
-1. Select a level mesh and inspect the parent attachment and material slots of `SoundTracingObjectComponent`.
-2. Play a sound in PIE and move the listener to hear directionality and occlusion changes.
-3. Change material presets to compare reflection, absorption, and transmission.
-4. Enable the Path Visualizer to compare audible changes with acoustic paths.
+Levels are in `/SoundTracing/Samples/Maps`, behavior and UI Blueprints are in
+`/SoundTracing/Samples/Blueprints`, and per-source settings are in
+`/SoundTracing/Samples/Audio/Settings`.
 
-The sample map is included in the SDK sample project's Content. For projects that only have the plugin installed, migrate the required sample assets together with their dependencies.
+### ST_SampleScene01
+
+![ST_SampleScene01 — a single source and listener in a room](/img/unreal/ST_Sample01.png)
+
+Explore basic spatial audio with one source and a fixed listener in a 10 m room.
+Listen to the music and examine how room geometry, acoustic materials, and visualized paths relate to the sound.
+
+Use `SoundTrace / Unreal dry` to switch between SoundTrace output and Unreal's regular output.
+Both outputs stay synchronized, so you can compare spatial cues and reverberation without restarting the music.
+
+The behavior Blueprint is `BP_Sample01`, and the UI is `WBP_Sample01`.
+
+### ST_SampleScene02
+
+![ST_SampleScene02 — top-down demo with draggable instruments and listener](/img/unreal/ST_Sample02.png)
+
+Move eight sources arranged as left/right guitar, bass, drum, and synth pairs, along with the headphone-shaped listener, in a top-down view.
+Quartz synchronizes playback so you can compare directionality and room response while changing positions and acoustic materials.
+
+| Control | Action |
+|---|---|
+| Drag an icon | Use the left mouse button or the first touch to move a source or listener. Its height and the initial grab offset are preserved. |
+| `Mirror: ON / OFF` | Moves the opposite source symmetrically while dragging. Enabling it does not immediately realign positions. |
+| `SoundTrace / Unreal dry` | Switches between SoundTrace output and Unreal's regular output while preserving playback position. |
+| `Acoustic material (floor + dome)` | Changes the acoustic material of both the floor and dome. The initial preset is `Glass`; this setting is separate from their visual materials. |
+| `Reset` / `R` | Restores source/listener positions, `Mirror: ON`, and the `Glass` acoustic material, then restarts playback. |
+| `Record / save` / `F9` | Starts recording the output. Press again while recording to save a WAV and end the recording. |
+| `Save WAV` / `F10` | Saves the active recording as a WAV and ends it. |
+
+Recordings are saved with unique filenames in the project's `Saved/BouncedWavFiles` folder.
+Saving a WAV in Unreal ends the current recording, unlike Unity's snapshot export during recording.
+Start dragging inside an icon: drags starting over the UI or within 24 px of the screen edge are ignored.
+
+The behavior Blueprint is `BP_Sample02`, and the UI is `WBP_Sample02`.
+
+### ST_SampleScene03
+
+![ST_SampleScene03 — male and female voices among walls and partitions](/img/unreal/ST_Sample03.png)
+
+Two sources alternate through eight male and female voice clips in a loop, in a space with walls and partitions.
+Move the listener with the camera to hear changes in occlusion, reflections, HRTF directionality, and room reverberation.
+
+| Control | Action |
+|---|---|
+| `WASD` | Moves forward, backward, left, and right. |
+| `Q / E` | Moves down/up. |
+| Mouse movement | Rotates the view. |
+| `Esc` | Releases mouse look to interact with the UI. Use `Shift+F1` to release the cursor in editor PIE. |
+| Right mouse click | Resumes mouse look. |
+| `Reset` / `R` | Restarts the conversation from the beginning at the current camera position. |
+
+In editor PIE, `Esc` ends the play session.
+The behavior Blueprint is `BP_Sample03`, and the UI is `WBP_Sample03`.
 
 ## Troubleshooting tips
 

@@ -482,18 +482,78 @@ Skinned Mesh 的 cache key 包含 component path，不同 pose 不會覆寫同�
 
 ## 範例展示
 
-### Test
+Unity SDK 的三個範例也以 Unreal 關卡和藍圖的形式提供，保留相同的場景組成。
+在 Content Browser 中啟用 `Settings > Show Plugin Content`，開啟
+`SoundTracing Content > Samples > Maps` 下的關卡，然後按下 `Play`。
+每個關卡均已設定專用 GameMode 和攝影機，執行後會自動播放音訊。
 
-![Unreal Test 展示圖片預留區](/img/unreal/demo-placeholder.svg)
+三個展示共用以下 UI：
 
-開啟 SDK 範例專案中的 `Content/FirstPerson/Test.umap`，查看網格註冊、BVH 和聲學材質槽設定。
+| 按鈕 | 鍵盤 | 操作 |
+|---|---|---|
+| `Play` | `P` | 從頭播放音樂或對話。 |
+| `Pause / Resume` | `Space` | 暫停或繼續播放。 |
+| `Stop` | `X` | 停止播放。 |
+| `Reset` | `R` | 重新開始展示。02 還會重設位置和聲學材質。 |
+| `Show / hide UI` | — | 隱藏或顯示左側控制面板。 |
 
-1. 選擇關卡網格，檢查 `SoundTracingObjectComponent` 的父元件連接和材質槽。
-2. 在 PIE 中播放聲音並移動聆聽器，體驗方向感和遮蔽變化。
-3. 切換材質預設，比較反射、吸收和透射差異。
-4. 啟用 Path Visualizer，將聽感變化與聲學路徑對照。
+關卡位於 `/SoundTracing/Samples/Maps`，行為和 UI 藍圖位於
+`/SoundTracing/Samples/Blueprints`，各音源的設定可在
+`/SoundTracing/Samples/Audio/Settings` 中編輯。
 
-範例地圖包含在 SDK 範例專案的 Content 中。僅安裝外掛的專案應使用 Migrate，將所需範例資產及其相依項目一起移轉。
+### ST_SampleScene01
+
+![ST_SampleScene01 — 房間內的單一音源和聆聽器](/img/unreal/ST_Sample01.png)
+
+在 10 m 的房間內，透過一個音源和固定聆聽器體驗基本空間音訊。
+聆聽音樂，了解房間幾何、聲學材質以及視覺化路徑與聲音的關係。
+
+使用 `SoundTrace / Unreal dry` 按鈕切換 SoundTrace 輸出和 Unreal 一般輸出。
+兩路輸出保持播放位置同步，因此可以連續聆聽同一段音樂，比較空間感和殘響。
+
+行為藍圖為 `BP_Sample01`，UI 為 `WBP_Sample01`。
+
+### ST_SampleScene02
+
+![ST_SampleScene02 — 可拖曳樂器音源和聆聽器的俯視展示](/img/unreal/ST_Sample02.png)
+
+在俯視圖中移動吉他、貝斯、鼓和合成器的左右八個音源，以及耳機形狀的聆聽器。
+Quartz 同步播放音樂，可透過改變位置和聲學材質來比較方向感與空間響應。
+
+| 控制項 | 操作 |
+|---|---|
+| 拖曳圖示 | 使用滑鼠左鍵或第一個觸控點移動音源、聆聽器，保持其高度及初始抓取位置的偏移。 |
+| `Mirror: ON / OFF` | 拖曳音源時，使另一側配對音源左右對稱移動。啟用時不會立即重新對齊位置。 |
+| `SoundTrace / Unreal dry` | 保持播放位置，切換 SoundTrace 輸出和 Unreal 一般輸出。 |
+| `Acoustic material (floor + dome)` | 同時變更地板和穹頂的聲學材質。初始預設為 `Glass`，此設定獨立於視覺材質。 |
+| `Reset` / `R` | 還原音源、聆聽器的位置、`Mirror: ON` 和 `Glass` 聲學材質，並重新播放。 |
+| `Record / save` / `F9` | 開始錄製輸出。錄製中再次按下會儲存 WAV 並結束錄製。 |
+| `Save WAV` / `F10` | 將目前錄音儲存為 WAV 並結束錄製。 |
+
+錄音檔以唯一檔名儲存在專案的 `Saved/BouncedWavFiles` 中。
+Unreal 儲存 WAV 時會結束目前的錄製，操作方式與 Unity 在錄製中匯出快照不同。
+從 UI 上或螢幕邊緣 24 px 範圍內開始的拖曳會被忽略，請從圖示內部開始拖曳。
+
+行為藍圖為 `BP_Sample02`，UI 為 `WBP_Sample02`。
+
+### ST_SampleScene03
+
+![ST_SampleScene03 — 牆壁和隔板之間的男女語音展示](/img/unreal/ST_Sample03.png)
+
+在有牆壁和隔板的空間中，男性、女性兩個音源交替循環播放八段語音。
+隨攝影機移動聆聽器，體驗牆壁遮蔽、反射、HRTF 方向感和空間殘響的變化。
+
+| 控制項 | 操作 |
+|---|---|
+| `WASD` | 向前、後、左、右移動。 |
+| `Q / E` | 下降、上升。 |
+| 移動滑鼠 | 旋轉視角。 |
+| `Esc` | 釋放視角控制以操作 UI。在編輯器 PIE 中，使用 `Shift+F1` 釋放游標。 |
+| 滑鼠右鍵 | 恢復視角控制。 |
+| `Reset` / `R` | 在目前攝影機位置從頭播放對話。 |
+
+在編輯器 PIE 中，`Esc` 用於結束執行。
+行為藍圖為 `BP_Sample03`，UI 為 `WBP_Sample03`。
 
 ## 疑難排解提示
 

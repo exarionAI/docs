@@ -510,20 +510,78 @@ Reverb=보라입니다. 성능 측정에서는 시각화를 비활성화하십�
 
 ## 샘플 데모 설명
 
-### Test
+Unity SDK의 세 샘플과 같은 구성을 Unreal 레벨과 블루프린트로 제공합니다.
+Content Browser에서 `Settings > Show Plugin Content`를 켠 뒤
+`SoundTracing Content > Samples > Maps`의 레벨을 열고 `Play`를 누릅니다.
+각 레벨에는 전용 GameMode와 카메라가 설정되어 있으며, 실행하면 오디오가 자동으로 재생됩니다.
 
-![Unreal Test 데모 이미지 플레이스홀더](/img/unreal/demo-placeholder.svg)
+세 데모의 공통 UI는 다음과 같습니다.
 
-SDK 샘플 프로젝트의 `Content/FirstPerson/Test.umap`을 엽니다.
-오브젝트의 메시 등록, BVH와 사운드 재질 슬롯 설정을 확인할 수 있습니다.
+| 버튼 | 키보드 | 동작 |
+|---|---|---|
+| `Play` | `P` | 음악 또는 대화를 처음부터 재생합니다. |
+| `Pause / Resume` | `Space` | 재생을 일시정지하거나 이어서 재생합니다. |
+| `Stop` | `X` | 재생을 정지합니다. |
+| `Reset` | `R` | 데모를 다시 시작합니다. 02에서는 위치와 재질도 초기화합니다. |
+| `Show / hide UI` | — | 왼쪽 조작 패널을 숨기거나 표시합니다. |
 
-1. 레벨의 메시를 선택해 `SoundTracingObjectComponent`의 부모 연결과 재질 슬롯을 확인합니다.
-2. PIE에서 음원을 재생하고 리스너를 이동하며 방향감과 차폐에 따른 변화를 확인합니다.
-3. 재질 프리셋을 바꾸어 반사·흡수·투과 차이를 비교합니다.
-4. Path Visualizer를 켜서 들리는 변화와 음향 경로를 함께 확인합니다.
+레벨 경로는 `/SoundTracing/Samples/Maps`, 동작과 UI 블루프린트는
+`/SoundTracing/Samples/Blueprints`에 있습니다. 음원별 설정은
+`/SoundTracing/Samples/Audio/Settings`에서 편집합니다.
 
-샘플 맵은 SDK 샘플 프로젝트의 Content에 포함됩니다.
-플러그인만 설치한 프로젝트에서는 필요한 샘플 에셋을 의존성과 함께 Migrate하여 사용하십시오.
+### ST_SampleScene01
+
+![ST_SampleScene01 — 방 안의 단일 음원과 리스너](/img/unreal/ST_Sample01.png)
+
+10m 크기의 방에서 음원 하나와 고정 리스너로 기본 공간 음향을 확인합니다.
+음악을 들어보며 방의 지오메트리와 음향 재질에 따른 소리 변화를 시각화된 경로와 비교할 수 있습니다.
+
+`SoundTrace / Unreal dry` 버튼으로 SoundTrace 출력과 Unreal의 일반 출력을 전환합니다.
+두 출력은 재생 위치를 맞춰 유지하므로 같은 구간을 이어 들으며 공간감과 잔향을 비교할 수 있습니다.
+
+동작 블루프린트는 `BP_Sample01`, UI는 `WBP_Sample01`입니다.
+
+### ST_SampleScene02
+
+![ST_SampleScene02 — 악기 음원과 리스너를 이동하는 탑뷰 데모](/img/unreal/ST_Sample02.png)
+
+탑뷰에서 기타·베이스·드럼·신스의 좌우 음원 8개와 헤드폰 모양의 리스너를 이동합니다.
+음악은 Quartz로 동기 재생되며, 배치와 음향 재질을 바꾸면서 방향감과 공간 응답을 비교할 수 있습니다.
+
+| 조작 | 동작 |
+|---|---|
+| 아이콘 드래그 | 마우스 왼쪽 버튼 또는 첫 번째 터치로 음원·리스너를 이동합니다. 높이와 처음 잡은 위치의 오프셋을 유지합니다. |
+| `Mirror: ON / OFF` | 음원을 드래그할 때 반대쪽 짝도 좌우 대칭으로 이동합니다. 켜는 순간에는 위치를 다시 정렬하지 않습니다. |
+| `SoundTrace / Unreal dry` | 재생 위치를 유지하면서 SoundTrace 출력과 Unreal의 일반 출력을 전환합니다. |
+| `Acoustic material (floor + dome)` | 바닥과 돔의 음향 재질을 함께 변경합니다. 초기 프리셋은 `Glass`이며 화면에 보이는 시각적 머티리얼과는 별개입니다. |
+| `Reset` / `R` | 음원·리스너 위치, `Mirror: ON`, 음향 재질 `Glass`를 복원하고 다시 재생합니다. |
+| `Record / save` / `F9` | 출력 녹음을 시작합니다. 녹음 중 다시 누르면 WAV로 저장하고 녹음을 종료합니다. |
+| `Save WAV` / `F10` | 진행 중인 녹음을 WAV로 저장하고 종료합니다. |
+
+녹음 파일은 프로젝트의 `Saved/BouncedWavFiles`에 고유한 이름으로 저장됩니다.
+Unreal에서는 WAV 저장 시 현재 녹음이 종료됩니다. Unity의 녹음 중 스냅샷 내보내기와 조작 방식이 다릅니다.
+UI 위나 화면 가장자리 24px에서 시작한 드래그는 처리하지 않으므로 아이콘 안쪽에서 드래그를 시작합니다.
+
+동작 블루프린트는 `BP_Sample02`, UI는 `WBP_Sample02`입니다.
+
+### ST_SampleScene03
+
+![ST_SampleScene03 — 벽과 칸막이 사이의 남녀 음성 데모](/img/unreal/ST_Sample03.png)
+
+벽과 칸막이가 있는 공간에서 남성·여성 음원 두 개가 음성 클립 8개를 번갈아 반복 재생합니다.
+카메라와 함께 리스너를 이동하며 벽에 의한 차폐, 반사, HRTF 방향감과 공간의 잔향 변화를 확인합니다.
+
+| 조작 | 동작 |
+|---|---|
+| `WASD` | 앞뒤·좌우로 이동합니다. |
+| `Q / E` | 하강·상승합니다. |
+| 마우스 이동 | 시점을 회전합니다. |
+| `Esc` | 시점 조작을 해제하고 UI를 조작합니다. 에디터 PIE에서 커서를 해제하려면 `Shift+F1`을 사용합니다. |
+| 마우스 오른쪽 클릭 | 시점 조작을 다시 시작합니다. |
+| `Reset` / `R` | 현재 카메라 위치에서 대화를 처음부터 다시 재생합니다. |
+
+에디터 PIE에서는 `Esc`가 플레이 종료에 사용됩니다.
+동작 블루프린트는 `BP_Sample03`, UI는 `WBP_Sample03`입니다.
 
 ## 트러블슈팅 팁
 
