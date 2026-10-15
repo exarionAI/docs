@@ -1,6 +1,6 @@
 {
   "homepage.hero.tagline": {
-    "message": "实时空间音频仿真 SDK 与产品线"
+    "message": "实时空间音频仿真引擎、SDK 与插件"
   },
   "homepage.hero.primaryCta": {
     "message": "开始使用 →"
@@ -12,16 +12,16 @@
     "message": "原生声学引擎"
   },
   "homepage.hero.summary.sdk": {
-    "message": "Web、Unity 与 Unreal 绑定"
+    "message": "Web、Unity、Unreal、FMOD、Wwise"
   },
   "homepage.hero.summary.tools": {
     "message": "渲染与分析工作流"
   },
   "homepage.products.core.desc": {
-    "message": "C/C++ 原生声学仿真引擎 STCoreV2：模块化 path module、lock-free、跨平台。"
+    "message": "C++20 几何声学引擎 SimpleST：9 频段材质、Hybrid 早期反射、主机 pull 渲染、公开 C ABI 6。"
   },
   "homepage.products.sdk.desc": {
-    "message": "已提供 Web、Unity、Unreal 绑定，Python 计划中。可在各平台使用 Core。"
+    "message": "Web、Unity 与 Unreal Engine 封装，以及 FMOD 和 Wwise 插件。Python 计划中。"
   },
   "homepage.products.exatools.desc": {
     "message": "用于处理声学仿真结果的工具，包括 IR 分析、验证和可视化。"
@@ -48,7 +48,7 @@
     "message": "跨平台"
   },
   "homepage.highlights.crossPlatform.desc": {
-    "message": "Windows、macOS、Linux 原生版本、WebAssembly，以及 Unity 和 Unreal Engine 绑定。"
+    "message": "Windows、macOS、Linux、Android、iOS 原生版本、WebAssembly、Unity 和 Unreal Engine 封装，以及 FMOD 和 Wwise 插件。"
   },
   "theme.ErrorPageContent.title": {
     "message": "页面已崩溃。",

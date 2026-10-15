@@ -1,6 +1,6 @@
 {
   "homepage.hero.tagline": {
-    "message": "Real-time spatial audio simulation SDK and product family"
+    "message": "Real-time spatial audio simulation engine, SDKs and plug-ins"
   },
   "homepage.hero.primaryCta": {
     "message": "Get started ->"
@@ -12,16 +12,16 @@
     "message": "Native acoustic engine"
   },
   "homepage.hero.summary.sdk": {
-    "message": "Web, Unity, and Unreal bindings"
+    "message": "Web, Unity, Unreal, FMOD, Wwise"
   },
   "homepage.hero.summary.tools": {
     "message": "Rendering and analysis workflows"
   },
   "homepage.products.core.desc": {
-    "message": "The STCoreV2 native C/C++ acoustic simulation engine — modular path modules, lock-free, cross-platform."
+    "message": "SimpleST, the C++20 geometric-acoustics engine: nine-band materials, Hybrid early reflections, host-pull rendering, public C ABI 6."
   },
   "homepage.products.sdk.desc": {
-    "message": "Web, Unity, and Unreal bindings are available; Python is planned. Use the Core engine from each platform."
+    "message": "Web, Unity and Unreal Engine wrappers plus FMOD and Wwise plug-ins. Python is planned."
   },
   "homepage.products.exatools.desc": {
     "message": "Utilities for working with acoustic simulation results, including IR analysis, validation, and visualization."
@@ -48,7 +48,7 @@
     "message": "Cross-Platform"
   },
   "homepage.highlights.crossPlatform.desc": {
-    "message": "Native Windows, macOS, and Linux builds, WebAssembly, and Unity and Unreal Engine bindings."
+    "message": "Native Windows, macOS, Linux, Android and iOS builds, WebAssembly, Unity and Unreal Engine wrappers, FMOD and Wwise plug-ins."
   },
   "theme.ErrorPageContent.title": {
     "message": "This page crashed.",

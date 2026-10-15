@@ -5,22 +5,24 @@ title: 제품군
 
 # 제품군
 
-Sound Tracing 제품군은 **Core 엔진**, **SDK 바인딩**, **분석 도구**의
-세 축으로 구성됩니다.
+Sound Tracing 제품군은 **엔진**, **SDK·플러그인**, **분석 도구**의 세 축으로 구성됩니다.
 
-## Core
+## Core — SimpleST
 
-C/C++ 기반의 음향 시뮬레이션 네이티브 엔진입니다.
+C++20 기반의 기하음향 네이티브 엔진입니다.
 
-- [STCoreV2](../core/stcorev2.md) — 모듈식 path module과 lock-free 데이터 흐름의 네이티브 코어
+- [SimpleST](../core/simplest.md) — 현행 엔진. 공개 C ABI 6(실시간 `st_rt_*` / 오프라인 `st_off_*`)
+- [STCoreV2 → SimpleST](../core/stcorev2.md) — 이전 세대 엔진에서 옮기는 팀을 위한 대응표
 
-## SDK
+## SDK · 플러그인
 
-Core 엔진을 각 플랫폼/언어에서 사용할 수 있도록 감싸는 바인딩 라인업입니다.
+엔진을 각 플랫폼·미들웨어에서 사용할 수 있도록 감싸는 라인업입니다.
 
 - [SDK 개요](../sdk/overview.md)
-- 제공: Web, Unity, Unreal Engine
-- 예정: Python
+- 게임 엔진: [Unity](../sdk/unity.md), [Unreal Engine](../sdk/ue.md)
+- 오디오 미들웨어: [FMOD](../sdk/fmod.md), [Wwise](../sdk/wwise.md)
+- 웹: [soundtrace.js](../sdk/web.md)
+- 예정: [Python](../sdk/python.md)
 
 ## ExaTools
 

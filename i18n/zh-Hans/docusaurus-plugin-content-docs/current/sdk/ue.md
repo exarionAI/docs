@@ -1,174 +1,282 @@
 ---
 title: Unreal Engine
-description: 安装 SoundTracing UE5 插件，并配置音频集成、HRTF、GPU 传播、材质预设和示例占位内容。
+description: SoundTracing UE5 插件 0.3.0（SimpleST ABI 6）的安装、Project Settings、听者/声源/对象组件、Native/FMOD/Wwise 集成模式、平台链接约定。
 ---
 
 # SoundTrace SDK for Unreal Engine
 
-UE5 SDK 通过 Unreal Audio Extension 插件和 Actor Component 连接
-[STCoreV2](../core/stcorev2.md)。当前源项目面向 Unreal Engine 5.6，
-并包含原生 Unreal Audio、FMOD 和 Wwise 集成的选择路径。
+SoundTracing UE5 插件通过 Unreal Audio Mixer 的 Spatialization 插件 + 子混音（submix）以及
+Actor Component 连接 [SimpleST](../core/simplest.md)。从 0.3.0 起，引擎由 STCoreV2 换成了
+**SimpleST 2.12.0 / ABI 6**；如果项目中存在 FMOD 或 Wwise 插件，同一份源码会以挂接到该中间件
+SimpleST 插件的**集成模式**构建。
 
 ## 当前状态
 
-| 项目 | 状态 |
+| 项目 | 内容 |
 |---|---|
-| 引擎 | Unreal Engine 5.6 |
-| 插件 | `Plugins/SoundTracing` |
-| 声明的目标平台 | Win64、macOS、Linux、Android、iOS |
-| 当前检出中包含的预构建二进制 | Win64 Release |
-| 演示场景 | 三个文档占位场景；尚未包含场景资源 |
-
-其他目标平台需要发行包中提供对应的 STCoreV2 二进制文件。
+| Engine | Unreal Engine 5.6（5.7 已验证） |
+| Plugin | `Plugins/SoundTracing` 0.3.0（`SoundTracing` 运行时 + `SoundTracingEditor` 模块，依赖 Niagara） |
+| 支持平台 | Win64、Mac、Linux、Android、IOS |
+| 分发 | `SoundTracing-release.zip`（插件 + 独立 Python 安装器） |
+| 引擎二进制 | `ThirdParty/SimpleST/Binaries/<Plat>/<Config>/` — 仅 UE Debug 使用 SDK Debug，其余使用 Release |
+| Demo scene | 3 个文档占位内容。尚未包含发行 scene |
 
 ## 安装
 
-1. 关闭项目。
-2. 将 `Plugins/SoundTracing` 复制到目标项目的 `Plugins/` 目录。
-3. 打开 `.uproject` 并启用 `SoundTracing` 插件。
-4. 重启编辑器并完成模块编译。
-5. 打开 `Project Settings > Plugins > SoundTracing`。
+在有 Python 3.9+ 的环境中运行安装器。它会把所有包含的平台安装到项目的 `Plugins/SoundTracing`，
+并把现有插件保留到 `.simplest-backups/`。不会修改项目设置。
+
+```bash
+python3 install.py /path/to/Game.uproject
+python3 install.py /path/to/Game.uproject --dry-run
+```
 
 ```text
 YourProject/
 └─ Plugins/
    └─ SoundTracing/
-      ├─ Content/
-      ├─ Source/
-      └─ ThirdParty/
+      ├─ Content/           Niagara 路径可视化、Material Preset Library
+      ├─ Source/            SoundTracing · SoundTracingEditor
+      └─ ThirdParty/SimpleST/
+         ├─ Include/SimpleST/ABI/
+         ├─ Binaries/<Plat>/<Config>/
+         └─ Resources/HRTF/
 ```
 
-## Unreal Audio 设置
+安装后在 `.uproject` 中启用 `SoundTracing` plugin，重启 editor 完成 module compile。
+安装内容仅包含 UE 封装源码、资源、公开 C ABI 头文件、各平台引擎二进制、HRTF 和许可证。
 
-为每个目标平台选择：
+## 集成模式 — Native / FMOD / Wwise
+
+![集成模式选择](/img/ue/integration-mode.png)
+
+`SoundTracing.Build.cs` 根据 `.uproject` 中启用的插件选择集成方式
+（按 `Wwise` → `FMODStudio` → Native 的顺序，可用环境变量
+`SOUNDTRACING_UNREAL_INTEGRATION=native|fmod|wwise` 强制指定）。组件在三种模式下的名称和用法相同。
+
+| | Native | FMOD | Wwise |
+|---|---|---|---|
+| SimpleST 上下文与渲染 | SoundTracing（UE Audio Mixer Spatialization + 子混音） | `SimpleSTFmod`（Source/Listener DSP） | `SimpleSTWwise`（Sound-tracing Renderer） |
+| SoundTracing 负责的内容 | 全部 | 仅几何体、材质、可视化、统计 | 相同（`sceneRatio = 0.01`，通知 Unreal 坐标轴） |
+| 听者 | UE 听者 / `ListenerComponent` | FMOD 听者 0 | Wwise 听者 |
+| 引擎 DLL 位置 | `ThirdParty/SimpleST/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
+
+在 FMOD/Wwise 模式下，`ListenerComponent` 的输出设置（HRTF、输出模式）和 Source Settings 资源
+不会被使用 — 由中间件插件的参数承担这些职责。
+
+### FMOD 模式安装
+
+```bash
+python3 install.py /path/to/Game.uproject --fmod <fmod/plugins 文件夹>
+```
+
+`--fmod` 把 `SimpleSTFmod`、`SimpleSTRealtime`、HRTF 复制到 `Plugins/FMODStudio/Binaries/<Plat>/`，
+并在 `Config/DefaultEngine.ini` 中加入 `+PluginFiles=SimpleSTFmod`（= Project Settings › FMOD Studio ›
+Plugin Files）。之后在 FMOD Studio 中，在主总线上放置 SimpleST Listener，在 3D 事件的主轨道上放置
+SimpleST Source — 参见 [FMOD 插件](./fmod.md)。
+
+![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
+
+### Wwise 模式安装
+
+```bash
+python3 install.py /path/to/Game.uproject --wwise <wwise/SDK 文件夹>
+```
+
+SoundTracing 在模块启动时获取插件，设置 `sceneRatio = 0.01`（Wwise Unreal 单位 = cm），
+并通过 `SimpleSTWwise_SetWorldAxes(UNREAL)` 通知 Unreal 坐标轴（+Z 向上）。这是因为
+Wwise for Unreal 2024.1+ 会不经坐标轴转换直接传递位置 — 参见 [Wwise 插件](./wwise.md)。
+
+![UE Wwise 安装结果](/img/wwise/ue-install.png)
+
+## Unreal Audio 设置（Native 模式）
+
+在每个 target platform 的 Audio 设置中选择以下 plugin。
+
+![Audio 插件设置](/img/ue/audio-plugin-settings.png)
 
 ```text
 Spatialization Plugin: SoundTracing
 Source Data Override Plugin: SoundTracing
 ```
 
-示例项目使用 48 kHz、1024 帧回调和一个排队缓冲区。调优前应先使用当前项目的音频
-预算验证功能。
+Audio Mixer Sample Rate 可以是任意值。SimpleST 以 44.1 kHz 运行并转换到设备采样率
+（44.1 kHz 时跳过转换）。
 
-## 最快设置
+## Project Settings › Plugins › SoundTracing
 
-### 1. Project Settings
+![Project Settings](/img/ue/project-settings.png)
 
-开始时只决定：
+| 类别 | 项目 | 默认值 | 说明 |
+|---|---|---:|---|
+| Runtime | `Max Compute Threads` | `0` | SimpleST 计算线程上限。0 = auto（min(性能核数, 6)）。需要重启 |
+| Runtime | `Prefer Performance Cores` | `true` | 把传播 lane 和计算池固定到性能核（关闭 Windows 11 EcoQoS）。混合架构 CPU 推荐 |
+| Runtime | `Render Mode` | `Buffered` | `Buffered`（SimpleST 渲染线程填充环形缓冲，回调只复制，约 3 块延迟）/ `In Callback`（在 Unreal 音频回调内渲染，最低延迟） |
+| Runtime | `Max Delay Seconds` | `0` | 渲染器保留的最大路径延迟。0 = 引擎默认 2 s |
+| Runtime | `Dry Fallback When Unavailable` | `true` | 运行时不存在或失败时，声源以 dry 播放而非静音 |
+| Runtime | `Output Submix Parent` | 空 | 空间化输出子混音的父级 |
+| Propagation | `Reflection Update Interval (ms)` | `33` | 反射/绕射 lane 的最小周期。它占传播成本的大部分，要回收 CPU 就提高此值。0 = 无限制 |
+| Propagation | `Direct Update Interval (ms)` / `Reverb Update Interval (ms)` | `10` / `4` | direct、reverb lane 的最小周期 |
+| Propagation | `Acceleration Structure` | `TinyBVH` | BinnedSAH / HybridKD / TinyBVH / LBVH / LBVH SIMD |
+| Propagation | `Static Rebuild Delay Seconds` | `0.1` | 把静态几何体变更合入静态加速结构前的等待时间（用于 level streaming 批处理） |
+| Listener | `Default Listener Settings` | — | 下面的听者设置结构体 |
+| Sources | `Source Ray Resolution Cap` / `Source Ray Depth Cap` | `0` / `0` | 所有声源资源的 transport ray 网格与深度上限。0 = 按资源值 |
+| Materials | `Material Preset Library` | 空 | 启动时注册到 SimpleST 的库。为空时使用插件随包库 |
 
-- HRTF：`Band8` 或 `Parametric`
-- 是否请求 GPU 传播
-- 默认启用的路径
+## 听者设置（`FSoundTracingListenerSettings`）
 
-保持射线分辨率、深度和 Early Path 预算的默认值。
+![听者设置](/img/ue/listener-settings.png)
 
-### 2. 声源设置资源
+项目默认值放在 Project Settings 中，按关卡的 override 放在 `USoundTracingListenerComponent` 上。
 
-在 Content Browser 中创建可复用的 `SoundTracing Audio Spatialization Settings`
-资源。将共享资源作为预设使用，不要逐个编辑 Audio Component。
+| 类别 | 项目 | 默认值 | 选项 / 说明 |
+|---|---|---:|---|
+| Quality Preset | `Quality Preset` | `Balanced` | `Custom`（保留字段）/ `Fast`（12×12，深度 4）/ `Balanced`（16×16，深度 8 = 引擎默认）/ `Quality`（24×24，深度 8） |
+| Listener Rays | `Ray Resolution` / `Ray Depth` | `16` / `8` | guide ray N×N（`4..64`），反射最大阶数（`1..16`）。仅 Custom 时可编辑 |
+| Listener Rays | `Ray Sampling` | `FibonacciSphere` | LegacyGrid / FibonacciSphere / EqualAreaGrid / SobolSphere / Icosahedral |
+| Output | `Output Mode` | `Headphones` | `Headphones`（双耳 HRIR）/ `Speakers (HOA decode)` / `Stereo Panning` |
+| Output | `HRTF Dataset` | `SADIE II D2 KEMAR` | SADIE II D2（8,802 方向 · 256 tap，插件随包）/ MIT KEMAR（128 tap，引擎内置） |
+| Output | `Speaker Layout` | `Stereo 2.0` | Stereo 2.0 / Laptop Stereo 2.0 / 2.1 / 4.1 / 5.1 / 7.1 |
+| Output | `Early Reflections` | `Hybrid Ambisonic Bed` | 仅 Headphones、Stereo Panning。`Objects` 用于基准试听 — 8 个声源的大厅中每块 16.8 ms（上限 11.6 ms），Hybrid 2.4 ms |
+| Render | `Doppler` / `Doppler Gain` | `true` / `Off` | 可变延迟音高 / 运动单极子辐射增益 |
+| Render | `Late Reverb` / `Late Reverb Coupling` | `true` / `Default` | FDN16 / Off · Subtle 6 dB · Default 9 dB · Strong 12 dB |
+| Render | `Path Fade Time Seconds` | `0.05` | 路径出现/消失的交叉淡化 |
+| Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak |
+| Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 63 ~ 16k Hz 9 频段 ±24 dB |
+| Paths | `Enable Direct/Transmission/Reflection/Diffraction/Reverb Path` | 全部 `true` | 全局路径门控 |
+| Acoustics | `Propagation Delay` / `Direct Occlusion` | `true` / `true` | 关闭后分别为：所有路径与直达声同时到达 / 直达声穿过几何体 |
+| Acoustics | `Reference Distance Meters` / `Min Distance Meters` | `1.0` / `1.0` | 物理 `1/r` 衰减的起始距离 / 近距离钳制 |
+| Air Absorption | `Air Absorption Enabled`, `Temperature Celsius`, `Relative Humidity Percent`, `Pressure Pa` | `true`, `20`, `50`, `101325` | ISO 9613-1。声速由温度推导 |
 
-| 预设资源 | 用途 |
+### `USoundTracingListenerComponent`
+
+可选组件。即使没有它，插件也会用项目默认听者设置和音频设备听者 transform 运行。
+把它挂到 Pawn 或相机上，可提供按关卡的 override 或直接供给 transform。
+
+| 项目 | 说明 |
 |---|---|
-| `ST_Source_Fast` | 大量同时播放的声源或背景声源 |
-| `ST_Source_Middle` | 普通游戏声源 |
-| `ST_Source_Quality` | 主角声源和质量优先演示 |
+| `Override Project Listener Settings` / `Listener Settings` | 用上述结构体覆盖项目默认值 |
+| `Drive Listener Transform` | 把此组件的 world transform 和速度传给 SimpleST，代替音频设备听者 |
+| `ApplyListenerSettings()`, `SetQualityPreset()`, `SetHrtfDataset()`, `SetOutputMode()`, `SetSpeakerLayout()` | 在 Blueprint 中运行时更改 |
+| `ResetMotionState()` | 传送、重生后防止 Doppler 尖峰 |
 
-当前插件公开了高级声源属性，但大多数项目只需要修改强度、路径启用标记和衰减覆盖。
+## 声源设置资源（`USoundTracingSourceSettings`）
 
-### 3. Audio Component
+![Source Settings 资源](/img/ue/source-settings-asset.png)
 
-将共享的 SoundTracing 设置资源分配给 Audio Component，或分配到 Sound Attenuation
-的 Spatialization Plugin Settings。
+在 Content Browser 中创建 `SoundTracing Source Settings` 资源，并连接到 Audio Component 或
+Sound Attenuation 的 spatialization plugin settings。请按用途把共享资源当作 preset 使用。
 
-### 4. 几何体
-
-将 `SoundTracingObjectComponent` 作为目标 `StaticMeshComponent` 或
-`SkinnedMeshComponent` 的直接子组件添加。当前实现使用它的直接父网格。
-
-### 5. 材质
-
-运行 `Sync Materials From Parent`，将渲染材质名称映射到 SoundTrace 材质预设，
-然后只修正不匹配的槽。
-
-## HRTF
-
-主要指南使用两种模式。
-
-| 模式 | 行为 |
+| preset asset | 用途 |
 |---|---|
-| `Band8` | 不需要外部 HRTF 资源的轻量渲染 |
-| `Parametric` | 使用 KU100 参数表的测量型渲染 |
+| `ST_Source_Fast` | 大量同时声源、背景 source |
+| `ST_Source_Balanced` | 普通 gameplay source |
+| `ST_Source_Quality` | 主角声源、质量优先 demo |
 
-源码还包含高级 `Convolution` 和 `SteamAudio` 模式。只有在发行包已经验证相应资源和
-平台二进制文件后才应使用。
+| 类别 | 项目 | 默认值 | 说明 |
+|---|---|---:|---|
+| Attenuation | `Preserve Unreal Attenuation` | `false` | 开启后保留 Unreal 距离衰减（通常关闭 — 由 SimpleST 做物理衰减） |
+| Attenuation | `Disable Unreal Reverb Sends` | `false` | 阻断 Unreal 混响发送 |
+| Emission | `Gain Boost Db` | `0` | 输入电平（±24 dB） |
+| Emission | `Direct/Reflection/Diffraction/Reverb Send Db` | `0` | SimpleST path volume |
+| Emission | `Directivity` | `0` | 0 全指向 ~ 1 心形 |
+| Reverb Rays | `Ray Preset` | `Balanced` | `Fast`（8×4，深度 3）/ `Balanced`（16×8，深度 4 = 引擎默认）/ `Quality`（24×12，深度 6）/ `Custom` |
+| Reverb Rays | `Ray Resolution` / `Ray Depth` | `16` / `4` | N×N/2 transport ray，深度。仅 Custom 时可编辑 |
+| Reverb Rays | `Transport Refresh Steps` | `0` | 把传输网格分成 n 次传播更新（0 = 引擎默认） |
+| Reverb Rays | `Stationary Emitter` | `false` | 不移动的发射器提示 |
+| Per-Path Enable | `Direct/Transmission/Reflection/Diffraction/Reverb Path Enabled` | 全部 `true` | 逐声源路径门控 |
+| Bypass | `Bypass` | `false` | 不经过 SimpleST 直接通过 |
 
-## GPU 后端
+## 几何体（`USoundTracingObjectComponent`）
 
-启用 `bEnableGpuPropagation` 会请求初始化 GPU Provider。
+![Object Component](/img/ue/object-component.png)
 
-- 初始化成功后使用 GPU 传播。
-- 缺少 Export、设备或后端时继续使用 CPU。
-- Win64 包必须包含 `webgpu_dawn.dll`。
-- GPU 部署应使用兼容的 LBVH 系列几何体配置。
+作为要用作声学 geometry 的 `StaticMeshComponent` 或 `SkinnedMeshComponent` 的**直接 child** 添加。
+使用相同网格 asset、LOD 和材质排列的对象共享一个 SimpleST 网格。
 
-通过 Output Log 中的 `SoundTracing GPU propagation enabled` 或 CPU 回退警告确认
-实际运行路径。
+| 项目 | 默认值 | 说明 |
+|---|---:|---|
+| `Acoustic Mobility` | `Auto` | `Auto`（跟随父级 Mobility）/ `Static`（静态加速结构，移动时重建）/ `Movable`（动态实例，每个传播周期应用变换） |
+| `Sound Material Slots` | — | 渲染材质槽 → `Sound Material Type`（preset index）。`Auto Set Materials` 按钮按名称和别名自动排列 |
+| `Skinned Pose Refresh Seconds` | `0` | 仅蒙皮父级。SimpleST 没有 vertex refit，因此每隔此周期**构建新网格**替换。0 = 保持注册时的姿态 |
+| `Auto Register Native Object` / `Sync Transform On Tick` / `Auto Sync Materials` | `true` | 高级 |
+| Debug: `Visualize Acoustic Mesh`, `Visualize BVH`（+ `BVH Depth`, `BVH Leaves Only`） | 关闭 | 选中时在编辑器中显示上传的三角形和加速结构节点包围盒 |
 
-## 材质预设
+专用服务器会跳过注册。在 Blueprint 中可调用 `RegisterNativeObject`、`UnregisterNativeObject`、
+`SyncNativeTransform`、`RefreshNativeMesh` 以及材质槽 get/set。
 
-插件内容包含默认 `SoundTraceMaterialPresetLibrary`。
-`SoundTracingObjectComponent` 将渲染材质名称和别名映射到预设。优先使用内置预设；
-直接编辑 8 频段反射、吸收、透射和散射值时，应建立独立的自定义库。
+## Material preset
 
-## 对象更新
+插件 content 中的 `SoundTraceMaterialPresetLibrary` 提供 BRAS 24 种 9 频段 preset。
+`Sound Material Slots` 根据 render material 名称和 alias 选择最接近的 preset。直接编辑 9 频段
+reflection、absorption、transmission、scattering 的工作，请仅限于创建了单独 Material Preset Library
+asset 的情况。每个频段必须满足 `R + A + T = 1`（±0.001）。
 
-| 模式 | 用途 |
-|---|---|
-| `Static` | 不移动的关卡几何体 |
-| `Dynamic` | 仅 Transform 移动的门和道具 |
-| `Refit` | 顶点姿态变化的蒙皮网格 |
-| `Rebuild` | 拓扑变化的几何体 |
+## Path visualization
 
-## 路径可视化
+![Path Visualizer](/img/ue/path-visualizer.png)
 
-添加 `SoundTracingPathVisualizerComponent` 可以显示基于 Niagara 的路径线段。
-这是调试／演示功能，正式性能测量时应禁用。
+在 Actor 上添加 `SoundTracingPathVisualizerComponent`，即可显示基于 Niagara 的 path segment。
+可以调整各路径类型（Direct、Reflection、Diffraction、Reverb、Transmission、GuideRay）的颜色、
+最大路径数、线宽和 alpha。它用于调试和演示，在 shipping 性能测量中应禁用。
 
-## 演示场景占位内容
+## 统计（`USoundTracingSubsystem`）
 
-当前检出不包含以下三个演示资源。这些章节保留了未来场景发布后要接入的文档结构。
+可在 Blueprint 中读取的 World Subsystem — 集成模式、场景网格/对象/声源/三角形数、有效路径数、
+各 lane 的传播/IR/渲染时间（ms）、渲染块统计（active sources、exact/send taps）。
+
+## 平台链接约定
+
+| UE 平台 | SDK 路径（`Binaries/` 之下） | 链接 |
+|---|---|---|
+| Win64 | `Win64/<Config>/SimpleSTRealtime.dll` | 运行时 export 绑定 |
+| Mac | `Mac/<Config>/libSimpleSTRealtime.dylib` | Universal，运行时绑定 |
+| Linux | `Linux/<Config>/libSimpleSTRealtime.so` | x86_64，运行时绑定 |
+| Android | `Android/<ABI>/<Config>/libSimpleSTRealtime.so` | 通过 UPL 复制到 APK 各 ABI 文件夹。HRTF 从 UFS 提取 |
+| IOS | `IOS/device` 或 `IOS/simulator` 下的 `<Config>/libsimplest_static.a` | 静态链接，直接函数指针绑定 |
+
+仅 UE Debug 使用 SDK Debug，Development/DebugGame/Shipping 使用 Release。缺失时在 UBT 阶段报错。
+在中间件插件静态链接的 iOS 和 Web 上，FMOD/Wwise 模式尚不支持（桌面 Win64 已验证，
+Mac/Linux 为相同代码路径）。
+
+## Demo scene placeholder
+
+当前 SDK checkout 不包含以下三个文档用 demo scene。它们是实际 asset 加入后按照 Unity 文档相同模式
+接入的位置。
 
 ### SampleScene01 — Basic Room
 
-:::note 占位内容
-基本声源、监听器、静态房间几何体、材质预设和直达／反射路径。
+:::note Placeholder
+用于说明基础 source、listener、static room geometry、material preset、direct/reflection path 的 scene。
 :::
 
 ### SampleScene02 — Material and Dynamic Door
 
-:::note 占位内容
-共享声源预设、材质变化、动态门遮挡和 CPU/GPU 比较。
+:::note Placeholder
+用于说明 shared source preset、material 变更、Movable door 遮挡、Buffered/In Callback 渲染模式对比的 scene。
 :::
 
 ### SampleScene03 — Multiroom
 
-:::note 占位内容
-多声源、房间切换、绕射／透射和 HRTF 方向。
+:::note Placeholder
+用于说明多个 source、room 移动、diffraction/transmission、HRTF 方向感、late reverb coupling 的 scene。
 :::
 
 ## 故障排除
 
 | 症状 | 检查项 |
 |---|---|
-| 选择器中没有插件 | 插件启用状态、模块编译和平台 Audio 设置 |
-| 原生库加载失败 | `ThirdParty/STCoreV2` 下的目标平台二进制和已打包依赖项 |
-| 声源未空间化 | Audio Component 是否分配了 SoundTracing 声源设置资源 |
-| 几何体被忽略 | Object Component 的直接父级是否为支持的网格组件 |
-| GPU 回退到 CPU | GPU Provider／Export／设备以及 `webgpu_dawn.dll` 打包 |
-| 路径不可见 | Visualizer Component、Niagara 插件和路径启用状态 |
+| plugin 不在选择列表中 | plugin enable、module compile、target platform Audio 设置 |
+| native library load 失败 | `ThirdParty/SimpleST/Binaries` 中各 target 的 binary、Config（Debug/Release）是否匹配 |
+| 集成模式与预期不同 | `.uproject` 中 Wwise/FMODStudio 插件的启用状态、`SOUNDTRACING_UNREAL_INTEGRATION` |
+| FMOD/Wwise 模式下声音未空间化 | FMOD Studio / Wwise 项目侧的 SimpleST DSP 配置、运行时 READY 状态（Output Log） |
+| source 未空间化（Native） | Audio Component 是否连接了 SoundTracing Source Settings asset |
+| geometry 未生效 | Object Component 的 immediate parent 是否为支持的 mesh component、`Acoustic Mobility` |
+| 渲染块超时（音频断续） | `Early Reflections = Hybrid`、提高 `Reflection Update Interval`、降低 Quality Preset |
+| 看不到 path | visualizer component、Niagara plugin、path enable 状态 |
 
-## 下一步
+## 后续文档
 
-- [Unity SDK](./unity.md)
-- [Web SDK](./web.md)
-- [STCoreV2](../core/stcorev2.md)
+- [FMOD 插件](./fmod.md) · [Wwise 插件](./wwise.md)
+- [Unity SDK](./unity.md) · [Web SDK](./web.md)
+- [SimpleST](../core/simplest.md)

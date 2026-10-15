@@ -1,130 +1,114 @@
 ---
 title: Performance Guide
+description: The performance axes of SimpleST-based integrations — ray budget, lane intervals, Hybrid early reflections, render modes, threads, and the metrics to measure.
 ---
 
-# Web SDK Performance Guide
+# Performance Guide
 
-In soundtrace.js, raising ray count, depth, source count, and geometry/BVH
-settings can improve path stability and spatial impression. The same settings
-also raise propagation time, memory use, main-thread frame time, and
-AudioWorklet load.
-
-This guide is the reference an SDK integrator uses when choosing options. The
-presets below are starting points; the recommended source counts and
-platform-specific limits will be replaced with measured tables once
-measurement is complete.
+In SimpleST, raising the listener guide rays, source transport rays, reflection depth, source count,
+and geometry size makes paths more stable and improves the sense of space, but propagation time and
+the per-block audio render cost rise with them. This document summarizes the cost axes and starting
+points shared by the Web, Unity, UE, FMOD, and Wwise integrations.
 
 ## Fixed runtime contract
 
 | Item | Current contract |
 |---|---|
-| Listener | 1 per scene |
-| Realtime output | Stereo/binaural, 2ch |
-| Audio render path | WASM `AudioWorkletProcessor` on both ST and MT |
-| Multi-source audio | `source.play(input, 2)` per source (facade) / `createWorkletNode()` for ST direct-native |
-| Native source cap | 16 sources (`EXA_MAX_SOUNDSOURCE`) |
-| Ray depth ceiling | 16 (`EXA_MAX_DEPTH`) |
-| Default quality preset | `quality: 'balanced'` = listener rays `24 x 24`, depth `8` |
-
-`16` is the native cap — the maximum number of sources that can exist in one
-scene at a time. The realtime source count you recommend to customers has to be
-measured separately within that cap, per platform, geometry size, ray budget,
-BVH, and ST/MT mode.
-
-The listener ray grid and depth set by each quality preset:
-
-| Preset | Listener rays | Depth |
-|---|---|---|
-| `fast` | `16 x 16` | `4` |
-| `balanced` (default) | `24 x 24` | `8` |
-| `quality` | `32 x 32` | `12` |
+| Listener | 1 per real-time context |
+| Output | Binaural/panning 2ch, or N channels for a speaker layout (HOA3 decode) |
+| Engine sample rate | Fixed 44.1 kHz; host rates go through the built-in resampler |
+| Render block | 512 frames (≈11.6 ms @ 44.1 kHz) — the per-block render cost must stay within this budget to avoid dropouts |
+| Concurrent source streams | 64 (excess sources go dry or fail to create) |
+| Max reflection depth | 16 · transmission 64 |
+| Default guide rays / depth | `16 × 16` / 8 (global), per-source depth 4 |
+| Default transport rays | `16 × 8` |
+| Compute threads | `maxComputeThreads = 0` → min(performance cores, 6) |
 
 ## Key options and trade-offs
 
 | Option | Quality effect | Performance effect |
 |---|---|---|
-| Listener ray width/height | Better path discovery and directional stability at the listener | Propagation cost grows with the ray grid area |
-| Listener depth | Allows deeper reflection/diffraction/reverb paths | More path search and cache pressure |
-| Source reverb ray width/height | Better source-side late reverb coverage and material response stability | Cost grows with source count and ray grid area |
-| Source reverb depth | Deeper source-side late reverb tracing | Path search and cache pressure grow with depth |
-| Source count | More simultaneously spatialized emitters | Higher propagation and AudioWorklet mixer cost |
-| BVH type | Changes traversal/build characteristics | Build/refit/traversal cost varies with geometry and update style |
-| BVH max depth | Controls tree depth | Too shallow wastes traversal; too deep costs build time and memory |
-| Prims per leaf | Controls triangles per leaf | The traversal/build balance point depends on scene structure |
-| Animated/refit geometry | Reflects moving colliders | Higher refit/rebuild cost; measure separately as a stress item |
-| Thread mode | MT can distribute propagation jobs across worker threads | Requires cross-origin isolation; adds thread/memory overhead |
+| Listener guide rays (N×N) | Reflection/diffraction path discovery and directional stability | Reflection/diffraction lane cost grows with the grid area |
+| Reflection depth | Allows higher-order reflections and mixed diffraction paths | More path search and more IR taps |
+| Source transport rays (W×H) × depth | Stability of the late reverb room response and material response | Proportional to source count × grid × depth |
+| Source count | Emitters spatialized at the same time | Propagation + render (tap count) cost |
+| Early reflection mode | Objects = individual HRTF per path, Hybrid = budget + HOA3 bed | **Objects grows the render block in proportion to the path count** |
+| Reflection lane interval | Longer = early reflections follow listener movement later | The largest propagation CPU saving |
+| Render mode | Buffered ≈3 blocks of latency / In Callback lowest latency | In Callback puts the render cost on the host audio thread |
+| HRTF dataset | SADIE D2 (256 taps) > MIT KEMAR (128 taps) resolution | Convolution cost proportional to tap length |
+| Dynamic object count | Reflects moving occluders | Dynamic TLAS rebuild cost |
 
-## Reverb ray budget
+## Early reflections: use Hybrid
 
-Reverb rays are not a copy of the listener rays. Source-side late reverb costs
-scale as `source count × width × height × depth`, so production defaults are
-raised per scene separately from the listener rays. The QA sweep uses sources
-`[4, 8, 12, 16]`, general and reverb rays each stepping through `4 x 4 x 3`,
-`8 x 8 x 7`, `16 x 16 x 11`, `32 x 32 x 16`, and path cache `[256, 512, 1024]`.
+Render block cost measured in a reverberant hall (Sibenik) with 8 sources.
+
+| Mode | Exact objects | Block cost | Verdict |
+|---|---:|---:|---|
+| Objects | ≈650 | 16.8 ms | Exceeds the 11.6 ms budget — dropouts |
+| Hybrid | ≈33 | 2.4 ms | Pass |
+
+Hybrid renders only a listener-global budget (reflection 12+4 · diffraction 3+1) as exact objects
+and collects the rest into an HOA3 bed. With HRTF and multiple sources there is a level difference
+of about −1 ~ −2 dB. Every official integration applies Hybrid by default; Objects is for reference
+listening and offline A/B.
+
+## Quality presets (per integration)
+
+| Integration | Fast | Balanced / Middle | Quality |
+|---|---|---|---|
+| Web (`quality`) | 8×8, depth 4 | 16×16, depth 6 | 24×24, depth 8 |
+| Unity Listener | 16, depth 4 | 24, depth 8 | 32, depth 12 |
+| UE Listener | 12×12, depth 4 | 16×16, depth 8 | 24×24, depth 8 |
+| UE Source (transport) | 8×4, depth 3 | 16×8, depth 4 | 24×12, depth 6 |
+
+On Web the source transport rays follow the same values. Unity source transport rays default to
+24 / depth 4.
 
 ## Starting presets
 
-Until the measured tables are filled in, use these as starting points and adjust
-against your target FPS and perceived quality.
+| Situation | guide rays | transport rays | Depth | Reflection lane interval | Notes |
+|---|---|---|---|---|---|
+| Mobile / Web with many sources | 8×8 ~ 12×12 | 8×4 ~ 8×8 | 4 | 33 ~ 66 ms | Fast preset |
+| Desktop game | 16×16 | 16×8 | 8 | 33 ms (UE default) ~ 0 | Balanced |
+| Quality demo | 24×24 ~ 32×32 | 24×12 | 8 ~ 12 | 0 ms | Quality, ≤ 8 sources |
 
-| Preset | Thread | Listener rays | Reverb rays | Depth | BVH | Use for | Measurement status |
-|---|---|---:|---:|---:|---|---|---|
-| Mobile conservative | ST | `16 x 16` | `4 x 4` or `8 x 8` | `4` | LBVH or platform default | Mobile minimum baseline | Measurement pending |
-| Desktop balanced | ST or MT | `24 x 24` | `8 x 8` | `8` | LBVH_SIMD8 | Desktop default baseline | Measurement pending |
-| Desktop quality | MT | `32 x 32` | `16 x 16` | `12` | LBVH_SIMD8 | Quality-first desktop | Measurement pending |
-| Stress only | MT | `32 x 32` | `32 x 32` | `7..16` | BVH matrix | Limit measurement only | Not a realtime default |
+If the sense of space is weak, do not add sources first; raise guide rays, transport rays, and
+depth separately, step by step, and check. If performance is short, adjust in this order:
+(1) confirm Hybrid → (2) lower the quality preset → (3) raise the reflection lane interval →
+(4) disable path visualization.
 
-> **The MT gain is unmeasured and is not automatically faster.** The speed gain
-> of the MT presets above is still `Measurement pending`. MT distributes
-> propagation jobs to a worker, so the gain shows up **when the ray budget and
-> source count are large** (high ray grid/depth, many sources); in small scenes
-> the worker round trip and memory overhead can make ST simpler and faster. MT
-> also carries the deployment cost of cross-origin isolation (COOP/COEP). Start
-> small scenes and simple pages on ST, and choose MT only after **measuring
-> ST vs MT** on a scene with a large budget.
+## Threads and lanes
 
-If the spatial impression is weak, do not raise the source count first. Raise
-the listener rays and the source reverb ray count/depth separately, in steps.
-Measure source-count increases last.
+The PIPELINED scheduler runs the Direct / Reflection-Diffraction / Reverb lanes at independent cadences.
+
+| Lane | Default minimum interval | Meaning |
+|---|---:|---|
+| Direct | 10 ms | Interval between consecutive run starts. Direct sound and transmission — keep it free of dropouts |
+| Reflection-Diffraction | 0 ms (immediate) | Most of the propagation cost. Pending requests collapse into one |
+| Reverb | 4 ms | Interval from run completion to the next run |
+
+The `maxComputeThreads` budget N is at least 3 in PIPELINED (1 audio + 1 dedicated Direct + N−2
+general). On hybrid CPUs, pinning to performance cores with `st_rt_set_thread_attributes` (UE
+`Prefer Performance Cores`) is recommended. Check the actual thread count with
+`st_rt_get_thread_inventory`.
 
 ## Metrics to measure
 
-When publishing numbers in customer documentation, repeat the same scenario
-under the same duration/warmup conditions and publish summaries only, never raw
-logs.
-
-| Group | Metrics |
-|---|---|
-| Browser frame | Average FPS, frame time p50/p95/p99, worst frame, dropped frame count |
-| Main-thread stall | `PerformanceObserver` longtask count/total/worst, where supported |
-| Engine propagation | `scene.tick()` + `scene.updatePropagation()` time p50/p95/p99/worst |
-| Native job timing | Propagation job timing frames, worker distribution/wait time |
-| Path quality | Valid path count average/max, listening notes on material/path changes |
-| Audio | `AudioContext.sampleRate`, `baseLatency`, `outputLatency`, state, setup time |
-| Memory | Native memory trace snapshot, JS heap snapshot |
-| Manual observation | Drop-outs, weak localization, thermals, fan noise, perceived battery drain |
-
-Browser JavaScript alone cannot reliably produce cross-platform power and
-thermal numbers. Do not treat power and thermals as automatic measurements —
-separate them into manual observation or dedicated instrumentation.
-
-## Measurement matrix
-
-| Matrix | Values |
-|---|---|
-| Baseline | 1 source on ST and MT each, listener `16 x 16 x 3`, source `16 x 8 x 3`, static small geometry |
-| Quality scale | Listener `16 x 16`, `32 x 32`; source reverb `4 x 4`, `8 x 8`, `16 x 16`, `32 x 32`; depth `3`, `7`, `11`, `16` |
-| Source scale | `1`, `2`, `4`, `8`, `12`, `16` sources (native cap `16`) |
-| Reverb ray scale | Sources `[4, 8, 12, 16]`, general ray steps `4 x 4 x 3` → `8 x 8 x 7` → `16 x 16 x 11` → `32 x 32 x 16`, reverb rays on the same steps, path cache `[256, 512, 1024]` |
-| Geometry/BVH | Small/medium/large geometry, HKDtree, LBVH, LBVH_SIMD4/8/16, LBVH_NWAY4/8/16 |
-| Stress only | Animated/refit, rebuild-heavy, native source cap, high ray budget |
+| Group | Metric | Source |
+|---|---|---|
+| Propagation | Per-lane ms (direct / reflDiff / reverb), IR build ms | `st_rt_get_timing` (Web `debugSnapshot().simplest.timing`, UE Subsystem) |
+| Render block | `totalUs`, per-stage µs (sourceInput / exactTaps / bed / send / late / output), activeSources, exactTaps, sendTaps | `st_rt_render_get_process_stats` |
+| IR publish | publishSequence cadence, bed cell count, prepare CPU/wall ratio (preemption vs. slow cores) | `st_rt_ir_get_stats` |
+| Scene | Mesh, object, source, triangle counts | `st_rt_scene_get_stats` |
+| Audio input | queued / capacity / dropped / underrun frames | `st_rt_source_get_stream_status` |
+| Latency | Output stage latency (frames) + queue + fixed DSP latency | `st_rt_render_get_latency_frames` |
+| Host | Frame time p50/p95/p99, audio callback overrun count | Platform profiler |
 
 ## Publication rules
 
 | Item | Rule |
 |---|---|
-| Measured values | Publish with platform, browser, SDK commit, STCoreV2 commit, and scenario |
-| Unmeasured values | Do not estimate a number; mark it `Measurement pending` |
-| Source cap | Keep the native cap `16` separate from the recommended source count |
-| Stress results | Present as limit/regression detection, not as realtime recommendations |
-| Raw logs | Never paste into customer docs; publish summary tables and interpretation |
+| Measured values | State the platform, host version, SimpleST commit/version, and scenario together |
+| Unmeasured values | Do not estimate numbers; mark them `Measurement pending` |
+| Stream limit | Separate the engine limit of 64 from the actually recommended source count |
+| Raw logs | Do not paste into customer documents; publish only summary tables and interpretation |

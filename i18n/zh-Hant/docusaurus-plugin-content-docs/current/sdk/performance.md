@@ -1,120 +1,109 @@
 ---
 title: Performance Guide
+description: SimpleST 整合的效能軸線 — 射線預算、lane 週期、Hybrid 早期反射、渲染模式、執行緒、量測指標。
 ---
 
-# Web SDK Performance Guide
+# Performance Guide
 
-在 soundtrace.js 中，提高 ray count、depth、source count 以及 geometry/BVH 設定，
-可以改善聲學路徑的穩定性與空間感。同樣的設定也會同時提高傳播計算時間、記憶體用量、
-主執行緒 frame time 與 AudioWorklet 負載。
+在 SimpleST 中，提高聆聽者 guide ray、音源 transport ray、反射深度、音源數與幾何體規模，
+會讓路徑更穩定、空間感更好，但傳播時間與音訊渲染區塊成本也會隨之上升。
+本文整理 Web、Unity、UE、FMOD、Wwise 整合共通的成本軸線與起點。
 
-本文是 SDK 整合方選擇選項時的效能/品質參考。下列預設為起點；實際建議的 source
-數量與各平台上限，會在測量完成後以數值表更新。
+## 固定執行階段契約
 
-## 固定執行階段合約
-
-| 項目 | 目前合約 |
+| 項目 | 目前契約 |
 |---|---|
-| Listener | 每個 scene 1 個 |
-| Realtime output | stereo/binaural 2ch |
-| 音訊渲染路徑 | ST/MT 皆為 WASM `AudioWorkletProcessor` |
-| Multi-source 音訊 | 每個 source 呼叫 `source.play(input, 2)`（facade）/ ST·direct-native 使用 `createWorkletNode()` |
-| Native source cap | 16 sources（`EXA_MAX_SOUNDSOURCE`） |
-| Ray depth 上限 | 16（`EXA_MAX_DEPTH`） |
-| 預設品質預設 | `quality: 'balanced'` = listener ray `24 x 24`，depth `8` |
-
-`16` 是 native cap，也就是一個 scene 中可同時存在的 source 數量上限。對客戶應用
-建議的即時 source 數，必須在此上限之內，依平台、geometry 規模、ray budget、BVH 與
-ST/MT 模式分別測量。
-
-各品質預設所設定的 listener ray grid 與 depth 如下。
-
-| Preset | Listener ray | Depth |
-|---|---|---|
-| `fast` | `16 x 16` | `4` |
-| `balanced`（預設） | `24 x 24` | `8` |
-| `quality` | `32 x 32` | `12` |
+| 聆聽者 | 每個即時上下文 1 個 |
+| 輸出 | 雙耳／panning 2ch，或揚聲器配置（HOA3 解碼）N 聲道 |
+| 引擎取樣率 | 固定 44.1 kHz，主機取樣率由內建重取樣器轉換 |
+| 渲染區塊 | 512 影格（≈11.6 ms @ 44.1 kHz）— 每區塊的渲染成本必須落在此預算內才不會中斷 |
+| 同時音源串流 | 64 個（超出的音源為 dry 或建立失敗） |
+| 反射最大深度 | 16 · 穿透 64 |
+| 預設 guide ray / 深度 | `16 × 16` / 8（全域），逐音源深度 4 |
+| 預設 transport ray | `16 × 8` |
+| 計算執行緒 | `maxComputeThreads = 0` → min(效能核心數, 6) |
 
 ## 主要選項與取捨
 
 | 選項 | 品質影響 | 效能影響 |
 |---|---|---|
-| Listener ray width/height | 改善以聽者為基準的路徑發現與方向穩定性 | 傳播計算隨 ray grid 面積成比例增加 |
-| Listener depth | 允許更深的 reflection/diffraction/reverb 路徑 | path search 與 cache pressure 增加 |
-| Source reverb ray width/height | 改善 source 側 late reverb 覆蓋與材質反應穩定性 | 成本隨 source 數與 ray grid 面積增加 |
-| Source reverb depth | 增加 source 側 late reverb 的追蹤深度 | depth 越大，path search 與 cache pressure 越高 |
-| Source count | 同時空間化的 emitter 增加 | propagation 與 AudioWorklet mixer 成本增加 |
-| BVH type | 改變 traversal/build 特性 | 依幾何體與更新方式，build/refit/traversal 成本不同 |
-| BVH max depth | 控制樹的深度 | 過淺會使 traversal 沒效率，過深會增加 build/memory 成本 |
-| Prims per leaf | 控制每個 leaf 的三角形數 | 依場景結構，traversal/build 的平衡點不同 |
-| Animated/refit geometry | 反映移動中的 collider | refit/rebuild 成本增加，作為 stress 項目單獨測量 |
-| Thread mode | MT 可將 propagation job 分散到 worker 執行緒 | 需要 cross-origin isolation，執行緒/記憶體開銷增加 |
+| 聆聽者 guide ray（N×N） | 反射與繞射路徑的發現與方向穩定性 | 反射／繞射 lane 成本與格網面積成正比 |
+| 反射深度 | 允許高階反射與混合繞射路徑 | 路徑搜尋與 IR tap 數增加 |
+| 音源 transport ray（W×H）× 深度 | late reverb 的房間響應與材質反應穩定性 | 與音源數 × 格網 × 深度成正比 |
+| 音源數 | 同時空間化的 emitter | 傳播 + 渲染（tap 數）成本 |
+| 早期反射模式 | Objects = 所有路徑各自 HRTF，Hybrid = 預算 + HOA3 bed | **Objects 的渲染區塊與路徑數成正比** 增大 |
+| 反射 lane 週期 | 越長，早期反射跟上聆聽者移動的速度越慢 | 對傳播 CPU 的節省最大 |
+| 渲染模式 | Buffered ≈3 個區塊延遲 / In Callback 最低延遲 | In Callback 的渲染成本落在主機音訊執行緒上 |
+| HRTF 資料集 | SADIE D2（256 tap）> MIT KEMAR（128 tap）的解析度 | 卷積成本與 tap 長度成正比 |
+| 動態物件數 | 反映移動中的遮蔽物 | 動態 TLAS 重建成本 |
 
-## Reverb ray budget
+## 早期反射：請使用 Hybrid
 
-Reverb ray 並不是 listener ray 的複製值。source 側 late reverb 的成本會以
-`source count × width × height × depth` 成長，因此 production 預設值要與 listener
-ray 分開，依場景逐步提高。QA 基準 sweep 為 source `[4, 8, 12, 16]`，general ray 與
-reverb ray 各自經過 `4 x 4 x 3`、`8 x 8 x 7`、`16 x 16 x 11`、`32 x 32 x 16` 階段，
-path cache `[256, 512, 1024]`。
+在有 8 個音源的殘響廳堂（Sibenik）中量測的渲染區塊成本。
+
+| 模式 | exact 物件 | 區塊成本 | 判定 |
+|---|---:|---:|---|
+| Objects | ≈650 | 16.8 ms | 超出 11.6 ms 預算 — 中斷 |
+| Hybrid | ≈33 | 2.4 ms | 通過 |
+
+Hybrid 只將聆聽者全域預算（反射 12+4 · 繞射 3+1）渲染為 exact 物件，其餘彙整到 HOA3 bed。
+在 HRTF 多音源情況下約有 −1 ~ −2 dB 的音量差異。所有官方整合都預設啟用 Hybrid，
+Objects 用於基準聆聽與離線 A/B。
+
+## 品質預設（依整合）
+
+| 整合 | Fast | Balanced / Middle | Quality |
+|---|---|---|---|
+| Web（`quality`） | 8×8，深度 4 | 16×16，深度 6 | 24×24，深度 8 |
+| Unity Listener | 16，深度 4 | 24，深度 8 | 32，深度 12 |
+| UE Listener | 12×12，深度 4 | 16×16，深度 8 | 24×24，深度 8 |
+| UE Source（transport） | 8×4，深度 3 | 16×8，深度 4 | 24×12，深度 6 |
+
+Web 的音源 transport ray 也遵循相同的值。Unity 音源的 transport ray 預設為 24 / 深度 4。
 
 ## 起始預設
 
-在實測表格完成之前，請將下列值作為起點，並依應用的目標 FPS 與聽感品質調整。
+| 情況 | guide ray | transport ray | 深度 | 反射 lane 週期 | 備註 |
+|---|---|---|---|---|---|
+| 行動裝置 / Web 多音源 | 8×8 ~ 12×12 | 8×4 ~ 8×8 | 4 | 33 ~ 66 ms | Fast 預設 |
+| 桌機遊戲 | 16×16 | 16×8 | 8 | 33 ms（UE 預設）~ 0 | Balanced |
+| 品質示範 | 24×24 ~ 32×32 | 24×12 | 8 ~ 12 | 0 ms | Quality，音源 ≤ 8 |
 
-| Preset | Thread | Listener rays | Reverb rays | Depth | BVH | 用途 | 測量狀態 |
-|---|---|---:|---:|---:|---|---|---|
-| Mobile conservative | ST | `16 x 16` | `4 x 4` 或 `8 x 8` | `4` | LBVH 或 platform default | 行動裝置最低基準 | Measurement pending |
-| Desktop balanced | ST 或 MT | `24 x 24` | `8 x 8` | `8` | LBVH_SIMD8 | 桌機基本基準 | Measurement pending |
-| Desktop quality | MT | `32 x 32` | `16 x 16` | `12` | LBVH_SIMD8 | 品質優先桌機 | Measurement pending |
-| Stress only | MT | `32 x 32` | `32 x 32` | `7..16` | BVH matrix | 僅供極限測量 | 非 realtime 預設值 |
+若空間感偏弱，不要先增加音源數，而是把 guide ray 與 transport ray／深度分開、逐級提高並確認。
+效能不足時，依 (1) 確認 Hybrid → (2) 降低品質預設 → (3) 提高反射 lane 週期
+→ (4) 關閉路徑視覺化 的順序調整。
 
-> **MT 的效益尚未測量，並非必然更快。** 上表 MT 預設的速度效益仍是
-> `Measurement pending`。MT 會將 propagation job 分散到 worker，因此效益出現在
-> **ray 預算與 source 數較大時**（高 ray grid/depth、多 source）；在小型場景中，
-> worker 往返與記憶體開銷可能讓 ST 更單純也更快。此外 MT 還有 cross-origin
-> isolation（COOP/COEP）的部署成本。小型場景與簡單頁面請從 ST 開始，在預算較大的
-> 場景中**實測比較** ST↔MT 後再選擇 MT。
+## 執行緒與 lane
 
-若空間感偏弱，請勿先增加 source 數量；應分別、逐級提高 listener ray 與 source
-reverb ray 的 count/depth。source 數量的增加放到最後測量。
+PIPELINED 排程器讓 Direct / Reflection-Diffraction / Reverb lane 以各自獨立的節奏運行。
 
-## 需要測量的指標
+| lane | 預設最小週期 | 意義 |
+|---|---:|---|
+| Direct | 10 ms | 連續執行起點之間的間隔。直達音與穿透 — 維持不出現 dropout |
+| Reflection-Diffraction | 0 ms（立即） | 傳播成本的大部分。等待中的請求會合併為一個 |
+| Reverb | 4 ms | 執行完成後到下一次之間的間隔 |
 
-在客戶文件中提供數值時，請在相同 duration/warmup 條件下重複測量同一 scenario，並且
-只公開彙總值而非 raw log。
+`maxComputeThreads` 預算 N 在 PIPELINED 下至少為 3（音訊 1 + Direct 專用 1 + 一般 N−2）。
+在混合架構 CPU 上建議以 `st_rt_set_thread_attributes`（UE 的 `Prefer Performance Cores`）固定在
+效能核心。實際執行緒數以 `st_rt_get_thread_inventory` 確認。
 
-| 分組 | 指標 |
-|---|---|
-| Browser frame | 平均 FPS、frame time p50/p95/p99、worst frame、dropped frame count |
-| Main-thread stall | `PerformanceObserver` longtask count/total/worst（僅支援的瀏覽器） |
-| Engine propagation | `scene.tick()` + `scene.updatePropagation()` 時間 p50/p95/p99/worst |
-| Native job timing | propagation job timing frame、worker 分散/等待時間 |
-| Path quality | valid path count 平均/最大值、material/path 變化的聽感記錄 |
-| Audio | `AudioContext.sampleRate`、`baseLatency`、`outputLatency`、state、setup time |
-| Memory | native memory trace snapshot、JS heap snapshot |
-| Manual observation | drop-out、定位偏弱、thermal、風扇噪音、體感耗電 |
+## 需要量測的指標
 
-僅靠瀏覽器 JavaScript 很難可靠取得跨平台通用的功耗/thermal 數值。功耗與 thermal
-請勿作為自動測量值確定，應拆分為 manual observation 或專用設備的測量結果。
-
-## 測量矩陣
-
-| Matrix | 值 |
-|---|---|
-| Baseline | ST/MT 各 1 source，listener `16 x 16 x 3`，source `16 x 8 x 3`，static small geometry |
-| Quality scale | listener `16 x 16`、`32 x 32`；source reverb `4 x 4`、`8 x 8`、`16 x 16`、`32 x 32`；depth `3`、`7`、`11`、`16` |
-| Source scale | `1`、`2`、`4`、`8`、`12`、`16` sources（native cap `16`） |
-| Reverb ray scale | source `[4, 8, 12, 16]`，general ray 階段 `4 x 4 x 3` → `8 x 8 x 7` → `16 x 16 x 11` → `32 x 32 x 16`，reverb ray 同階段，path cache `[256, 512, 1024]` |
-| Geometry/BVH | small/medium/large geometry、HKDtree、LBVH、LBVH_SIMD4/8/16、LBVH_NWAY4/8/16 |
-| Stress only | animated/refit、rebuild-heavy、native source cap、high ray budget |
+| 分組 | 指標 | 來源 |
+|---|---|---|
+| 傳播 | 各 lane 的 ms（direct / reflDiff / reverb）、IR 建置 ms | `st_rt_get_timing`（Web `debugSnapshot().simplest.timing`、UE Subsystem） |
+| 渲染區塊 | `totalUs`、各階段 µs（sourceInput / exactTaps / bed / send / late / output）、activeSources、exactTaps、sendTaps | `st_rt_render_get_process_stats` |
+| IR 發布 | publishSequence 節奏、bed 格數、prepare CPU/wall 比率（搶占 vs 慢核心） | `st_rt_ir_get_stats` |
+| 場景 | 網格、物件、音源、三角形數 | `st_rt_scene_get_stats` |
+| 音訊輸入 | queued / capacity / dropped / underrun 影格 | `st_rt_source_get_stream_status` |
+| 延遲 | 輸出端延遲（影格）+ 佇列 + 固定 DSP 延遲 | `st_rt_render_get_latency_frames` |
+| 主機 | 影格時間 p50/p95/p99、音訊回呼超時次數 | 平台分析工具 |
 
 ## 公開準則
 
 | 項目 | 準則 |
 |---|---|
-| 已實測的值 | 一併標註 platform、browser、SDK commit、STCoreV2 commit 與 scenario |
-| 未測量的值 | 不要估算數字，標註為 `Measurement pending` |
-| Source cap | 將 native cap `16` 與實際建議 source 數分開 |
-| Stress 結果 | 作為極限/回歸偵測用途，而非 realtime 建議值 |
+| 已實測的值 | 一併標註平台、主機版本、SimpleST commit 與版本、情境 |
+| 未量測的值 | 不要估算數字，標註為 `Measurement pending` |
+| 串流上限 | 將引擎上限 64 與實際建議音源數分開 |
 | Raw log | 不要原樣放進客戶文件，只公開彙總表與解讀 |

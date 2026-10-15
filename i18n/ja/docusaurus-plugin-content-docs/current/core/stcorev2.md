@@ -1,307 +1,101 @@
 ---
-title: STCoreV2
+sidebar_position: 2
+title: STCoreV2 から SimpleST へ
+sidebar_label: STCoreV2 → SimpleST
+description: 前世代エンジン STCoreV2（exasoundC.h）から現行の SimpleST ABI 6 へ移行する際に変わった概念と API 対応表。
 ---
 
-# STCoreV2
+# STCoreV2 から SimpleST へ
 
-**モジュール式の音響経路探索とlock-freeデータ転送を採用した次世代Sound Tracingコア。**
+**STCoreV2**（`exaSound`、`exasoundC.h` の `exa*` API）は Sound Tracing の前世代コアでした。
+2026 年 10 月をもって、すべての SDK・プラグイン・デモが [SimpleST](./simplest.md) に置き換えられ、
+STCoreV2 の実装は配布されなくなりました。このページは、STCoreV2 統合を持つチームが移行する際に
+確認すべき差分をまとめたものです。
 
-STCoreV2は、メッシュ、材質、リスナー、音源からインパルス応答（IR）と空間オーディオをリアルタイムに合成するC++ライブラリです。
+:::info この URL について
+このページのアドレス（`/core/stcorev2`）は、かつて STCoreV2 リファレンスがあった場所です。リファレンス本文は
+[SimpleST](./simplest.md) に置き換えられました。
+:::
 
-## 概要
+## 変わった概念
 
-| 項目 | 値 |
-|---|---|
-| 基準ブランチ | `feat/lock-free-hybrid-v2-reverb` (lock-free reverb) |
-| 主言語 | C++ (C++17ビルド、C API公開) |
-| ビルドシステム | CMake 3.22+ |
-| プラットフォーム | macOS · Windows · Linux |
-| Webビルド | Emscripten対応 (`EMSCRIPTEN_KEEPALIVE` export) |
-| アクセラレータ | 内蔵BVH **または** External callback（ゲームエンジンBVHなど） |
-| Max Path Depth | **16** (`EXA_MAX_DEPTH`) |
-| テスト | Google Test (unit + benchmark) |
-| 状態 | アクティブ開発 |
-
-## アーキテクチャ
-
-```
-                Scene
-                  │
-                  ▼
-        SceneSnapshot  ── lock-free per-tick snapshot
-                  │       (TripleBuffer · POD · immutable)
-                  ▼
-        ┌─────────────────────────────────────────────┐
-        │  Propagation                                │
-        │   ├ IAccelerator                            │
-        │   │   ├ Internal BVH                        │
-        │   │   └ ExternalAccelerator (callback)      │
-        │   └ Path Modules  (IPathModule)             │
-        │       ├ SpecularReflectionModule            │
-        │       ├ UTDDiffractionModule                │
-        │       ├ DiffuseOffsetModule                 │
-        │       └ StaticReverbModule                  │
-        │       (+ ScatterHandoff, ComparisonReport)  │
-        └─────────────────────────────────────────────┘
-                  │
-                  ▼
-        Auralizator (filter / frequence / HRTF / states)
-                  │
-                  ▼
-              Audio Output
-```
-
-エンジンは大きく4層で構成されます。
-
-- **Scene → Snapshot** — 毎tickのシーン状態をPODベースの`SceneSnapshot`として取得し、`TripleBuffer`を通してpropagation/rendererスレッドへlock-freeで渡します。
-- **Propagation (モジュール式)** — `IPathModule`共通インターフェース上で4種類のモジュールが動作します。モジュールごとにアルゴリズムの差し替えや数値比較が可能です。アクセラレータは内蔵BVHに加え、ホスト側BVHへコールバック委譲できます。
-- **Auralizator** — 追跡済み経路をIRへ合成し、filter、frequency decomposition、HRTFを適用して空間オーディオを生成します。
-- **Audio Output** — チャンネルマッピング後に呼び出し側へ返します。
-
-## モジュール構成
-
-```
-exaSound/
-├── src/
-│   ├── core/                    # engine core
-│   │   ├── EngineConfig         #  engine settings
-│   │   ├── SceneSnapshot         #  immutable per-tick snapshot
-│   │   ├── SnapshotBuilder       #  snapshot builder
-│   │   ├── ExternalAccelerator   #  external BVH callback
-│   │   ├── IAccelerator          #  accelerator abstraction
-│   │   ├── Handle / Ref / FixedPool / PoolAllocator
-│   │   ├── ThreadAffinity / Telemetry
-│   │   └── PropagationResult
-│   ├── propagation/
-│   │   ├── Propagator            #  top-level dispatch
-│   │   ├── RGC                   #  Ray Generation Cluster
-│   │   ├── module/               #  Path Module abstraction
-│   │   │   ├── IPathModule       #   common interface
-│   │   │   ├── PathModuleRegistry
-│   │   │   ├── reflection/       #   SpecularReflectionModule
-│   │   │   ├── diffraction/      #   UTDDiffractionModule
-│   │   │   ├── diffuse/          #   DiffuseOffsetModule
-│   │   │   └── reverb/           #   StaticReverbModule
-│   │   ├── UTDDiffraction.hpp    #  UTD formula
-│   │   └── Ray/                  #  ray and plane utilities
-│   ├── auralizator/              # auralization
-│   │   ├── core / filter / frequence / HRTF / states
-│   ├── scene/
-│   │   ├── SoundObject           #  Object / Mesh / Preprocessing
-│   │   └── BVH                   #  Native BVH/TLAS
-│   ├── math/, utils/, objects/, config/
-│   ├── exasound.h                # C++ main header
-│   └── exasoundC.h               # **public C API**
-├── tests/                        # Google Test
-└── demo/                         # demos
-```
-
-## Public C API
-
-C linkage API (`exasoundC.h`, **約120 export**) として公開されます。
-
-| カテゴリ | 代表関数 |
-|---|---|
-| ライフサイクル | `exaInit`, `exaReset`, `exaGetVersion`, `exaGetPathTypeCount` |
-| Scene | `exaNewScene`, `exaTickScene`, `exaSceneAddObject/Source/Listener` |
-| Object | `exaNewObject`, `exaObjectSetPosition/Rotation/Scale/Mesh`, `exaObjectSetUpdateType` |
-| Mesh | `exaNewMesh`, `exaMeshSetData`, `exaMeshUpdateVertices`, `exaMeshRefit`, `exaMeshSetMaterial` |
-| Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
-| SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity` |
-| Listener (basic) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
-| Listener (HRTF) | `exaInit`でdefault HRTFを一度loadし、listener rendererが共有 |
-| Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
-| 結果取得 | `exaGetValidPathCount`, `exaGetValidPaths`, `exaGetSortedIRDatas` |
-| 診断・可視化 | `exaPropagatorGetGuidePlanes/MirrorPositions`, `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot`, `exaGetLastError` |
-
-## はじめに
-
-### 要件
-
-- CMake 3.22以上
-- C++17互換コンパイラ
-- macOS · Windows · Linux
-
-### ビルド
-
-```bash
-cd exaSound
-cmake -S . -B build
-cmake --build build
-```
-
-テスト込み:
-
-```bash
-cmake -S . -B build -DBUILD_TESTS=ON
-cmake --build build --target unit_tests
-./build/tests/unit/unit_tests
-```
-
-### 最小利用シナリオ（疑似コード）
-
-```c
-#include "exasoundC.h"
-
-// 1. Initialize the engine
-exaInit();
-
-// 2. Create a scene
-int sceneID = exaNewScene();
-
-// 3. Register a mesh and assign material
-int meshID = exaNewMesh();
-exaMeshSetData(meshID, vertices, vertexCount, indices, indexCount);
-exaMeshSetMaterial(meshID, materialIndex);
-
-// 4. Attach the mesh to an object and add it to the scene
-int objID = exaNewObject();
-exaObjectSetMesh(objID, meshID);
-exaObjectSetPosition(objID, 0.f, 0.f, 0.f);
-exaSceneAddObject(sceneID, objID);
-
-// 5. Configure source and listener
-int srcID = exaNewSoundSource();
-exaSoundSourceSetPosition(srcID, 1.f, 1.f, 0.f);
-exaSoundSourceSetIntensity(srcID, 1.0f);
-exaSceneAddSource(sceneID, srcID);
-
-int listenerID = exaNewListener();
-exaListenerSetPosition(listenerID, -1.f, 1.f, 0.f);
-exaListenerSetRayCount(listenerID, 4096);
-exaListenerSetRayDepth(listenerID, 16);    // up to EXA_MAX_DEPTH = 16
-exaSceneAddListener(sceneID, listenerID);
-
-// 6. Simulate and render audio each frame
-for (;;) {
-  exaTickScene(sceneID, deltaTime);
-  exaRenderSound(/* render args */);
-  // Query results through exaGetValidPaths / exaGetSortedIRDatas
-}
-
-// 7. Clean up
-exaReset();
-```
-
-> このコードはAPIの流れを示す疑似例です。実際のシグネチャは`exasoundC.h`で確認してください。
-
-## 主要概念
-
-### Path Module構造
-
-伝搬アルゴリズムは4種類のモジュールに分離され、内部パイプラインで動作します。
-
-| モジュール | 経路タイプ | 位置 |
+| 項目 | STCoreV2 | SimpleST |
 |---|---|---|
-| `SpecularReflectionModule` | 鏡面反射 | `propagation/module/reflection/` |
-| `UTDDiffractionModule` | 回折(UTD) | `propagation/module/diffraction/` |
-| `DiffuseOffsetModule` | 散乱 | `propagation/module/diffuse/` |
-| `StaticReverbModule` | 静的残響 | `propagation/module/reverb/` |
+| ヘッダー / プレフィックス | `exasoundC.h`、`exa*` の単一 DLL | `STRealtime.h`（`st_rt_*`）+ `STOffline.h`（`st_off_*`）の 2-DLL、共通 `STTypes.h` |
+| コンテキスト | グローバル `exaInit()` / `exaReset()` | コンテキストオブジェクト `st_rt_create` / `st_rt_destroy`。1 プロセスに複数可 |
+| エンティティ id | すべて `int`、**0 = 無効** | 型付きハンドル `STMeshId` など、**`v < 0` = 無効**、0 は有効 |
+| シーン | `exaNewScene` + `exaSceneAdd*` | コンテキストがそのままシーン。リスナーはリアルタイムコンテキストごとに 1 個（暗黙） |
+| 材質 | 8バンド（`67.5…8k Hz`）、三角形に吸収/透過を直接保存、`reflection = 1 − (A+T)` を導出、`Surface` / `Solid Distance` 透過モデル | **9バンド（63…16k Hz）** R/A/T/scattering を明示、`|R+A+T−1| ≤ 0.001` の厳格検証、自動導出なし、不変材質（差し替え時は新しい材質ハンドル） |
+| 距離減衰 | 多項式 `1/(c + l·d + q·d²)` を音源ごと・経路ごとに | 物理 `1/r` + 参照/最小距離（`st_rt_set_physical_distance_attenuation`）、ISO 9613-1 空気吸収 |
+| 音源オーディオ | レンダラーが音源ごとに出力（`exaRenderSound`、`exaCreateRenderer`） | 音源は**モノ入力ストリーム**、リスナーレンダラーが全音源を一度にステレオ/Nチャンネルへミックス（`st_rt_render_process`） |
+| レンダー出力 | 呼び出し側が音源ごとのバッファを収集 | `DEVICE` / `HOST_PULL` / `HOST_PULL_BUFFERED` の 3 モード、ホストサンプルレート変換を内蔵 |
+| 初期反射 | 経路ごとのオブジェクト | Objects / **Hybrid（exact 予算 + HOA3 bed）** |
+| HRTF | KU100 parametric / convolution / SADIE H12 テーブルロード、Band8 | パンニング / 内蔵 **MIT KEMAR** / **SADIE II D2**（ファイル 1 つ）。KU100・H12・Band8・parametric はなし |
+| GPU | WebGPU（Dawn）propagation provider | **なし**（CPU パイプラインスケジューラ）。`enableGpu` 類はエラーを返す |
+| 加速構造 | HKDTree / LBVH / LBVH_SIMD4·8·16 / NWAY、メッシュごとのビルドオプション | コンテキスト全体の `st_rt_scene_set_accel`（TinyBVH 既定）、メッシュごとのオプションなし |
+| スキンドメッシュ | `exaMeshUpdateVertices` → `exaMeshRefit` の 2-call refit | **refit なし** — 新しいポーズは新しいメッシュ生成（`st_rt_mesh_create`）で差し替え |
+| オブジェクト更新 | `STATIC / REFIT / REBUILD / DYNAMIC` の 4 種 | `isDynamic` フラグ（静的 = 静的 TLAS、動的 = 変換のみ更新） |
+| path cache / seed | `pathCacheSize`、`seedValue` オプション | `seedValue` のみ（`STRT_CreateOptions`）、path cache オプションなし |
+| 伝搬呼び出し | `exaTickScene` 同期 | `st_rt_propagate` — PIPELINED はワーカーを起こして即座に返り、SYNCHRONOUS は呼び出しスレッドで実行 |
+| 統計 | `exaGetStatistics`、`exaPropagatorGetProfile`、`exaGetMemoryTraceSnapshot` | `st_rt_get_timing`、`st_rt_ir_get_stats`、`st_rt_render_get_process_stats`、`st_rt_scene_get_stats` |
+| 可視化 | `exaGetValidPaths`（`ExaPathData`） | `st_rt_debug_set_collect_visual_paths` + `acquire_snapshot` + `copy_visual_paths` |
+| 座標 | 右手系、`+Y` up、`-Z` forward、`exaListenerSetCoordinateBasis` | **左手系、`+Y` up、`+Z` forward（Unity と同一）**、basis API なし — ラッパーが変換 |
+| 単位 | `ExaSTOption.sceneRatio` | `STRT_CreateOptions.sceneRatio`（生成時に 1 回） |
+| 最大深度 | `EXA_MAX_DEPTH = 16` | 反射 16、透過 64 |
 
-各モジュールは`IPathModule`を実装し、2段階で動作します。
+## 関数対応表
 
-1. **Phase 1 — `buildSetupPlanes`**: Guide ray結果からSetupPlaneを構成
-2. **Phase 2 — `validatePaths`**: 経路を追跡・検証し、有効経路を出力バッファへ記録
-
-SpecularからDiffuseへは`ScatterHandoffEntry`でpath状態が渡されます。
-
-### Lock-free snapshot (`SceneSnapshot`)
-
-シーン状態は毎tick immutable POD snapshotとして取得されます。
-
-- すべての構造はフラット配列、non-virtual、heap pointerなしで、`TripleBuffer`スロットへ値コピー可能
-- propagation/audioスレッドは別スロットを読み、lock-freeで動作
-- geometryは別BVH double bufferで管理（Phase 3）
-
-この構造により、mutexなしでマルチスレッドのシミュレーションとレンダリングを安全に進められます。
-
-### Materialモデル
-
-`SoundTriangle`単位に**absorption**と**transmission**を直接保存します。別Material ID/pointerは持たず、反射は次の規則で計算します。
-
-```
-reflection = 1 - (absorption + transmission)
-```
-
-`ExaRayHit`には`materialId`フィールドがあり、ray cast時に衝突材質を直接識別できます。
-
-### Ray Count・Ray Depth
-
-リスナーごとにray数と最大反射深度を設定します。
-
-| 関数 | 効果 |
+| STCoreV2 | SimpleST（リアルタイム） |
 |---|---|
-| `exaListenerSetRayCount(id, n)` | ray数を設定 |
-| `exaListenerSetRayDepth(id, d)` | 最大深度 (`1 ≤ d ≤ EXA_MAX_DEPTH = 16`) |
+| `exaInit()` / `exaReset()` | `st_rt_create(&opt, &ctx)` / `st_rt_destroy(ctx)` |
+| `exaGetVersion()` | `st_rt_get_version_string()`、`st_rt_get_api_version()`、`st_rt_get_capabilities()` |
+| `exaGetLastError()` | `st_rt_get_last_status(ctx)`、`st_rt_get_last_error(ctx, buf, cap)` |
+| `exaNewScene()` / `exaTickScene()` | （コンテキスト）/ `st_rt_propagate(ctx)` |
+| `exaAddSoundMaterial()` / `exaSetSoundMaterial()` | `st_rt_material_create(ctx, &mat)` / 材質は不変 — 新しい材質を生成して `st_rt_mesh_set_material` |
+| 既定材質テーブルのロード（SDK 側） | `st_rt_material_load_defaults(ctx)` |
+| `exaNewMesh()` + `exaMeshSetData()` + `exaMeshSetMaterial()` | `st_rt_mesh_create(ctx, &mesh, material, triMaterialIndices)` |
+| `exaMeshUpdateVertices()` + `exaMeshRefit()` | なし — 新しいメッシュを生成してオブジェクトを差し替え |
+| `exaNewObject()` + `exaObjectSetMesh()` + `exaSceneAddObject()` | `st_rt_object_create(ctx, mesh, &transform, isDynamic)` または `_q`（位置・クォータニオン・スケール） |
+| `exaObjectSetPosition/Rotation/Scale()` | `st_rt_object_set_transform[_q]()` |
+| `exaObjectSetUpdateType()` | 生成時の `isDynamic`。静的の変更は `st_rt_build`、動的は `st_rt_build_dynamic` |
+| `exaNewSoundSource()` + `exaSceneAddSource()` | `st_rt_source_create(ctx, &desc)` |
+| `exaSoundSourceSetPosition/Direction/Velocity()` | `st_rt_source_set_position/direction/velocity()` |
+| `exaSoundSourceSetIntensity()` | `STSourceDesc.intensity`（圧力倍率）+ `st_rt_source_set_energy()`（エネルギー倍率） |
+| `exaSoundSourceSetRayCount/Depth()` | `st_rt_source_set_ray_count()`、`st_rt_source_set_depth()` |
+| `exaSoundSourceSetReverbSendDb()` | `st_rt_source_set_path_volume(ctx, src, ST_SOURCE_VOLUME_REVERB, linear)` |
+| `exaSoundSourceSetPathEnable()` | `st_rt_source_set_path_enabled(ctx, src, pathType, enabled)` |
+| 音源ごとの指向性テーブル | `st_rt_source_set_directivity()` + `st_rt_source_set_orientation_q()`、コーン式は `st_rt_source_set_axis_attenuation()` |
+| `exaNewListener()` + `exaSceneAddListener()` | 暗黙のリスナー 1 個（`st_rt_listener_*`） |
+| `exaListenerSetPosition/Orientation/Velocity()` | `st_rt_listener_set_position/rotation(yaw,pitch)/velocity()` |
+| `exaListenerSetRayCount/RayDepth()` | `st_rt_listener_set_ray_count()`、`st_rt_set_max_depth()` |
+| `exaListenerSetOption()`（`sceneRatio` など） | `STRT_CreateOptions.sceneRatio`、`st_rt_set_*` ポリシー関数群 |
+| `exaListenerSetCoordinateBasis()` | なし — ホストラッパーで変換 |
+| `exaListenerSetHrtfMode()` / `exaListenerLoadHrtf()` | `st_rt_render_set_spatializer(ctx, 0/1/2)` |
+| `exaCreateRenderer()` / `exaRenderSound()` / `exaRemoveRenderer()` | `st_rt_render_start(ctx, useHrtf)` / `st_rt_render_process(ctx, out, frames)` / `st_rt_render_stop(ctx)` |
+| 音源オーディオ入力（ホストミキシング） | `st_rt_source_attach_stream()` + `st_rt_source_write_stream()`、または `st_rt_source_set_audio_file()` |
+| `exaGetValidPathCount/Paths()` | `st_rt_debug_set_collect_visual_paths(mask)` → `st_rt_debug_acquire_snapshot()` → `st_rt_debug_copy_visual_paths()` |
+| `exaGetSortedIRDatas()` | リアルタイム ABI にはなし — オフライン `st_off_ir_compute()` + `st_off_ir_copy_raw_early_taps()` / `render_pressure()` |
+| `exaGetStatistics()` / `exaPropagatorGetProfile()` | `st_rt_get_timing()`、`st_rt_ir_get_stats()`、`st_rt_render_get_process_stats()`、`st_rt_scene_get_stats()` |
+| `exaGetMemoryTraceSnapshot()` | なし |
+| `exaPropagatorInitGpu()` / `exaPropagatorSetGpuProvider()` | なし（CPU 専用） |
+| `exaPropagatorGetGuidePlanes/MirrorPositions()` | なし（guide ray は visual path 収集 mask で観察） |
 
-現在のbuildではpath depth上限は`EXA_MAX_DEPTH = 16`です。
+## 移行時のチェックリスト
 
-### Diffuse Scatteringオプション
-
-`ExaSTOption`には散乱関連パラメータがあり、シミュレーションを微調整できます。
-
-| フィールド | 意味 |
-|---|---|
-| `diffuseEnabled` | 散乱処理のon/off |
-| `diffuseStartDepth` | 散乱を開始する反射深度（default 5） |
-| `diffuseMaxOffsetRadius` | 散乱offset半径 |
-| `diffuseCurveA/B/C` | 距離・角度に対する散乱曲線係数 |
-| `guideDiffuseEnabled` | Guide diffuse rayを使用 |
-| `guideDiffuseListenerHeadRadius` | リスナー頭部半径（default 0.0875m） |
-
-### HRTF
-
-```c
-exaInit();        // embedded default HRTFを一度load
-exaNewListener(); // rendererはengine default HRTFで開始
-exaReset();       // renderer stateとdefault HRTFを解放
-```
-
-### 結果取得
-
-| 形式 | 関数 |
-|---|---|
-| 有効経路（可視化・デバッグ） | `exaGetValidPathCount`, `exaGetValidPaths` |
-| ソート済みIR（コンボリューション入力） | `exaGetSortedIRDatas` |
-| Guide Plane / Mirror Position（診断） | `exaPropagatorGetGuidePlanes`, `exaPropagatorGetMirrorPositions` |
-
-`ExaPathData`は`pos[0]=source`, `pos[1..N]=hit points`, `pos[N+1]=listener`の順に保存されます。
-
-### Object Update Type
-
-```c
-exaObjectSetUpdateType(objID, updateType);
-// 0 = EXA_OBJECT_UPDATE_STATIC   : 実行時の TLAS/BLAS 更新なし
-// 1 = EXA_OBJECT_UPDATE_REFIT    : deformation - BLAS refit + TLAS bounds 更新
-// 2 = EXA_OBJECT_UPDATE_REBUILD  : topology 変更 - 再ビルド
-// 3 = EXA_OBJECT_UPDATE_DYNAMIC  : transform のみ変更 - TLAS instance 更新
-```
-
-静的オブジェクトは毎フレームのBVH refitコストを避けられます。
-
-`Refit` は skinned animation のように topology を保ったまま vertex だけが動く geometry の
-ためのポリシーです。vertex 自体は mesh 側の 2-call protocol でアップロードします。
-
-```c
-exaMeshUpdateVertices(meshID, vertices, numVertices);  // CPU skinning パス
-exaMeshRefit(meshID);                                  // mesh BVH の refit
-```
-
-`numVertices` は `exaMeshSetData` 時の vertex 数と完全に一致する必要があり、異なる場合は
-`EXA_ERR_INVALID_ARG` として拒否されます。topology（triangle index）が変わる場合は refit では
-なく、`exaMeshSetData` で再ビルドして object update type を `Rebuild` にしてください。
-
-## 診断・統計
-
-| 関数 | 用途 |
-|---|---|
-| `exaGetStatistics()` | ray・path・時間統計 |
-| `exaPropagatorGetProfile(sceneID)` | 伝搬段階別プロファイル |
-| `exaPropagatorGetGuidePlanes/MirrorPositions` | アルゴリズム内部状態 |
-| `exaGetMemoryTraceSnapshot()` | メモリ使用snapshot |
-| `exaGetLastError()` | 最後のエラーメッセージ |
+1. **材質を 9バンドで再入力**します。8バンドを複製して埋めるのではなく、16 kHz の値を測定・推定して入れ、
+   バンドごとに R+A+T=1 を合わせます。`Solid Distance` 透過距離は SimpleST にないため、表面透過
+   係数（T）に換算します。
+2. **音源オーディオをモノストリームとして**流し込みます。音源ごとの出力ノード・エフェクトはリスナーミックスの後ろへ移します。
+3. `exaMeshRefit` の経路があった場合は、スキンドメッシュを**定期的に新しいメッシュへ差し替える**構造に変えます
+   （UE プラグインの `SkinnedPoseRefreshSeconds` がこの方式です）。
+4. 座標系を確認します。`-Z` forward のホストは Z の符号を反転します（soundtrace.js は
+   `coordinateBasis` が処理します）。
+5. `exaRenderSound` をホストオーディオコールバックの `st_rt_render_process` に置き換え、
+   `renderOutputMode` と `hostSampleRate` を生成オプションに指定します。
+6. `st_rt_render_start` の**後に** `STRenderOptions.reserved0 = 1`（Hybrid）を適用します。
+7. capability ビット（`ST_CAP_*`）で機能の有無を確認し、`structSize`/`apiVersion` を埋めて呼び出します。
 
 ## 参考
 
-- [SDK概要](../sdk/overview.md)
-- [Sound Tracingとは?](../intro/what-is-soundtracing.md)
+- [SimpleST](./simplest.md)
+- 各 SDK の変更点: [Web](../sdk/web.md) · [Unity](../sdk/unity.md) · [Unreal Engine](../sdk/ue.md)

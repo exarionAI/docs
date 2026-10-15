@@ -1,37 +1,43 @@
 ---
 title: Unity
-description: Install the SoundTrace Unity SDK and use its component APIs, HRTF, GPU/BVH, and Surface and Solid Distance transmission settings.
+description: SoundTrace Unity SDK 0.3.0 (SimpleST ABI 6) installation, component Inspector contract, HRTF and output, materials, FMOD/Wwise integration modes, WebGL.
 ---
 
 # SoundTrace SDK for Unity
 
-The SoundTrace Unity SDK is a real-time spatial audio plugin that connects Unity meshes,
-Renderer material slots, audio sources, and listeners to
-[STCoreV2](../core/stcorev2.md).
-
-This page documents the public components and Inspector contract of the current Unity SDK.
+The SoundTrace Unity SDK is a real-time spatial audio plug-in that connects Unity meshes, Renderer
+material slots, sources, and the listener to [SimpleST](../core/simplest.md). From 0.3.0 the engine
+has changed from STCoreV2 to **SimpleST 2.12.0 / ABI 6**, and the renderer starts in **Hybrid**
+mode. The `SoundTraceManager`, `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`, and
+`SoundTracePathVisualizer` component names, script GUIDs, and sample scenes are unchanged.
 
 ## Requirements and platforms
 
-| Area | Current package status |
+| Item | Current package |
 |---|---|
-| Unity | 2022.3 LTS or newer |
-| Bundled native plugins | macOS, Windows x64, iOS, Android |
-| Linux | The current package does not include a binary; build it separately on a Linux host |
-| Unity WebGL | Unsupported. The `OnAudioFilterRead`-based DSP path is unavailable on Unity WebGL |
-
-`Use GPU Backend` requests the WebGPU compute provider for reflection and reverb propagation.
-Diffraction remains on the CPU. Actual availability depends on the native plugin and device;
-SoundTrace uses CPU propagation when GPU initialization fails.
+| Unity | 2022.3 LTS or later (verified on 2022.3.62f2 · 6000.3) |
+| Package | `SoundTrace-SimpleST-release.unitypackage` → `Assets/SoundTrace` |
+| Bundled native plug-ins | Windows x64 · macOS Universal · Linux x86_64 · Android (ARMv7/ARM64/x86_64, API 24+) · iOS 15+ (device/simulator XCFramework) · WebGL |
+| WebGL | Supported — standalone pthread WASM + AudioWorklet path (`OnAudioFilterRead` not used) |
+| GPU | None. `SoundTraceManager.IsGpuPropagate` is always `false` |
 
 ## Installation
 
-The SoundTrace Unity SDK package and its installation instructions are supplied through the
-contracted evaluation or licensing delivery channel. Follow the instructions included with
-your distribution.
+1. You do not need to close Unity in the target project. Choose `Assets > Import Package > Custom Package`
+   and select the `.unitypackage`; it installs into `Assets/SoundTrace`.
+2. If an older STCoreV2-based `Assets/SoundTrace` exists, **back it up outside Assets first**, then
+   import. This prevents the old native plug-ins from being loaded alongside. Updates of the same
+   SimpleST package keep the GUIDs, so they can be imported over the existing install.
+3. You can also install automatically with the `install.py` in the distribution folder. It checks
+   file hashes and GUIDs and preserves the existing install in the project's `.simplest-backups`.
 
-To import the samples, select SoundTrace SDK in Package Manager and choose
-`Samples > Demo Assets > Import`.
+```bash
+python3 install.py /path/to/UnityProject
+# with the FMOD / Wwise plug-in as well: --fmod <plugins folder> or --wwise <plugins folder>
+```
+
+Import the samples by selecting the SoundTrace SDK in the Package Manager and choosing
+`Samples > Demo Assets > Import`. The sample UI compiles only when `com.unity.ugui` is present.
 
 ## Unity Audio settings
 
@@ -41,36 +47,52 @@ To import the samples, select SoundTrace SDK in Package Manager and choose
 
 ![Unity Audio settings](/img/unity/Image01_AudioSetting.png)
 
-The Manager and Listener Inspectors display a warning when these settings do not match.
+The Manager and Listener Inspectors display a warning when these settings differ. The output sample
+rate is the device value as is (SimpleST converts from its internal 44.1 kHz); if the device rate
+changes, the native state is recreated with the same settings.
 
 ## Audio asset import settings
 
-Mono sound sources are assumed, and audio clips are set to the PCM format.
+Mono sound sources are assumed, and audio clips should be set to the PCM format. WebGL requires
+`Decompress On Load`.
 
 ![Audio asset import settings](/img/unity/ImportSetting.png)
 
 ## Fastest setup
 
 1. Add `SoundTraceManager` to an empty GameObject.
-2. Add `SoundTraceListener` to the Main Camera.
-3. Add `SoundTraceSource` to an audio-source GameObject and assign a clip to the `AudioSource` on the same GameObject.
-4. Add `SoundTraceObject` to each mesh GameObject used as acoustic geometry.
+2. Add `SoundTraceListener` to the Main Camera that has the `AudioListener`.
+3. Add `SoundTraceSource` to a source GameObject and assign a clip to the `AudioSource` on the same GameObject.
+4. Add `SoundTraceObject` to the Mesh GameObjects you want to use as acoustic geometry.
 5. If needed, add `SoundTracePathVisualizer` to the same GameObject as the Manager.
-6. Enter Play Mode and check the Console for errors, then verify the audio and paths.
+6. In Play Mode, check the Console for errors, the sound, and the paths.
 
-Across all loaded scenes, only one active Manager and one active Path Visualizer may be used.
-Multiple Listeners may register, but Source rendering uses the first registered
-`PrimaryListener`.
+Only one active Manager and one Path Visualizer can be used across all simultaneously loaded
+scenes. There is one listener per SimpleST context, and the first registered `PrimaryListener`
+renders.
 
 ## Component overview
 
-| Component | Role | Required dependency |
+| Component | Role | Required dependencies |
 |---|---|---|
-| `SoundTraceManager` | Manages the runtime, scene, material registration, and propagation backend | One per runtime |
-| `SoundTraceListener` | Manages the listener transform, ray quality, output, and HRTF settings | Active Manager |
-| `SoundTraceSource` | Spatializes `AudioSource` output and configures each path type | `AudioSource` on the same GameObject and an active Listener |
-| `SoundTraceObject` | Registers a Mesh and its submesh materials in the acoustic scene | `MeshFilter`, `MeshRenderer` |
-| `SoundTracePathVisualizer` | Debug display for valid paths and hit triangles | Same GameObject as the Manager |
+| `SoundTraceManager` | Runtime (context and control thread), scene, material registration, propagation | 1 per runtime |
+| `SoundTraceListener` | Listener transform, ray quality, output/HRTF, delay and fade | Active Manager, `AudioListener` |
+| `SoundTraceSource` | Feeds the `AudioSource` output as a mono stream, per-path settings | `AudioSource` on the same GameObject, active Listener |
+| `SoundTraceObject` | Registers the Mesh and submesh materials in the acoustic scene | `MeshFilter`, `MeshRenderer` (Read/Write Enabled) |
+| `SoundTracePathVisualizer` | Debug display of valid paths and hit triangles | Same GameObject as the Manager |
+
+## Audio flow and threads
+
+- `SoundTraceSource.OnAudioFilterRead` pushes the input into a **mono host stream**
+  (`st_rt_source_write_stream`) and clears Unity's dry output. The `SoundTraceListener` callback
+  pulls the full spatial mix once (`st_rt_render_process`, Buffered mode).
+- Scene changes, source create/destroy, propagation, and visualization snapshots are processed
+  serially on a dedicated **control thread** (`SoundTraceControlThread`). No scene control API or
+  managed heap allocation runs in the audio callback.
+- Positions are sampled with fixed-step motion sampling (`SoundTraceFixedStepMotion`) to estimate
+  velocity. After a teleport, call `ResetMotionState()` to prevent a Doppler spike.
+- Because the native `render_start` resets the options, Hybrid (`reserved0 = 1`) is applied
+  **after start**, and re-applied after a restart or HRTF toggle.
 
 ## SoundTraceManager
 
@@ -80,317 +102,236 @@ Multiple Listeners may register, but Source rendering uses the first registered
 
 | Field | Default | Behavior |
 |---|---:|---|
-| `bool propagateOnStart` | `true` | Synchronizes the initial scene graph and transforms in `Start()`, then requests the first propagation pass. |
-| `bool loadDefaultMaterialsOnEnable` | `true` | Registers the bundled Material Preset Library in the native material table during `OnEnable()`. |
-| `int propagationThreadCount` | `-1` | Sets the sound engine's execution-thread count for propagation jobs. On native platforms, `-1` is configured automatically from the logical-thread count reported by `std::thread::hardware_concurrency()`, while `0` and `1` run single-threaded. Values of `2` or more use the specified total, including the calling thread. |
-| `bool useGpuBackend` | `false` | Runs propagation on GPU compute shaders instead of job multithreading. |
-| `int pathCacheSize` | `256` | Cache-buffer size for generated paths, with a minimum of `0` and a maximum of `1024`. Higher values improve the spatial-audio effect but also increase computation. Depending on device performance, we recommend starting below the default value of `256`. |
+| `Propagate On Start` | `true` | In `Start()`, synchronizes the initial scene graph and transforms, then requests the first propagation. |
+| `Load Default Materials On Enable` | `true` | In `OnEnable()`, registers the bundled Material Preset Library (24 BRAS materials) in the native material table. |
+| `Propagation Thread Count` | `-1` | Width of the SimpleST compute pool (`maxComputeThreads`). `-1` is auto (based on the logical thread count, adjusted by the engine to min(performance cores, 6)), `0`/`1` is single, `2` or more is the given count. Applied before native initialization. |
 
 ### Public properties
 
-| Property | Type / access | Exact meaning |
+| Property | Type | Meaning |
 |---|---|---|
-| `Instance` | `static SoundTraceManager` / `get; private set;` | Singleton Manager used across all loaded scenes, or `null` when none is enabled. |
-| `DefaultMaterialsLoaded` | `int` / `get; private set;` | Number of bundled materials registered automatically in `OnEnable()`. It is `0` when automatic loading is disabled or the asset is missing. |
-| `Scene` | `SoundScene` / `get; private set;` | Low-level scene owned by the Manager. It is `null` while inactive or after initialization failure. |
-| `PrimaryListener` | `SoundTraceListener` / `get` | First registered Listener used by Source rendering, or `null` when no Listener is registered. |
-| `ListenerCount` | `int` / `get` | Number of Listeners currently registered with the Manager. |
-| `SourceCount` | `int` / `get` | Number of Sources currently registered with the Manager. |
-| `ObjectCount` | `int` / `get` | Number of Objects currently registered with the Manager. |
-| `LastValidPathCount` | `int` / `get; private set;` | Valid-path count from the most recently completed propagation result. It is `0` when propagation cannot run. |
-| `LastNativeError` | `string` / `get; private set;` | Most recent scene-graph or propagation error; an empty string means no current error. |
-| `PropagationThreadCount` | `int` / `get` | Number of execution threads used by propagation jobs. `-1` means the maximum. |
-| `IsGpuPropagate` | `bool` / `get; private set;` | Whether `exaPropagatorInitGpu()` succeeded and activated the GPU propagation provider. |
-| `GpuBackendStatus` | `string` / `get; private set;` | GPU backend initialization result: `GPU active` or `CPU fallback (<ExaResult>): <error>`. |
-| `PathCacheSize` | `int` / `get` | Cache-buffer size for generated paths. |
+| `Instance` | `static SoundTraceManager` | The singleton Manager. `null` if none |
+| `Scene` | `SoundScene` | The low-level scene owned by the Manager |
+| `PrimaryListener` / `ListenerCount` / `SourceCount` / `ObjectCount` | — | Registration status |
+| `DefaultMaterialsLoaded` | `int` | Number of automatically registered bundled materials |
+| `LastValidPathCount` | `int` | Valid path count of the most recent propagation |
+| `LastNativeError` | `string` | The most recent scene graph/propagation error |
+| `PropagationThreadCount` | `int` | The applied compute thread count |
+| `IsGpuPropagate` / `GpuBackendStatus` | `bool` / `string` | Compatibility only. Always `false` / `"CPU"` |
 
 ### Public methods
 
 | Method | Behavior |
 |---|---|
-| `public void ResetMotionState()` | Clears motion history for every registered Listener and Source immediately after a teleport, respawn, or scene transition. |
+| `ResetMotionState()` | Resets the motion history of every Listener and Source right after a teleport, respawn, or scene transition. |
 
 ## SoundTraceListener
 
 ![SoundTraceListener Inspector](/img/unity/Img_STListener.png)
 
-Add this component to the Main Camera in most projects.
+Usually added to the Main Camera.
 
 ### Inspector
 
-| Field | Default | Range/options |
+| Field | Default | Range/choices |
 |---|---:|---|
 | `Quality Preset` | `Fast` | `Custom`, `Fast`, `Middle`, `Quality` |
-| `Ray Resolution` | `16` | `1..32`; the same value is applied to width and height |
-| `Ray Depth` | `4` | `1..16` |
-| `Output Mode` | `Headset` | `Headset`, `Speaker` |
+| `Ray Resolution` | `16` | `1..32`; the same value for the listener guide ray width and height |
+| `Ray Depth` | `4` | `1..16`; maximum reflection depth |
+| `Output Mode` | `Headset` | `Headset` (binaural), `Speaker` (stereo panning) |
 | `HRTF` | `HRIR Interpolated` | The three modes below |
+| `Max Delay Seconds` | `2.0 s` | `0.012..5 s`; maximum path delay the renderer keeps |
+| `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`; path appear/disappear crossfade |
 
-Selecting `Fast`, `Middle`, or `Quality` applies the ray values and associated rendering-quality
-settings together, and disables the ray fields in the Inspector. Select `Custom` before editing
-the values directly. Switching from a preset back to `Custom` preserves the last applied values.
+Selecting `Fast`, `Middle`, or `Quality` applies the ray values together and locks them in the
+Inspector. Select `Custom` to edit them directly.
 
 | Preset | Ray Resolution | Ray Depth | Recommended starting point |
 |---|---:|---:|---|
-| `Custom` | Stored value | Stored value | Manual tuning |
-| `Fast` | `16` | `4` | Mobile and projects with many sources |
-| `Middle` | `24` | `8` | General games and desktop |
-| `Quality` | `32` | `12` | Apps where audio is a major focus and other workloads are light |
+| `Custom` | Saved value | Saved value | Manual tuning |
+| `Fast` | `16` | `4` | Mobile, many sources |
+| `Middle` | `24` | `8` | Typical games and desktop |
+| `Quality` | `32` | `12` | Acoustics-heavy apps |
 
 ### HRTF and output modes
 
 | Mode | Required asset | Description |
 |---|---|---|
-| `Band8` | None | Lightweight mode that does not load an external HRTF table |
-| `Hrir` | `KU100_convolution.bytes` | HRIR mode |
-| `HRIR Interpolated` | `KU100_convolution.bytes` | Applies interpolation to HRIR mode to improve directional perception. |
+| `Band8` | None | Lightweight mode without an external table — renders as **stereo panning** on SimpleST |
+| `Hrir` | None | The **MIT KEMAR** HRIR embedded in the engine |
+| `HRIR Interpolated` | None | MIT KEMAR HRIR (default). SimpleST performs broadband HRIR convolution |
 
-Assets are loaded from `Runtime/Resources/SoundTrace/HRTF/`. If a required asset is missing or
-empty, Listener initialization fails; SoundTrace does not switch to another mode automatically.
+The old `KU100_convolution.bytes` resource is no longer used. `Output Mode = Speaker` is panned
+output.
 
 ## SoundTraceSource
 
 ![SoundTraceSource Inspector](/img/unity/Img_STSource.png)
 
-`SoundTraceSource` processes the output of the `AudioSource` on the same GameObject. When
-enabled, it sets `AudioSource.spatialBlend` and `AudioSource.dopplerLevel` to `0` so SoundTrace
-handles spatialization and Doppler.
+`SoundTraceSource` pushes the output of the `AudioSource` on the same GameObject into the engine as
+a mono stream. On enable it sets `AudioSource.spatialBlend` and `AudioSource.dopplerLevel` to `0` so
+that SoundTrace handles spatialization and Doppler.
 
 ### Inspector
 
 | Field | Default | Behavior |
 |---|---:|---|
-| `Intensity` | `1` | Source emission intensity in the `0..10` range. |
-| `Ray Resolution` | `24` | Applies the same horizontal and vertical resolution to reverb rays. Range: `1..32`. |
-| `Reverb Ray Depth` | `4` | Maximum reflection depth for reverb rays. Range: `1..16`. |
-| `Enable Direct` | `true` | Enables the Direct path. |
-| `Enable Reflection` | `true` | Enables the Reflection path. |
-| `Enable Diffraction` | `true` | Enables the Diffraction path. |
-| `Enable Reverb` | `true` | Enables the Reverb path. |
-| `Enable Transmission` | `true` | Enables the Transmission path. |
-| `Direct Attenuation` | `1.0` | Distance attenuation for the Direct path. Higher values sound quieter at the same distance. Range: `0.5..1.5`. |
-| `Reflection Attenuation` | `1.0` | Distance attenuation for the Reflection path. Higher values sound quieter at the same distance. Range: `0.5..1.5`. |
-| `Diffraction Attenuation` | `1.0` | Distance attenuation for the Diffraction path. Higher values sound quieter at the same distance. Range: `0.5..1.5`. |
-| `Reverb Attenuation` | `1.0` | Distance attenuation for the Reverb path. Higher values sound quieter at the same distance. Range: `0.5..1.5`. |
-| `Transmission Attenuation` | `1.0` | Distance attenuation for the Transmission path. Higher values sound quieter at the same distance. Range: `0.5..1.5`. |
-| `Max Delay Seconds` | `1.0 s` | Maximum propagation delay retained by the Source renderer. Longer delays use more memory. Range: `0.01..5 s`. |
-| `Path Fade Time Seconds` | `0.066 s` | Fade time used when a path enters or leaves the renderer. Range: `0.001..0.5 s`. |
-| `Path Hold Time Seconds` | `0.120 s` | Time a missing non-direct path is retained before fading starts. `0` disables holding. |
-| `Max Delay Rate` | `0.1` | Maximum delay change allowed per sample. Range: `0.001..0.999`. |
-| `Bypass` | `false` | Skips SoundTrace spatial rendering and passes through the original `AudioSource` output. |
+| `Intensity` | `1` | Source radiation intensity (pressure multiplier). Range `0..10` |
+| `Reverb Ray Resolution` | `24` | Source transport ray horizontal and vertical resolution. Range `1..32` |
+| `Reverb Ray Depth` | `4` | Maximum reflection depth of transport rays. Range `1..16` |
+| `Enable Direct` / `Reflection` / `Diffraction` / `Reverb` / `Transmission` | `true` | Per-path gates |
+| `Bypass` | `false` | Skips the SoundTrace render and passes the original `AudioSource` output through |
 
-A larger Distance Attenuation value makes the corresponding path type roll off faster with
-distance. `Show Gizmo` displays the reach of Direct, Reflection, Diffraction, Reverb, and
-Transmission independently in the Scene view.
-
-Render Tuning applies to a source-listener pair. `Path Hold = 0` disables path holding.
+STCoreV2's per-path `Distance Attenuation` (0.5 ~ 1.5), `Max Delay Rate`, and `Path Hold Time` are
+gone. SimpleST applies physical `1/r` attenuation and air absorption, and the maximum delay and fade
+are Listener settings. `Show Gizmo` in the Scene View shows the audible range per path.
 
 ### Public methods
 
 | Method | Behavior |
 |---|---|
-| `SetBypass(bool enabled)` | When `true`, skips SoundTrace spatial rendering and passes through the original `AudioSource` output. When `false`, applies SoundTrace rendering again. |
-| `ResetMotionState()` | Re-seeds motion from the current Transform and publishes zero velocity to prevent a Doppler spike after a teleport or respawn. |
+| `SetBypass(bool enabled)` | When `true`, skips the SoundTrace render and passes the original output through. |
+| `ResetMotionState()` | Re-anchors the motion reference to the current Transform to prevent a Doppler spike after a teleport. |
 
-To synchronize multiple `AudioSource` instances, call `PlayScheduled()` against the same
-`AudioSettings.dspTime` reference.
+To align the playback timing of multiple `AudioSource`s, call `PlayScheduled()` against the same
+`AudioSettings.dspTime`.
 
 ## SoundTraceObject
 
 ![SoundTraceObject Inspector](/img/unity/Img_STObj.png)
 
-`SoundTraceObject` registers `MeshFilter.sharedMesh` and the Renderer submesh material slots.
-Enable `Read/Write Enabled` in Import Settings because builds must read the mesh data.
+`SoundTraceObject` registers `MeshFilter.sharedMesh` and the Renderer's submesh material slots. The
+mesh data must be readable in a Build, so enable `Read/Write Enabled` in the Import Settings. Do not
+call `UploadMeshData(true)` on procedural meshes.
 
-### Geometry and BVH
+### Geometry and acceleration structure
 
-![BVH shown in the Scene View](/img/unity/Img_STObjDome.png)
+![BVH displayed in the Scene View](/img/unity/Img_STObjDome.png)
 
 | Field | Default | Description |
 |---|---:|---|
-| `BVH Type` | `LBVH_SIMD8` | `HKDTree`, `LBVH`, `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16` |
-| `BVH Max Depth` | `12` | `1..32` |
-| `Primitives Per Leaf` | `16` | `1..128` |
-| `Update Mode` | `Static` | `Static`, `Dynamic`, `Refit`, `Rebuild` |
+| `BVH Type` | `LBVH_SIMD8` | `HKDTree` (→ SimpleST HybridKD), `LBVH` (→ LBVH), `LBVH_SIMD4/8/16` (→ LBVH_SIMD) |
+| `BVH Max Depth` / `Primitives Per Leaf` | `12` / `16` | Compatibility fields. **Ignored, because SimpleST decides the leaf size internally** |
+| `Update Mode` | `Static` | `Static` (static TLAS) / `Dynamic` (transform updates only). `Refit` and `Rebuild` are kept for compatibility |
 
-#### BVH Type
+`BVH Type` only chooses the acceleration structure kind at mesh registration time. Objects that use
+the same Mesh asset, material slots, and BVH settings share the native mesh through
+`SoundTraceMeshCache` with reference counting.
 
-| BVH Type | Description |
-|---|---|
-| `HKDTree` | Uses KD-partition traversal. It supports Refit, but switches to BVH-style fallback traversal after a Refit. The GPU backend does not support it. |
-| `LBVH` | Uses Morton codes, rebuilds faster than HKDTree, and supports Refit. After uploading vertices through the low-level API, it can be refit for SkinnedMesh or procedural-mesh deformation. The scalar format does not support the GPU backend. |
-| `LBVH_SIMD4` | Processes LBVH leaf intersections in SIMD batches of 4. Refit supported and GPU Backend supported. |
-| `LBVH_SIMD8` | Processes LBVH leaf intersections in SIMD batches of 8. This is the current default. Refit supported and GPU Backend supported. |
-| `LBVH_SIMD16` | Processes LBVH leaf intersections in SIMD batches of 16. Refit supported and GPU Backend supported. |
+### Skinned and procedural meshes
 
-The Inspector displays a warning when `HKDTree` or scalar `LBVH` is selected in a scene that requests the GPU backend.
-
-#### Update Mode
-
-| Update Mode | STCoreV2 update policy | Meaning |
-|---|---|---|
-| `Static` | `EXA_OBJECT_UPDATE_STATIC` (0) | No runtime TLAS/BLAS updates. Use it for level geometry that does not move. |
-| `Refit` | `EXA_OBJECT_UPDATE_REFIT` (1) | The deformation policy: it refits the mesh BLAS and refreshes the TLAS bounds. Target it at skinned and procedural meshes whose topology stays fixed. |
-| `Rebuild` | `EXA_OBJECT_UPDATE_REBUILD` (2) | Rebuilds the BVH. Use it for geometry whose topology changes. |
-| `Dynamic` | `EXA_OBJECT_UPDATE_DYNAMIC` (3) | Transform-only: refreshes the TLAS instance. |
-
-#### Refit and vertex upload
-
-`Refit` is STCoreV2's **update policy for vertex deformation (skinned animation)**. The core
-does not decide on its own when vertices are uploaded: a mesh update is the
-`exaMeshUpdateVertices` → `exaMeshRefit` two-call protocol, and the object's `Refit` setting is
-the policy switch that makes the result reach the BLAS and the TLAS bounds. **The host SDK owns
-the upload.**
-
-The Unity `SoundTraceObject` MonoBehaviour currently syncs only the Transform; it never calls the
-vertex upload. It requires `MeshFilter`/`MeshRenderer`, so it does not bind a
-`SkinnedMeshRenderer` directly, and the mesh geometry is snapshotted once in `OnEnable`. To make
-skinned or procedural deformation audible in Unity, set `Update Mode` to `Refit` and push the
-vertices yourself through `MeshCore`, as shown below. The UE plugin's
-`SoundTracingObjectComponent` performs this upload automatically for skeletal meshes.
-
-```csharp
-using Exarion.SoundTrace;
-using Exarion.SoundTrace.Core;
-using Exarion.SoundTrace.Native;
-using UnityEngine;
-
-[RequireComponent(typeof(SoundTraceObject))]
-public sealed class SoundTraceSkinnedRefit : MonoBehaviour
-{
-    [SerializeField] private SkinnedMeshRenderer skin;
-
-    private SoundTraceObject _object;
-    private Mesh _baked;
-    private ExaVec3f[] _vertices;
-
-    private void Awake()
-    {
-        _object = GetComponent<SoundTraceObject>();
-        _baked = new Mesh();
-    }
-
-    private void LateUpdate()
-    {
-        SoundMeshCore mesh = _object.MeshCore;
-        if (mesh == null || !mesh.IsValid)
-            return;
-
-        // 1) Bake the current pose and read the vertices. This is the Unity Mesh
-        //    API, so it must happen on the main thread.
-        skin.BakeMesh(_baked);
-        Vector3[] baked = _baked.vertices;
-        if (_vertices == null || _vertices.Length != baked.Length)
-            _vertices = new ExaVec3f[baked.Length];
-        for (int i = 0; i < baked.Length; ++i)
-            _vertices[i] = new ExaVec3f(baked[i].x, baked[i].y, baked[i].z);
-
-        // 2) Run the upload and the refit as the two-call protocol on the control thread.
-        ExaVec3f[] vertices = _vertices;
-        SoundTraceControlThread.Invoke(() =>
-        {
-            if (mesh.UpdateVertices(vertices))
-                mesh.Refit();
-        });
-    }
-
-    private void OnDestroy()
-    {
-        if (_baked != null)
-            Destroy(_baked);
-    }
-}
-```
-
-Things to watch for:
-
-- The vertex count must **exactly match** the count the mesh was built with.
-  `exaMeshUpdateVertices` rejects a mismatch with `EXA_ERR_INVALID_ARG`. Put the
-  `SkinnedMeshRenderer` bind-pose mesh into `MeshFilter.sharedMesh` so the counts line up.
-- Vertices are uploaded in mesh local space. `SoundTraceObject` syncs the object's position,
-  rotation, and scale separately, so bake without applying the scale.
-- The native mesh is refcount-shared by `SoundTraceMeshCache`, keyed on the Mesh asset, the
-  material slots, and the BVH settings. When several objects use the same combination, refitting
-  one deforms all of them. Give each object its own Mesh instance if they must deform
-  independently.
-- `SoundTraceControlThread.Invoke` is a blocking call. Calling it every frame for many objects
-  stalls the main thread behind the control thread's propagation frame, so keep the set of
-  refit objects small.
-- Use a refit-capable `LBVH` family BVH Type. `HKDTree` also refits, but traversal switches to
-  the BVH-style fallback afterwards.
-- A topology change — different triangle indices — cannot be handled by a refit. Rebuild through
-  `MeshCore.SetData(...)` and set `Update Mode` to `Rebuild`.
+SimpleST has no vertex refit. To reflect deformed geometry, bake a new Mesh and re-register the
+`SoundTraceObject` (or call `MeshCore.SetData`) to **replace it with a new native mesh**. Replacing
+every frame is expensive, so refresh periodically (for example every 0.2 ~ 0.5 s).
 
 ### Public methods
 
-`Auto Set` matches Renderer material names against the bundled presets. If an imported model
-root has no mesh and its children own the geometry, use `Add To Child Meshes`.
+`Auto Set` matches Renderer material names against the bundled presets. If an imported model root
+has no mesh and the children own the geometry, use `Add To Child Meshes`.
 
 | Method | Behavior |
 |---|---|
-| `AutoSetMaterialSlots()` | Iterates over every submesh, matches the Renderer material name against the bundled presets, and refreshes the slot configuration. |
-| `GetMaterialPresetIndex(int slotIndex)` | Returns the preset index for the specified slot. Returns `0` when no slots exist or the slot index is invalid. |
-| `GetPresetName(int slotIndex)` | Returns the display name of the preset assigned to the specified slot. Returns `Concrete` when the preset cannot be found. |
-| `SetMaterialPresetIndex(int slotIndex, int presetIndex)` | Changes one slot's preset. Clamps `presetIndex` to at least `0` and returns `false` when the slot index is invalid. |
-| `SetMaterialPresetForAllSlots(int presetIndex)` | Applies one preset to every slot. Clamps `presetIndex` to at least `0` and returns `false` when there are no slots to update. |
-| `GetNativeMaterialIndices()` | Returns the per-submesh preset indices in the array format used to register a native mesh. Missing or empty slots use `0`. |
-| `GetTriangleCount()` | Sums the index counts of all submeshes and returns the triangle count. Returns `0` when no mesh is assigned. |
-| `static IsGpuCompatibleBvhType(BvhType value)` | Returns `true` for `LBVH_SIMD4`, `LBVH_SIMD8`, and `LBVH_SIMD16`. |
+| `AutoSetMaterialSlots()` | Automatically matches the Renderer material name of every submesh against the bundled presets. |
+| `GetMaterialPresetIndex(int slotIndex)` / `GetPresetName(int slotIndex)` | Returns the preset index / display name of a slot. |
+| `SetMaterialPresetIndex(int slotIndex, int presetIndex)` | Changes the preset of one slot. |
+| `SetMaterialPresetForAllSlots(int presetIndex)` | Applies the same preset to every slot. |
+| `GetNativeMaterialIndices()` | Returns the per-submesh preset indices as an array in the native registration format. |
+| `GetTriangleCount()` | Returns the triangle count across all submeshes. |
+| `static IsGpuCompatibleBvhType(BvhType value)` | Compatibility only. `true` for the SIMD family |
 
-## Acoustic materials and Transmission
+## Sound materials
 
-The default authoring asset is
-`Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`.
-Use `SoundTrace > Material Preset Library` to:
+The default authoring asset is `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`.
+In `SoundTrace > Material Preset Library` you can:
 
 - Add, remove, and reorder presets
-- Import or export `soundMaterial.json`, or re-import the bundled JSON
-- Edit Scattering and the 8-band Reflection, Absorption, and Transmission graphs
-- Select the `Transmission Model`
+- Import/export `soundMaterial.json` and re-import the bundled JSON
+- Edit Scattering and the **9-band** Reflection, Absorption, and Transmission graphs
 
 ![Material Preset Library](/img/unity/Image_Mat_01.png)
 
-The frequency-band centers are `67.5`, `125`, `250`, `500`, `1000`, `2000`, `4000`, and
-`8000 Hz`. Material order and table indices must match.
+The band centers are `63`, `125`, `250`, `500`, `1000`, `2000`, `4000`, `8000`, and `16000 Hz`.
+`R + A + T` in every band must be `1`, with a tolerance of `0.001`. Wrong lengths and coefficients
+are reported as errors, and 8-band values are not duplicated to fill 9 bands. The default materials
+are the 24 BRAS materials from SimpleST's `material3.txt`. Slot indices in existing scenes are kept,
+but the acoustic result is not identical to the old STCore materials, so re-enter custom materials
+as 9 bands.
 
-![Per-band material graph editing](/img/unity/Image_Mat_02.png)
+![Editing the per-band material graphs](/img/unity/Image_Mat_02.png)
 
-### Transmission Model
-
-| Model | Input | Geometry requirements |
-|---|---|---|
-| `Surface` | Per-band transmitted-energy coefficient remaining after crossing a surface, `0..1` | May be used with open faces and thin surfaces |
-| `Solid Distance` | Per-band material reference distance (m) at which transmitted energy reaches `-30 dB`; `0` or greater | Requires a closed volume with consistent face winding |
-
-The `Solid Distance` input is not the actual thickness of the object. At runtime, attenuation is
-applied from the distance actually traveled through the geometry. Changing the model does not
-calculate the eight values automatically. Enter a verified value for every band and do not leave
-them at the default `0`.
-
-In JSON, the absence of `transmissionDistanceToMinus30DbMeters` selects `Surface`; its presence
-as exactly eight finite, non-negative values selects `Solid Distance`. When exporting `Surface`,
-the field is omitted instead of being written as `null` or an empty array.
+STCoreV2's `Transmission Model` (`Surface` / `Solid Distance`) is gone. Transmission is expressed
+only through the per-band surface transmission coefficient `T`.
 
 ## SoundTracePathVisualizer
 
 ![SoundTracePathVisualizer Inspector](/img/unity/Img_STPathVisual.png)
 
-Add one to the same GameObject as the Manager.
+Add exactly one to the same GameObject as the Manager.
 
 | Inspector field | Default | Description |
 |---|---:|---|
-| `Enable Path Visualization` | Enabled | Controls whether the path mesh is displayed. |
-| `Refresh Interval Ms` | `50` | Minimum interval between visualization-mesh rebuilds. Does not affect the acoustic propagation interval. |
-| `Max Visualized Paths` | `1024` | Maximum number of paths to display. |
-| `Path Width` | `0.08` | Line width. |
-| `Path Alpha Intensity` | `0.5` | Display intensity. |
-| `Draw Hit Triangles` | Disabled | Displays hit triangles in the Scene view. |
+| `Enable Path Visualization` | On | Whether to display the path mesh |
+| `Refresh Interval Ms` | `50` | Minimum interval between visualization mesh rebuilds. Does not affect the propagation cadence |
+| `Max Visualized Paths` | `1024` | Maximum number of paths to display (`16..5000`) |
+| `Path Width` | `0.08` | Line width |
+| `Path Alpha Intensity` | `0.5` | Display intensity |
+| `Path Depth Mode` / `Sorting Layer` / `Sorting Order` | `AlwaysOnTop` / `Default` / `10` | Render sorting |
+| `Draw Hit Triangles` | Off | Shows hit triangles in the Scene View |
 
-Direct, Reflection, Diffraction, Reverb, and Transmission use distinct path colors. This
-component is for debugging; disable it during performance measurements and in release builds.
+Direct, Reflection, Diffraction, Reverb, and Transmission paths are drawn in per-type colors. It is a
+debug tool; disable it for performance measurements and release builds. The main public members are
+`Active`, `Render()`, and `Clear()`.
 
-The main public members are `Instance`, the settings and count properties, `Render()`, and
-`Clear()`.
+## Using with FMOD
+
+When the SimpleST FMOD plug-in (`SimpleSTFmod`) is present in the project, SoundTrace automatically
+runs in **FMOD integration** mode. Spatial audio rendering is done by the SimpleST Source / Listener
+DSPs in FMOD Studio, and SoundTrace only uploads geometry and materials to the plug-in context via
+`SoundTraceManager` + `SoundTraceObject`. `SoundTraceListener` / `SoundTraceSource` log a warning
+and disable themselves.
+
+![Unity FMOD install menu](/img/fmod/unity-install-menu.png)
+
+1. Install FMOD for Unity 2.04 (embed a tgz install under `Packages/`).
+2. In the **SoundTrace › FMOD › Install SimpleST FMOD Plug-in...** menu, choose the folder containing
+   `SimpleSTFmod` (for example `fmod/plugins`, or `mac/plugins` on Mac). The DLL/bundle is copied into
+   the FMOD plug-in folder and registered under FMOD Settings › Dynamic Plugins.
+3. In FMOD Studio, put **SimpleST Listener** on the master bus and **SimpleST Source** on the master
+   track of 3D events in place of the FMOD Spatializer — see [FMOD plug-in](./fmod.md).
+4. In the scene, place `SoundTraceManager`, `SoundTraceObject` for the geometry, and the FMOD
+   `StudioListener`.
+
+There is one engine instance. SimpleSTFmod loads the same `SimpleSTRealtime` that SoundTrace
+P/Invokes, and every control call runs on the plug-in's control thread. E2E passed on 2026-10-07
+with Unity 6000.3 + FMOD for Unity 2.04 (objects 0→6→0, paths 1→266→1).
+
+## Using with Wwise
+
+When `SimpleSTWwise` is present in the DSP folder of the Wwise Unity integration, SoundTrace runs in
+**Wwise integration** mode (FMOD takes precedence if both are present).
+
+![Unity Wwise install menu](/img/wwise/unity-install-menu.png)
+
+1. Install the Wwise Unity integration with the Audiokinetic Launcher.
+2. In the **SoundTrace › Wwise › Install SimpleST Wwise Plug-in...** menu, choose the folder containing
+   `SimpleSTWwise`. It is copied into the DSP folder and loaded by the Wwise sound engine.
+3. In the Wwise project, put **Sound-tracing Renderer** on an Audio Objects bus and route 3D sounds to
+   that bus (disable or flatten Attenuation) — see [Wwise plug-in](./wwise.md).
+4. In the scene, place `AkInitializer`, `AkAudioListener`, `AkGameObj` on the emitters, plus
+   `SoundTraceManager` and `SoundTraceObject`. Wwise Unity units are meters, so `sceneRatio = 1`.
+
+## WebGL
+
+Unity WebGL does not provide `OnAudioFilterRead`, so a separate path is used. The AudioClip PCM and
+playback state are passed through, and the SimpleST buffered host renderer output is sent to an
+AudioWorklet through a shared ring buffer.
+
+- Import AudioClips with **Decompress On Load**.
+- Serve over HTTPS or localhost with the `Cross-Origin-Opener-Policy: same-origin` and
+  `Cross-Origin-Embedder-Policy: require-corp` headers. Audio starts after user input.
+- The build post-processor copies `Runtime/Web/*.bytes` into `StreamingAssets/SoundTrace/`, so ship
+  that folder as well.
+- Unity AudioMixer effect chains are not applied to the separate SoundTrace output on WebGL.
 
 ## Samples
 
@@ -404,32 +345,46 @@ Demonstrates a basic room, source, listener, geometry, material presets, and pat
 
 ![ST_SampleScene02](/img/unity/SampleScene02.png)
 
-Demonstrates source/listener movement, material-preset changes, and comparison between the
-original Unity audio and SoundTrace output.
+Demonstrates source/listener movement, material preset changes, and a comparison between Unity's
+original audio and the SoundTrace output.
 
 ### ST_SampleScene03
 
 ![ST_SampleScene03](/img/unity/Img_25_Sample03.png)
 
 Demonstrates multiple sources in a large space, wall occlusion, HRTF directionality while moving,
-and room response.
+and the room response.
+
+## Contract changes from STCoreV2
+
+| Before | Now |
+|---|---|
+| `exaSound` / STCoreV2 entry points | `st_rt_*` / SimpleST ABI 6 |
+| 0 = invalid handle | **-1 = invalid**, 0 is valid |
+| Listener renders per source | Per-source mono stream + one listener-wide mix |
+| 8-band materials, scalar scattering | **9-band** R/A/T/scattering from 63…16000 Hz |
+| Mutable native materials | Immutable materials, rebinding to a new material/mesh |
+| STCore polynomial distance attenuation | SimpleST physical distance attenuation |
+| STCore GPU/provider/path-cache settings | SimpleST CPU pipeline scheduler |
+| KU100 Resources table | Embedded MIT KEMAR HRTF |
+| `exaMeshUpdateVertices` → `exaMeshRefit` | Replace with a new mesh |
 
 ## Troubleshooting
 
-| Symptom | Check |
+| Symptom | What to check |
 |---|---|
-| No audio output | Check the first Manager initialization error in the Console, Stereo/Best latency, the AudioSource clip, and the presence of a Manager and Listener |
-| Source/Listener/Object reports that it requires a Manager | Find the earlier `Failed to initialize SoundTraceManager` cause instead of a later cascade error |
-| HRTF initialization fails | Check that the Resources asset for the selected mode exists and is not empty |
-| Geometry is ignored | Check `Read/Write Enabled`, MeshFilter/MeshRenderer, child-mesh placement, and registration state |
-| A deformed mesh does not update at runtime | `Update Mode` alone does not upload vertices or topology; use a separate low-level geometry update path |
-| GPU is not active | Check `GpuBackendStatus`, the Console fallback reason, and the Object SIMD BVH selection |
-| Pitch jumps after a teleport | Call `ResetMotionState()` immediately after changing the Transform |
-| Performance is insufficient | Step down `Quality → Middle → Fast`, reduce the path cache buffer, then disable the path visualizer |
-| Multiple sources produce a comb-filtered sound | Call `PlayScheduled()` against the same `AudioSettings.dspTime` |
+| No sound | The first Manager initialization error in the Console, Stereo/Best latency, AudioSource clip, presence of Manager/Listener |
+| Source/Listener/Object requires a Manager | The `Failed to initialize SoundTraceManager` cause logged before the cascade errors |
+| Conflict with the old version | The STCoreV2 `Assets/SoundTrace` was moved outside Assets |
+| Geometry is not reflected | `Read/Write Enabled`, MeshFilter/MeshRenderer, child mesh placement, registration status |
+| Deformed meshes are not reflected at runtime | SimpleST has no refit. Replace with a new mesh |
+| Listener/Source disabled in FMOD/Wwise mode | Expected — the middleware plug-in renders |
+| Pitch jumps after a teleport | Call `ResetMotionState()` right after changing the transform |
+| Not enough performance | In order: `Quality → Middle → Fast`, lower Reverb Ray Resolution, disable the path visualizer |
+| Multiple sources sound like comb filtering | Run `PlayScheduled()` against the same `AudioSettings.dspTime` |
 
 ## Next
 
 - [SDK Overview](./overview.md)
-- [Web SDK](./web.md)
-- [Unreal Engine SDK](./ue.md)
+- [FMOD plug-in](./fmod.md) · [Wwise plug-in](./wwise.md)
+- [Web SDK](./web.md) · [Unreal Engine SDK](./ue.md)

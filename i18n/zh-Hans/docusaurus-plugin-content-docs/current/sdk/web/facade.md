@@ -1,12 +1,12 @@
 ---
 title: Facade API
-description: 在 ST 与 MT 上用法一致的 soundtrace.js 推荐 API。
+description: 在 ST 与 MT 上用法一致的 soundtrace.js 1.0.0 推荐 API，以及因切换到 SimpleST 而变化的选项。
 ---
 
 # Facade API
 
-Facade 是普通 Web 应用的推荐入口。`SoundTrace` 管理场景生命周期，`Listener`、
-`Source`、`Mesh` 表示应用的 3D 状态。
+Facade 是普通 Web 应用的推荐入口。`SoundTrace` 管理场景生命周期，`Listener`、`Source`、`Mesh`
+表示应用的 3D 状态。所有公开方法在 `thread: 'st'` 和 `'mt'` 上行为一致，诊断全部为异步。
 
 [Web SDK 概览](../web.md) · [Native API](./native.md)
 
@@ -14,48 +14,40 @@ Facade 是普通 Web 应用的推荐入口。`SoundTrace` 管理场景生命周�
 
 ```ts
 const sound = await SoundTrace.create(audioContext, options);
+sound.output.connect(audioContext.destination);
 
 sound.listener.setPose(listenerPose);
 const mesh = sound.addMesh(meshOptions);
 const source = sound.addSource(sourceOptions);
 
-const spatial = await source.play(inputNode);
-spatial.connect(sound.output).connect(audioContext.destination);
-
+await source.play(inputNode);      // 输入捕获。输出只有 sound.output 一个
 await sound.update(0);
 ```
-
-这套调用流程在 ST 和 worker-hosted MT 上完全相同。在 MT 上请使用
-`debugSnapshot()` 这类异步回读，而不是同步的 native getter。
 
 ## `SoundTrace` 选项
 
 | 选项 | 默认值 | 说明 |
 |---|---|---|
-| `mode` | 未指定 | `'single_thread'`、`'multi_thread'`、`'gpu'` 之一 |
-| `thread` | `'auto'` | 高级 WASM 选择：`'auto'`、`'st'`、`'mt'`；`mode` 优先 |
+| `thread` | `'auto'` | `'st'`（同步传播）/ `'mt'`（管线传播）。两者都使用专用 Worker + pthread WASM |
+| `mode` | 未指定 | `'single_thread'` / `'multi_thread'`。是 `thread` 的别名，`mode` 优先。`'gpu'` 会被**拒绝** |
 | `quality` | `'balanced'` | `'fast'`、`'balanced'`、`'quality'` |
-| `throughput` | 未指定 | MT worker 预算：`'low'`、`'medium'`、`'max'` |
-| `coordinateBasis` | core 坐标系 | 把渲染器坐标系转换为 SDK 坐标系 |
-| `coreBaseUrl` | 包内 | 包含 `st/`、`mt/` 的 core URL |
-| `assetBaseUrl` | 包内 | 材质与 HRTF 资源的 URL |
-| `propagationThreadCount` | 引擎默认 | MT propagation 线程数的低层 override |
-| `defaultMeshBuild` | 引擎默认 | `addMesh()` 使用的默认 BVH build 选项 |
-| `sceneRatio` | `1.0` | 每个场景长度单位对应的米数。不要与预缩放几何体混用（会双重缩放） |
-| `autoLoadMaterials` | `true` | 加载默认材质，启用按名称映射 |
-| `transmissionModel` | `'surface'` | 直达声穿过材质时的能量衰减模型，参见[材质透射模型](#材质透射模型) |
-| `debug` | `false` | 输出初始化诊断日志 |
-
-Three.js 的相机朝向 `-Z`，因此可以从下面的 basis 开始。
+| `earlyReflectionMode` | `'hybrid'` | 实时始终为 Hybrid。其他值会被拒绝 |
+| `coordinateBasis` | 引擎坐标系（`+Z` forward） | 把渲染器坐标系转换为 SDK 坐标系 |
+| `coreBaseUrl` | 包内 | 存放 `SimpleSTRealtime.mjs/.wasm`、`SimpleSTOffline.mjs` 的 URL |
+| `assetBaseUrl` | 包内 | 材质 JSON 与 HRTF 资源的 URL |
+| `propagationThreadCount` | 同步 1 / 管线 3 | 计算预算 1 ~ 5（负数 = 5）。管线模式至少 3 |
+| `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT 工作线程预算的简写 |
+| `sceneRatio` | `1.0` | 每个场景长度单位对应的米数（cm = 0.01）。**不要**与预缩放几何体混用 |
+| `autoLoadMaterials` | `true` | 加载默认材质表并启用按名称映射 |
+| `transmissionModel` | `'surface'` | SimpleST 只支持表面 R/A/T。`'solid'` 会被**拒绝** |
+| `defaultMeshBuild` | — | STCoreV2 BVH 选项。指定后加载会被**拒绝** |
+| `debug` | `false` | 输出一行初始化诊断日志 |
 
 ```ts
 const sound = await SoundTrace.create(audioContext, {
-  mode: 'single_thread',
-  coordinateBasis: {
-    right: [-1, 0, 0],
-    up: [0, 1, 0],
-    forward: [0, 0, -1],
-  },
+  thread: 'mt',
+  quality: 'balanced',
+  coordinateBasis: { right: [-1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }, // Three.js
 });
 ```
 
@@ -66,42 +58,47 @@ const sound = await SoundTrace.create(audioContext, {
 | API | 说明 |
 |---|---|
 | `SoundTrace.create(ctx, options?)` | 创建并加载引擎（构造函数 + `load()`） |
-| `output` / `audioContext` | master output 节点与应用传入的 `AudioContext` |
+| `output` / `audioContext` | 听者主输出节点（立体声）与应用传入的 `AudioContext` |
 | `listener` | 场景中唯一的听者 |
-| `addMesh(options)` | 添加声学几何体 |
-| `removeMesh(mesh)` | 移除几何体 |
+| `descriptor` | `{ transport: 'worker', thread: 'st' \| 'mt' }` — 仅用于诊断，不要用于分支 |
+| `addMesh(options)` / `removeMesh(mesh)` | 添加/移除声学几何体 |
 | `addSource(options)` | 添加空间声源 |
-| `setQuality(tier)` | 更改质量预设 |
-| `setAudioOption(options)` | 覆盖块大小与输出通道 |
-| `loadHrtf(mode, source?)` | 加载随包或自定义 HRTF |
+| `setQuality(tier)` | 更改质量预设（听者与声源射线和深度） |
+| `setAudioOption(options)` | 覆盖输入块大小、输出通道 |
+| `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'`（别名 `'convolution'` / `'steamaudio'`） |
 | `loadMaterialAssets()` | 手动加载材质表（`autoLoadMaterials: false` 时） |
-| `enableGpu()` | 开启 WebGPU 传播并返回是否成功；不支持时返回 `false` 并保持 CPU |
-| `update(dt?)` | 更新场景并执行 propagation |
-| `debugSnapshot(options?)` | 兼容 MT 的异步诊断快照 |
-| `getStatistics(options?)` | valid path、ray 与内存统计（async） |
-| `getGpuStats()` | GPU dispatch/fallback 计数（async） |
-| `getIRs()` | 最近一次 propagation 的各 path 脉冲响应（async） |
-| `renderMonoImpulseResponse(source, sec)` | 离线 mono IR 渲染，仅在输出通道为 1 时使用 |
-| `reset()` | 重置引擎状态（async） |
+| `update(dt?)` | 更新场景并执行传播。以本帧的有效路径数 resolve |
+| `debugSnapshot(options?)` | 异步诊断快照。`.simplest` 中包含 SimpleST scene/timing/render/IR 统计 |
+| `getStatistics(options?)` | `debugSnapshot` 的封装。`validPathCount` 与 `.simplest` |
+| `getIRs()` | 在独立 Offline Worker 中重新计算 9 频段 early path IR |
+| `renderMonoImpulseResponse(source, sec)` | 在 Offline Worker 中生成 44.1 kHz 单声道压力 IR（最长 30 s） |
+| `enableGpu()` / `getGpuStats()` | **拒绝** — SimpleST Web 仅支持 CPU |
+| `reset()` | 重置引擎状态（async）。Hybrid、材质、质量会重新应用 |
 | `dispose()` | 释放 SDK 拥有的资源。幂等，可配合 `using` |
 
 ### `Listener`
 
 ```ts
 sound.listener
-  .setPose({ position: [0, 1.6, 0], orientation: [0, 0, 0, 1] })
-  .setRenderOptions({ hrtfQuality: 'medium' });
+  .setPose({ position: [0, 1.6, 0], orientation: camera.quaternion.toArray() })
+  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 })
+  .setOutputMode('hrtf');   // 'hrtf'（双耳）| 'speaker'（立体声声像）
 ```
 
-场景中只有一个 listener。它由 `SoundTrace` 拥有，因此不需要单独 dispose。
+场景中只有一个 listener，由 `SoundTrace` 拥有。`orientation` 直接传入相机的当前旋转四元数（XYZW）。
 
-用 `setOutputMode()` 切换输出渲染器。默认的 `'hrtf'` 是双耳渲染器，`'speaker'`
-选择内部的 Ambisonic 扬声器渲染器（1ch/2ch）。HRTF 模式与已加载的 HRTF 表仅对
-`'hrtf'` 输出生效。
+`setRenderOptions` 接受的键：
 
-```ts
-sound.listener.setOutputMode('speaker');
-```
+| 键 | 含义 |
+|---|---|
+| `earlyReflectionMode` | 仅允许 `'hybrid'` |
+| `useDoppler` | 可变延迟 Doppler 音高 |
+| `useLimiter` | 输出限制器 |
+| `pathFadeTime` | 路径出现/消失的交叉淡化（秒） |
+| `maxDelaySeconds` | 渲染器保留的最大路径延迟（秒） |
+| `diffuseEnabled` | late reverb 渲染开关 |
+
+`hrtfQuality`、`diffuseQuality`、`delayInterpolation`、`hrtfMode` 为 STCoreV2 专用，会被**拒绝**。
 
 ### `Source`
 
@@ -109,43 +106,28 @@ sound.listener.setOutputMode('speaker');
 const source = sound.addSource({
   position: [2, 1, -1],
   gain: 1,
-  paths: {
-    direct: true,
-    reflection: true,
-    diffraction: true,
-    reverberation: true,
-  },
+  paths: { direct: true, reflection: true, diffraction: true, reverberation: true },
 });
 
-source.setPose({ position: [1, 1, -2] });
-source.setGain(0.8);
+source.setPose({ position: [1, 1, -2], velocity: [0.5, 0, 0] });
+source.setGain(0.8);                          // 压力增益。传给引擎时为 energy = gain²
 source.setPathEnabled('reverberation', false);
+source.setDirection([0, 0, -1]);
 ```
 
-`play(input, channels?)` 返回已接入输入的 `AudioWorkletNode`。输出由应用连接到
-`sound.output` 或其他 Web Audio graph。
+| API | 说明 |
+|---|---|
+| `play(input, channels?)` | 返回已接入输入的 `AudioWorkletNode`。**输出为静音**，实际声音来自 `sound.output` |
+| `setPose(pose)` / `setGain(g)` | 位置、速度、方向，增益 |
+| `setPathEnabled(path, on)` / `setPathOptions(o)` / `isPathEnabled(path)` | `'direct'`（含透射）/ `'reflection'` / `'diffraction'` / `'reverberation'` |
+| `setDirection(v)` | 声源 forward。以无 roll 的最小旋转同时更新 orientation |
+| `setDirectivityTable(anglesDeg, attenDbPerBand)` / `setDirectivityEnabled(on)` | 把按角度的 9 频段衰减表转换为 SimpleST 指向性表并应用 |
+| `dispose()` | 释放声源与流 |
 
 #### 距离衰减
 
-`addSource()` 会对全部 5 种 path 应用默认衰减系数
-`{ constant: 1, linear: 0, quadratic: 1 }`。
-
-```text
-gain = 1 / (constant + linear * distance + quadratic * distance^2)
-```
-
-也就是说默认曲线为 `1 / (1 + distance²)`。`constant = 1` 防止距离接近 0 时增益
-发散，`quadratic = 1` 提供接近平方反比的衰减。
-
-#### 指向性
-
-要让声源具有指向性，需要注册按角度的频段衰减表并启用它。
-
-```ts
-source.setDirection([0, 0, -1]);
-source.setDirectivityTable(anglesDeg, attenDbPerBand);
-source.setDirectivityEnabled(true);
-```
+STCoreV2 的逐声源多项式衰减（`constant / linear / quadratic`）已不存在。SimpleST 对所有路径应用
+物理 `1/r` 衰减和 ISO 9613-1 空气吸收，参考距离（1 m）与最小距离（1 m）是引擎策略。
 
 ### `Mesh`
 
@@ -163,78 +145,53 @@ mesh.setPose({
 });
 ```
 
-当整个网格使用同一种材质时，`indices` 很方便。若需要逐面材质，请改为传入
+`indices` 用于整个网格使用同一种材质的情况。若需要逐面材质，请传入
 `{ a, b, c, materialIndex }` 形式的 `triangles`。
-
-创建之后仍可更改材质与更新策略。
 
 | API | 说明 |
 |---|---|
-| `setMaterial(material)` | 替换整个网格的材质 |
+| `setMaterial(material)` | 替换整个网格的材质。SimpleST 材质不可变，内部会重新绑定到新的材质/网格句柄 |
 | `setMaterialRange(triStart, triCount, material)` | 按三角形范围替换材质 |
-| `setUpdateType(type)` / `getUpdateType()` | `'static'`、`'refit'`、`'rebuild'`、`'dynamic'` |
+| `setUpdateType(type)` / `getUpdateType()` | `'static'`（静态 TLAS）/ `'dynamic'`（只更新变换）。`'refit'`、`'rebuild'` 仅为兼容保留，在 SimpleST 中会重新创建网格 |
 | `setPose(pose)` | 更新 position、orientation、scale |
-| `dispose()` | 释放网格与 collider |
+| `dispose()` | 释放网格与对象 |
 
-不动的墙体用 `'static'`，只有顶点变化的几何体用 `'refit'`，拓扑发生变化时用
-`'rebuild'`。
+BVH 由 SimpleST 拥有（默认 TinyBVH）。没有逐网格构建选项。
 
-## 材质透射模型
+## 相对 STCoreV2 的选项变更摘要
 
-`transmissionModel` 决定直达声穿过墙体等材质时如何损失能量。
-
-| 值 | 行为 |
+| 之前 | 现在 |
 |---|---|
-| `'surface'`（默认） | 每穿过一个表面就应用一次材质的透射系数，与墙体厚度无关 |
-| `'solid'` | 考虑厚度：按 ray 在 solid 内部经过的距离，应用材质各频段的厚度，越厚的墙阻隔越强 |
-
-```ts
-const sound = await SoundTrace.create(audioContext, {
-  mode: 'single_thread',
-  transmissionModel: 'solid',
-});
-```
-
-`'solid'` 只会切换那些标注了厚度的材质，没有厚度的材质保持 `'surface'` 行为。
-在默认材质表中，22 种材质里有 15 种带有厚度。
-
-:::warning
-这是 opt-in 选项 —— 它会改变墙后声源的响度，因此若需要保持既有场景的声音，请
-保留默认值。
-:::
-
-## 传播 path cache
-
-每个会话启动时 propagation path cache 都是**开启**的（固定 seed，大小 512）。它在
-ST 和 MT 上都会在第一帧之前生效，`reset()` 之后也会重新应用，因此不需要调用任何
-API 来开启它。
+| `mode: 'gpu'`, `enableGpu()`, `getGpuStats()` | 拒绝（仅 CPU） |
+| `transmissionModel: 'solid'` | 拒绝（仅表面 T） |
+| `defaultMeshBuild`, `BvhType` | 拒绝（SimpleST 拥有 BVH） |
+| `hrtfQuality`, `diffuseQuality`, `delayInterpolation`, `hrtfMode` | 拒绝 |
+| `loadHrtf('parametric')`，KU100/H12 表 | 无。改为 `'mit-kemar'` / `'sadie-d2'` |
+| path cache（`seedValue`, `pathCacheSize`） | 无 |
+| 逐声源多项式距离衰减 | 物理衰减（引擎） |
+| 连接 `source.play()` 的输出节点 | 输出只有 `sound.output` 一个。`play()` 节点用于输入捕获 |
+| 8 频段材质 | 9 频段，严格 R+A+T=1 |
+| 同步 `getStatistics()` 等 | 全部为 `Promise` |
+| `./internal` entry, `SoundTraceMtUnsupportedError` | 已移除。通过 `./native` 访问 SimpleST 模块 |
 
 ## 帧更新
-
-pose 变更可以快速记录，但同一时刻只保持一个 propagation update 在执行更为安全。
 
 ```ts
 let updateInFlight: Promise<number> | undefined;
 
 function frame(dt: number) {
   if (!updateInFlight) {
-    updateInFlight = sound.update(dt).finally(() => {
-      updateInFlight = undefined;
-    });
+    updateInFlight = sound.update(dt).finally(() => { updateInFlight = undefined; });
   }
 }
 ```
 
+pose 变更可以快速记录，但同一时刻只执行一个传播 update 更为安全。
+
 ## 生命周期
 
-`SoundTrace`、`Source`、`Mesh` 都支持 `dispose()`。`SoundTrace.dispose()` 会清理
-包括 listener 在内的所有 SDK 所有资源，并且可以安全地多次调用。
-
-```ts
-source.dispose();
-mesh.dispose();
-sound.dispose();
-```
+`SoundTrace`、`Source`、`Mesh` 都支持 `dispose()`。`SoundTrace.dispose()` 会清理包括 listener 和
+Worker 在内的所有 SDK 所有资源，多次调用也是安全的。
 
 ## 相关文档
 

@@ -10,7 +10,7 @@ function Hero() {
   const {siteConfig} = useDocusaurusContext();
   const tagline = translate({
     id: 'homepage.hero.tagline',
-    message: '실시간 공간 음향 시뮬레이션 SDK · 제품군',
+    message: '실시간 공간 음향 시뮬레이션 엔진 · SDK · 플러그인',
   });
 
   return (
@@ -41,7 +41,7 @@ function Hero() {
           <span className={styles.heroSummaryItem} role="listitem">
             <strong>SDK</strong>
             <span className={styles.heroSummaryDetail}>
-              <Translate id="homepage.hero.summary.sdk">Web · Unity · Unreal 바인딩</Translate>
+              <Translate id="homepage.hero.summary.sdk">Web · Unity · Unreal · FMOD · Wwise</Translate>
             </span>
           </span>
           <span className={styles.heroSummaryItem} role="listitem">
@@ -60,11 +60,11 @@ function getProducts() {
   return [
     {
       title: 'Core',
-      href: '/core/stcorev2',
+      href: '/core/simplest',
       desc: translate({
         id: 'homepage.products.core.desc',
         message:
-          'C/C++ 네이티브 음향 시뮬레이션 엔진 STCoreV2. 모듈식 path module, lock-free, 크로스 플랫폼.',
+          'C++20 기하음향 엔진 SimpleST. 9밴드 재질, Hybrid 초기 반사, 호스트 pull 렌더, 공개 C ABI 6.',
       }),
     },
     {
@@ -73,7 +73,7 @@ function getProducts() {
       desc: translate({
         id: 'homepage.products.sdk.desc',
         message:
-          'Web · Unity · Unreal 바인딩 제공, Python 예정. Core를 각 플랫폼에서 사용.',
+          'Web · Unity · Unreal Engine 래퍼와 FMOD · Wwise 플러그인. Python 예정.',
       }),
     },
     {
@@ -153,8 +153,8 @@ function Highlights() {
             </h3>
             <p>
               <Translate id="homepage.highlights.crossPlatform.desc">
-                Windows·macOS·Linux 네이티브, WebAssembly, Unity·Unreal Engine
-                바인딩.
+                Windows·macOS·Linux·Android·iOS 네이티브, WebAssembly, Unity·Unreal
+                Engine 래퍼와 FMOD·Wwise 플러그인.
               </Translate>
             </p>
           </div>
@@ -168,7 +168,7 @@ export default function Home() {
   const {siteConfig} = useDocusaurusContext();
   const description = translate({
     id: 'homepage.hero.tagline',
-    message: '실시간 공간 음향 시뮬레이션 SDK · 제품군',
+    message: '실시간 공간 음향 시뮬레이션 엔진 · SDK · 플러그인',
   });
 
   return (

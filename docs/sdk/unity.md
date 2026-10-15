@@ -1,35 +1,43 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 설치, 주요 컴포넌트 API, HRTF, GPU/BVH, Surface 및 Solid Distance Transmission 설정.
+description: SoundTrace Unity SDK 0.3.0(SimpleST ABI 6) 설치, 컴포넌트 Inspector 계약, HRTF·출력, 재질, FMOD/Wwise 통합 모드, WebGL.
 ---
 
 # SoundTrace SDK for Unity
 
 SoundTrace Unity SDK는 Unity의 메시, Renderer 재질 슬롯, 음원, 리스너를
-[STCoreV2](../core/stcorev2.md)에 연결하는 실시간 공간 음향 플러그인입니다.
-
-이 페이지는 현재 Unity SDK의 공개 컴포넌트와 Inspector 계약을 기준으로 합니다.
+[SimpleST](../core/simplest.md)에 연결하는 실시간 공간 음향 플러그인입니다. 0.3.0부터 엔진이
+STCoreV2에서 **SimpleST 2.12.0 / ABI 6**으로 바뀌었고 렌더러는 **Hybrid**로 시작합니다.
+`SoundTraceManager`, `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`,
+`SoundTracePathVisualizer` 컴포넌트 이름과 스크립트 GUID, 샘플 씬은 그대로입니다.
 
 ## 요구 사항과 플랫폼
 
 | 항목 | 현재 패키지 기준 |
 |---|---|
-| Unity | 2022.3 LTS 이상 |
-| 번들 네이티브 플러그인 | macOS, Windows x64, iOS, Android |
-| Linux | 현재 패키지에 바이너리가 없으므로 Linux 호스트에서 별도 빌드 필요 |
-| Unity WebGL | 미지원. Unity WebGL에서는 `OnAudioFilterRead` 기반 DSP 처리를 사용할 수 없음 |
-
-`Use GPU Backend`는 propagation의 반사·리버브 연산에 WebGPU compute provider를
-요청합니다. 회절은 CPU에서 계산합니다. 실제 활성 여부는 네이티브 플러그인과 장치에서
-결정되며, GPU 초기화에 실패하면 CPU로 실행합니다.
+| Unity | 2022.3 LTS 이상 (2022.3.62f2 · 6000.3 검증) |
+| 패키지 | `SoundTrace-SimpleST-release.unitypackage` → `Assets/SoundTrace` |
+| 번들 네이티브 플러그인 | Windows x64 · macOS Universal · Linux x86_64 · Android(ARMv7/ARM64/x86_64, API 24+) · iOS 15+(device/simulator XCFramework) · WebGL |
+| WebGL | 지원 — 독립 pthread WASM + AudioWorklet 경로 (`OnAudioFilterRead` 미사용) |
+| GPU | 없음. `SoundTraceManager.IsGpuPropagate`는 항상 `false` |
 
 ## 설치
 
-SoundTrace Unity SDK 패키지와 설치 안내는 계약된 평가·라이선스 배포 채널로
-제공합니다. 전달받은 배포본의 설치 절차를 따르십시오.
+1. 대상 프로젝트의 Unity를 닫지 않아도 됩니다. `Assets > Import Package > Custom Package`에서
+   `.unitypackage`를 선택하면 `Assets/SoundTrace`에 설치됩니다.
+2. STCoreV2 기반 구버전 `Assets/SoundTrace`가 있으면 **먼저 Assets 밖으로 백업**한 뒤 임포트합니다.
+   옛 네이티브 플러그인이 함께 로드되지 않게 하기 위해서입니다. 같은 SimpleST 패키지의 업데이트는
+   GUID를 유지하므로 덮어써도 됩니다.
+3. 배포 폴더의 `install.py`로 자동 설치할 수도 있습니다. 파일 해시·GUID를 검사하고 기존 설치를
+   프로젝트의 `.simplest-backups`에 보존합니다.
+
+```bash
+python3 install.py /path/to/UnityProject
+# FMOD / Wwise 플러그인까지 함께: --fmod <plugins 폴더> 또는 --wwise <plugins 폴더>
+```
 
 샘플은 Package Manager에서 SoundTrace SDK를 선택한 뒤 `Samples > Demo Assets > Import`로
-가져옵니다.
+가져옵니다. 샘플 UI는 `com.unity.ugui`가 있을 때만 컴파일됩니다.
 
 ## Unity Audio 설정
 
@@ -39,36 +47,50 @@ SoundTrace Unity SDK 패키지와 설치 안내는 계약된 평가·라이선�
 
 ![Unity Audio 설정](/img/unity/Image01_AudioSetting.png)
 
-Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니다.
+Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니다. 출력 샘플레이트는 장치
+값을 그대로 쓰며(SimpleST가 내부 44.1 kHz와 변환), 장치 레이트가 바뀌면 네이티브 상태를
+같은 설정으로 재생성합니다.
 
 ## Audio Asset Import 설정
 
-모노 사운드 소스 사용을 전제로 하며, 오디오 클립은 PCM 포맷으로 설정합니다.
+모노 사운드 소스 사용을 전제로 하며, 오디오 클립은 PCM 포맷으로 설정합니다. WebGL은
+`Decompress On Load`가 필요합니다.
 
 ![Audio Asset Import 설정](/img/unity/ImportSetting.png)
 
 ## 가장 빠른 설정
 
 1. 빈 GameObject에 `SoundTraceManager`를 추가합니다.
-2. Main Camera에 `SoundTraceListener`를 추가합니다.
+2. `AudioListener`가 있는 Main Camera에 `SoundTraceListener`를 추가합니다.
 3. 음원 GameObject에 `SoundTraceSource`를 추가하고 같은 GameObject의 `AudioSource`에 clip을 지정합니다.
 4. 음향 geometry로 사용할 Mesh GameObject에 `SoundTraceObject`를 추가합니다.
 5. 필요하면 Manager와 같은 GameObject에 `SoundTracePathVisualizer`를 추가합니다.
 6. Play Mode에서 Console 오류, 소리, path를 확인합니다.
 
 동시에 로드된 scene 전체에서 활성 Manager와 Path Visualizer는 각각 하나만 사용할 수
-있습니다. 여러 Listener를 등록할 수 있지만 Source 렌더링은 첫 번째로 등록된
-`PrimaryListener`를 사용합니다.
+있습니다. 리스너는 SimpleST 컨텍스트당 하나이며 첫 번째로 등록된 `PrimaryListener`가 렌더합니다.
 
 ## 컴포넌트 개요
 
 | 컴포넌트 | 역할 | 필수 의존성 |
 |---|---|---|
-| `SoundTraceManager` | 런타임, scene, 재질 등록, propagation backend 관리 | 런타임당 1개 |
-| `SoundTraceListener` | Listener transform, ray 품질, 출력/HRTF 설정 | 활성 Manager |
-| `SoundTraceSource` | `AudioSource` 출력 공간화, path별 설정 | 같은 GameObject의 `AudioSource`, 활성 Listener |
-| `SoundTraceObject` | Mesh와 submesh 재질을 음향 scene에 등록 | `MeshFilter`, `MeshRenderer` |
+| `SoundTraceManager` | 런타임(컨텍스트·컨트롤 스레드), scene, 재질 등록, 전파 | 런타임당 1개 |
+| `SoundTraceListener` | Listener transform, ray 품질, 출력/HRTF, 지연·페이드 | 활성 Manager, `AudioListener` |
+| `SoundTraceSource` | `AudioSource` 출력을 모노 스트림으로 입력, path별 설정 | 같은 GameObject의 `AudioSource`, 활성 Listener |
+| `SoundTraceObject` | Mesh와 submesh 재질을 음향 scene에 등록 | `MeshFilter`, `MeshRenderer` (Read/Write Enabled) |
 | `SoundTracePathVisualizer` | 유효 path와 hit triangle 디버그 표시 | Manager와 같은 GameObject |
+
+## 오디오 흐름과 스레드
+
+- `SoundTraceSource.OnAudioFilterRead`가 입력을 **모노 호스트 스트림**(`st_rt_source_write_stream`)에
+  넣고 Unity의 dry 출력을 지웁니다. `SoundTraceListener`의 콜백이 전체 공간 음향 믹스를 한 번
+  가져옵니다(`st_rt_render_process`, Buffered 모드).
+- 씬 변경·소스 생성/삭제·전파·시각화 스냅샷은 전용 **control thread**(`SoundTraceControlThread`)에서
+  직렬 처리합니다. 오디오 콜백에는 씬 제어 API나 관리 힙 할당이 들어가지 않습니다.
+- 위치는 고정 스텝 모션 샘플링(`SoundTraceFixedStepMotion`)으로 속도를 추정합니다. 텔레포트
+  뒤에는 `ResetMotionState()`로 Doppler 스파이크를 막습니다.
+- 네이티브 `render_start`가 옵션을 되돌리므로 **시작 후** Hybrid(`reserved0 = 1`)를 적용하고,
+  재시작·HRTF 토글 뒤에도 다시 적용합니다.
 
 ## SoundTraceManager
 
@@ -78,35 +100,28 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 
 | 필드 | 기본값 | 동작 |
 |---|---:|---|
-| `bool propagateOnStart` | `true` | `Start()`에서 초기 scene graph와 transform을 동기화한 뒤 첫 propagation을 요청합니다. |
-| `bool loadDefaultMaterialsOnEnable` | `true` | `OnEnable()`에서 번들 Material Preset Library를 네이티브 material table에 등록합니다. |
-| `int propagationThreadCount` | `-1` | 사운드 엔진 내부 propagation job의 실행 스레드 수를 지정합니다. 네이티브에서 `-1`은 `std::thread::hardware_concurrency()`로 조회한 논리 스레드 수를 기준으로 자동 설정하고, `0`과 `1`은 싱글쓰레드로 작동합니다. `2` 이상은 호출 스레드를 포함하여 지정한 수만큼 사용합니다. |
-| `bool useGpuBackend` | `false` | propagation을 job 멀티스레드가 아닌 GPU compute shader로 계산합니다. |
-| `int pathCacheSize` | `256` | 최소 `0`, 최대 `1024`인 생성 path의 cache buffer size입니다. 값이 높을수록 공간 음향감은 좋아지지만 계산량도 함께 증가합니다. 기기 성능에 따라 기본값 `256`보다 낮게 설정하여 시작하는 것을 권장합니다. |
+| `Propagate On Start` | `true` | `Start()`에서 초기 scene graph와 transform을 동기화한 뒤 첫 전파를 요청합니다. |
+| `Load Default Materials On Enable` | `true` | `OnEnable()`에서 번들 Material Preset Library(BRAS 24종)를 네이티브 재질 테이블에 등록합니다. |
+| `Propagation Thread Count` | `-1` | SimpleST 계산 풀 폭(`maxComputeThreads`). `-1`은 자동(논리 스레드 수 기준, 엔진이 min(퍼포먼스 코어, 6)로 조정), `0`/`1`은 싱글, `2` 이상은 지정 수. 네이티브 초기화 전에 적용됩니다. |
 
 ### 공개 프로퍼티
 
-| 프로퍼티 | 타입 / 접근 | 정확한 의미 |
+| 프로퍼티 | 타입 | 의미 |
 |---|---|---|
-| `Instance` | `static SoundTraceManager` / `get; private set;` | 동시에 로드된 scene 전체에서 사용하는 싱글턴 Manager입니다. 없으면 `null`입니다. |
-| `DefaultMaterialsLoaded` | `int` / `get; private set;` | `OnEnable()`에서 자동 등록된 번들 재질 수입니다. 자동 로드를 끄거나 asset이 없으면 `0`입니다. |
-| `Scene` | `SoundScene` / `get; private set;` | Manager가 소유한 저수준 scene입니다. 비활성 상태이거나 초기화에 실패하면 `null`입니다. |
-| `PrimaryListener` | `SoundTraceListener` / `get` | 가장 먼저 등록된 Listener입니다. Source 렌더링이 이 Listener를 사용하며, 없으면 `null`입니다. |
-| `ListenerCount` | `int` / `get` | 현재 Manager에 등록된 Listener 수입니다. |
-| `SourceCount` | `int` / `get` | 현재 Manager에 등록된 Source 수입니다. |
-| `ObjectCount` | `int` / `get` | 현재 Manager에 등록된 Object 수입니다. |
-| `LastValidPathCount` | `int` / `get; private set;` | 가장 최근에 완료된 propagation 결과의 유효 path 수입니다. propagation을 실행할 수 없으면 `0`입니다. |
-| `LastNativeError` | `string` / `get; private set;` | 최근 scene graph 또는 propagation 오류입니다. 오류가 없으면 빈 문자열입니다. |
-| `PropagationThreadCount` | `int` / `get` | 프로파게이션 잡쓰레드의 실행 쓰레드 개수입니다. `-1`은 최대치를 의미합니다. |
-| `IsGpuPropagate` | `bool` / `get; private set;` | `exaPropagatorInitGpu()`가 성공해 GPU propagation provider가 활성화되었는지 나타냅니다. |
-| `GpuBackendStatus` | `string` / `get; private set;` | GPU Backend 초기화 결과입니다: `GPU active` 또는 `CPU fallback (<ExaResult>): <error>`. |
-| `PathCacheSize` | `int` / `get` | 생성 path의 cache buffer size입니다. |
+| `Instance` | `static SoundTraceManager` | 싱글턴 Manager. 없으면 `null` |
+| `Scene` | `SoundScene` | Manager가 소유한 저수준 scene |
+| `PrimaryListener` / `ListenerCount` / `SourceCount` / `ObjectCount` | — | 등록 현황 |
+| `DefaultMaterialsLoaded` | `int` | 자동 등록된 번들 재질 수 |
+| `LastValidPathCount` | `int` | 가장 최근 전파의 유효 path 수 |
+| `LastNativeError` | `string` | 최근 scene graph/전파 오류 |
+| `PropagationThreadCount` | `int` | 적용된 계산 스레드 수 |
+| `IsGpuPropagate` / `GpuBackendStatus` | `bool` / `string` | 호환용. 항상 `false` / `"CPU"` |
 
 ### 공개 메서드
 
 | 메서드 | 동작 |
 |---|---|
-| `public void ResetMotionState()` | teleport, respawn, scene 전환 직후 모든 등록 Listener와 Source의 motion history를 초기화합니다. |
+| `ResetMotionState()` | teleport, respawn, scene 전환 직후 모든 Listener와 Source의 motion history를 초기화합니다. |
 
 ## SoundTraceListener
 
@@ -119,76 +134,62 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 | 필드 | 기본값 | 범위/선택지 |
 |---|---:|---|
 | `Quality Preset` | `Fast` | `Custom`, `Fast`, `Middle`, `Quality` |
-| `Ray Resolution` | `16` | `1..32`; 가로/세로에 같은 값 적용 |
-| `Ray Depth` | `4` | `1..16` |
-| `Output Mode` | `Headset` | `Headset`, `Speaker` |
+| `Ray Resolution` | `16` | `1..32`; 리스너 guide ray 가로/세로에 같은 값 |
+| `Ray Depth` | `4` | `1..16`; 반사 최대 깊이 |
+| `Output Mode` | `Headset` | `Headset`(바이노럴), `Speaker`(스테레오 패닝) |
 | `HRTF` | `HRIR Interpolated` | 아래 세 모드 |
+| `Max Delay Seconds` | `2.0 s` | `0.012..5 s`; 렌더러가 유지하는 최대 경로 지연 |
+| `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`; 경로 등장/소멸 크로스페이드 |
 
-`Fast`, `Middle`, `Quality`를 선택하면 ray 값과 연결된 render 품질 값이 함께 적용되고
-ray 필드는 Inspector에서 비활성화됩니다. 값을 직접 편집하려면 먼저 `Custom`을
-선택하십시오. 프리셋에서 `Custom`으로 돌아오면 마지막으로 적용된 값이 유지됩니다.
+`Fast`, `Middle`, `Quality`를 선택하면 ray 값이 함께 적용되고 Inspector에서 잠깁니다. 직접
+편집하려면 `Custom`을 선택하십시오.
 
 | 프리셋 | Ray Resolution | Ray Depth | 권장 시작점 |
 |---|---:|---:|---|
 | `Custom` | 저장된 값 | 저장된 값 | 수동 튜닝 |
 | `Fast` | `16` | `4` | 모바일, 많은 음원 |
 | `Middle` | `24` | `8` | 일반 게임과 데스크톱 |
-| `Quality` | `32` | `12` | 음향 비중이 크고 기타 비중이 적은 앱 |
+| `Quality` | `32` | `12` | 음향 비중이 큰 앱 |
 
 ### HRTF와 출력 모드
 
 | 모드 | 필요한 asset | 설명 |
 |---|---|---|
-| `Band8` | 없음 | 외부 HRTF table을 로드하지 않는 경량 모드 |
-| `Hrir` | `KU100_convolution.bytes` | HRIR 모드 |
-| `HRIR Interpolated` | `KU100_convolution.bytes` | HRIR 모드에 보간 계산을 적용해 방향감을 올려줍니다. |
+| `Band8` | 없음 | 외부 테이블 없는 경량 모드 — SimpleST에서는 **스테레오 패닝**으로 렌더됩니다 |
+| `Hrir` | 없음 | 엔진에 내장된 **MIT KEMAR** HRIR |
+| `HRIR Interpolated` | 없음 | MIT KEMAR HRIR(기본). SimpleST는 광대역 HRIR 컨볼루션을 수행합니다 |
 
-Asset은 `Runtime/Resources/SoundTrace/HRTF/`에서 로드됩니다. 필요한 asset이 없거나 비어
-있으면 Listener 초기화가 실패하며 다른 모드로 자동 전환되지 않습니다.
+구 `KU100_convolution.bytes` 리소스는 더 이상 쓰이지 않습니다. `Output Mode = Speaker`는
+패닝 출력입니다.
 
 ## SoundTraceSource
 
 ![SoundTraceSource Inspector](/img/unity/Img_STSource.png)
 
-`SoundTraceSource`는 같은 GameObject의 `AudioSource` 출력을 처리합니다. 활성화할 때
-SoundTrace가 공간화와 Doppler를 담당하도록 `AudioSource.spatialBlend`와
+`SoundTraceSource`는 같은 GameObject의 `AudioSource` 출력을 모노 스트림으로 엔진에 밀어
+넣습니다. 활성화할 때 SoundTrace가 공간화와 Doppler를 담당하도록 `AudioSource.spatialBlend`와
 `AudioSource.dopplerLevel`을 `0`으로 설정합니다.
 
 ### Inspector
 
 | 필드 | 기본값 | 동작 |
 |---|---:|---|
-| `Intensity` | `1` | Source 방사 강도입니다. 범위는 `0..10`입니다. |
-| `Ray Resolution` | `24` | Reverb ray의 가로·세로 해상도에 같은 값을 적용합니다. 범위는 `1..32`입니다. |
-| `Reverb Ray Depth` | `4` | Reverb ray의 최대 반사 깊이입니다. 범위는 `1..16`입니다. |
-| `Enable Direct` | `true` | Direct path를 활성화합니다. |
-| `Enable Reflection` | `true` | Reflection path를 활성화합니다. |
-| `Enable Diffraction` | `true` | Diffraction path를 활성화합니다. |
-| `Enable Reverb` | `true` | Reverb path를 활성화합니다. |
-| `Enable Transmission` | `true` | Transmission path를 활성화합니다. |
-| `Direct Attenuation` | `1.0` | Direct path의 거리 감쇠입니다. 값이 클수록 같은 거리에서 소리가 더 작게 들립니다. 범위는 `0.5..1.5`입니다. |
-| `Reflection Attenuation` | `1.0` | Reflection path의 거리 감쇠입니다. 값이 클수록 같은 거리에서 소리가 더 작게 들립니다. 범위는 `0.5..1.5`입니다. |
-| `Diffraction Attenuation` | `1.0` | Diffraction path의 거리 감쇠입니다. 값이 클수록 같은 거리에서 소리가 더 작게 들립니다. 범위는 `0.5..1.5`입니다. |
-| `Reverb Attenuation` | `1.0` | Reverb path의 거리 감쇠입니다. 값이 클수록 같은 거리에서 소리가 더 작게 들립니다. 범위는 `0.5..1.5`입니다. |
-| `Transmission Attenuation` | `1.0` | Transmission path의 거리 감쇠입니다. 값이 클수록 같은 거리에서 소리가 더 작게 들립니다. 범위는 `0.5..1.5`입니다. |
-| `Max Delay Seconds` | `1.0 s` | Source renderer가 유지하는 최대 propagation delay입니다. 길어질수록 메모리 사용량이 많아집니다. 범위는 `0.01..5 s`입니다. |
-| `Path Fade Time Seconds` | `0.066 s` | Path가 renderer에 들어오거나 사라질 때 적용하는 fade 시간입니다. 범위는 `0.001..0.5 s`입니다. |
-| `Path Hold Time Seconds` | `0.120 s` | 사라진 non-direct path가 fade를 시작하기 전까지 유지하는 시간입니다. `0`은 hold를 끕니다. |
-| `Max Delay Rate` | `0.1` | sample마다 허용하는 최대 delay 변화량입니다. 범위는 `0.001..0.999`입니다. |
-| `Bypass` | `false` | SoundTrace spatial rendering을 건너뛰고 원본 `AudioSource` 출력을 그대로 전달합니다. |
+| `Intensity` | `1` | 음원 방사 강도(압력 배율). 범위 `0..10` |
+| `Reverb Ray Resolution` | `24` | source transport ray 가로·세로 해상도. 범위 `1..32` |
+| `Reverb Ray Depth` | `4` | transport ray 최대 반사 깊이. 범위 `1..16` |
+| `Enable Direct` / `Reflection` / `Diffraction` / `Reverb` / `Transmission` | `true` | path별 게이트 |
+| `Bypass` | `false` | SoundTrace 렌더를 건너뛰고 원본 `AudioSource` 출력을 그대로 전달 |
 
-Distance Attenuation 값이 클수록 해당 path의 거리 감쇠가 빨라집니다. `Show Gizmo`는
-Direct, Reflection, Diffraction, Reverb, Transmission별 도달 범위를 Scene View에
-독립적으로 표시합니다.
-
-Render Tuning은 source-listener 쌍에 적용됩니다. `Path Hold = 0`은 hold를 끕니다.
+STCoreV2의 path별 `Distance Attenuation`(0.5 ~ 1.5)과 `Max Delay Rate`, `Path Hold Time`은
+없습니다. SimpleST는 물리 `1/r` 감쇠와 공기 흡수를 적용하며, 최대 지연과 페이드는 Listener
+설정입니다. Scene View의 `Show Gizmo`는 path별 가청 범위를 표시합니다.
 
 ### 공개 메서드
 
 | 메서드 | 동작 |
 |---|---|
-| `SetBypass(bool enabled)` | `true`이면 SoundTrace spatial rendering을 건너뛰고 원본 `AudioSource` 출력을 그대로 전달합니다. `false`이면 SoundTrace rendering을 다시 적용합니다. |
-| `ResetMotionState()` | 현재 Transform을 motion 기준점으로 다시 설정하고 속도를 `0`으로 반영하여 teleport나 respawn 뒤 Doppler spike를 방지합니다. |
+| `SetBypass(bool enabled)` | `true`이면 SoundTrace 렌더를 건너뛰고 원본 출력을 전달합니다. |
+| `ResetMotionState()` | 현재 Transform을 motion 기준점으로 다시 설정해 teleport 뒤 Doppler spike를 방지합니다. |
 
 여러 `AudioSource`의 재생 시점을 맞출 때는 동일한 `AudioSettings.dspTime`을 기준으로
 `PlayScheduled()`를 호출하십시오.
@@ -199,124 +200,26 @@ Render Tuning은 source-listener 쌍에 적용됩니다. `Path Hold = 0`은 hold
 
 `SoundTraceObject`는 `MeshFilter.sharedMesh`와 Renderer의 submesh 재질 슬롯을 등록합니다.
 Build에서 메시 데이터를 읽어야 하므로 Import Settings의 `Read/Write Enabled`를 켜십시오.
+절차적 메시에는 `UploadMeshData(true)`를 호출하지 않습니다.
 
-### Geometry와 BVH
+### Geometry와 가속구조
 
 ![Scene View에 표시한 BVH](/img/unity/Img_STObjDome.png)
 
 | 필드 | 기본값 | 설명 |
 |---|---:|---|
-| `BVH Type` | `LBVH_SIMD8` | `HKDTree`, `LBVH`, `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16` |
-| `BVH Max Depth` | `12` | `1..32` |
-| `Primitives Per Leaf` | `16` | `1..128` |
-| `Update Mode` | `Static` | `Static`, `Dynamic`, `Refit`, `Rebuild` |
+| `BVH Type` | `LBVH_SIMD8` | `HKDTree`(→ SimpleST HybridKD), `LBVH`(→ LBVH), `LBVH_SIMD4/8/16`(→ LBVH_SIMD) |
+| `BVH Max Depth` / `Primitives Per Leaf` | `12` / `16` | 호환용 필드. **SimpleST가 leaf 크기를 내부에서 정하므로 무시**됩니다 |
+| `Update Mode` | `Static` | `Static`(정적 TLAS) / `Dynamic`(변환만 갱신). `Refit`·`Rebuild`는 호환용 |
 
-#### BVH Type
+`BVH Type`은 메시 등록 시점의 가속구조 종류만 고릅니다. 같은 Mesh asset·재질 슬롯·BVH 설정을
+쓰는 object는 `SoundTraceMeshCache`가 네이티브 메시를 refcount 공유합니다.
 
-| BVH Type | 설명 |
-|---|---|
-| `HKDTree` | KD 분할 기반 traversal입니다. Refit을 지원하지만 Refit 뒤에는 BVH-style fallback traversal로 전환됩니다. GPU backend는 지원하지 않습니다. |
-| `LBVH` | Morton code 기반으로 HKDTree보다 rebuild가 빠르고 Refit을 지원합니다. 저수준 API로 vertex를 업로드한 뒤 Refit하여 SkinnedMesh나 procedural mesh 변형에 적용할 수 있습니다. Scalar 형식은 GPU backend를 지원하지 않습니다. |
-| `LBVH_SIMD4` | LBVH leaf intersection을 4개 단위로 SIMD 병렬 처리합니다. Refit 지원 및 GPU Backend 지원. |
-| `LBVH_SIMD8` | LBVH leaf intersection을 8개 단위로 SIMD 병렬 처리하는 현재 기본값입니다. Refit 지원 및 GPU Backend 지원. |
-| `LBVH_SIMD16` | LBVH leaf intersection을 16개 단위로 SIMD 병렬 처리합니다. Refit 지원 및 GPU Backend 지원. |
+### 스킨드·절차적 메시
 
-GPU를 요청한 scene에서 `HKDTree` 또는 scalar `LBVH`를 선택하면 Inspector가 경고합니다.
-
-#### Update Mode
-
-| Update Mode | STCoreV2 update policy | 의미 |
-|---|---|---|
-| `Static` | `EXA_OBJECT_UPDATE_STATIC` (0) | 런타임 TLAS/BLAS 갱신이 없습니다. 움직이지 않는 level geometry에 사용합니다. |
-| `Refit` | `EXA_OBJECT_UPDATE_REFIT` (1) | Deformation용 정책입니다. mesh BLAS를 refit하고 TLAS bounds를 갱신합니다. topology가 유지되는 skinned·procedural mesh가 대상입니다. |
-| `Rebuild` | `EXA_OBJECT_UPDATE_REBUILD` (2) | Topology가 바뀌는 geometry에 사용하며 BVH를 다시 빌드합니다. |
-| `Dynamic` | `EXA_OBJECT_UPDATE_DYNAMIC` (3) | Transform만 바뀔 때 TLAS instance만 갱신합니다. |
-
-#### Refit과 vertex 업로드
-
-`Refit`은 STCoreV2에서 **vertex 변형(skinned animation)을 위한 update policy**입니다.
-다만 core는 vertex를 언제 올릴지 스스로 정하지 않습니다. mesh 갱신은
-`exaMeshUpdateVertices` → `exaMeshRefit`의 2-call protocol이고, object의 `Refit`은 그
-결과가 BLAS와 TLAS bounds에 반영되도록 하는 정책 스위치입니다. 즉 **vertex를 올리는 주체는
-host SDK**입니다.
-
-현재 Unity의 `SoundTraceObject` MonoBehaviour는 Transform만 자동으로 동기화하고 vertex
-업로드는 호출하지 않습니다. `MeshFilter`/`MeshRenderer`를 요구하므로 `SkinnedMeshRenderer`를
-직접 바인딩하지 않고, mesh geometry는 `OnEnable` 시점에 한 번 스냅샷됩니다. 따라서 Unity에서
-skinned·procedural 변형을 사운드에 반영하려면 `Update Mode`를 `Refit`으로 두고 아래처럼
-`MeshCore`로 vertex를 직접 올리십시오. UE 플러그인의 `SoundTracingObjectComponent`는 이
-업로드를 skeletal mesh에 대해 자동으로 수행합니다.
-
-```csharp
-using Exarion.SoundTrace;
-using Exarion.SoundTrace.Core;
-using Exarion.SoundTrace.Native;
-using UnityEngine;
-
-[RequireComponent(typeof(SoundTraceObject))]
-public sealed class SoundTraceSkinnedRefit : MonoBehaviour
-{
-    [SerializeField] private SkinnedMeshRenderer skin;
-
-    private SoundTraceObject _object;
-    private Mesh _baked;
-    private ExaVec3f[] _vertices;
-
-    private void Awake()
-    {
-        _object = GetComponent<SoundTraceObject>();
-        _baked = new Mesh();
-    }
-
-    private void LateUpdate()
-    {
-        SoundMeshCore mesh = _object.MeshCore;
-        if (mesh == null || !mesh.IsValid)
-            return;
-
-        // 1) 현재 pose를 굽고 vertex를 읽습니다. Unity Mesh API이므로 main thread입니다.
-        skin.BakeMesh(_baked);
-        Vector3[] baked = _baked.vertices;
-        if (_vertices == null || _vertices.Length != baked.Length)
-            _vertices = new ExaVec3f[baked.Length];
-        for (int i = 0; i < baked.Length; ++i)
-            _vertices[i] = new ExaVec3f(baked[i].x, baked[i].y, baked[i].z);
-
-        // 2) 업로드와 refit은 control thread에서 2-call protocol로 수행합니다.
-        ExaVec3f[] vertices = _vertices;
-        SoundTraceControlThread.Invoke(() =>
-        {
-            if (mesh.UpdateVertices(vertices))
-                mesh.Refit();
-        });
-    }
-
-    private void OnDestroy()
-    {
-        if (_baked != null)
-            Destroy(_baked);
-    }
-}
-```
-
-주의할 점입니다.
-
-- vertex 개수는 build 시점과 **정확히 일치**해야 합니다. `exaMeshUpdateVertices`는 개수가
-  다르면 `EXA_ERR_INVALID_ARG`로 거부합니다. `MeshFilter.sharedMesh`에 `SkinnedMeshRenderer`의
-  bind pose mesh를 넣어 count를 맞추십시오.
-- vertex는 mesh local 좌표계 그대로 올립니다. object의 position·rotation·scale은
-  `SoundTraceObject`가 별도로 동기화하므로 `BakeMesh`도 scale을 적용하지 않은 형태를
-  사용하십시오.
-- native mesh는 `SoundTraceMeshCache`가 Mesh asset·material slot·BVH 설정을 키로 refcount
-  공유합니다. 같은 조합을 쓰는 object가 여럿이면 하나를 refit할 때 전부 같은 변형을 받습니다.
-  개체별로 다르게 변형하려면 object마다 별도 Mesh instance를 사용하십시오.
-- `SoundTraceControlThread.Invoke`는 blocking 호출입니다. 매 프레임 다수의 object에 대해
-  호출하면 main thread가 control thread의 propagation frame 뒤에서 대기합니다. refit 대상은
-  소수의 object로 제한하십시오.
-- BVH Type은 refit 가능한 `LBVH` 계열을 사용하십시오. `HKDTree`도 refit되지만 이후 traversal이
-  BVH-style fallback으로 전환됩니다.
-- triangle index가 바뀌는 topology 변경은 refit으로 처리할 수 없습니다. `MeshCore.SetData(...)`로
-  다시 빌드하고 `Update Mode`를 `Rebuild`로 두십시오.
+SimpleST에는 vertex refit이 없습니다. 변형된 지오메트리를 반영하려면 새 Mesh를 굽고
+`SoundTraceObject`를 다시 등록(또는 `MeshCore.SetData`)해 **새 네이티브 메시로 교체**합니다.
+매 프레임 교체는 비용이 크므로 주기적으로(예: 0.2 ~ 0.5 s) 갱신하십시오.
 
 ### 공개 메서드
 
@@ -325,47 +228,35 @@ mesh가 없고 child가 geometry를 소유하면 `Add To Child Meshes`를 사용
 
 | 메서드 | 동작 |
 |---|---|
-| `AutoSetMaterialSlots()` | 모든 submesh를 순회하며 Renderer material 이름을 번들 preset과 자동 매칭하고 슬롯 구성을 갱신합니다. |
-| `GetMaterialPresetIndex(int slotIndex)` | 지정한 슬롯의 preset index를 반환합니다. 슬롯이 없거나 index가 유효하지 않으면 `0`을 반환합니다. |
-| `GetPresetName(int slotIndex)` | 지정한 슬롯에 적용된 preset의 표시 이름을 반환합니다. preset을 찾지 못하면 `Concrete`를 반환합니다. |
-| `SetMaterialPresetIndex(int slotIndex, int presetIndex)` | 한 슬롯의 preset을 변경합니다. `presetIndex`는 최소 `0`으로 보정되며 슬롯 index가 유효하지 않으면 `false`를 반환합니다. |
-| `SetMaterialPresetForAllSlots(int presetIndex)` | 모든 슬롯에 같은 preset을 적용합니다. `presetIndex`는 최소 `0`으로 보정되며 적용할 슬롯이 없으면 `false`를 반환합니다. |
-| `GetNativeMaterialIndices()` | submesh별 preset index를 native mesh 등록 형식의 배열로 반환합니다. 비어 있거나 누락된 슬롯은 `0`을 사용합니다. |
-| `GetTriangleCount()` | 모든 submesh의 index 수를 합산해 triangle 수를 반환합니다. mesh가 없으면 `0`입니다. |
-| `static IsGpuCompatibleBvhType(BvhType value)` | `LBVH_SIMD4`, `LBVH_SIMD8`, `LBVH_SIMD16`이면 `true`를 반환합니다. |
+| `AutoSetMaterialSlots()` | 모든 submesh의 Renderer material 이름을 번들 preset과 자동 매칭합니다. |
+| `GetMaterialPresetIndex(int slotIndex)` / `GetPresetName(int slotIndex)` | 슬롯의 preset index / 표시 이름을 반환합니다. |
+| `SetMaterialPresetIndex(int slotIndex, int presetIndex)` | 한 슬롯의 preset을 변경합니다. |
+| `SetMaterialPresetForAllSlots(int presetIndex)` | 모든 슬롯에 같은 preset을 적용합니다. |
+| `GetNativeMaterialIndices()` | submesh별 preset index를 네이티브 등록 형식의 배열로 반환합니다. |
+| `GetTriangleCount()` | 모든 submesh의 triangle 수를 반환합니다. |
+| `static IsGpuCompatibleBvhType(BvhType value)` | 호환용. SIMD 계열이면 `true` |
 
-## 사운드 재질과 Transmission
+## 사운드 재질
 
-기본 authoring asset은
-`Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`입니다.
-`SoundTrace > Material Preset Library`에서 다음 작업을 수행합니다.
+기본 authoring asset은 `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`
+입니다. `SoundTrace > Material Preset Library`에서 다음 작업을 수행합니다.
 
 - preset 추가, 삭제, 순서 변경
 - `soundMaterial.json` import/export 및 번들 JSON 재가져오기
-- Scattering과 8-band Reflection, Absorption, Transmission 그래프 편집
-- `Transmission Model` 선택
+- Scattering과 **9밴드** Reflection, Absorption, Transmission 그래프 편집
 
 ![Material Preset Library](/img/unity/Image_Mat_01.png)
 
-주파수 대역 중심은 `67.5`, `125`, `250`, `500`, `1000`, `2000`, `4000`,
-`8000 Hz`입니다. 재질 순서와 table index는 일치해야 합니다.
+주파수 대역 중심은 `63`, `125`, `250`, `500`, `1000`, `2000`, `4000`, `8000`, `16000 Hz`입니다.
+각 밴드의 `R + A + T`는 `1`이어야 하며 허용오차는 `0.001`입니다. 잘못된 길이와 계수는 오류로
+보고하고, 8밴드를 복제해 9밴드로 채우지 않습니다. 기본 재질은 SimpleST `material3.txt`의
+BRAS 24종입니다. 기존 씬의 슬롯 인덱스는 유지되지만 이전 STCore 재질과 음향 결과가 같지는
+않으므로 사용자 재질은 9밴드로 다시 입력합니다.
 
 ![재질 대역별 그래프 편집](/img/unity/Image_Mat_02.png)
 
-### Transmission Model
-
-| 모델 | 입력 | Geometry 조건 |
-|---|---|---|
-| `Surface` | 각 대역에서 표면을 통과한 뒤 남는 전송 에너지 계수 `0..1` | 열린 면과 얇은 surface에 사용 가능 |
-| `Solid Distance` | 각 대역에서 전송 에너지가 `-30 dB`가 되는 재질 기준 거리(m), `0` 이상 | 닫힌 볼륨과 일관된 면 방향 필요 |
-
-`Solid Distance`의 입력은 object의 실제 두께가 아닙니다. 런타임은 geometry 내부의 실제
-통과 거리에 따라 감쇠를 적용합니다. 모드를 변경해도 8개 값은 자동 계산되지 않으므로,
-검증한 값을 모두 입력하고 기본 `0` 상태로 두지 마십시오.
-
-JSON에서 `transmissionDistanceToMinus30DbMeters`가 없으면 `Surface`, 정확히 8개의 유한한
-0 이상 값으로 존재하면 `Solid Distance`입니다. `Surface`로 export할 때 이 필드는
-`null`이나 빈 배열이 아니라 생략됩니다.
+STCoreV2의 `Transmission Model`(`Surface` / `Solid Distance`)은 없습니다. 투과는 밴드별 표면
+투과 계수 `T`로만 표현합니다.
 
 ## SoundTracePathVisualizer
 
@@ -376,16 +267,63 @@ Manager와 같은 GameObject에 하나만 추가합니다.
 | Inspector 필드 | 기본값 | 설명 |
 |---|---:|---|
 | `Enable Path Visualization` | 켜짐 | path mesh 표시 여부 |
-| `Refresh Interval Ms` | `50` | 시각화 mesh 재생성 최소 간격. 음향 propagation 주기에는 영향 없음 |
-| `Max Visualized Paths` | `1024` | 표시할 최대 path 수 |
+| `Refresh Interval Ms` | `50` | 시각화 mesh 재생성 최소 간격. 전파 주기에는 영향 없음 |
+| `Max Visualized Paths` | `1024` | 표시할 최대 path 수 (`16..5000`) |
 | `Path Width` | `0.08` | 선 폭 |
 | `Path Alpha Intensity` | `0.5` | 표시 강도 |
+| `Path Depth Mode` / `Sorting Layer` / `Sorting Order` | `AlwaysOnTop` / `Default` / `10` | 렌더 정렬 |
 | `Draw Hit Triangles` | 꺼짐 | Scene View에서 hit triangle 표시 |
 
 Direct, Reflection, Diffraction, Reverb, Transmission을 path 종류별 색으로 표시합니다.
-이 컴포넌트는 디버그용이며 성능 측정과 release build에서는 비활성화하십시오.
+디버그용이며 성능 측정과 release build에서는 비활성화하십시오. 주요 공개 멤버는
+`Active`, `Render()`, `Clear()`입니다.
 
-주요 공개 멤버는 `Instance`, 설정/카운트 프로퍼티, `Render()`, `Clear()`입니다.
+## FMOD와 함께 쓰기
+
+프로젝트에 SimpleST FMOD 플러그인(`SimpleSTFmod`)이 있으면 SoundTrace는 자동으로 **FMOD 통합**으로
+동작합니다. 공간 음향 렌더는 FMOD Studio의 SimpleST Source / Listener DSP가 하고, SoundTrace는
+`SoundTraceManager` + `SoundTraceObject`로 지오메트리·재질만 플러그인 컨텍스트에 올립니다.
+`SoundTraceListener` / `SoundTraceSource`는 경고를 남기고 꺼집니다.
+
+![Unity FMOD 설치 메뉴](/img/fmod/unity-install-menu.png)
+
+1. FMOD for Unity 2.04를 설치합니다(tgz 설치본은 `Packages/`로 embed).
+2. **SoundTrace › FMOD › Install SimpleST FMOD Plug-in...** 메뉴에서 `SimpleSTFmod`가 있는 폴더
+   (예: `fmod/plugins`, Mac은 `mac/plugins`)를 고릅니다. DLL/bundle이 FMOD 플러그인 폴더에 복사되고
+   FMOD Settings › Dynamic Plugins에 등록됩니다.
+3. FMOD Studio에서 마스터 버스에 **SimpleST Listener**, 3D 이벤트 마스터 트랙에 FMOD Spatializer 대신
+   **SimpleST Source**를 넣습니다 — [FMOD 플러그인](./fmod.md).
+4. 씬에는 `SoundTraceManager`와 지오메트리용 `SoundTraceObject`, FMOD `StudioListener`를 둡니다.
+
+엔진 인스턴스는 하나입니다. SimpleSTFmod가 SoundTrace가 P/Invoke하는 같은 `SimpleSTRealtime`을
+로드하고, 모든 제어 호출은 플러그인의 컨트롤 스레드에서 실행됩니다. 2026-10-07 Unity 6000.3 +
+FMOD for Unity 2.04 E2E 통과(오브젝트 0→6→0, 경로 1→266→1).
+
+## Wwise와 함께 쓰기
+
+Wwise Unity 통합의 DSP 폴더에 `SimpleSTWwise`가 있으면 **Wwise 통합**으로 동작합니다(FMOD가
+함께 있으면 FMOD 우선).
+
+![Unity Wwise 설치 메뉴](/img/wwise/unity-install-menu.png)
+
+1. Audiokinetic Launcher로 Wwise Unity 통합을 설치합니다.
+2. **SoundTrace › Wwise › Install SimpleST Wwise Plug-in...** 메뉴에서 `SimpleSTWwise`가 있는 폴더를
+   고릅니다. DSP 폴더에 복사되고 Wwise 사운드엔진이 로드합니다.
+3. Wwise 프로젝트에서 Audio Objects 버스에 **Sound-tracing Renderer**를 넣고 3D 사운드를 그 버스로
+   보냅니다(Attenuation은 끄거나 평탄) — [Wwise 플러그인](./wwise.md).
+4. 씬에는 `AkInitializer`, `AkAudioListener`, 이미터의 `AkGameObj`와 `SoundTraceManager`,
+   `SoundTraceObject`를 둡니다. Wwise Unity의 단위는 미터이므로 `sceneRatio = 1`입니다.
+
+## WebGL
+
+Unity WebGL은 `OnAudioFilterRead`를 제공하지 않으므로 별도 경로를 사용합니다. AudioClip PCM과
+재생 상태를 전달하고, SimpleST buffered host renderer 결과를 공유 링버퍼로 AudioWorklet에 보냅니다.
+
+- AudioClip은 **Decompress On Load**로 임포트합니다.
+- HTTPS 또는 localhost에서 `Cross-Origin-Opener-Policy: same-origin`,
+  `Cross-Origin-Embedder-Policy: require-corp` 헤더로 서비스합니다. 오디오는 사용자 입력 후 시작합니다.
+- 빌드 후처리가 `Runtime/Web/*.bytes`를 `StreamingAssets/SoundTrace/`에 복사하므로 그 폴더를 함께 배포합니다.
+- Unity AudioMixer 효과 체인은 WebGL의 별도 SoundTrace 출력에 적용되지 않습니다.
 
 ## 샘플
 
@@ -408,22 +346,36 @@ source/listener 이동, material preset 변경, Unity 원본 audio와 SoundTrace
 
 넓은 공간의 여러 source, wall occlusion, 이동 중 HRTF 방향감과 room response를 확인합니다.
 
+## STCoreV2에서 바뀐 계약
+
+| 이전 | 현재 |
+|---|---|
+| `exaSound` / STCoreV2 진입점 | `st_rt_*` / SimpleST ABI 6 |
+| 0 = 무효 핸들 | **-1 = 무효**, 0은 유효 |
+| 소스마다 리스너 렌더 | 소스별 mono stream + 리스너 전체 mix |
+| 8밴드 재질·scalar scattering | 63…16000 Hz **9밴드** R/A/T/scattering |
+| 변경 가능한 native material | 불변 material, 새 material/mesh로 재바인딩 |
+| STCore 다항식 거리 감쇠 | SimpleST 물리 거리 감쇠 |
+| STCore GPU/provider/path-cache 설정 | SimpleST CPU pipeline 스케줄러 |
+| KU100 Resources 테이블 | 내장 MIT KEMAR HRTF |
+| `exaMeshUpdateVertices` → `exaMeshRefit` | 새 메시로 교체 |
+
 ## 문제 해결
 
 | 증상 | 확인할 것 |
 |---|---|
 | 소리가 나지 않음 | Console의 첫 Manager 초기화 오류, Stereo/Best latency, AudioSource clip, Manager/Listener 존재 여부 |
 | Source/Listener/Object가 Manager를 요구함 | cascade 오류보다 먼저 기록된 `Failed to initialize SoundTraceManager` 원인 확인 |
-| HRTF 초기화 실패 | 선택한 모드의 Resources asset 존재 여부와 빈 파일 여부 |
+| 구버전과 충돌 | STCoreV2 `Assets/SoundTrace`를 Assets 밖으로 옮겼는지 |
 | Geometry가 반영되지 않음 | `Read/Write Enabled`, MeshFilter/MeshRenderer, child mesh 위치, 등록 상태 |
-| 실행 중 변형 mesh가 반영되지 않음 | `Update Mode`만으로 vertex/topology가 업로드되지 않음. 별도 저수준 geometry 갱신 경로 필요 |
-| GPU가 활성화되지 않음 | `GpuBackendStatus`, Console fallback 사유, Object의 SIMD BVH 선택 확인 |
+| 실행 중 변형 mesh가 반영되지 않음 | SimpleST는 refit이 없음. 새 메시로 교체 |
+| FMOD/Wwise 모드에서 Listener/Source가 꺼짐 | 정상 — 렌더는 미들웨어 플러그인이 담당 |
 | Teleport 뒤 pitch가 튐 | transform 변경 직후 `ResetMotionState()` 호출 |
-| 성능이 부족함 | `Quality → Middle → Fast`, path cache buffer 축소, path visualizer 비활성화 순서로 확인 |
+| 성능이 부족함 | `Quality → Middle → Fast`, Reverb Ray Resolution 축소, path visualizer 비활성화 순서로 확인 |
 | 여러 음원이 comb filtering처럼 들림 | 동일한 `AudioSettings.dspTime`으로 `PlayScheduled()` 실행 |
 
 ## 다음 문서
 
 - [SDK 개요](./overview.md)
-- [Web SDK](./web.md)
-- [Unreal Engine SDK](./ue.md)
+- [FMOD 플러그인](./fmod.md) · [Wwise 플러그인](./wwise.md)
+- [Web SDK](./web.md) · [Unreal Engine SDK](./ue.md)

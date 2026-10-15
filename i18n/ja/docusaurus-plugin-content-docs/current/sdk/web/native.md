@@ -1,164 +1,107 @@
 ---
 title: Native API
-description: soundtrace.js の single-thread 低レベル API と現在のサポート範囲です。
+description: soundtrace.js の低レベルエントリポイント `@exarionai/soundtrace.js/native` — SimpleST WASM モジュールローダー、ヒープヘルパー、Realtime/Offline アダプター。
 ---
 
 # Native API
 
-Native API は、scene、listener、source、mesh、BVH を直接制御する必要がある高度な
-single-thread 統合向けです。一般的なアプリは [Facade API](./facade.md) を使用して
-ください。
+`@exarionai/soundtrace.js/native` は、facade が内部で使う SimpleST モジュールローダーとアダプターを
+公開します。一般的なアプリは [Facade API](./facade.md) を使ってください。この表面は SimpleST C ABI の
+契約（パッケージに同梱された `core/Include/SimpleST/ABI/*.h`）にそのまま従い、バージョン間の互換性保証は
+facade より弱くなります。
 
 ```ts
-import { SoundTrace } from '@exarionai/soundtrace.js';
 import {
-  BvhType,
-  PathType,
-  UpdateType,
-  type MeshBuildOptions,
+  SimpleSTRealtime,
+  loadRealtimeModule, loadOfflineModule, analyzeScene,
+  Heap, packMaterial, validateMaterial,
+  ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
+  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
 ## サポート範囲
 
-:::warning 現在の公開型契約
-`@exarionai/soundtrace.js/native` は低レベルのクラスと型を export しますが、現在
-`SoundTrace.create()` の公開戻り値型は facade です。したがって `createScene()`、
-`createListener()`、`createSource()` などの factory を使う完全な direct-native
-TypeScript のエントリーフローは、まだ公開契約として提供されていません。
-
-公開型が拡張されるまでは facade を使用してください。内部実装へのキャストや非公開の
-deep import はバージョン互換性を保証しません。
+:::warning 変更点
+STCoreV2 時代の `SoundScene` / `SoundListener` / `SoundMesh` / `SoundObject` / `SoundCollider` /
+`MaterialTable` / `Propagator` / `Diagnostics` クラスと `./internal` entry は 1.0.0 で削除されました。
+現在の低レベル契約は SimpleST ABI 6 ヘッダーと以下のアダプターです。
 :::
 
-また direct-native 制御は ST 専用です。worker-hosted MT では次の surface が
-`SoundTraceMtUnsupportedError` を送出します。
+- すべての SimpleST `[control]` 呼び出しは**1 つの Worker** でのみ行います。facade は専用の control Worker を
+  持ち、そこでのみエンジンを操作します。
+- メインスレッドで `st_rt_propagate` のようなブロッキングエントリポイントを呼ぶと、`Atomics.wait` がブロックされて失敗します。
 
-- `createScene()`、`createListener()`、`createSource()`
-- `createMesh()`、`createObject()`、`createCollider()`
-- `materials`、`propagator`、`diagnostics`
-- `createWorkletNode()`
-- 同期 native getter
+## 構成要素
 
-MT アプリケーションは facade と `await sound.debugSnapshot()` を使用してください。
-
-## オブジェクトモデル
-
-| オブジェクト | 役割 |
+| 名前 | 役割 |
 |---|---|
-| `SoundScene` | object、source、単一の listener を所有し propagation を実行 |
-| `SoundListener` | listener の pose、ray と render オプションを管理 |
-| `SoundSource` | source の pose、gain、path 別オプションを管理 |
-| `SoundMesh` | 三角形ジオメトリと BLAS を管理 |
-| `SoundObject` | シーンの transform と mesh インスタンスを管理 |
-| `SoundCollider` | `SoundMesh` と `SoundObject` のライフサイクルを結合 |
-| `MaterialTable` | 周波数帯域ごとのマテリアルを登録 |
-| `Propagator` | valid path と profile を照会 |
-| `Diagnostics` | ray、メモリ、ランタイム診断を照会 |
+| `loadRealtimeModule(baseUrl)` | `SimpleSTRealtime.mjs` + `.wasm`（pthreads）をロードして `SimpleSTModule` を返します |
+| `loadOfflineModule(baseUrl)` | `SimpleSTOffline.mjs`（シングルスレッド）をロードします。IR 解析専用 |
+| `Heap` | WASM ヒープに POD を書き込み・読み出すヘルパー。`structSize`/`apiVersion` のスタンプが付いた構造体の割り当て（`stamped`）を含む |
+| `layout` | `STRT_CreateOptions`、`STMaterial`、`STRenderOptions`、`STTiming`、`STSceneStats`、`STProcessStats`、`STIrStats` などのオフセット/サイズ |
+| `packMaterial` / `validateMaterial` | 9バンド R/A/T/scattering を `STMaterial` にパックし、`R+A+T=1` を検証 |
+| `SimpleSTRealtime` | リスナー 1 つと共有レンダラーを所有するアダプター。facade のコマンドを `st_rt_*` 呼び出しに変換します |
+| `analyzeScene(module, snapshot, …)` | Offline コンテキストにシーンスナップショットを複製して Raw IR / 圧力 IR を計算 |
+| `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
-## シーンの更新
+## `SimpleSTRealtime`
 
-低レベルのシーンは次の順序で更新します。
-
-```ts
-scene.tick(dt);
-scene.updatePropagation();
-```
-
-`scene.update(dt)` は 2 つの呼び出しを順に実行するショートハンドです。
-
-シーンの listener は 1 つです。
+facade の control Worker が使うアダプターです。直接使う場合は Worker 内で次の順序を
+守ります。
 
 ```ts
-scene.setListener(listener);
-scene.addSource(source);
-scene.addCollider(collider);
+const M = await loadRealtimeModule(coreBaseUrl);
+const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, 材質テーブル登録, Hybrid 適用
+
+rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
+rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + 品質プリセット適用
+rt.attachStream(handle);                               // st_rt_source_attach_stream (モノ)
+rt.sourcePose(handle, cache); rt.listenerPose(cache); rt.meshPose(handle, pose);
+
+const validPaths = rt.frame();                         // st_rt_build[_dynamic] + st_rt_propagate
+rt.writeStream(handle, monoSamples);                   // [audio] st_rt_source_write_stream
+const stereo = rt.render(frames);                      // [audio] st_rt_render_process
+
+const diag = rt.diagnostics();                         // SimpleSTDiagnostics
+rt.reset(); rt.dispose();
 ```
 
-## ジオメトリの変更
+- `setQuality(tier)` はリスナー guide ray、音源 transport ray、反射深度を一度に設定します
+  （`fast` 8×8/4、`balanced` 16×16/6、`quality` 24×24/8）。
+- 音源ゲインは圧力値で、エンジンには `st_rt_source_set_energy(gain²)` として渡されます。
+- `'direct'` 経路ゲートは Direct と Transmission を同時に on/off します。
+- レンダーオプションの変更（`useDoppler`、`useLimiter`、`diffuseEnabled`）は `STRenderOptions` の該当フィールドを
+  上書きしますが、`reserved0 = 1`（Hybrid）は常に維持します。Hybrid が外れると `diagnostics()` が例外を投げます。
 
-| 変更 | API | update type |
-|---|---|---|
-| transform のみ変更 | `object.setPosition(...)` など | object の状態に合わせて更新 |
-| 頂点のみ変更 | `mesh.updateVerticesAndRefit(...)` | `UpdateType.Refit` |
-| トポロジーまたは BVH オプションの変更 | `mesh.setData(...)` | `UpdateType.Rebuild` |
-
-refit はトポロジーが保たれるアニメーションジオメトリ（skinned animation、procedural 変形）に
-使用します。このパスは refit 可能な LBVH 系と組み合わせてください。
-
-頂点の更新は core の `exaMeshUpdateVertices` → `exaMeshRefit` という 2-call protocol です。
-`mesh.updateVertices()` は頂点をアップロードするだけで BVH を refit しないため、両方を行う
-`mesh.updateVerticesAndRefit()` を使うか、自分で `mesh.refit()` を呼んでください。頂点数は
-build 時と完全に一致している必要があります。
+## 診断スナップショット
 
 ```ts
-mesh.updateVerticesAndRefit(vertices);  // updateVertices + refit
-object.setUpdateType(UpdateType.Refit);
-scene.tick(dt);
+interface SimpleSTDiagnostics {
+  engine: 'SimpleST'; abiVersion: number; version: string;
+  scheduler: 'synchronous' | 'pipelined'; earlyReflectionMode: 'hybrid'; spatializer: number;
+  scene:  { meshes; objects; sources; triangles };
+  timing: { propagationMs; directMs; reflectionDiffractionMs; reverbMs; irMs; renderMs };
+  render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
+  ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
+  audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
+}
 ```
 
-`SoundCollider` を使うと 2 つのステップを 1 回で処理できます。
+facade の `debugSnapshot().simplest` と `getStatistics().simplest` は同じオブジェクトを返します。
+旧 STCore の profile / memory / ray 統計と音源ごとの `ExaRenderStats` はありません。
 
-```ts
-collider.refitVertices(vertices);  // updateVerticesAndRefit + setUpdateType(Refit)
-scene.tick(dt);
-```
+## オーディオ契約
 
-トポロジーが変わる場合は rebuild を明示します。
-
-```ts
-mesh.setData(vertices, triangles, buildOptions);
-object.setUpdateType(UpdateType.Rebuild);
-scene.tick(dt);
-```
-
-`collider.rebuild(vertices, triangles, buildOptions)` が同じ組み合わせを実行します。
-
-## BVH の選択
-
-| タイプ | 用途 |
-|---|---|
-| `BvhType.HKDtree` | 壁や床などの静的ジオメトリ |
-| `BvhType.LBVH` | 頂点が頻繁に変わるジオメトリ |
-| `BvhType.LBVH_SIMD*` | SIMD 幅を明示した LBVH |
-| `BvhType.LBVH_NWAY*` | N-way LBVH |
-
-`BvhType.Default` は per-mesh でエンジン既定値に従う sentinel です。プロセス全体の
-既定値を決めるときは具体的な BVH タイプを使用してください。
-
-```ts
-const buildOptions: MeshBuildOptions = {
-  bvhType: BvhType.HKDtree,
-  bvhMaxDepth: 0,
-  primPerLeaf: 0,
-};
-```
-
-## オーディオ
-
-Native のリアルタイムレンダリングも `AudioWorkletNode` を使用します。基本契約は
-次のとおりです。
-
-- サンプルレート: `AudioContext.sampleRate`
-- ブロックサイズ: 128 samples
-- 出力: 2 チャンネルのバイノーラル
-
-facade の `source.play()` がこの設定と graph 接続を管理します。direct-native の
-`createWorkletNode()` は、公開 factory 型が提供されたあとにアプリケーション
-コードで使用することを推奨します。
-
-## 診断
-
-| 必要な情報 | Facade | Native ST |
-|---|---|---|
-| valid path と profile | `await debugSnapshot()` | `Propagator` |
-| ray とメモリ統計 | `await debugSnapshot()` | `Diagnostics` |
-| アプリが設定した pose | エンティティの状態 | native object getter |
-
-MT では propagation の結果を同期 getter で読まないでください。
+- エンジン内部レートは 44.1 kHz で、`STRT_CreateOptions.hostSampleRate` に `AudioContext.sampleRate` を
+  入れると入力・出力ともエンジンが変換します。
+- 音源入力はモノ float PCM（`st_rt_source_write_stream`）、出力はインターリーブのステレオ
+  （`st_rt_render_process`）です。出力モードは `HOST_PULL_BUFFERED` で、AudioWorklet が共有
+  リングからコピーします。
+- 同時ストリームのスロットは 64 個です。超過した音源は生成に失敗します。
 
 ## 関連ドキュメント
 
 - [Web SDK 概要](../web.md)
 - [Facade API](./facade.md)
-- [Performance Guide](../performance.md)
+- [SimpleST エンジン](../../core/simplest.md) — C ABI の全契約

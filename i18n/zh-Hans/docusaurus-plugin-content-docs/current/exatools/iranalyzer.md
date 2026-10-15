@@ -6,13 +6,20 @@ title: IRAnalyzer
 
 **Room Impulse Response (IR) 分析与可视化工具。**
 
-IRAnalyzer 用于验证 [exaSound (STCoreV2)](../core/stcorev2.md) 几何声学仿真器生成的 IR 准确性，并与实测数据或其他仿真器结果进行比较分析。它由两个可执行文件组成。
+IRAnalyzer 用于验证 Sound Tracing 几何声学仿真器生成的 IR 的准确性，并与实测数据或其他仿真器
+结果进行比较分析。它由两个可执行文件组成。
+
+:::note
+IRAnalyzer 的实时仿真后端联动选项是基于 STCoreV2 源码树编写的。以 SimpleST 离线 ABI
+（`SimpleSTOffline`）作为后端的联动是单独的工作；在此之前，请使用把 SimpleST 生成的压力 IR（WAV）
+作为外部 IR 导入并分析的流程。
+:::
 
 ## 组成
 
 | 模块 | 可执行文件 | 说明 |
 |---|---|---|
-| **simulator** | `rir_sim` | 基于 Embree 的独立路径追踪 IR 合成器，用作验证 baseline |
+| **simulator** | `rir_sim` | 基于 Embree 的独立路径追踪 IR 合成器（用作验证基线） |
 | **viewer** | `rir_viewer` | 基于 SDL3 + ImGui 的实时可视化与分析工具 |
 
 ## 构建
@@ -34,17 +41,12 @@ cmake --build build
 
 | 依赖 | CMake 变量 | 用途 |
 |---|---|---|
-| Intel Embree 4 | system install | `rir_sim` path tracing |
-| exaSound (STCoreV2) | `STCORE_SOURCE_DIR` | 实时几何声学仿真 backend |
+| Intel Embree 4 | （系统安装） | `rir_sim` 路径追踪 |
+| STCoreV2 源码（遗留） | `STCORE_SOURCE_DIR` | 旧的实时仿真后端 |
 | SketchUp C SDK | `SKETCHUP_SDK_DIR` | 直接加载 `.skp` 文件 |
 
 ```bash
-# exaSound integration
-cmake -S . -B build \
-  -DSTCORE_SOURCE_DIR=/path/to/STCoreV2/exaSound \
-  -DCMAKE_BUILD_TYPE=Release
-
-# Add SketchUp SDK
+# 添加 SketchUp SDK
 cmake -S . -B build \
   -DSKETCHUP_SDK_DIR=/path/to/sketchup-sdk-mac \
   -DCMAKE_BUILD_TYPE=Release
@@ -56,29 +58,30 @@ cmake -S . -B build \
 cd build && ctest
 ```
 
-## Viewer (`rir_viewer`)
+## Viewer（`rir_viewer`）
 
-Viewer 以 ImGui docking 风格的多面板界面运行。
+以 ImGui docking 风格的多面板界面运行。
 
 | 面板 | 功能 |
 |---|---|
-| **3D Viewport** | scene geometry、声学路径、debug visualization |
-| **Control** | simulation parameters（ray resolution、max depth、tuning） |
-| **View** | scene statistics、render options（wireframe、face culling） |
-| **Materials** | 8-band absorption/scattering 系数，BRAS CSV 自动 mapping |
+| **3D Viewport** | 场景 geometry、声学路径、调试可视化 |
+| **Control** | 仿真参数（ray 分辨率、max depth、调优） |
+| **View** | 场景统计、渲染选项（wireframe、face culling） |
+| **Materials** | 各频段吸声与散射系数，BRAS CSV 自动映射 |
 
-## Simulator (`rir_sim`)
+## Simulator（`rir_sim`）
 
-Simulator 是一个直接使用 Embree 追踪路径并合成 IR 的**独立**合成器。它在相同 scene/material 条件下与 STCoreV2 对比，用作验证准确性的 *reference* baseline。
+直接使用 Embree 追踪路径并合成 IR 的**独立**合成器。它在相同场景与材质条件下与 SimpleST 对比结果，
+用作验证准确性的*基线（reference）*。
 
 ## 使用场景
 
-- **回归验证** — 确认 STCoreV2 修改前后的 IR 差异
-- **算法比较** — deterministic tracing (`rir_sim`, Embree) vs statistical sound propagation (STCoreV2)
-- **材质调优** — 调整 8-band absorption 后立即可视化
-- **实测比较** — 在同一坐标下 overlay 实测 IR 与仿真 IR
+- **回归验证** — 确认引擎修改前后的 IR 差异
+- **算法比较** — 确定性追踪（rir_sim, Embree）vs 统计性声学传播（SimpleST）
+- **材质调优** — 调整各频段吸声率后立即可视化
+- **实测比较** — 在同一坐标下叠加实测 IR 与仿真 IR（以 BRAS CR2 ~ CR4 为基准）
 
 ## 参考
 
-- [STCoreV2](../core/stcorev2.md) — 分析目标仿真器
+- [SimpleST](../core/simplest.md) — 分析目标仿真器
 - [ExaTools 概览](./overview.md)

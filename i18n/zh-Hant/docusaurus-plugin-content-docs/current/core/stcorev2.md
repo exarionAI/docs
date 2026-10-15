@@ -1,307 +1,98 @@
 ---
-title: STCoreV2
+sidebar_position: 2
+title: 從 STCoreV2 到 SimpleST
+sidebar_label: STCoreV2 → SimpleST
+description: 從前一代引擎 STCoreV2（exasoundC.h）遷移到現行 SimpleST ABI 6 時改變的概念與 API 對照表。
 ---
 
-# STCoreV2
+# 從 STCoreV2 到 SimpleST
 
-**采用模組化聲學路徑搜尋和 lock-free 資料傳递的下一代 Sound Tracing core。**
+**STCoreV2**（`exaSound`，`exasoundC.h` 的 `exa*` API）是 Sound Tracing 的前一代核心。
+自 2026 年 10 月起，所有 SDK、外掛與示範都已換成 [SimpleST](./simplest.md)，
+STCoreV2 實作不再發布。本頁整理擁有 STCoreV2 整合的團隊在遷移時需要確認的差異。
 
-STCoreV2 是一個 C++ 函式庫，可從網格、材質、聽者和聲源即時合成脈衝響應 (IR) 與空間音訊。
+:::info 關於這個 URL
+本頁的網址（`/core/stcorev2`）是過去 STCoreV2 參考文件所在的位置。參考文件本文已由
+[SimpleST](./simplest.md) 取代。
+:::
 
-## 概覽
+## 改變的概念
 
-| 專案 | 值 |
-|---|---|
-| 基準分支 | `feat/lock-free-hybrid-v2-reverb` (lock-free reverb) |
-| 主要語言 | C++ (C++17 build，暴露 C API) |
-| 建置系統 | CMake 3.22+ |
-| 平台 | macOS · Windows · Linux |
-| Web 建置 | 支援 Emscripten (`EMSCRIPTEN_KEEPALIVE` export) |
-| 加速器 | 内置 BVH **或** external callback（遊戲引擎 BVH 等） |
-| Max Path Depth | **16** (`EXA_MAX_DEPTH`) |
-| 測試 | Google Test (unit + benchmark) |
-| 狀態 | 活躍開發 |
-
-## 架构
-
-```
-                Scene
-                  │
-                  ▼
-        SceneSnapshot  ── lock-free per-tick snapshot
-                  │       (TripleBuffer · POD · immutable)
-                  ▼
-        ┌─────────────────────────────────────────────┐
-        │  Propagation                                │
-        │   ├ IAccelerator                            │
-        │   │   ├ Internal BVH                        │
-        │   │   └ ExternalAccelerator (callback)      │
-        │   └ Path Modules  (IPathModule)             │
-        │       ├ SpecularReflectionModule            │
-        │       ├ UTDDiffractionModule                │
-        │       ├ DiffuseOffsetModule                 │
-        │       └ StaticReverbModule                  │
-        │       (+ ScatterHandoff, ComparisonReport)  │
-        └─────────────────────────────────────────────┘
-                  │
-                  ▼
-        Auralizator (filter / frequence / HRTF / states)
-                  │
-                  ▼
-              Audio Output
-```
-
-引擎大致分為四層。
-
-- **Scene → Snapshot** — 每個 tick 將場景狀態捕获為基於 POD 的 `SceneSnapshot`，並透過 `TripleBuffer` lock-free 傳递给 propagation/render 執行緒。
-- **Propagation (模組化)** — 四類模組執行在 `IPathModule` 共用介面之上，可替換演算法並比較數值行為。加速器既可以使用内置 BVH，也可以透過 callback 委托给主機侧 BVH。
-- **Auralizator** — 將追蹤到的路徑合成為 IR，並應用 filter、frequency decomposition、HRTF 產生空間音訊。
-- **Audio Output** — 经過聲道映射後返回给调用方。
-
-## 模組結構
-
-```
-exaSound/
-├── src/
-│   ├── core/                    # engine core
-│   │   ├── EngineConfig         #  engine settings
-│   │   ├── SceneSnapshot         #  immutable per-tick snapshot
-│   │   ├── SnapshotBuilder       #  snapshot builder
-│   │   ├── ExternalAccelerator   #  external BVH callback
-│   │   ├── IAccelerator          #  accelerator abstraction
-│   │   ├── Handle / Ref / FixedPool / PoolAllocator
-│   │   ├── ThreadAffinity / Telemetry
-│   │   └── PropagationResult
-│   ├── propagation/
-│   │   ├── Propagator            #  top-level dispatch
-│   │   ├── RGC                   #  Ray Generation Cluster
-│   │   ├── module/               #  Path Module abstraction
-│   │   │   ├── IPathModule       #   common interface
-│   │   │   ├── PathModuleRegistry
-│   │   │   ├── reflection/       #   SpecularReflectionModule
-│   │   │   ├── diffraction/      #   UTDDiffractionModule
-│   │   │   ├── diffuse/          #   DiffuseOffsetModule
-│   │   │   └── reverb/           #   StaticReverbModule
-│   │   ├── UTDDiffraction.hpp    #  UTD formula
-│   │   └── Ray/                  #  ray and plane utilities
-│   ├── auralizator/              # auralization
-│   │   ├── core / filter / frequence / HRTF / states
-│   ├── scene/
-│   │   ├── SoundObject           #  Object / Mesh / Preprocessing
-│   │   └── BVH                   #  Native BVH/TLAS
-│   ├── math/, utils/, objects/, config/
-│   ├── exasound.h                # C++ main header
-│   └── exasoundC.h               # **public C API**
-├── tests/                        # Google Test
-└── demo/                         # demos
-```
-
-## Public C API
-
-透過 C linkage API (`exasoundC.h`, **约 120 個 export**) 公開。
-
-| 類別 | 代表函數 |
-|---|---|
-| 生命周期 | `exaInit`, `exaReset`, `exaGetVersion`, `exaGetPathTypeCount` |
-| Scene | `exaNewScene`, `exaTickScene`, `exaSceneAddObject/Source/Listener` |
-| Object | `exaNewObject`, `exaObjectSetPosition/Rotation/Scale/Mesh`, `exaObjectSetUpdateType` |
-| Mesh | `exaNewMesh`, `exaMeshSetData`, `exaMeshUpdateVertices`, `exaMeshRefit`, `exaMeshSetMaterial` |
-| Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
-| SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity` |
-| Listener (basic) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
-| Listener (HRTF) | `exaInit` 載入一次 default HRTF，listener renderer 共享 |
-| Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
-| 結果查詢 | `exaGetValidPathCount`, `exaGetValidPaths`, `exaGetSortedIRDatas` |
-| 診斷/視覺化 | `exaPropagatorGetGuidePlanes/MirrorPositions`, `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot`, `exaGetLastError` |
-
-## 開始使用
-
-### 要求
-
-- CMake 3.22 或更高
-- C++17 兼容编譯器
-- macOS · Windows · Linux
-
-### 建置
-
-```bash
-cd exaSound
-cmake -S . -B build
-cmake --build build
-```
-
-包含測試:
-
-```bash
-cmake -S . -B build -DBUILD_TESTS=ON
-cmake --build build --target unit_tests
-./build/tests/unit/unit_tests
-```
-
-### 最小使用場景（伪程式碼）
-
-```c
-#include "exasoundC.h"
-
-// 1. Initialize the engine
-exaInit();
-
-// 2. Create a scene
-int sceneID = exaNewScene();
-
-// 3. Register a mesh and assign material
-int meshID = exaNewMesh();
-exaMeshSetData(meshID, vertices, vertexCount, indices, indexCount);
-exaMeshSetMaterial(meshID, materialIndex);
-
-// 4. Attach the mesh to an object and add it to the scene
-int objID = exaNewObject();
-exaObjectSetMesh(objID, meshID);
-exaObjectSetPosition(objID, 0.f, 0.f, 0.f);
-exaSceneAddObject(sceneID, objID);
-
-// 5. Configure source and listener
-int srcID = exaNewSoundSource();
-exaSoundSourceSetPosition(srcID, 1.f, 1.f, 0.f);
-exaSoundSourceSetIntensity(srcID, 1.0f);
-exaSceneAddSource(sceneID, srcID);
-
-int listenerID = exaNewListener();
-exaListenerSetPosition(listenerID, -1.f, 1.f, 0.f);
-exaListenerSetRayCount(listenerID, 4096);
-exaListenerSetRayDepth(listenerID, 16);    // up to EXA_MAX_DEPTH = 16
-exaSceneAddListener(sceneID, listenerID);
-
-// 6. Simulate and render audio each frame
-for (;;) {
-  exaTickScene(sceneID, deltaTime);
-  exaRenderSound(/* render args */);
-  // Query results through exaGetValidPaths / exaGetSortedIRDatas
-}
-
-// 7. Clean up
-exaReset();
-```
-
-> 上面程式碼只是展示 API 流程。實際籤名請查看 `exasoundC.h`。
-
-## 核心概念
-
-### Path Module 結構
-
-傳播演演算法分离為四類模組，並在內部 pipeline 中工作。
-
-| 模組 | 路徑類型 | 位置 |
+| 項目 | STCoreV2 | SimpleST |
 |---|---|---|
-| `SpecularReflectionModule` | 镜面反射 | `propagation/module/reflection/` |
-| `UTDDiffractionModule` | 繞射(UTD) | `propagation/module/diffraction/` |
-| `DiffuseOffsetModule` | 散射 | `propagation/module/diffuse/` |
-| `StaticReverbModule` | 靜態混響 | `propagation/module/reverb/` |
+| 標頭 / 前綴 | `exasoundC.h`，`exa*` 單一 DLL | `STRealtime.h`（`st_rt_*`）+ `STOffline.h`（`st_off_*`）2-DLL，共用 `STTypes.h` |
+| 上下文 | 全域 `exaInit()` / `exaReset()` | 上下文物件 `st_rt_create` / `st_rt_destroy`。一個行程可有多個 |
+| 實體 id | 全為 `int`，**0 = 無效** | 型別化控制代碼 `STMeshId` 等，**`v < 0` = 無效**，0 為有效 |
+| 場景 | `exaNewScene` + `exaSceneAdd*` | 上下文即場景。每個即時上下文一個聆聽者（隱含） |
+| 材質 | 8 頻段（`67.5…8k Hz`），吸收／穿透直接存於三角形，推導 `reflection = 1 − (A+T)`，`Surface` / `Solid Distance` 穿透模型 | **9 頻段（63…16k Hz）** 明示 R/A/T/scattering，嚴格驗證 `|R+A+T−1| ≤ 0.001`，無自動推導，不可變材質（更換時建立新材質控制代碼） |
+| 距離衰減 | 多項式 `1/(c + l·d + q·d²)`，逐音源、逐路徑 | 物理 `1/r` + 參考／最小距離（`st_rt_set_physical_distance_attenuation`），ISO 9613-1 空氣吸收 |
+| 音源音訊 | 渲染器逐音源輸出（`exaRenderSound`、`exaCreateRenderer`） | 音源為 **單聲道輸入串流**，聆聽者渲染器一次將全部音源混成立體聲／N 聲道（`st_rt_render_process`） |
+| 渲染輸出 | 呼叫端逐音源收集緩衝區 | `DEVICE` / `HOST_PULL` / `HOST_PULL_BUFFERED` 三種模式，內建主機取樣率轉換 |
+| 早期反射 | 逐路徑物件 | Objects / **Hybrid（exact 預算 + HOA3 bed）** |
+| HRTF | KU100 parametric / convolution / SADIE H12 表載入，Band8 | panning / 內建 **MIT KEMAR** / **SADIE II D2**（單一檔案）。沒有 KU100、H12、Band8、parametric |
+| GPU | WebGPU（Dawn）propagation provider | **無**（CPU 管線排程器）。`enableGpu` 之類會回傳錯誤 |
+| 加速結構 | HKDTree / LBVH / LBVH_SIMD4·8·16 / NWAY，逐網格建置選項 | 上下文全域 `st_rt_scene_set_accel`（預設 TinyBVH），沒有逐網格選項 |
+| 蒙皮網格 | `exaMeshUpdateVertices` → `exaMeshRefit` 兩次呼叫 refit | **沒有 refit** — 新姿態以建立新網格（`st_rt_mesh_create`）替換 |
+| 物件更新 | `STATIC / REFIT / REBUILD / DYNAMIC` 四種 | `isDynamic` 旗標（靜態 = 靜態 TLAS，動態 = 只更新變換） |
+| path cache / seed | `pathCacheSize`、`seedValue` 選項 | 只有 `seedValue`（`STRT_CreateOptions`），沒有 path cache 選項 |
+| 傳播呼叫 | `exaTickScene` 同步 | `st_rt_propagate` — PIPELINED 會喚醒工作執行緒並立即返回，SYNCHRONOUS 在呼叫執行緒上執行 |
+| 統計 | `exaGetStatistics`、`exaPropagatorGetProfile`、`exaGetMemoryTraceSnapshot` | `st_rt_get_timing`、`st_rt_ir_get_stats`、`st_rt_render_get_process_stats`、`st_rt_scene_get_stats` |
+| 視覺化 | `exaGetValidPaths`（`ExaPathData`） | `st_rt_debug_set_collect_visual_paths` + `acquire_snapshot` + `copy_visual_paths` |
+| 座標 | 右手系，`+Y` 向上，`-Z` 向前，`exaListenerSetCoordinateBasis` | **左手系，`+Y` 向上，`+Z` 向前（與 Unity 相同）**，沒有 basis API — 由包裝層轉換 |
+| 單位 | `ExaSTOption.sceneRatio` | `STRT_CreateOptions.sceneRatio`（建立時一次） |
+| 最大深度 | `EXA_MAX_DEPTH = 16` | 反射 16，穿透 64 |
 
-每個模組實作 `IPathModule`，並分两阶段執行。
+## 函式對照表
 
-1. **Phase 1 — `buildSetupPlanes`**：從 guide ray 結果建置 SetupPlane
-2. **Phase 2 — `validatePaths`**：追蹤並驗證路徑，把有效路徑写入輸出 buffer
-
-Specular 到 Diffuse 之間透過 `ScatterHandoffEntry` 傳递 path 狀態。
-
-### Lock-free snapshot (`SceneSnapshot`)
-
-場景狀態在每個 tick 被捕获為 immutable POD snapshot。
-
-- 所有結構都是扁平陣列、non-virtual、无 heap pointer，可複製到 `TripleBuffer` slot
-- propagation/audio 執行緒读取不同 slot，lock-free 執行
-- geometry 由独立 BVH double buffer 管理（Phase 3）
-
-因此多執行緒模擬與渲染无需 mutex 也能安全进行。
-
-### Material 模型
-
-`SoundTriangle` 直接存储 **absorption** 和 **transmission**。不使用独立 Material ID/pointer，反射计算遵循：
-
-```
-reflection = 1 - (absorption + transmission)
-```
-
-`ExaRayHit` 結構暴露 `materialId` 字段，因此 ray cast 時可以直接识別命中的材質。
-
-### Ray Count 與 Ray Depth
-
-按 listener 設定 ray 數量和最大反射深度。
-
-| 函數 | 效果 |
+| STCoreV2 | SimpleST（即時） |
 |---|---|
-| `exaListenerSetRayCount(id, n)` | 設定 ray 數量 |
-| `exaListenerSetRayDepth(id, d)` | 設定最大深度 (`1 ≤ d ≤ EXA_MAX_DEPTH = 16`) |
+| `exaInit()` / `exaReset()` | `st_rt_create(&opt, &ctx)` / `st_rt_destroy(ctx)` |
+| `exaGetVersion()` | `st_rt_get_version_string()`、`st_rt_get_api_version()`、`st_rt_get_capabilities()` |
+| `exaGetLastError()` | `st_rt_get_last_status(ctx)`、`st_rt_get_last_error(ctx, buf, cap)` |
+| `exaNewScene()` / `exaTickScene()` | （上下文）/ `st_rt_propagate(ctx)` |
+| `exaAddSoundMaterial()` / `exaSetSoundMaterial()` | `st_rt_material_create(ctx, &mat)` / 材質不可變 — 建立新材質後 `st_rt_mesh_set_material` |
+| 載入預設材質表（SDK 端） | `st_rt_material_load_defaults(ctx)` |
+| `exaNewMesh()` + `exaMeshSetData()` + `exaMeshSetMaterial()` | `st_rt_mesh_create(ctx, &mesh, material, triMaterialIndices)` |
+| `exaMeshUpdateVertices()` + `exaMeshRefit()` | 無 — 建立新網格後替換物件 |
+| `exaNewObject()` + `exaObjectSetMesh()` + `exaSceneAddObject()` | `st_rt_object_create(ctx, mesh, &transform, isDynamic)` 或 `_q`（位置、四元數、縮放） |
+| `exaObjectSetPosition/Rotation/Scale()` | `st_rt_object_set_transform[_q]()` |
+| `exaObjectSetUpdateType()` | 建立時的 `isDynamic`；靜態變更用 `st_rt_build`，動態用 `st_rt_build_dynamic` |
+| `exaNewSoundSource()` + `exaSceneAddSource()` | `st_rt_source_create(ctx, &desc)` |
+| `exaSoundSourceSetPosition/Direction/Velocity()` | `st_rt_source_set_position/direction/velocity()` |
+| `exaSoundSourceSetIntensity()` | `STSourceDesc.intensity`（壓力倍率）+ `st_rt_source_set_energy()`（能量倍率） |
+| `exaSoundSourceSetRayCount/Depth()` | `st_rt_source_set_ray_count()`、`st_rt_source_set_depth()` |
+| `exaSoundSourceSetReverbSendDb()` | `st_rt_source_set_path_volume(ctx, src, ST_SOURCE_VOLUME_REVERB, linear)` |
+| `exaSoundSourceSetPathEnable()` | `st_rt_source_set_path_enabled(ctx, src, pathType, enabled)` |
+| 逐音源指向性表 | `st_rt_source_set_directivity()` + `st_rt_source_set_orientation_q()`，錐形公式用 `st_rt_source_set_axis_attenuation()` |
+| `exaNewListener()` + `exaSceneAddListener()` | 隱含的單一聆聽者（`st_rt_listener_*`） |
+| `exaListenerSetPosition/Orientation/Velocity()` | `st_rt_listener_set_position/rotation(yaw,pitch)/velocity()` |
+| `exaListenerSetRayCount/RayDepth()` | `st_rt_listener_set_ray_count()`、`st_rt_set_max_depth()` |
+| `exaListenerSetOption()`（`sceneRatio` 等） | `STRT_CreateOptions.sceneRatio`、各 `st_rt_set_*` 政策函式 |
+| `exaListenerSetCoordinateBasis()` | 無 — 在主機包裝層轉換 |
+| `exaListenerSetHrtfMode()` / `exaListenerLoadHrtf()` | `st_rt_render_set_spatializer(ctx, 0/1/2)` |
+| `exaCreateRenderer()` / `exaRenderSound()` / `exaRemoveRenderer()` | `st_rt_render_start(ctx, useHrtf)` / `st_rt_render_process(ctx, out, frames)` / `st_rt_render_stop(ctx)` |
+| 音源音訊輸入（主機混音） | `st_rt_source_attach_stream()` + `st_rt_source_write_stream()`，或 `st_rt_source_set_audio_file()` |
+| `exaGetValidPathCount/Paths()` | `st_rt_debug_set_collect_visual_paths(mask)` → `st_rt_debug_acquire_snapshot()` → `st_rt_debug_copy_visual_paths()` |
+| `exaGetSortedIRDatas()` | 即時 ABI 中沒有 — 離線 `st_off_ir_compute()` + `st_off_ir_copy_raw_early_taps()` / `render_pressure()` |
+| `exaGetStatistics()` / `exaPropagatorGetProfile()` | `st_rt_get_timing()`、`st_rt_ir_get_stats()`、`st_rt_render_get_process_stats()`、`st_rt_scene_get_stats()` |
+| `exaGetMemoryTraceSnapshot()` | 無 |
+| `exaPropagatorInitGpu()` / `exaPropagatorSetGpuProvider()` | 無（僅 CPU） |
+| `exaPropagatorGetGuidePlanes/MirrorPositions()` | 無（guide ray 以 visual path 收集 mask 觀察） |
 
-目前 build 的 path depth 上限是 `EXA_MAX_DEPTH = 16`。
+## 遷移檢查清單
 
-### Diffuse Scattering 選項
-
-`ExaSTOption` 新增了散射相關参數，用於微调模擬。
-
-| 字段 | 含义 |
-|---|---|
-| `diffuseEnabled` | 啟用/停用散射 |
-| `diffuseStartDepth` | 開始散射的反射深度，預設 5 |
-| `diffuseMaxOffsetRadius` | 散射 offset 半徑 |
-| `diffuseCurveA/B/C` | 距离和角度的散射曲線系數 |
-| `guideDiffuseEnabled` | 使用 guide diffuse ray |
-| `guideDiffuseListenerHeadRadius` | 聽者头部半徑，預設 0.0875 m |
-
-### HRTF
-
-```c
-exaInit();        // 載入內嵌 default HRTF 一次
-exaNewListener(); // renderer 使用 engine default HRTF 啟動
-exaReset();       // 釋放 renderer state 和 default HRTF
-```
-
-### 結果查詢
-
-| 形式 | 函數 |
-|---|---|
-| 有效路徑（視覺化/调試） | `exaGetValidPathCount`, `exaGetValidPaths` |
-| 排序後的 IR（卷積輸入） | `exaGetSortedIRDatas` |
-| Guide Plane / Mirror Position（診斷） | `exaPropagatorGetGuidePlanes`, `exaPropagatorGetMirrorPositions` |
-
-`ExaPathData` 按 `pos[0]=source`, `pos[1..N]=hit points`, `pos[N+1]=listener` 的顺序存储。
-
-### Object Update Type
-
-```c
-exaObjectSetUpdateType(objID, updateType);
-// 0 = EXA_OBJECT_UPDATE_STATIC   : 執行階段不更新 TLAS/BLAS
-// 1 = EXA_OBJECT_UPDATE_REFIT    : 形變 - refit BLAS 並更新 TLAS bounds
-// 2 = EXA_OBJECT_UPDATE_REBUILD  : topology 變更 - 重新建置
-// 3 = EXA_OBJECT_UPDATE_DYNAMIC  : 僅 transform 變更 - 更新 TLAS instance
-```
-
-靜態 object 可以避免每帧 BVH refit 成本。
-
-`Refit` 用於 topology 維持不變、僅 vertex 移動的 geometry，例如 skinned animation。vertex
-本身透過 mesh 端的 2-call protocol 上傳。
-
-```c
-exaMeshUpdateVertices(meshID, vertices, numVertices);  // CPU skinning 路徑
-exaMeshRefit(meshID);                                  // refit mesh BVH
-```
-
-`numVertices` 必須與 `exaMeshSetData` 時的 vertex 數量完全一致，不一致會以
-`EXA_ERR_INVALID_ARG` 拒絕。若 topology（triangle index）發生變更，則無法使用 refit：請透過
-`exaMeshSetData` 重新建置，並將 object update type 設為 `Rebuild`。
-
-## 診斷與統計
-
-| 函數 | 用途 |
-|---|---|
-| `exaGetStatistics()` | ray、path、時間統計 |
-| `exaPropagatorGetProfile(sceneID)` | 傳播阶段 profile |
-| `exaPropagatorGetGuidePlanes/MirrorPositions` | 演算法內部狀態 |
-| `exaGetMemoryTraceSnapshot()` | 記憶體使用 snapshot |
-| `exaGetLastError()` | 最後一条錯誤訊息 |
+1. **以 9 頻段重新輸入材質**。不要複製 8 頻段來填充，而是量測或估算 16 kHz 的值，
+   並讓每個頻段滿足 R+A+T=1。SimpleST 沒有 `Solid Distance` 穿透距離，請換算成表面穿透係數（T）。
+2. **將音源音訊推成單聲道串流**。逐音源的輸出節點與效果移到聆聽者混音之後。
+3. 若原本有 `exaMeshRefit` 路徑，改為 **定期以新網格替換** 蒙皮網格的結構
+   （UE 外掛的 `SkinnedPoseRefreshSeconds` 就是這種方式）。
+4. 確認座標系。`-Z` 向前的主機要翻轉 Z 的符號（soundtrace.js 由 `coordinateBasis` 處理）。
+5. 將 `exaRenderSound` 換成主機音訊回呼中的 `st_rt_render_process`，
+   並在建立選項中指定 `renderOutputMode` 與 `hostSampleRate`。
+6. 在 `st_rt_render_start` **之後** 套用 `STRenderOptions.reserved0 = 1`（Hybrid）。
+7. 以 capability 位元（`ST_CAP_*`）確認功能是否存在，並填入 `structSize`/`apiVersion` 再呼叫。
 
 ## 參考
 
-- [SDK 概覽](../sdk/overview.md)
-- [Sound Tracing 是什麼?](../intro/what-is-soundtracing.md)
+- [SimpleST](./simplest.md)
+- 各 SDK 的變更：[Web](../sdk/web.md) · [Unity](../sdk/unity.md) · [Unreal Engine](../sdk/ue.md)

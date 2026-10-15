@@ -1,44 +1,59 @@
 ---
 title: Web
-description: 安裝 soundtrace.js WebAssembly SDK，並使用 HRTF 模式、品質預設與 CPU/MT/WebGPU 後端。
+description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、部署需求、HRTF、品質預設、材質與疑難排解。
 ---
 
 # Web SDK
 
-**soundtrace.js** 是在瀏覽器中使用 [STCoreV2](../core/stcorev2.md) 的
-TypeScript/WebAssembly SDK。它將渲染場景中的網格、材質、音源與聆聽者連接到
-Sound Tracing 場景，並向 Web Audio 圖提供空間音訊輸出。
+**soundtrace.js** 是在瀏覽器中使用 [SimpleST](../core/simplest.md) 的 TypeScript/WebAssembly SDK。
+它將 Three.js 之類渲染場景中的網格、材質、音源與聆聽者連接到 Sound Tracing 場景，
+並向 Web Audio graph 提供空間化的立體聲輸出。
+
+自 1.0.0 起，引擎從 STCoreV2 換成 **SimpleST 2.12.0 / ABI 6**。`SoundTrace`、
+`Source`、`Mesh`、`Listener` facade 維持不變，但後端、HRTF、材質與選項契約都已改變。
+完整選項與實體 API 請見 [Facade API](./web/facade.md)，低階 SimpleST 模組存取請見
+[Native API](./web/native.md)。
+
+![soundtrace.js 結構](/img/web/architecture.png)
 
 ## 目前 SDK 重點
 
-| 項目 | 建議流程 |
+| 項目 | 目前行為 |
 |---|---|
-| HRTF | 預設使用 core 內建 HRIR 表（不需載入）；參數化方向渲染呼叫 `loadHrtf('parametric')` |
-| 後端 | 選擇 `Single Thread`、`Multi Thread` 或 `WebGPU` |
-| 品質 | 選擇 `Fast`、`Balanced` 或 `Quality` 預設 |
-| 材質 | 以名稱指定材質預設：`concrete`、`wood`、`glass`、`metal` 等 |
-| 底層參數 | 讓預設統一管理射線解析度、深度與渲染預算 |
+| 引擎 | SimpleST Realtime（pthreads WASM）+ Offline（單執行緒，僅供 IR 分析） |
+| 執行模式 | `single_thread`（同步傳播）/ `multi_thread`（管線傳播）。**兩者都使用專用 Worker + pthread WASM** |
+| 早期反射 | 永遠是 **Hybrid**。渲染啟動、HRTF 變更、reset 之後都會重新套用 |
+| HRTF | 內建 MIT KEMAR（`'mit-kemar'`）、隨附 SADIE II D2（`'sadie-d2'`） |
+| 品質 | `fast` / `balanced` / `quality` — 同時設定聆聽者與音源的射線格網及反射深度 |
+| 材質 | 9 頻段（63 Hz ~ 16 kHz）BRAS 24 種 + 示範用 3 種，以名稱或別名指定 |
+| 輸出 | 每個音源為單聲道輸入，聆聽者渲染器混出一路立體聲（`sound.output`） |
+| GPU | 無。`mode: 'gpu'`、`enableGpu()` 會出錯 |
 
 ## 需求
 
-- Node.js 20 或更新版本
-- 支援 Web Audio API 與 AudioWorklet 的現代瀏覽器
-- `Multi Thread` 需要 COOP/COEP 與 `crossOriginIsolated === true`
-- `WebGPU` 需要提供 `navigator.gpu` 的瀏覽器與 GPU
-- 已授權的 SDK 發行包
+- Node.js 20 以上（建置工具），建議使用最新的 Chromium 系瀏覽器
+- HTTPS 或 localhost
+- AudioWorklet、SharedArrayBuffer、**cross-origin isolation** — ST/MT 都需要
+  （沒有非隔離的回退）
+- 已授權的 SDK 發布物（vendor ZIP 或 npm tgz）
 
 ## 安裝
 
-`soundtrace.js` 是透過授權合約提供的非公開套件 `@exarionai/soundtrace.js`。取得
-發行版之後，直接使用下列範例中的 import 指定子即可。
+`soundtrace.js` 是依授權合約提供的非公開套件 `@exarionai/soundtrace.js`。
+發布物有兩種形式。
+
+| 形式 | 檔案 | 安裝 |
+|---|---|---|
+| vendor 樹 | `soundtrace-js-release-vendor.zip`（根目錄 `sdk/`） | 解壓到靜態路徑後提供服務。隨附的 `install.py` 會在驗證雜湊後安裝到 `vendor/sound-tracing/sdk` |
+| npm 套件 | `exarionai-soundtrace.js-1.0.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.0.0.tgz` |
 
 ```ts
 import { SoundTrace } from '@exarionai/soundtrace.js';
 ```
 
-套件自帶 WASM core（`core/st`、`core/mt`）以及材質與 HRTF 資源，並於執行時直接
-fetch。若打包工具對這段模組圖做預先打包，worker 與 wasm 載入會失效，因此在 Vite
-中要將該套件排除在相依預先打包之外。
+套件同時包含 WASM 核心（`core/SimpleSTRealtime.mjs/.wasm`、`core/SimpleSTOffline.mjs`）與材質、HRTF
+資源，並於執行期 fetch。若打包工具對這段模組圖做預先打包，Worker 與 WASM 載入會失效，
+因此在 Vite 中要將它排除在預先打包之外，改以靜態 vendor 樹提供。
 
 ```ts
 // vite.config.ts
@@ -47,12 +62,21 @@ export default defineConfig({
 });
 ```
 
-如需自行託管 core 與資源，可用 `coreBaseUrl`、`assetBaseUrl` 指定 URL，詳見
-[Facade API](./web/facade.md)。
+若自行託管核心與資源，以 `coreBaseUrl`、`assetBaseUrl` 選項指定 URL。
+`.mjs` 請以 JavaScript、`.wasm` 請以 `application/wasm` MIME 提供服務。
+
+### 部署標頭
+
+頁面回應與 **Worker 指令碼的回應** 都必須帶有下列標頭。
+
+```text
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
 
 ## 快速開始
 
-請在使用者點擊或觸控事件處理函式中執行。
+下列程式碼必須在使用者點擊或觸控事件內執行。
 
 ```ts
 import { SoundTrace } from '@exarionai/soundtrace.js';
@@ -61,185 +85,167 @@ const audioContext = new AudioContext();
 await audioContext.resume();
 
 const sound = await SoundTrace.create(audioContext, {
-  mode: 'single_thread',
+  thread: 'mt',              // 'st' = 同步傳播，'mt' = 管線傳播（建議）
   quality: 'balanced',
-  coordinateBasis: {
+  earlyReflectionMode: 'hybrid',
+  coordinateBasis: {         // Three.js：相機看向 -Z
     right: [-1, 0, 0],
     up: [0, 1, 0],
     forward: [0, 0, -1],
   },
 });
+sound.output.connect(audioContext.destination);
 
-const room = sound.addMesh({
-  vertices,
-  indices,
-  material: 'concrete',
-});
+const room = sound.addMesh({ vertices, indices, material: 'concrete' });
+const source = sound.addSource({ position: [2, 1.5, -1], gain: 1 });
+sound.listener.setPose({ position: [0, 1.7, 0] });
 
-const source = sound.addSource({
-  position: [2, 1.5, -1],
-  gain: 1,
-});
-
-sound.listener.setPose({
-  position: [0, 1.7, 0],
-});
-
+const player = audioContext.createBufferSource();
+player.buffer = decodedMonoBuffer;
+player.loop = true;
+await source.play(player);     // 輸入擷取節點。輸出為靜音 — 聲音從 sound.output 發出
 await sound.update(0);
+player.start();
 ```
 
-Three.js 相機朝向 `-Z`，因此應使用上面的座標基底。如果座標基底錯誤，HRTF 的左右
-或前後方向會被鏡像。
+SimpleST 的座標系與 Unity 相同，為 `+Z` 向前。像 Three.js 這類看向 `-Z` 的渲染器必須傳入上述
+`coordinateBasis`，左右與前後才會正確。
+
+## 執行模式
+
+| 選項 | 傳播 | 說明 |
+|---|---|---|
+| `thread: 'st'` / `mode: 'single_thread'` | 同步（SYNCHRONOUS） | `update()` 在傳播完成後才返回。預設計算預算 1 |
+| `thread: 'mt'` / `mode: 'multi_thread'` | 管線（PIPELINED） | Direct / Reflection-Diffraction / Reverb lane 在 worker 中獨立執行。預設預算 3 |
+
+兩種模式都由專用 Worker 擁有引擎工作階段並使用相同的 pthread WASM。發布的 pthread
+pool 為 5，`propagationThreadCount` 為 1 ~ 5。主執行緒只保留 UI 與 Web Audio graph；
+位置更新經由共享記憶體 lane 傳遞，建立／刪除／材質變更則經由保證順序的命令路徑傳遞。
 
 ## 選擇 HRTF
 
-core 在建立每個 listener 時就已安裝 min-phase HRIR 表，因此即使完全不呼叫
-`loadHrtf()`，雙耳渲染也能運作 —— 這就是預設路徑。
-
-若要切換到精簡後的 KU100 parametric 表，需要明確載入。
-
-```ts
-await sound.loadHrtf('parametric');
-```
-
-| 呼叫 | 使用的表 | 額外資源 |
+| 呼叫 | 表 | 額外資源 |
 |---|---|---|
-| （不呼叫） | core 內建 min-phase HRIR | 無 |
-| `loadHrtf('parametric')` | KU100 parametric | `KU100_bprime.bin` |
-| `loadHrtf('convolution')` | core 內建 HRIR（切換為最近鄰查找） | 無 |
-| `loadHrtf('steamaudio')` | SADIE H12 HRIR | `sadie_h12_steamaudio.bin` |
+| （不呼叫） | 內建 MIT KEMAR（SDK 預設值）。`setOutputMode('speaker')` 切換為立體聲 panning | 無 |
+| `loadHrtf('mit-kemar')` 或 `'convolution'` | 引擎內建 MIT KEMAR 128 tap | 無 |
+| `loadHrtf('sadie-d2')` 或 `'steamaudio'` | SADIE II D2 KEMAR 8,802 個方向 256 tap | `SADIE_D2_44K_16bit_256tap.hrtfbin` |
 
-若要使用應用程式自有的表，將 URL、`ArrayBuffer` 或 typed array 作為第二個參數傳入。
-
-```ts
-await sound.loadHrtf('parametric', '/assets/my-hrtf.bin');
-```
-
-:::note
-core 中確實存在以 8 頻段振幅加 ITD 渲染的 `Band8` 空間化器，但 facade 無法選擇它：
-`setRenderOptions()` 會拒絕 `hrtfMode` 鍵，只能透過 native 的 `setHrtfMode()` 切換。
-:::
-
-## 選擇後端
-
-| 模式 | 程式碼 | 需求 | 行為 |
-|---|---|---|---|
-| Single Thread | `mode: 'single_thread'` | 一般瀏覽器託管 | 最簡單的 CPU 路徑 |
-| Multi Thread | `mode: 'multi_thread'` | COOP/COEP 與 SharedArrayBuffer | 在 Worker 中執行的 MT CPU 路徑 |
-| WebGPU | `mode: 'gpu'` | WebGPU | 嘗試 GPU 傳播，失敗時回退至 CPU |
-
-### Multi Thread 部署回應標頭
-
-```text
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
-```
-
-專用 Worker 擁有 MT 引擎工作階段，主執行緒保留 UI 與 Web Audio 所有權。
-Transform 更新使用快速狀態路徑，建立／刪除、材質與網格操作使用有序命令路徑。
-
-### WebGPU
+舊的 KU100 parametric / convolution / SADIE H12 表與 `Band8` 模式已不存在。
+`loadHrtf('parametric')` 會出錯。
 
 ```ts
-const sound = await SoundTrace.create(audioContext, {
-  mode: 'gpu',
-  quality: 'balanced',
-});
+await sound.loadHrtf('sadie-d2');
+sound.listener.setOutputMode('speaker');   // 'hrtf'（預設）| 'speaker'（立體聲 panning）
 ```
-
-目前自動 WebGPU 路徑與 Single Thread 核心搭配使用。不要同時強制
-`thread: 'mt'` 與 `mode: 'gpu'`。GPU 初始化失敗時，SDK 會繼續使用 CPU。
 
 ## 品質預設
 
-| 預設 | 建議用途 |
-|---|---|
-| `fast` | 行動裝置、低功耗裝置、大量同時音源 |
-| `balanced` | 一般桌面平台與產品整合的預設選擇 |
-| `quality` | 高階桌面平台與品質優先示範 |
+| 預設 | 聆聽者 guide ray | 音源 transport ray | 反射深度 | 用途 |
+|---|---|---|---|---|
+| `fast` | `8 × 8` | `8 × 8` | 4 | 行動裝置、大量同時音源 |
+| `balanced`（預設） | `16 × 16` | `16 × 16` | 6 | 桌機基本設定 |
+| `quality` | `24 × 24` | `24 × 24` | 8 | 品質優先的示範 |
 
 ```ts
 sound.setQuality('quality');
 ```
 
-預設會同時協調傳播與 HRTF／Diffuse 渲染預算。效能不足時，應先依
-`quality → balanced → fast` 降級，再考慮編輯個別射線屬性。
+`'speed'`、`'middle'` 分別是 `fast`、`balanced` 的即將棄用別名。遇到效能問題時，
+在調整個別射線數之前，先依 `quality → balanced → fast` 的順序降低。
+
+## 材質
+
+網格可指定材質名稱、別名或索引。預設表為 SimpleST BRAS 24 種加上示範用近似值 3 種
+（`Fabric`、`Sand`、`Water` — 並非量測值），共 27 種，所有值都是 9 頻段 R/A/T/scattering。
+
+| 別名 | 對應的材質 |
+|---|---|
+| `concrete`、`cement`、`콘크리트` | `BRAS_CR2_concrete` |
+| `glass`、`window`、`유리` | `BRAS_CR2_windows` |
+| `wood`、`timber`、`나무` | `BRAS_CR4_woodPanels` |
+| `fabric`、`cloth`、`carpet`、`curtain`、`천` | `Fabric` |
+| `sand`、`snow`、`모래` | `Sand` |
+| `water`、`waterSurface`、`물` | `Water` |
+
+BRAS 材質的完整名稱（`BRAS_CR2_ceiling`、`BRAS_CR3_seating`、`BRAS_CR4_brickwall` …）也可直接使用。
+完整清單在套件的 `assets/soundMaterial.json`。
+
+```ts
+sound.addMesh({ vertices, indices, material: 'BRAS_CR4_parquet' });
+```
+
+:::warning
+不在表中的名稱不會擲出例外，而是靜默替換為預設材質（`defaultMaterialType = 1`，`BRAS_CR2_concrete`）。
+要確認材質如預期套用，請精確使用上述名稱。
+:::
+
+要自行定義材質，請傳入四組各 9 個值，且每個頻段滿足 `R + A + T = 1`（容許誤差 0.001）。
+不要複製 8 頻段的值來填成 9 頻段。
 
 ## 連接 Web Audio
 
 ```ts
-const player = audioContext.createBufferSource();
-player.buffer = decodedBuffer;
-player.loop = true;
-
-const spatialNode = await source.play(player);
-spatialNode.connect(sound.output).connect(audioContext.destination);
-player.start();
+const node = await source.play(player);  // AudioWorkletNode：供輸入擷取，輸出靜音
+sound.output.connect(audioContext.destination);
 ```
 
-應用程式擁有 `AudioContext` 與播放節點。soundtrace.js 提供每個音源的空間節點與
-主輸出。
+`soundtrace.js` 不會建立 `AudioContext`。應用程式擁有 context 與播放節點，SDK 提供逐音源的
+**輸入擷取節點** 與一個 **聆聽者主輸出**（`sound.output`）。逐音源的輸出效果必須移到
+`sound.output` 之後。
 
 ## 更新與清理
 
 ```ts
 source.setPose({ position: [1, 1.5, -2] });
-sound.listener.setPose({ position: [0, 1.7, 0.25] });
+sound.listener.setPose({ position: [0, 1.7, 0.25], orientation: camera.quaternion.toArray() });
 room.setPose({ position: [0, 0, 0] });
 
-await sound.update(1 / 60);
+await sound.update(1 / 60);   // 回傳這一影格的有效路徑數
 
+source.dispose();
 sound.dispose();
 await audioContext.close();
 ```
 
-## 材質預設
-
-網格接受材質名稱或索引。預設材質表共 22 種，名稱透過下列 10 個 canonical name 解析。
-
-| Canonical name | 可辨識別名（部分） |
-|---|---|
-| `concrete` | cement、beton、pavement、sidewalk |
-| `wood` | plank、timber、oak、pine、bamboo |
-| `glass` | window、mirror、crystal |
-| `metal` | steel、iron、aluminum、copper、brass |
-| `brick` | tile、ceramic、terracotta |
-| `fabric` | cloth、textile、carpet、curtain |
-| `plastic` | rubber、vinyl、pvc |
-| `water` | liquid、pool |
-| `grass` | vegetation、leaves、lawn |
-| `sand` | dirt、gravel、soil、mud |
+## 診斷與 IR 分析
 
 ```ts
-sound.addMesh({
-  vertices,
-  indices,
-  material: 'steel',   // metal 的別名
-});
+const snap = await sound.debugSnapshot();
+snap.simplest.timing;   // { propagationMs, directMs, reflectionDiffractionMs, reverbMs, irMs, renderMs }
+snap.simplest.scene;    // { meshes, objects, sources, triangles }
+snap.simplest.render;   // { blockSequence, activeSources, exactTaps, sendTaps, totalUs }
+
+const irs = await sound.getIRs();                               // 9 頻段 early path IR
+const h = await sound.renderMonoImpulseResponse(source, 2.0);   // 44.1 kHz 單聲道壓力 IR（最長 30 s）
 ```
 
-:::warning
-表中不存在的名稱不會擲出例外，而是靜默回退到預設材質（索引 `0`、`concrete`）。
-即使拼錯仍會發聲，因此要確認材質是否如預期套用，請使用上表中的名稱。
-:::
+IR 分析會在獨立的 Offline Worker 中複製場景後計算，因此即時輸出不會中斷。
+`renderMonoImpulseResponse` 是壓力 IR，不是 HRTF/Hybrid 輸出的錄音。
 
-請先使用隨套件提供的預設；只有在確實需要自訂聲學材質時，才直接編輯 8 頻段的
-reflection/absorption/transmission 數值。
+## 示範
+
+在公開示範儲存庫 [Sound-tracing](https://github.com/exarionAI/Sound-tracing) 可以執行 Shoebox room、
+Multi-room occlusion、Runtime capability 範例。
+
+![Shoebox room 示範](/img/web/demo-shoebox.png)
+
+![Multi-room occlusion 示範](/img/web/demo-multiroom.png)
 
 ## 疑難排解
 
 | 症狀 | 檢查項目 |
 |---|---|
-| 沒有聲音 | 在使用者手勢中先呼叫 `AudioContext.resume()` |
-| MT 啟動失敗 | 檢查 COOP/COEP、SharedArrayBuffer 與 `crossOriginIsolated` |
-| GPU 未啟用 | 檢查 `navigator.gpu` 與硬體加速；CPU 回退是有效狀態 |
-| 方向被鏡像 | 檢查渲染器對應的 `coordinateBasis` |
-| 材質似乎沒有作用 | 對照上面的 canonical name／別名表檢查名稱；未知名稱會回退到預設材質 |
-| core/資源回傳 404 | 檢查打包工具是否對該套件做了預先打包，以及 `coreBaseUrl`、`assetBaseUrl` 是否正確 |
-| 效能較低 | 深入調校前先降低品質預設並關閉路徑視覺化 |
+| 沒有聲音 | 是否先在使用者手勢內呼叫了 `AudioContext.resume()`，是否將 `sound.output` 連接到 destination |
+| `SoundTrace.create` 因 cross-origin isolation 錯誤被拒絕 | 頁面與 Worker 回應的 COOP/COEP 標頭、`crossOriginIsolated === true`（ST 也需要） |
+| `mode: 'gpu'` / `enableGpu()` 錯誤 | SimpleST Web 僅支援 CPU。移除該選項 |
+| `transmissionModel: 'solid'`、`defaultMeshBuild`、`hrtfQuality` 等被拒絕 | STCoreV2 專用選項。參考 [Facade API](./web/facade.md) 的拒絕清單 |
+| 方向聽起來相反 | 符合渲染器座標系的 `coordinateBasis`（`-Z` 向前時必要） |
+| 材質似乎沒有生效 | 名稱是否存在於材質表或別名中（不存在時會替換為混凝土） |
+| 核心／資源 404 | 打包工具的預先打包排除、`coreBaseUrl`、`assetBaseUrl`、`.wasm` MIME |
+| 效能不足 | 降低品質預設並使用 `thread: 'mt'`，關閉路徑視覺化 |
 
-## 下一步
+## 下一篇
 
-- [SDK 概覽](./overview.md)
-- [Unity SDK](./unity.md)
-- [Unreal Engine SDK](./ue.md)
+- [Facade API](./web/facade.md) — 建立選項、場景／音源／網格 API、生命週期、被拒絕的舊選項
+- [Native API](./web/native.md) — SimpleST 模組載入器與低階配接器
+- [Performance Guide](./performance.md)

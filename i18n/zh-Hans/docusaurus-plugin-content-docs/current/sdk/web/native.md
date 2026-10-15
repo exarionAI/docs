@@ -1,160 +1,104 @@
 ---
 title: Native API
-description: soundtrace.js 的 single-thread 低层 API 及当前支持范围。
+description: soundtrace.js 的低层入口 `@exarionai/soundtrace.js/native` — SimpleST WASM 模块加载器、堆辅助工具、Realtime/Offline 适配器。
 ---
 
 # Native API
 
-Native API 面向需要直接控制 scene、listener、source、mesh 和 BVH 的高级
-single-thread 集成。普通应用请使用 [Facade API](./facade.md)。
+`@exarionai/soundtrace.js/native` 公开了 facade 在内部使用的 SimpleST 模块加载器和适配器。
+普通应用请使用 [Facade API](./facade.md)。这一层直接遵循 SimpleST C ABI 约定
+（包内随附的 `core/Include/SimpleST/ABI/*.h`），版本间兼容性保证弱于 facade。
 
 ```ts
-import { SoundTrace } from '@exarionai/soundtrace.js';
 import {
-  BvhType,
-  PathType,
-  UpdateType,
-  type MeshBuildOptions,
+  SimpleSTRealtime,
+  loadRealtimeModule, loadOfflineModule, analyzeScene,
+  Heap, packMaterial, validateMaterial,
+  ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
+  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
 ## 支持范围
 
-:::warning 当前公开类型契约
-`@exarionai/soundtrace.js/native` 导出了低层类与类型，但目前
-`SoundTrace.create()` 的公开返回类型仍是 facade。因此，通过 `createScene()`、
-`createListener()`、`createSource()` 等 factory 的完整 direct-native TypeScript
-入口流程尚未作为公开契约提供。
-
-在公开类型扩展之前请使用 facade。对内部实现的强制类型转换和非公开的 deep import
-不保证版本兼容性。
+:::warning 变更
+STCoreV2 时期的 `SoundScene` / `SoundListener` / `SoundMesh` / `SoundObject` / `SoundCollider` /
+`MaterialTable` / `Propagator` / `Diagnostics` 类和 `./internal` entry 已在 1.0.0 中移除。
+当前的低层约定是 SimpleST ABI 6 头文件和下面的适配器。
 :::
 
-此外，direct-native 控制仅限 ST。在 worker-hosted MT 上，以下 surface 会抛出
-`SoundTraceMtUnsupportedError`。
+- 所有 SimpleST `[control]` 调用只在**一个 Worker** 中进行。facade 设有专用 control Worker，
+  只在那里操作引擎。
+- 在主线程调用 `st_rt_propagate` 等阻塞入口会因 `Atomics.wait` 被阻止而失败。
 
-- `createScene()`、`createListener()`、`createSource()`
-- `createMesh()`、`createObject()`、`createCollider()`
-- `materials`、`propagator`、`diagnostics`
-- `createWorkletNode()`
-- 同步 native getter
+## 组成
 
-MT 应用请使用 facade 与 `await sound.debugSnapshot()`。
-
-## 对象模型
-
-| 对象 | 职责 |
+| 名称 | 作用 |
 |---|---|
-| `SoundScene` | 拥有 object、source 和唯一 listener，并执行 propagation |
-| `SoundListener` | 管理 listener 的 pose、ray 与 render 选项 |
-| `SoundSource` | 管理 source 的 pose、gain 与各 path 选项 |
-| `SoundMesh` | 管理三角形几何体与 BLAS |
-| `SoundObject` | 管理场景 transform 与 mesh 实例 |
-| `SoundCollider` | 绑定 `SoundMesh` 与 `SoundObject` 的生命周期 |
-| `MaterialTable` | 注册按频段的材质 |
-| `Propagator` | 查询 valid path 与 profile |
-| `Diagnostics` | 查询 ray、内存与运行时诊断 |
+| `loadRealtimeModule(baseUrl)` | 加载 `SimpleSTRealtime.mjs` + `.wasm`（pthreads）并返回 `SimpleSTModule` |
+| `loadOfflineModule(baseUrl)` | 加载 `SimpleSTOffline.mjs`（单线程）。仅用于 IR 分析 |
+| `Heap` | 向 WASM 堆读写 POD 的辅助工具。包含带 `structSize`/`apiVersion` 戳的结构体分配（`stamped`） |
+| `layout` | `STRT_CreateOptions`、`STMaterial`、`STRenderOptions`、`STTiming`、`STSceneStats`、`STProcessStats`、`STIrStats` 等的偏移/大小 |
+| `packMaterial` / `validateMaterial` | 把 9 频段 R/A/T/scattering 打包为 `STMaterial` 并校验 `R+A+T=1` |
+| `SimpleSTRealtime` | 拥有一个听者和共享渲染器的适配器。把 facade 命令转换为 `st_rt_*` 调用 |
+| `analyzeScene(module, snapshot, …)` | 把场景快照复制到 Offline 上下文并计算 Raw IR / 压力 IR |
+| `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
-## 场景更新
+## `SimpleSTRealtime`
 
-低层场景按以下顺序更新。
-
-```ts
-scene.tick(dt);
-scene.updatePropagation();
-```
-
-`scene.update(dt)` 是依次执行这两个调用的简写。
-
-场景中只有一个 listener。
+这是 facade 的 control Worker 所使用的适配器。直接使用时，在 Worker 内按以下顺序调用。
 
 ```ts
-scene.setListener(listener);
-scene.addSource(source);
-scene.addCollider(collider);
+const M = await loadRealtimeModule(coreBaseUrl);
+const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create、注册材质表、应用 Hybrid
+
+rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
+rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + 应用质量预设
+rt.attachStream(handle);                               // st_rt_source_attach_stream（单声道）
+rt.sourcePose(handle, cache); rt.listenerPose(cache); rt.meshPose(handle, pose);
+
+const validPaths = rt.frame();                         // st_rt_build[_dynamic] + st_rt_propagate
+rt.writeStream(handle, monoSamples);                   // [audio] st_rt_source_write_stream
+const stereo = rt.render(frames);                      // [audio] st_rt_render_process
+
+const diag = rt.diagnostics();                         // SimpleSTDiagnostics
+rt.reset(); rt.dispose();
 ```
 
-## 几何体变更
+- `setQuality(tier)` 一次性设置听者 guide ray、声源 transport ray 和反射深度
+  （`fast` 8×8/4，`balanced` 16×16/6，`quality` 24×24/8）。
+- 声源增益是压力值，传入引擎时为 `st_rt_source_set_energy(gain²)`。
+- `'direct'` 路径门控同时开关 Direct 和 Transmission。
+- 渲染选项变更（`useDoppler`、`useLimiter`、`diffuseEnabled`）会覆盖 `STRenderOptions` 的对应字段，
+  但始终保持 `reserved0 = 1`（Hybrid）。如果 Hybrid 被解除，`diagnostics()` 会抛出异常。
 
-| 变更 | API | update type |
-|---|---|---|
-| 仅 transform 变化 | `object.setPosition(...)` 等 | 按 object 状态更新 |
-| 仅顶点变化 | `mesh.updateVerticesAndRefit(...)` | `UpdateType.Refit` |
-| 拓扑或 BVH 选项变化 | `mesh.setData(...)` | `UpdateType.Rebuild` |
-
-Refit 用于保持拓扑的动画几何体（skinned animation、procedural 形变），请与可 refit 的
-LBVH 系列搭配使用。
-
-顶点更新在 core 中是 `exaMeshUpdateVertices` → `exaMeshRefit` 的 2-call protocol。
-`mesh.updateVertices()` 只上传顶点而不会 refit BVH，因此请使用同时完成两步的
-`mesh.updateVerticesAndRefit()`，或自行再调用 `mesh.refit()`。顶点数量必须与构建时完全一致。
+## 诊断快照
 
 ```ts
-mesh.updateVerticesAndRefit(vertices);  // updateVertices + refit
-object.setUpdateType(UpdateType.Refit);
-scene.tick(dt);
+interface SimpleSTDiagnostics {
+  engine: 'SimpleST'; abiVersion: number; version: string;
+  scheduler: 'synchronous' | 'pipelined'; earlyReflectionMode: 'hybrid'; spatializer: number;
+  scene:  { meshes; objects; sources; triangles };
+  timing: { propagationMs; directMs; reflectionDiffractionMs; reverbMs; irMs; renderMs };
+  render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
+  ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
+  audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
+}
 ```
 
-使用 `SoundCollider` 可以一次完成这两步。
+facade 的 `debugSnapshot().simplest` 和 `getStatistics().simplest` 返回同一个对象。
+旧 STCore 的 profile / memory / ray 统计和逐声源 `ExaRenderStats` 已不存在。
 
-```ts
-collider.refitVertices(vertices);  // updateVerticesAndRefit + setUpdateType(Refit)
-scene.tick(dt);
-```
+## 音频约定
 
-拓扑发生变化时需要显式 rebuild。
-
-```ts
-mesh.setData(vertices, triangles, buildOptions);
-object.setUpdateType(UpdateType.Rebuild);
-scene.tick(dt);
-```
-
-`collider.rebuild(vertices, triangles, buildOptions)` 会执行相同的组合。
-
-## BVH 选择
-
-| 类型 | 用途 |
-|---|---|
-| `BvhType.HKDtree` | 墙体、地面等静态几何体 |
-| `BvhType.LBVH` | 顶点频繁变化的几何体 |
-| `BvhType.LBVH_SIMD*` | 明确指定 SIMD 宽度的 LBVH |
-| `BvhType.LBVH_NWAY*` | N-way LBVH |
-
-`BvhType.Default` 是 per-mesh 层面「沿用引擎默认值」的 sentinel。设置进程级默认值
-时请使用具体的 BVH 类型。
-
-```ts
-const buildOptions: MeshBuildOptions = {
-  bvhType: BvhType.HKDtree,
-  bvhMaxDepth: 0,
-  primPerLeaf: 0,
-};
-```
-
-## 音频
-
-Native 实时渲染同样使用 `AudioWorkletNode`。基本契约如下。
-
-- 采样率：`AudioContext.sampleRate`
-- 块大小：128 samples
-- 输出：2 通道双耳
-
-Facade 的 `source.play()` 会管理这些设置与 graph 连接。建议在公开 factory 类型
-提供之后，再在应用代码中使用 direct-native 的 `createWorkletNode()`。
-
-## 诊断
-
-| 需要的信息 | Facade | Native ST |
-|---|---|---|
-| valid path 与 profile | `await debugSnapshot()` | `Propagator` |
-| ray 与内存统计 | `await debugSnapshot()` | `Diagnostics` |
-| 应用设置的 pose | 实体状态 | native object getter |
-
-在 MT 上不要用同步 getter 读取 propagation 结果。
+- 引擎内部采样率为 44.1 kHz，把 `AudioContext.sampleRate` 填入 `STRT_CreateOptions.hostSampleRate`，
+  输入和输出都由引擎转换。
+- 声源输入为单声道 float PCM（`st_rt_source_write_stream`），输出为交错立体声
+  （`st_rt_render_process`）。输出模式为 `HOST_PULL_BUFFERED`，AudioWorklet 从共享环形缓冲复制。
+- 并发流槽位为 64 个。超出的声源创建会失败。
 
 ## 相关文档
 
 - [Web SDK 概览](../web.md)
 - [Facade API](./facade.md)
-- [Performance Guide](../performance.md)
+- [SimpleST 引擎](../../core/simplest.md) — C ABI 完整约定

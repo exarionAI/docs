@@ -1,12 +1,13 @@
 ---
 title: Facade API
-description: ST와 MT에서 동일하게 사용하는 soundtrace.js 권장 API입니다.
+description: ST와 MT에서 동일하게 사용하는 soundtrace.js 1.0.0 권장 API와 SimpleST 전환으로 바뀐 옵션.
 ---
 
 # Facade API
 
 Facade는 일반 웹 애플리케이션의 권장 진입점입니다. `SoundTrace`가 장면 수명주기를
-관리하고 `Listener`, `Source`, `Mesh`가 앱의 3D 상태를 표현합니다.
+관리하고 `Listener`, `Source`, `Mesh`가 앱의 3D 상태를 표현합니다. 모든 공개 메서드는
+`thread: 'st'`와 `'mt'`에서 동일하게 동작하며, 진단은 전부 비동기입니다.
 
 [Web SDK 개요](../web.md) · [Native API](./native.md)
 
@@ -14,48 +15,40 @@ Facade는 일반 웹 애플리케이션의 권장 진입점입니다. `SoundTrac
 
 ```ts
 const sound = await SoundTrace.create(audioContext, options);
+sound.output.connect(audioContext.destination);
 
 sound.listener.setPose(listenerPose);
 const mesh = sound.addMesh(meshOptions);
 const source = sound.addSource(sourceOptions);
 
-const spatial = await source.play(inputNode);
-spatial.connect(sound.output).connect(audioContext.destination);
-
+await source.play(inputNode);      // 입력 캡처. 출력은 sound.output 하나
 await sound.update(0);
 ```
-
-ST와 worker-hosted MT에서 이 호출 흐름은 같습니다. MT의 동기 native getter 대신
-`debugSnapshot()` 같은 비동기 readback을 사용합니다.
 
 ## `SoundTrace` 옵션
 
 | 옵션 | 기본값 | 설명 |
 |---|---|---|
-| `mode` | 미지정 | `'single_thread'`, `'multi_thread'`, `'gpu'` 중 하나 |
-| `thread` | `'auto'` | 고급 WASM 선택: `'auto'`, `'st'`, `'mt'`; `mode`가 우선 |
+| `thread` | `'auto'` | `'st'`(동기 전파) / `'mt'`(파이프라인 전파). 둘 다 전용 Worker + pthread WASM |
+| `mode` | 미지정 | `'single_thread'` / `'multi_thread'`. `thread`의 별칭이며 `mode`가 우선. `'gpu'`는 **거부** |
 | `quality` | `'balanced'` | `'fast'`, `'balanced'`, `'quality'` |
-| `throughput` | 미지정 | MT worker 예산: `'low'`, `'medium'`, `'max'` |
-| `coordinateBasis` | 코어 좌표계 | 렌더러 좌표계를 SDK 좌표계로 변환 |
-| `coreBaseUrl` | 패키지 내부 | `st/`, `mt/`가 들어 있는 코어 URL |
-| `assetBaseUrl` | 패키지 내부 | 재질과 HRTF asset URL |
-| `propagationThreadCount` | 엔진 기본값 | MT propagation thread 수의 저수준 override |
-| `defaultMeshBuild` | 엔진 기본값 | `addMesh()`가 사용할 기본 BVH build 옵션 |
-| `sceneRatio` | `1.0` | 장면 길이 단위당 미터. 지오메트리 사전 스케일과 혼용 금지(이중 스케일) |
-| `autoLoadMaterials` | `true` | 기본 재질을 로드해 이름 기반 매핑 활성화 |
-| `transmissionModel` | `'surface'` | 직접음이 재질을 투과할 때의 에너지 감쇠 모델. [재질 투과 모델](#재질-투과-모델) 참고 |
-| `debug` | `false` | 초기화 진단 로그 출력 |
-
-Three.js는 카메라가 `-Z`를 바라보므로 다음 basis로 시작할 수 있습니다.
+| `earlyReflectionMode` | `'hybrid'` | 실시간은 항상 Hybrid. 다른 값은 거부 |
+| `coordinateBasis` | 엔진 좌표계(`+Z` forward) | 렌더러 좌표계를 SDK 좌표계로 변환 |
+| `coreBaseUrl` | 패키지 내부 | `SimpleSTRealtime.mjs/.wasm`, `SimpleSTOffline.mjs`가 있는 URL |
+| `assetBaseUrl` | 패키지 내부 | 재질 JSON과 HRTF asset URL |
+| `propagationThreadCount` | 동기 1 / 파이프라인 3 | 계산 예산 1 ~ 5 (음수 = 5). 파이프라인은 최소 3 |
+| `throughput` | 미지정 | `'low'` / `'medium'` / `'max'` — MT 워커 예산 단축 표기 |
+| `sceneRatio` | `1.0` | 장면 길이 단위당 미터(cm = 0.01). 지오메트리 사전 스케일과 **혼용 금지** |
+| `autoLoadMaterials` | `true` | 기본 재질 테이블을 로드해 이름 매핑 활성화 |
+| `transmissionModel` | `'surface'` | SimpleST는 표면 R/A/T만 지원. `'solid'`는 **거부** |
+| `defaultMeshBuild` | — | STCoreV2 BVH 옵션. 지정하면 로드 **거부** |
+| `debug` | `false` | 초기화 진단 로그 한 줄 출력 |
 
 ```ts
 const sound = await SoundTrace.create(audioContext, {
-  mode: 'single_thread',
-  coordinateBasis: {
-    right: [-1, 0, 0],
-    up: [0, 1, 0],
-    forward: [0, 0, -1],
-  },
+  thread: 'mt',
+  quality: 'balanced',
+  coordinateBasis: { right: [-1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }, // Three.js
 });
 ```
 
@@ -66,43 +59,48 @@ const sound = await SoundTrace.create(audioContext, {
 | API | 설명 |
 |---|---|
 | `SoundTrace.create(ctx, options?)` | 엔진을 생성하고 로드 (생성자 + `load()`) |
-| `output` / `audioContext` | master output node와 앱이 넘긴 `AudioContext` |
+| `output` / `audioContext` | 리스너 마스터 출력 노드(스테레오)와 앱이 넘긴 `AudioContext` |
 | `listener` | 장면의 단일 청취자 |
-| `addMesh(options)` | 음향 geometry 추가 |
-| `removeMesh(mesh)` | geometry 제거 |
+| `descriptor` | `{ transport: 'worker', thread: 'st' \| 'mt' }` — 진단용. 분기에 쓰지 않음 |
+| `addMesh(options)` / `removeMesh(mesh)` | 음향 geometry 추가/제거 |
 | `addSource(options)` | 공간 음원 추가 |
-| `setQuality(tier)` | 품질 preset 변경 |
-| `setAudioOption(options)` | block과 출력 channel override |
-| `loadHrtf(mode, source?)` | packaged 또는 custom HRTF 로드 |
-| `loadMaterialAssets()` | 재질 테이블을 수동 로드 (`autoLoadMaterials: false`일 때) |
-| `enableGpu()` | WebGPU 전파를 켜고 성공 여부를 반환. 미지원이면 `false` + CPU 유지 |
-| `update(dt?)` | 장면을 갱신하고 propagation 실행 |
-| `debugSnapshot(options?)` | MT 호환 비동기 진단 snapshot |
-| `getStatistics(options?)` | valid path·ray·메모리 통계 (async) |
-| `getGpuStats()` | GPU dispatch/fallback 카운터 (async) |
-| `getIRs()` | 최근 propagation의 path별 impulse response (async) |
-| `renderMonoImpulseResponse(source, sec)` | 오프라인 mono IR 렌더. 출력 채널이 1일 때만 사용 |
-| `reset()` | 엔진 상태 초기화 (async) |
-| `dispose()` | SDK가 소유한 리소스 해제. 멱등, `using`과 호환 |
+| `setQuality(tier)` | 품질 프리셋 변경(리스너·음원 레이와 깊이) |
+| `setAudioOption(options)` | 입력 블록 크기, 출력 채널 override |
+| `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'` (별칭 `'convolution'` / `'steamaudio'`) |
+| `loadMaterialAssets()` | 재질 테이블 수동 로드 (`autoLoadMaterials: false`일 때) |
+| `update(dt?)` | 장면을 갱신하고 전파 실행. 이번 프레임의 유효 경로 수로 resolve |
+| `debugSnapshot(options?)` | 비동기 진단 스냅샷. `.simplest`에 SimpleST scene/timing/render/IR 통계 |
+| `getStatistics(options?)` | `debugSnapshot` 래퍼. `validPathCount`와 `.simplest` |
+| `getIRs()` | 별도 Offline Worker에서 9밴드 early path IR 재계산 |
+| `renderMonoImpulseResponse(source, sec)` | Offline Worker에서 44.1 kHz 모노 압력 IR (최대 30 s) |
+| `enableGpu()` / `getGpuStats()` | **거부** — SimpleST Web은 CPU 전용 |
+| `reset()` | 엔진 상태 초기화 (async). Hybrid·재질·품질이 재적용됨 |
+| `dispose()` | SDK가 소유한 리소스 해제. 멱등, `using` 호환 |
 
 ### `Listener`
 
 ```ts
 sound.listener
-  .setPose({ position: [0, 1.6, 0], orientation: [0, 0, 0, 1] })
-  .setRenderOptions({ hrtfQuality: 'medium' });
+  .setPose({ position: [0, 1.6, 0], orientation: camera.quaternion.toArray() })
+  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 })
+  .setOutputMode('hrtf');   // 'hrtf'(바이노럴) | 'speaker'(스테레오 패닝)
 ```
 
-장면에는 listener가 하나 있습니다. listener는 `SoundTrace`가 소유하므로 별도로
-dispose하지 않습니다.
+장면에는 listener가 하나이며 `SoundTrace`가 소유합니다. `orientation`은 카메라의 활성 회전
+쿼터니언(XYZW)을 그대로 넘깁니다.
 
-출력 렌더러는 `setOutputMode()`로 바꿉니다. 기본값 `'hrtf'`는 바이노럴 렌더러이고,
-`'speaker'`는 내부 Ambisonic 스피커 렌더러(1ch/2ch)를 선택합니다. HRTF 모드와
-로드한 HRTF 테이블은 `'hrtf'` 출력에만 적용됩니다.
+`setRenderOptions`가 받는 키:
 
-```ts
-sound.listener.setOutputMode('speaker');
-```
+| 키 | 의미 |
+|---|---|
+| `earlyReflectionMode` | `'hybrid'`만 허용 |
+| `useDoppler` | 가변 지연 Doppler 피치 |
+| `useLimiter` | 출력 리미터 |
+| `pathFadeTime` | 경로 등장/소멸 크로스페이드(초) |
+| `maxDelaySeconds` | 렌더러가 유지하는 최대 경로 지연(초) |
+| `diffuseEnabled` | late reverb 렌더 on/off |
+
+`hrtfQuality`, `diffuseQuality`, `delayInterpolation`, `hrtfMode`는 STCoreV2 전용이라 **거부**됩니다.
 
 ### `Source`
 
@@ -110,43 +108,29 @@ sound.listener.setOutputMode('speaker');
 const source = sound.addSource({
   position: [2, 1, -1],
   gain: 1,
-  paths: {
-    direct: true,
-    reflection: true,
-    diffraction: true,
-    reverberation: true,
-  },
+  paths: { direct: true, reflection: true, diffraction: true, reverberation: true },
 });
 
-source.setPose({ position: [1, 1, -2] });
-source.setGain(0.8);
+source.setPose({ position: [1, 1, -2], velocity: [0.5, 0, 0] });
+source.setGain(0.8);                          // 압력 게인. 엔진에는 energy = gain² 로 전달
 source.setPathEnabled('reverberation', false);
+source.setDirection([0, 0, -1]);
 ```
 
-`play(input, channels?)`는 입력을 연결한 `AudioWorkletNode`를 반환합니다. 출력은
-앱이 `sound.output` 또는 다른 Web Audio graph에 연결합니다.
+| API | 설명 |
+|---|---|
+| `play(input, channels?)` | 입력을 연결한 `AudioWorkletNode`를 반환. **출력은 무음**이고 실제 소리는 `sound.output` |
+| `setPose(pose)` / `setGain(g)` | 위치·속도·방향, 게인 |
+| `setPathEnabled(path, on)` / `setPathOptions(o)` / `isPathEnabled(path)` | `'direct'`(투과 포함) / `'reflection'` / `'diffraction'` / `'reverberation'` |
+| `setDirection(v)` | 음원 forward. roll 없는 최소 회전으로 orientation이 함께 갱신됨 |
+| `setDirectivityTable(anglesDeg, attenDbPerBand)` / `setDirectivityEnabled(on)` | 각도별 9밴드 감쇠 테이블을 SimpleST 지향성 테이블로 변환해 적용 |
+| `dispose()` | 음원과 스트림 해제 |
 
 #### 거리 감쇠
 
-`addSource()`는 5종 path 전부에 기본 거리 감쇠 계수 `{ constant: 1, linear: 0,
-quadratic: 1 }`을 적용합니다.
-
-```text
-gain = 1 / (constant + linear * distance + quadratic * distance^2)
-```
-
-즉 기본 곡선은 `1 / (1 + distance²)`입니다. `constant = 1`이 거리 0 부근의 폭주를
-막고, `quadratic = 1`이 역제곱에 가까운 감쇠를 만듭니다.
-
-#### 지향성
-
-음원에 방향성을 주려면 각도별 대역 감쇠 테이블을 등록하고 활성화합니다.
-
-```ts
-source.setDirection([0, 0, -1]);
-source.setDirectivityTable(anglesDeg, attenDbPerBand);
-source.setDirectivityEnabled(true);
-```
+STCoreV2의 음원별 다항식 감쇠(`constant / linear / quadratic`)는 없습니다. SimpleST는 모든
+경로에 물리 `1/r` 감쇠와 ISO 9613-1 공기 흡수를 적용하며, 참조 거리(1 m)·최소 거리(1 m)는
+엔진 정책입니다.
 
 ### `Mesh`
 
@@ -164,80 +148,53 @@ mesh.setPose({
 });
 ```
 
-`indices`는 메시 전체가 하나의 재질을 사용할 때 편리합니다. 면별 재질이 필요하면
+`indices`는 메시 전체가 하나의 재질일 때 씁니다. 면별 재질이 필요하면
 `{ a, b, c, materialIndex }` 형태의 `triangles`를 전달하세요.
-
-생성 후에도 재질과 갱신 정책을 바꿀 수 있습니다.
 
 | API | 설명 |
 |---|---|
-| `setMaterial(material)` | 메시 전체 재질 교체 |
+| `setMaterial(material)` | 메시 전체 재질 교체. SimpleST 재질은 불변이라 내부적으로 새 재질/메시 핸들로 재바인딩 |
 | `setMaterialRange(triStart, triCount, material)` | triangle 범위별 재질 교체 |
-| `setUpdateType(type)` / `getUpdateType()` | `'static'`, `'refit'`, `'rebuild'`, `'dynamic'` |
+| `setUpdateType(type)` / `getUpdateType()` | `'static'`(정적 TLAS) / `'dynamic'`(변환만 갱신). `'refit'`·`'rebuild'`는 호환용이며 SimpleST에서는 메시를 다시 만듭니다 |
 | `setPose(pose)` | position, orientation, scale 갱신 |
-| `dispose()` | 메시와 collider 해제 |
+| `dispose()` | 메시와 오브젝트 해제 |
 
-움직이지 않는 벽은 `'static'`, vertex만 바뀌는 geometry는 `'refit'`, topology가 바뀌면
-`'rebuild'`를 사용합니다.
+BVH는 SimpleST가 소유합니다(TinyBVH 기본). 메시별 빌드 옵션은 없습니다.
 
-## 재질 투과 모델
+## STCoreV2에서 바뀐 옵션 요약
 
-`transmissionModel`은 직접음이 벽 같은 재질을 통과할 때 에너지를 잃는 방식을
-선택합니다.
-
-| 값 | 동작 |
+| 이전 | 현재 |
 |---|---|
-| `'surface'` (기본) | 표면을 지날 때마다 재질의 투과 계수를 한 번 적용. 벽 두께와 무관 |
-| `'solid'` | 두께 인식: ray가 solid 내부를 지나는 거리에 재질별 per-band 두께를 적용. 두꺼운 벽이 더 많이 차단 |
-
-```ts
-const sound = await SoundTrace.create(audioContext, {
-  mode: 'single_thread',
-  transmissionModel: 'solid',
-});
-```
-
-`'solid'`는 두께가 저작된 재질만 전환하며, 두께가 없는 재질은 `'surface'` 동작을
-유지합니다. 기본 재질 테이블에서는 22종 중 15종이 두께를 포함합니다.
-
-:::warning
-opt-in 옵션입니다 — 벽 너머 음원의 크기가 달라지므로, 기존 장면의 사운드를
-유지해야 한다면 기본값을 그대로 두세요.
-:::
-
-## 전파 path cache
-
-모든 세션은 propagation path cache가 **켜진 상태**로 시작합니다(고정 seed, 크기 512).
-ST와 MT 양쪽에서 첫 프레임 이전에 적용되며 `reset()` 이후에도 다시 적용되므로,
-캐시를 켜기 위해 별도로 호출할 API는 없습니다.
+| `mode: 'gpu'`, `enableGpu()`, `getGpuStats()` | 거부(CPU 전용) |
+| `transmissionModel: 'solid'` | 거부(표면 T만) |
+| `defaultMeshBuild`, `BvhType` | 거부(SimpleST가 BVH 소유) |
+| `hrtfQuality`, `diffuseQuality`, `delayInterpolation`, `hrtfMode` | 거부 |
+| `loadHrtf('parametric')`, KU100/H12 테이블 | 없음. `'mit-kemar'` / `'sadie-d2'` |
+| path cache(`seedValue`, `pathCacheSize`) | 없음 |
+| 음원별 다항식 거리 감쇠 | 물리 감쇠(엔진) |
+| `source.play()` 출력 노드 연결 | 출력은 `sound.output` 하나. `play()` 노드는 입력 캡처 |
+| 8밴드 재질 | 9밴드, R+A+T=1 엄격 |
+| 동기 `getStatistics()` 등 | 전부 `Promise` |
+| `./internal` entry, `SoundTraceMtUnsupportedError` | 제거. `./native`로 SimpleST 모듈 접근 |
 
 ## 프레임 업데이트
-
-pose 변경은 빠르게 기록할 수 있지만, propagation update는 동시에 하나만 실행하는
-것이 안전합니다.
 
 ```ts
 let updateInFlight: Promise<number> | undefined;
 
 function frame(dt: number) {
   if (!updateInFlight) {
-    updateInFlight = sound.update(dt).finally(() => {
-      updateInFlight = undefined;
-    });
+    updateInFlight = sound.update(dt).finally(() => { updateInFlight = undefined; });
   }
 }
 ```
 
+pose 변경은 빠르게 기록할 수 있지만, 전파 update는 동시에 하나만 실행하는 것이 안전합니다.
+
 ## 수명주기
 
-`SoundTrace`, `Source`, `Mesh`는 `dispose()`를 지원합니다. `SoundTrace.dispose()`는
-listener를 포함해 SDK가 소유한 리소스를 정리하며 여러 번 호출해도 안전합니다.
-
-```ts
-source.dispose();
-mesh.dispose();
-sound.dispose();
-```
+`SoundTrace`, `Source`, `Mesh`는 `dispose()`를 지원합니다. `SoundTrace.dispose()`는 listener와
+Worker를 포함해 SDK가 소유한 리소스를 정리하며 여러 번 호출해도 안전합니다.
 
 ## 관련 문서
 

@@ -17,7 +17,7 @@ const sidebars = {
       type: 'category',
       label: 'Core',
       collapsed: false,
-      items: ['core/stcorev2'],
+      items: ['core/simplest', 'core/stcorev2'],
     },
     {
       type: 'category',
@@ -34,6 +34,8 @@ const sidebars = {
         },
         'sdk/unity',
         'sdk/ue',
+        'sdk/fmod',
+        'sdk/wwise',
         'sdk/python',
         'sdk/performance',
       ],

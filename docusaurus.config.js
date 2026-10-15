@@ -6,7 +6,7 @@ const baseUrl = process.env.BASE_URL || '/';
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Sound Tracing',
-  tagline: '실시간 공간 음향 시뮬레이션 SDK · 제품군',
+  tagline: '실시간 공간 음향 시뮬레이션 엔진 · SDK · 플러그인',
   favicon: 'img/favicon.ico',
 
   future: {
@@ -105,7 +105,7 @@ const config = {
           {
             title: '제품',
             items: [
-              {label: 'Core', to: '/core/stcorev2'},
+              {label: 'Core', to: '/core/simplest'},
               {label: 'SDK', to: '/sdk/overview'},
               {label: 'ExaTools', to: '/exatools/overview'},
             ],

@@ -5,21 +5,24 @@ title: 製品群
 
 # 製品群
 
-Sound Tracing製品群は、**Coreエンジン**、**SDKバインディング**、**解析ツール**の3つを軸に構成されます。
+Sound Tracing 製品群は、**エンジン**、**SDK・プラグイン**、**解析ツール**の3つを軸に構成されます。
 
-## Core
+## Core — SimpleST
 
-C/C++ベースのネイティブ音響シミュレーションエンジンです。
+C++20 ベースの幾何音響ネイティブエンジンです。
 
-- [STCoreV2](../core/stcorev2.md) — モジュール式path moduleとlock-freeデータフローのネイティブコア
+- [SimpleST](../core/simplest.md) — 現行エンジン。公開 C ABI 6（リアルタイム `st_rt_*` / オフライン `st_off_*`）
+- [STCoreV2 → SimpleST](../core/stcorev2.md) — 前世代エンジンから移行するチーム向けの対応表
 
-## SDK
+## SDK・プラグイン
 
-Coreエンジンを各プラットフォーム/言語から利用できるようにするバインディング群です。
+エンジンを各プラットフォーム・ミドルウェアから利用できるようにラップするラインアップです。
 
 - [SDK概要](../sdk/overview.md)
-- 提供中: Web、Unity、Unreal Engine
-- 予定: Python
+- ゲームエンジン: [Unity](../sdk/unity.md)、[Unreal Engine](../sdk/ue.md)
+- オーディオミドルウェア: [FMOD](../sdk/fmod.md)、[Wwise](../sdk/wwise.md)
+- Web: [soundtrace.js](../sdk/web.md)
+- 予定: [Python](../sdk/python.md)
 
 ## ExaTools
 

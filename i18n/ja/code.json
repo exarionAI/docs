@@ -1,6 +1,6 @@
 {
   "homepage.hero.tagline": {
-    "message": "リアルタイム空間音響シミュレーションSDKと製品群"
+    "message": "リアルタイム空間音響シミュレーションエンジン、SDK、プラグイン"
   },
   "homepage.hero.primaryCta": {
     "message": "はじめる →"
@@ -12,16 +12,16 @@
     "message": "ネイティブ音響エンジン"
   },
   "homepage.hero.summary.sdk": {
-    "message": "Web・Unity・Unrealバインディング"
+    "message": "Web・Unity・Unreal・FMOD・Wwise"
   },
   "homepage.hero.summary.tools": {
     "message": "レンダリング・解析ワークフロー"
   },
   "homepage.products.core.desc": {
-    "message": "C/C++ ネイティブ音響シミュレーションエンジン STCoreV2。モジュール式 path module、lock-free、クロスプラットフォーム。"
+    "message": "C++20 幾何音響エンジン SimpleST。9バンド材質、Hybrid 初期反射、ホスト pull レンダー、公開 C ABI 6。"
   },
   "homepage.products.sdk.desc": {
-    "message": "Web、Unity、Unrealバインディングを提供中。Pythonは予定です。各プラットフォームからCoreを利用します。"
+    "message": "Web、Unity、Unreal Engine ラッパーに加え、FMOD・Wwise プラグインを提供。Python は予定です。"
   },
   "homepage.products.exatools.desc": {
     "message": "IR解析、検証、可視化など、音響シミュレーション結果を扱うためのユーティリティ。"
@@ -48,7 +48,7 @@
     "message": "クロスプラットフォーム"
   },
   "homepage.highlights.crossPlatform.desc": {
-    "message": "Windows、macOS、Linuxネイティブ、WebAssembly、Unity・Unreal Engineバインディング。"
+    "message": "Windows、macOS、Linux、Android、iOS ネイティブ、WebAssembly、Unity・Unreal Engine ラッパー、FMOD・Wwise プラグイン。"
   },
   "theme.ErrorPageContent.title": {
     "message": "エラーが発生しました",

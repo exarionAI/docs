@@ -5,24 +5,27 @@ title: Product Family
 
 # Product Family
 
-The Sound Tracing product family is organized around three pillars: **the Core engine**, **SDK bindings**, and **analysis tools**.
+The Sound Tracing product family has three pillars: the **engine**, the **SDKs and plug-ins**, and the **analysis tools**.
 
-## Core
+## Core — SimpleST
 
-Native C/C++ acoustic simulation engines.
+A C++20 native geometric-acoustics engine.
 
-- [STCoreV2](../core/stcorev2.md) — the native core, with modular path modules and lock-free data flow
+- [SimpleST](../core/simplest.md) — the current engine. Public C ABI 6 (real-time `st_rt_*` / offline `st_off_*`)
+- [STCoreV2 → SimpleST](../core/stcorev2.md) — a mapping table for teams moving from the previous-generation engine
 
-## SDK
+## SDKs and Plug-ins
 
-Binding lineup that makes the Core engine usable from each platform and language.
+The lineup that wraps the engine for each platform and middleware.
 
 - [SDK Overview](../sdk/overview.md)
-- Available: Web, Unity, Unreal Engine
-- Planned: Python
+- Game engines: [Unity](../sdk/unity.md), [Unreal Engine](../sdk/ue.md)
+- Audio middleware: [FMOD](../sdk/fmod.md), [Wwise](../sdk/wwise.md)
+- Web: [soundtrace.js](../sdk/web.md)
+- Planned: [Python](../sdk/python.md)
 
 ## ExaTools
 
-Utility tools for IR analysis, data conversion, batch validation, and related workflows.
+A collection of utilities for IR analysis, data conversion, and batch validation.
 
 - [ExaTools Overview](../exatools/overview.md)

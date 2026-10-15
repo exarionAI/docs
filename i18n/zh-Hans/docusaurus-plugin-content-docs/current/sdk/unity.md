@@ -1,35 +1,42 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 安装、主要组件 API、HRTF、GPU/BVH、Surface 和 Solid Distance Transmission 配置。
+description: SoundTrace Unity SDK 0.3.0（SimpleST ABI 6）的安装、组件 Inspector 约定、HRTF 与输出、材质、FMOD/Wwise 集成模式、WebGL。
 ---
 
 # SoundTrace SDK for Unity
 
-SoundTrace Unity SDK 是一款实时空间音频插件，用于将 Unity 的网格、Renderer 材质槽、声源和监听器连接到
-[STCoreV2](../core/stcorev2.md)。
-
-本页以当前 Unity SDK 的公开组件和 Inspector 契约为准。
+SoundTrace Unity SDK 是一款实时空间声学插件，用于把 Unity 的网格、Renderer 材质槽、声源和听者
+连接到 [SimpleST](../core/simplest.md)。从 0.3.0 起，引擎由 STCoreV2 换成了
+**SimpleST 2.12.0 / ABI 6**，渲染器以 **Hybrid** 模式启动。
+`SoundTraceManager`、`SoundTraceListener`、`SoundTraceSource`、`SoundTraceObject`、
+`SoundTracePathVisualizer` 组件名称、脚本 GUID 和示例场景保持不变。
 
 ## 要求与平台
 
 | 项目 | 当前包状态 |
 |---|---|
-| Unity | 2022.3 LTS 或更高版本 |
-| 随包提供的原生插件 | macOS、Windows x64、iOS、Android |
-| Linux | 当前包不包含二进制文件，需要在 Linux 主机上单独构建 |
-| Unity WebGL | 不支持。Unity WebGL 无法使用基于 `OnAudioFilterRead` 的 DSP 处理 |
-
-`Use GPU Backend` 会为 reflection 和 reverb propagation 请求 WebGPU compute provider。
-diffraction 仍由 CPU 计算。实际是否启用取决于原生插件和设备；GPU 初始化失败时使用
-CPU propagation。
+| Unity | 2022.3 LTS 或更高（已验证 2022.3.62f2 · 6000.3） |
+| 包 | `SoundTrace-SimpleST-release.unitypackage` → `Assets/SoundTrace` |
+| 随包原生插件 | Windows x64 · macOS Universal · Linux x86_64 · Android（ARMv7/ARM64/x86_64，API 24+）· iOS 15+（device/simulator XCFramework）· WebGL |
+| WebGL | 支持 — 独立 pthread WASM + AudioWorklet 路径（不使用 `OnAudioFilterRead`） |
+| GPU | 无。`SoundTraceManager.IsGpuPropagate` 始终为 `false` |
 
 ## 安装
 
-SoundTrace Unity SDK 包和安装说明通过已签约的评估或许可证交付渠道提供。
-请遵循所收到发行包中的安装步骤。
+1. 不需要关闭目标项目的 Unity。在 `Assets > Import Package > Custom Package` 中选择
+   `.unitypackage`，即可安装到 `Assets/SoundTrace`。
+2. 如果存在基于 STCoreV2 的旧版 `Assets/SoundTrace`，请**先备份到 Assets 之外**再导入，
+   以免旧的原生插件一起被加载。同一 SimpleST 包的更新会保留 GUID，可以直接覆盖。
+3. 也可以用发行文件夹中的 `install.py` 自动安装。它会检查文件哈希和 GUID，并把现有安装
+   保留到项目的 `.simplest-backups` 中。
 
-在 Package Manager 中选择 SoundTrace SDK，然后通过 `Samples > Demo Assets > Import`
-导入示例。
+```bash
+python3 install.py /path/to/UnityProject
+# 同时安装 FMOD / Wwise 插件：--fmod <plugins 文件夹> 或 --wwise <plugins 文件夹>
+```
+
+示例通过在 Package Manager 中选择 SoundTrace SDK，然后 `Samples > Demo Assets > Import` 导入。
+示例 UI 只有在存在 `com.unity.ugui` 时才会编译。
 
 ## Unity Audio 设置
 
@@ -39,35 +46,48 @@ SoundTrace Unity SDK 包和安装说明通过已签约的评估或许可证交�
 
 ![Unity Audio 设置](/img/unity/Image01_AudioSetting.png)
 
-如果这些设置不一致，Manager 和 Listener Inspector 会显示警告。
+如果这些设置不一致，Manager 和 Listener Inspector 会显示警告。输出采样率直接使用设备值
+（SimpleST 与内部 44.1 kHz 相互转换），设备采样率变化时会以相同设置重建原生状态。
 
 ## Audio Asset Import 设置
 
-以使用单声道音源为前提，音频剪辑设置为 PCM 格式。
+以使用单声道声源为前提，音频剪辑设置为 PCM 格式。WebGL 需要 `Decompress On Load`。
 
 ![Audio Asset Import 设置](/img/unity/ImportSetting.png)
 
 ## 最快设置
 
 1. 在空 GameObject 上添加 `SoundTraceManager`。
-2. 在 Main Camera 上添加 `SoundTraceListener`。
+2. 在带有 `AudioListener` 的 Main Camera 上添加 `SoundTraceListener`。
 3. 在声源 GameObject 上添加 `SoundTraceSource`，并为同一 GameObject 上的 `AudioSource` 指定 clip。
 4. 在要用作声学几何体的 Mesh GameObject 上添加 `SoundTraceObject`。
 5. 如有需要，在与 Manager 相同的 GameObject 上添加 `SoundTracePathVisualizer`。
 6. 在 Play Mode 中检查 Console 错误、声音和 path。
 
 在所有同时加载的 scene 中，只能各有一个活动的 Manager 和 Path Visualizer。
-可以注册多个 Listener，但 Source 渲染使用第一个注册的 `PrimaryListener`。
+每个 SimpleST 上下文只有一个听者，由第一个注册的 `PrimaryListener` 渲染。
 
 ## 组件概览
 
 | 组件 | 作用 | 必需依赖 |
 |---|---|---|
-| `SoundTraceManager` | 管理运行时、scene、材质注册和 propagation backend | 每个运行时 1 个 |
-| `SoundTraceListener` | Listener transform、ray 质量、输出/HRTF 设置 | 活动的 Manager |
-| `SoundTraceSource` | 对 `AudioSource` 输出进行空间化并配置各类 path | 同一 GameObject 上的 `AudioSource`、活动的 Listener |
-| `SoundTraceObject` | 将 Mesh 和 submesh 材质注册到声学 scene | `MeshFilter`、`MeshRenderer` |
+| `SoundTraceManager` | 运行时（上下文与控制线程）、scene、材质注册、传播 | 每个运行时 1 个 |
+| `SoundTraceListener` | Listener transform、ray 质量、输出/HRTF、延迟与淡化 | 活动的 Manager、`AudioListener` |
+| `SoundTraceSource` | 把 `AudioSource` 输出作为单声道流输入，按 path 配置 | 同一 GameObject 上的 `AudioSource`、活动的 Listener |
+| `SoundTraceObject` | 将 Mesh 和 submesh 材质注册到声学 scene | `MeshFilter`、`MeshRenderer`（Read/Write Enabled） |
 | `SoundTracePathVisualizer` | 调试显示有效 path 和 hit triangle | 与 Manager 相同的 GameObject |
+
+## 音频流与线程
+
+- `SoundTraceSource.OnAudioFilterRead` 把输入写入**单声道主机流**（`st_rt_source_write_stream`）
+  并清除 Unity 的 dry 输出。`SoundTraceListener` 的回调一次性拉取整个空间声学混音
+  （`st_rt_render_process`，Buffered 模式）。
+- 场景变更、声源创建/删除、传播、可视化快照在专用 **control thread**（`SoundTraceControlThread`）
+  上串行处理。音频回调中不包含场景控制 API 或托管堆分配。
+- 位置通过固定步长运动采样（`SoundTraceFixedStepMotion`）估算速度。传送后调用
+  `ResetMotionState()` 防止 Doppler 尖峰。
+- 原生 `render_start` 会重置选项，因此 Hybrid（`reserved0 = 1`）在**启动后**应用，
+  重启和 HRTF 切换后也会重新应用。
 
 ## SoundTraceManager
 
@@ -77,35 +97,28 @@ SoundTrace Unity SDK 包和安装说明通过已签约的评估或许可证交�
 
 | 字段 | 默认值 | 行为 |
 |---|---:|---|
-| `bool propagateOnStart` | `true` | 在 `Start()` 中同步初始 scene graph 和 transform，然后请求第一次 propagation。 |
-| `bool loadDefaultMaterialsOnEnable` | `true` | 在 `OnEnable()` 中将随包提供的 Material Preset Library 注册到原生 material table。 |
-| `int propagationThreadCount` | `-1` | 指定声音引擎内部 propagation job 的执行线程数。在原生平台上，`-1` 根据 `std::thread::hardware_concurrency()` 返回的逻辑线程数自动设置，`0` 和 `1` 以单线程运行。`2` 及以上使用指定数量，其中包含调用线程。 |
-| `bool useGpuBackend` | `false` | propagation 不使用 job 多线程，而是通过 GPU compute shader 计算。 |
-| `int pathCacheSize` | `256` | 生成 path 的 cache buffer size，最小值为 `0`，最大值为 `1024`。值越高，空间音频效果越好，但计算量也会随之增加。建议根据设备性能，从低于默认值 `256` 的设置开始。 |
+| `Propagate On Start` | `true` | 在 `Start()` 中同步初始 scene graph 和 transform，然后请求第一次传播。 |
+| `Load Default Materials On Enable` | `true` | 在 `OnEnable()` 中把随包 Material Preset Library（BRAS 24 种）注册到原生材质表。 |
+| `Propagation Thread Count` | `-1` | SimpleST 计算池宽度（`maxComputeThreads`）。`-1` 为自动（按逻辑线程数，引擎调整为 min(性能核数, 6)），`0`/`1` 为单线程，`2` 及以上为指定数量。在原生初始化之前生效。 |
 
 ### 公开属性
 
-| 属性 | 类型/访问方式 | 准确含义 |
+| 属性 | 类型 | 含义 |
 |---|---|---|
-| `Instance` | `static SoundTraceManager` / `get; private set;` | 所有已加载 scene 共用的单例 Manager；没有启用的 Manager 时为 `null`。 |
-| `DefaultMaterialsLoaded` | `int` / `get; private set;` | 在 `OnEnable()` 中自动注册的随包材质数量。关闭自动加载或 asset 缺失时为 `0`。 |
-| `Scene` | `SoundScene` / `get; private set;` | Manager 所有的底层 scene。处于禁用状态或初始化失败后为 `null`。 |
-| `PrimaryListener` | `SoundTraceListener` / `get` | Source 渲染使用的第一个已注册 Listener；没有 Listener 时为 `null`。 |
-| `ListenerCount` | `int` / `get` | 当前注册到 Manager 的 Listener 数量。 |
-| `SourceCount` | `int` / `get` | 当前注册到 Manager 的 Source 数量。 |
-| `ObjectCount` | `int` / `get` | 当前注册到 Manager 的 Object 数量。 |
-| `LastValidPathCount` | `int` / `get; private set;` | 最近完成的 propagation 结果中的有效 path 数量。无法运行 propagation 时为 `0`。 |
-| `LastNativeError` | `string` / `get; private set;` | 最近的 scene graph 或 propagation 错误；没有错误时为空字符串。 |
-| `PropagationThreadCount` | `int` / `get` | propagation job 的执行线程数量。`-1` 表示最大值。 |
-| `IsGpuPropagate` | `bool` / `get; private set;` | `exaPropagatorInitGpu()` 是否成功并启用了 GPU propagation provider。 |
-| `GpuBackendStatus` | `string` / `get; private set;` | GPU Backend 初始化结果：`GPU active` 或 `CPU fallback (<ExaResult>): <error>`。 |
-| `PathCacheSize` | `int` / `get` | 生成 path 的 cache buffer size。 |
+| `Instance` | `static SoundTraceManager` | 单例 Manager。不存在时为 `null` |
+| `Scene` | `SoundScene` | Manager 拥有的低层 scene |
+| `PrimaryListener` / `ListenerCount` / `SourceCount` / `ObjectCount` | — | 注册状况 |
+| `DefaultMaterialsLoaded` | `int` | 自动注册的随包材质数量 |
+| `LastValidPathCount` | `int` | 最近一次传播的有效 path 数 |
+| `LastNativeError` | `string` | 最近的 scene graph/传播错误 |
+| `PropagationThreadCount` | `int` | 生效的计算线程数 |
+| `IsGpuPropagate` / `GpuBackendStatus` | `bool` / `string` | 仅为兼容保留。始终为 `false` / `"CPU"` |
 
 ### 公开方法
 
 | 方法 | 行为 |
 |---|---|
-| `public void ResetMotionState()` | 在 teleport、respawn 或 scene 切换后，立即重置所有已注册 Listener 和 Source 的 motion history。 |
+| `ResetMotionState()` | 在 teleport、respawn、scene 切换后立即重置所有 Listener 和 Source 的 motion history。 |
 
 ## SoundTraceListener
 
@@ -118,78 +131,63 @@ SoundTrace Unity SDK 包和安装说明通过已签约的评估或许可证交�
 | 字段 | 默认值 | 范围/选项 |
 |---|---:|---|
 | `Quality Preset` | `Fast` | `Custom`、`Fast`、`Middle`、`Quality` |
-| `Ray Resolution` | `16` | `1..32`；横向和纵向使用相同值 |
-| `Ray Depth` | `4` | `1..16` |
-| `Output Mode` | `Headset` | `Headset`、`Speaker` |
+| `Ray Resolution` | `16` | `1..32`；听者 guide ray 横向和纵向使用相同值 |
+| `Ray Depth` | `4` | `1..16`；反射最大深度 |
+| `Output Mode` | `Headset` | `Headset`（双耳）、`Speaker`（立体声声像） |
 | `HRTF` | `HRIR Interpolated` | 以下三种模式 |
+| `Max Delay Seconds` | `2.0 s` | `0.012..5 s`；渲染器保留的最大路径延迟 |
+| `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`；路径出现/消失的交叉淡化 |
 
-选择 `Fast`、`Middle` 或 `Quality` 时，会同时应用 ray 值和关联的 render 质量值，
-ray 字段也会在 Inspector 中禁用。要直接编辑这些值，请先选择 `Custom`。
-从预设返回 `Custom` 时，会保留最后应用的值。
+选择 `Fast`、`Middle` 或 `Quality` 时会同时应用 ray 值，并在 Inspector 中锁定。
+要直接编辑，请选择 `Custom`。
 
 | 预设 | Ray Resolution | Ray Depth | 推荐起点 |
 |---|---:|---:|---|
 | `Custom` | 已保存的值 | 已保存的值 | 手动调优 |
 | `Fast` | `16` | `4` | 移动端、大量声源 |
 | `Middle` | `24` | `8` | 普通游戏和桌面平台 |
-| `Quality` | `32` | `12` | 音频占比较高、其他处理负载较低的应用 |
+| `Quality` | `32` | `12` | 音频占比较高的应用 |
 
 ### HRTF 与输出模式
 
 | 模式 | 所需 asset | 说明 |
 |---|---|---|
-| `Band8` | 无 | 不加载外部 HRTF table 的轻量模式 |
-| `Hrir` | `KU100_convolution.bytes` | HRIR 模式 |
-| `HRIR Interpolated` | `KU100_convolution.bytes` | 在 HRIR 模式中应用插值计算，以增强方向感。 |
+| `Band8` | 无 | 不使用外部表的轻量模式 — 在 SimpleST 中以**立体声声像**渲染 |
+| `Hrir` | 无 | 引擎内置的 **MIT KEMAR** HRIR |
+| `HRIR Interpolated` | 无 | MIT KEMAR HRIR（默认）。SimpleST 执行宽带 HRIR 卷积 |
 
-Asset 从 `Runtime/Resources/SoundTrace/HRTF/` 加载。如果所需 asset 不存在或为空，
-Listener 初始化会失败，并且不会自动切换到其他模式。
+旧的 `KU100_convolution.bytes` 资源不再使用。`Output Mode = Speaker` 为声像输出。
 
 ## SoundTraceSource
 
 ![SoundTraceSource Inspector](/img/unity/Img_STSource.png)
 
-`SoundTraceSource` 处理同一 GameObject 上的 `AudioSource` 输出。启用时，会将
-`AudioSource.spatialBlend` 和 `AudioSource.dopplerLevel` 设为 `0`，让 SoundTrace
-负责空间化和 Doppler。
+`SoundTraceSource` 把同一 GameObject 上的 `AudioSource` 输出作为单声道流推送给引擎。
+启用时，为了让 SoundTrace 负责空间化和 Doppler，会把 `AudioSource.spatialBlend` 和
+`AudioSource.dopplerLevel` 设为 `0`。
 
 ### Inspector
 
 | 字段 | 默认值 | 行为 |
 |---|---:|---|
-| `Intensity` | `1` | Source 发射强度，范围为 `0..10`。 |
-| `Ray Resolution` | `24` | 对 Reverb ray 的水平和垂直分辨率应用相同值，范围为 `1..32`。 |
-| `Reverb Ray Depth` | `4` | Reverb ray 的最大反射深度，范围为 `1..16`。 |
-| `Enable Direct` | `true` | 启用 Direct path。 |
-| `Enable Reflection` | `true` | 启用 Reflection path。 |
-| `Enable Diffraction` | `true` | 启用 Diffraction path。 |
-| `Enable Reverb` | `true` | 启用 Reverb path。 |
-| `Enable Transmission` | `true` | 启用 Transmission path。 |
-| `Direct Attenuation` | `1.0` | Direct path 的距离衰减。数值越大，在相同距离下听到的声音越小。范围为 `0.5..1.5`。 |
-| `Reflection Attenuation` | `1.0` | Reflection path 的距离衰减。数值越大，在相同距离下听到的声音越小。范围为 `0.5..1.5`。 |
-| `Diffraction Attenuation` | `1.0` | Diffraction path 的距离衰减。数值越大，在相同距离下听到的声音越小。范围为 `0.5..1.5`。 |
-| `Reverb Attenuation` | `1.0` | Reverb path 的距离衰减。数值越大，在相同距离下听到的声音越小。范围为 `0.5..1.5`。 |
-| `Transmission Attenuation` | `1.0` | Transmission path 的距离衰减。数值越大，在相同距离下听到的声音越小。范围为 `0.5..1.5`。 |
-| `Max Delay Seconds` | `1.0 s` | Source renderer 保留的最大 propagation delay。时间越长，内存占用越多。范围为 `0.01..5 s`。 |
-| `Path Fade Time Seconds` | `0.066 s` | Path 进入或离开 renderer 时使用的 fade 时间，范围为 `0.001..0.5 s`。 |
-| `Path Hold Time Seconds` | `0.120 s` | 消失的 non-direct path 开始 fade 前的保留时间。`0` 会禁用 hold。 |
-| `Max Delay Rate` | `0.1` | 每个 sample 允许的最大 delay 变化量，范围为 `0.001..0.999`。 |
-| `Bypass` | `false` | 跳过 SoundTrace spatial rendering，并直接传递原始 `AudioSource` 输出。 |
+| `Intensity` | `1` | 声源辐射强度（压力倍率）。范围 `0..10` |
+| `Reverb Ray Resolution` | `24` | source transport ray 横向和纵向分辨率。范围 `1..32` |
+| `Reverb Ray Depth` | `4` | transport ray 最大反射深度。范围 `1..16` |
+| `Enable Direct` / `Reflection` / `Diffraction` / `Reverb` / `Transmission` | `true` | 按 path 门控 |
+| `Bypass` | `false` | 跳过 SoundTrace 渲染，直接传递原始 `AudioSource` 输出 |
 
-Distance Attenuation 值越大，对应 path 的距离衰减越快。`Show Gizmo` 会在 Scene View 中
-分别显示 Direct、Reflection、Diffraction、Reverb 和 Transmission 的可达范围。
-
-Render Tuning 应用于 source-listener 配对。`Path Hold = 0` 会关闭 hold。
+STCoreV2 的逐 path `Distance Attenuation`（0.5 ~ 1.5）、`Max Delay Rate`、`Path Hold Time` 已不存在。
+SimpleST 应用物理 `1/r` 衰减和空气吸收，最大延迟与淡化是 Listener 的设置。Scene View 中的
+`Show Gizmo` 显示各 path 的可听范围。
 
 ### 公开方法
 
 | 方法 | 行为 |
 |---|---|
-| `SetBypass(bool enabled)` | 为 `true` 时跳过 SoundTrace spatial rendering，并直接传递原始 `AudioSource` 输出；为 `false` 时重新应用 SoundTrace rendering。 |
-| `ResetMotionState()` | 将当前 Transform 重新设为 motion 基准点，并以速度 `0` 反映，从而防止 teleport 或 respawn 后出现 Doppler spike。 |
+| `SetBypass(bool enabled)` | 为 `true` 时跳过 SoundTrace 渲染并传递原始输出。 |
+| `ResetMotionState()` | 将当前 Transform 重新设为 motion 基准点，防止 teleport 后出现 Doppler spike。 |
 
-要同步多个 `AudioSource` 的播放时机，请基于同一个 `AudioSettings.dspTime` 调用
-`PlayScheduled()`。
+要同步多个 `AudioSource` 的播放时机，请基于同一个 `AudioSettings.dspTime` 调用 `PlayScheduled()`。
 
 ## SoundTraceObject
 
@@ -197,169 +195,61 @@ Render Tuning 应用于 source-listener 配对。`Path Hold = 0` 会关闭 hold�
 
 `SoundTraceObject` 注册 `MeshFilter.sharedMesh` 和 Renderer 的 submesh 材质槽。
 由于 Build 中需要读取网格数据，请在 Import Settings 中启用 `Read/Write Enabled`。
+对于程序化网格，不要调用 `UploadMeshData(true)`。
 
-### Geometry 与 BVH
+### Geometry 与加速结构
 
 ![Scene View 中显示的 BVH](/img/unity/Img_STObjDome.png)
 
 | 字段 | 默认值 | 说明 |
 |---|---:|---|
-| `BVH Type` | `LBVH_SIMD8` | `HKDTree`、`LBVH`、`LBVH_SIMD4`、`LBVH_SIMD8`、`LBVH_SIMD16` |
-| `BVH Max Depth` | `12` | `1..32` |
-| `Primitives Per Leaf` | `16` | `1..128` |
-| `Update Mode` | `Static` | `Static`、`Dynamic`、`Refit`、`Rebuild` |
+| `BVH Type` | `LBVH_SIMD8` | `HKDTree`（→ SimpleST HybridKD）、`LBVH`（→ LBVH）、`LBVH_SIMD4/8/16`（→ LBVH_SIMD） |
+| `BVH Max Depth` / `Primitives Per Leaf` | `12` / `16` | 兼容字段。**SimpleST 在内部决定 leaf 大小，因此被忽略** |
+| `Update Mode` | `Static` | `Static`（静态 TLAS）/ `Dynamic`（只更新变换）。`Refit`、`Rebuild` 仅为兼容保留 |
 
-#### BVH Type
+`BVH Type` 只选择网格注册时的加速结构类型。使用相同 Mesh asset、材质槽和 BVH 设置的 object
+由 `SoundTraceMeshCache` 以 refcount 共享原生网格。
 
-| BVH Type | 说明 |
-|---|---|
-| `HKDTree` | 使用基于 KD 划分的 traversal。它支持 Refit，但 Refit 后会切换为 BVH-style fallback traversal。不支持 GPU backend。 |
-| `LBVH` | 基于 Morton code，rebuild 速度比 HKDTree 更快，并支持 Refit。通过底层 API 上传 vertex 后进行 Refit，可用于 SkinnedMesh 或 procedural mesh 变形。标量格式不支持 GPU backend。 |
-| `LBVH_SIMD4` | 以 4 个一组的 SIMD batch 并行处理 LBVH leaf intersection。支持 Refit 及支持 GPU Backend。 |
-| `LBVH_SIMD8` | 以 8 个一组的 SIMD batch 并行处理 LBVH leaf intersection，为当前默认值。支持 Refit 及支持 GPU Backend。 |
-| `LBVH_SIMD16` | 以 16 个一组的 SIMD batch 并行处理 LBVH leaf intersection。支持 Refit 及支持 GPU Backend。 |
+### 蒙皮与程序化网格
 
-如果在请求 GPU 的 scene 中选择 `HKDTree` 或标量 `LBVH`，Inspector 会显示警告。
-
-#### Update Mode
-
-| Update Mode | STCoreV2 update policy | 含义 |
-|---|---|---|
-| `Static` | `EXA_OBJECT_UPDATE_STATIC` (0) | 运行时不更新 TLAS/BLAS。用于不移动的 level geometry。 |
-| `Refit` | `EXA_OBJECT_UPDATE_REFIT` (1) | 形变（deformation）策略：refit mesh BLAS 并刷新 TLAS bounds。适用于 topology 保持不变的 skinned 与 procedural mesh。 |
-| `Rebuild` | `EXA_OBJECT_UPDATE_REBUILD` (2) | 用于 topology 会改变的 geometry，会重新构建 BVH。 |
-| `Dynamic` | `EXA_OBJECT_UPDATE_DYNAMIC` (3) | 仅 Transform 变化时，只刷新 TLAS instance。 |
-
-#### Refit 与 vertex 上传
-
-`Refit` 是 STCoreV2 中**用于 vertex 形变（skinned animation）的 update policy**。但 core
-不会自行决定何时上传 vertex：mesh 更新采用 `exaMeshUpdateVertices` → `exaMeshRefit` 的
-2-call protocol，而 object 上的 `Refit` 是让该结果反映到 BLAS 与 TLAS bounds 的策略开关。
-也就是说，**上传 vertex 的一方是 host SDK**。
-
-目前 Unity 的 `SoundTraceObject` MonoBehaviour 只自动同步 Transform，不会调用 vertex 上传。
-它要求 `MeshFilter`/`MeshRenderer`，因此不会直接绑定 `SkinnedMeshRenderer`，并且 mesh
-geometry 只在 `OnEnable` 时快照一次。所以要在 Unity 中让 skinned 或 procedural 形变体现在
-声音上，请将 `Update Mode` 设为 `Refit`，并如下所示通过 `MeshCore` 自行上传 vertex。UE 插件的
-`SoundTracingObjectComponent` 会为 skeletal mesh 自动完成这一上传。
-
-```csharp
-using Exarion.SoundTrace;
-using Exarion.SoundTrace.Core;
-using Exarion.SoundTrace.Native;
-using UnityEngine;
-
-[RequireComponent(typeof(SoundTraceObject))]
-public sealed class SoundTraceSkinnedRefit : MonoBehaviour
-{
-    [SerializeField] private SkinnedMeshRenderer skin;
-
-    private SoundTraceObject _object;
-    private Mesh _baked;
-    private ExaVec3f[] _vertices;
-
-    private void Awake()
-    {
-        _object = GetComponent<SoundTraceObject>();
-        _baked = new Mesh();
-    }
-
-    private void LateUpdate()
-    {
-        SoundMeshCore mesh = _object.MeshCore;
-        if (mesh == null || !mesh.IsValid)
-            return;
-
-        // 1) bake 当前 pose 并读取 vertex。这是 Unity Mesh API，必须在 main thread 上执行。
-        skin.BakeMesh(_baked);
-        Vector3[] baked = _baked.vertices;
-        if (_vertices == null || _vertices.Length != baked.Length)
-            _vertices = new ExaVec3f[baked.Length];
-        for (int i = 0; i < baked.Length; ++i)
-            _vertices[i] = new ExaVec3f(baked[i].x, baked[i].y, baked[i].z);
-
-        // 2) 上传与 refit 在 control thread 上以 2-call protocol 执行。
-        ExaVec3f[] vertices = _vertices;
-        SoundTraceControlThread.Invoke(() =>
-        {
-            if (mesh.UpdateVertices(vertices))
-                mesh.Refit();
-        });
-    }
-
-    private void OnDestroy()
-    {
-        if (_baked != null)
-            Destroy(_baked);
-    }
-}
-```
-
-注意事项：
-
-- vertex 数量必须与构建时**完全一致**。数量不匹配时 `exaMeshUpdateVertices` 会返回
-  `EXA_ERR_INVALID_ARG` 并拒绝。请把 `SkinnedMeshRenderer` 的 bind pose mesh 放入
-  `MeshFilter.sharedMesh`，使数量对齐。
-- vertex 以 mesh 局部坐标系原样上传。object 的 position、rotation、scale 由
-  `SoundTraceObject` 单独同步，因此 `BakeMesh` 也应使用不施加 scale 的形式。
-- native mesh 由 `SoundTraceMeshCache` 以 Mesh asset、material slot 与 BVH 设置为键进行
-  refcount 共享。当多个 object 使用相同组合时，refit 其中一个会让它们全部产生相同形变。
-  若需各自独立形变，请为每个 object 使用不同的 Mesh instance。
-- `SoundTraceControlThread.Invoke` 是阻塞调用。每帧对大量 object 调用会让 main thread 排在
-  control thread 的 propagation frame 之后等待，请把 refit 对象限制在少量 object 上。
-- BVH Type 请使用可 refit 的 `LBVH` 系列。`HKDTree` 也能 refit，但之后 traversal 会切换为
-  BVH-style fallback。
-- triangle index 改变的 topology 变化无法用 refit 处理。请通过 `MeshCore.SetData(...)`
-  重新构建，并将 `Update Mode` 设为 `Rebuild`。
+SimpleST 没有 vertex refit。要反映变形后的几何体，请烘焙新 Mesh 并重新注册 `SoundTraceObject`
+（或调用 `MeshCore.SetData`），**替换为新的原生网格**。每帧替换成本很高，请定期（例如 0.2 ~ 0.5 s）更新。
 
 ### 公开方法
 
-`Auto Set` 会将 Renderer material 名称与随包 preset 匹配。如果 imported model root
-上没有 mesh，而是由 child 持有 geometry，请使用 `Add To Child Meshes`。
+`Auto Set` 会将 Renderer material 名称与随包 preset 匹配。如果 imported model root 上没有 mesh，
+而是由 child 持有 geometry，请使用 `Add To Child Meshes`。
 
 | 方法 | 行为 |
 |---|---|
-| `AutoSetMaterialSlots()` | 遍历所有 submesh，将 Renderer material 名称与随包 preset 自动匹配，并刷新槽位配置。 |
-| `GetMaterialPresetIndex(int slotIndex)` | 返回指定槽位的 preset index。没有槽位或槽位 index 无效时返回 `0`。 |
-| `GetPresetName(int slotIndex)` | 返回指定槽位所用 preset 的显示名称。找不到 preset 时返回 `Concrete`。 |
-| `SetMaterialPresetIndex(int slotIndex, int presetIndex)` | 更改一个槽位的 preset。`presetIndex` 最小会修正为 `0`，槽位 index 无效时返回 `false`。 |
-| `SetMaterialPresetForAllSlots(int presetIndex)` | 对所有槽位应用同一个 preset。`presetIndex` 最小会修正为 `0`，没有可应用的槽位时返回 `false`。 |
-| `GetNativeMaterialIndices()` | 以 native mesh 注册所需的数组格式返回每个 submesh 的 preset index。空缺或缺失的槽位使用 `0`。 |
-| `GetTriangleCount()` | 汇总所有 submesh 的 index 数并返回 triangle 数。没有 mesh 时返回 `0`。 |
-| `static IsGpuCompatibleBvhType(BvhType value)` | 当值为 `LBVH_SIMD4`、`LBVH_SIMD8` 或 `LBVH_SIMD16` 时返回 `true`。 |
+| `AutoSetMaterialSlots()` | 将所有 submesh 的 Renderer material 名称与随包 preset 自动匹配。 |
+| `GetMaterialPresetIndex(int slotIndex)` / `GetPresetName(int slotIndex)` | 返回槽位的 preset index / 显示名称。 |
+| `SetMaterialPresetIndex(int slotIndex, int presetIndex)` | 更改一个槽位的 preset。 |
+| `SetMaterialPresetForAllSlots(int presetIndex)` | 对所有槽位应用同一个 preset。 |
+| `GetNativeMaterialIndices()` | 以原生注册格式的数组返回每个 submesh 的 preset index。 |
+| `GetTriangleCount()` | 返回所有 submesh 的 triangle 数。 |
+| `static IsGpuCompatibleBvhType(BvhType value)` | 仅为兼容保留。SIMD 系列时返回 `true` |
 
-## 声学材质与 Transmission
+## 声学材质
 
-默认创作资源为
-`Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`。
-在 `SoundTrace > Material Preset Library` 中可以执行以下操作：
+默认创作资源为 `Runtime/Resources/SoundTrace/SoundTraceMaterialPresetLibrary.asset`。
+在 `SoundTrace > Material Preset Library` 中可以执行以下操作。
 
-- 添加、删除预设并调整顺序
+- 添加、删除 preset 并调整顺序
 - 导入/导出 `soundMaterial.json`，或重新导入随包 JSON
-- 编辑 Scattering 以及 8 频段 Reflection、Absorption、Transmission 图表
-- 选择 `Transmission Model`
+- 编辑 Scattering 以及 **9 频段** Reflection、Absorption、Transmission 图表
 
 ![Material Preset Library](/img/unity/Image_Mat_01.png)
 
-频段中心为 `67.5`、`125`、`250`、`500`、`1000`、`2000`、`4000`、
-`8000 Hz`。材质顺序必须与表索引一致。
+频段中心为 `63`、`125`、`250`、`500`、`1000`、`2000`、`4000`、`8000`、`16000 Hz`。
+每个频段的 `R + A + T` 必须为 `1`，容差 `0.001`。错误的长度和系数会报错，并且不会复制 8 频段
+来填充 9 频段。默认材质是 SimpleST `material3.txt` 中的 BRAS 24 种。现有场景的槽位索引会保留，
+但与之前 STCore 材质的声学结果并不相同，因此用户材质需要重新按 9 频段录入。
 
 ![按频段编辑材质图表](/img/unity/Image_Mat_02.png)
 
-### Transmission Model
-
-| 模型 | 输入 | 几何体条件 |
-|---|---|---|
-| `Surface` | 每个频段中穿过表面后保留的透射能量系数 `0..1` | 可用于开放面和薄表面 |
-| `Solid Distance` | 每个频段中透射能量达到 `-30 dB` 时的材质参考距离（m），不小于 `0` | 需要封闭体积和一致的面方向 |
-
-`Solid Distance` 的输入不是对象的实际厚度。运行时会根据在几何体内部的实际
-穿行距离应用衰减。更改模式不会自动计算这 8 个值，因此请填写全部已验证值，
-不要保持默认的 `0` 状态。
-
-在 JSON 中，如果没有 `transmissionDistanceToMinus30DbMeters`，则使用 `Surface`；
-如果该字段包含恰好 8 个有限且不小于 0 的值，则使用 `Solid Distance`。
-导出为 `Surface` 时会省略此字段，而不是写入 `null` 或空数组。
+STCoreV2 的 `Transmission Model`（`Surface` / `Solid Distance`）已不存在。透射只用各频段的
+表面透射系数 `T` 表示。
 
 ## SoundTracePathVisualizer
 
@@ -370,16 +260,63 @@ public sealed class SoundTraceSkinnedRefit : MonoBehaviour
 | Inspector 字段 | 默认值 | 说明 |
 |---|---:|---|
 | `Enable Path Visualization` | 开启 | 是否显示 path mesh |
-| `Refresh Interval Ms` | `50` | 重建可视化 mesh 的最小间隔；不影响声学 propagation 周期 |
-| `Max Visualized Paths` | `1024` | 最多显示的 path 数量 |
+| `Refresh Interval Ms` | `50` | 重建可视化 mesh 的最小间隔。不影响传播周期 |
+| `Max Visualized Paths` | `1024` | 最多显示的 path 数量（`16..5000`） |
 | `Path Width` | `0.08` | 线宽 |
 | `Path Alpha Intensity` | `0.5` | 显示强度 |
+| `Path Depth Mode` / `Sorting Layer` / `Sorting Order` | `AlwaysOnTop` / `Default` / `10` | 渲染排序 |
 | `Draw Hit Triangles` | 关闭 | 在 Scene View 中显示 hit triangle |
 
-Direct、Reflection、Diffraction、Reverb 和 Transmission 会按 path 类型使用不同颜色显示。
-此组件用于调试，在性能测量和 release build 中应禁用。
+Direct、Reflection、Diffraction、Reverb 和 Transmission 按 path 类型用不同颜色显示。
+此组件用于调试，在性能测量和 release build 中应禁用。主要公开成员为
+`Active`、`Render()` 和 `Clear()`。
 
-主要公开成员为 `Instance`、设置/计数属性、`Render()` 和 `Clear()`。
+## 与 FMOD 配合使用
+
+如果项目中存在 SimpleST FMOD 插件（`SimpleSTFmod`），SoundTrace 会自动以 **FMOD 集成**方式工作。
+空间声学渲染由 FMOD Studio 的 SimpleST Source / Listener DSP 完成，SoundTrace 只通过
+`SoundTraceManager` + `SoundTraceObject` 把几何体和材质上传到插件上下文。
+`SoundTraceListener` / `SoundTraceSource` 会记录警告并关闭。
+
+![Unity FMOD 安装菜单](/img/fmod/unity-install-menu.png)
+
+1. 安装 FMOD for Unity 2.04（tgz 安装版以 embed 方式放入 `Packages/`）。
+2. 在 **SoundTrace › FMOD › Install SimpleST FMOD Plug-in...** 菜单中选择包含 `SimpleSTFmod` 的文件夹
+   （例如 `fmod/plugins`，Mac 为 `mac/plugins`）。DLL/bundle 会被复制到 FMOD 插件文件夹，
+   并注册到 FMOD Settings › Dynamic Plugins。
+3. 在 FMOD Studio 中，在主总线上放置 **SimpleST Listener**，在 3D 事件的主轨道上用
+   **SimpleST Source** 替代 FMOD Spatializer — 参见 [FMOD 插件](./fmod.md)。
+4. 场景中放置 `SoundTraceManager`、用于几何体的 `SoundTraceObject` 和 FMOD `StudioListener`。
+
+引擎实例只有一个。SimpleSTFmod 加载的 `SimpleSTRealtime` 与 SoundTrace 通过 P/Invoke 使用的是同一个，
+所有控制调用都在插件的控制线程上执行。2026-10-07 在 Unity 6000.3 + FMOD for Unity 2.04 上 E2E 通过
+（对象 0→6→0，路径 1→266→1）。
+
+## 与 Wwise 配合使用
+
+如果 Wwise Unity 集成的 DSP 文件夹中存在 `SimpleSTWwise`，则以 **Wwise 集成**方式工作
+（如果同时存在 FMOD，则 FMOD 优先）。
+
+![Unity Wwise 安装菜单](/img/wwise/unity-install-menu.png)
+
+1. 通过 Audiokinetic Launcher 安装 Wwise Unity 集成。
+2. 在 **SoundTrace › Wwise › Install SimpleST Wwise Plug-in...** 菜单中选择包含 `SimpleSTWwise` 的文件夹。
+   它会被复制到 DSP 文件夹，并由 Wwise 声音引擎加载。
+3. 在 Wwise 项目中，在 Audio Objects 总线上放置 **Sound-tracing Renderer**，并把 3D 声音发送到该总线
+   （Attenuation 关闭或设为平坦）— 参见 [Wwise 插件](./wwise.md)。
+4. 场景中放置 `AkInitializer`、`AkAudioListener`、发射器上的 `AkGameObj`，以及 `SoundTraceManager`、
+   `SoundTraceObject`。Wwise Unity 的单位是米，因此 `sceneRatio = 1`。
+
+## WebGL
+
+Unity WebGL 不提供 `OnAudioFilterRead`，因此使用单独的路径。它传递 AudioClip PCM 和播放状态，
+并把 SimpleST buffered host renderer 的结果通过共享环形缓冲发送给 AudioWorklet。
+
+- AudioClip 以 **Decompress On Load** 导入。
+- 在 HTTPS 或 localhost 上，以 `Cross-Origin-Opener-Policy: same-origin`、
+  `Cross-Origin-Embedder-Policy: require-corp` 响应头提供服务。音频在用户输入之后开始。
+- 构建后处理会把 `Runtime/Web/*.bytes` 复制到 `StreamingAssets/SoundTrace/`，请一并部署该文件夹。
+- Unity AudioMixer 效果链不会应用于 WebGL 上独立的 SoundTrace 输出。
 
 ## 示例
 
@@ -387,20 +324,33 @@ Direct、Reflection、Diffraction、Reverb 和 Transmission 会按 path 类型�
 
 ![ST_SampleScene01](/img/unity/SampleScene01.png)
 
-用于检查基础房间、声源、监听器、几何体、材质预设和路径可视化。
+用于检查基础 room、source、listener、geometry、material preset 和 path visualization。
 
 ### ST_SampleScene02
 
 ![ST_SampleScene02](/img/unity/SampleScene02.png)
 
-用于检查声源/监听器移动、材质预设切换，以及 Unity 原始音频与
-SoundTrace 输出的对比。
+用于检查 source/listener 移动、material preset 切换，以及 Unity 原始 audio 与 SoundTrace 输出的对比。
 
 ### ST_SampleScene03
 
 ![ST_SampleScene03](/img/unity/Img_25_Sample03.png)
 
-用于检查大空间中的多个声源、墙体遮挡、移动期间的 HRTF 方位感和房间响应。
+用于检查大空间中的多个 source、wall occlusion、移动期间的 HRTF 方位感和 room response。
+
+## 相对 STCoreV2 的约定变化
+
+| 之前 | 现在 |
+|---|---|
+| `exaSound` / STCoreV2 入口 | `st_rt_*` / SimpleST ABI 6 |
+| 0 = 无效句柄 | **-1 = 无效**，0 有效 |
+| 每个 source 由 listener 渲染 | 每个 source 一路 mono stream + listener 整体 mix |
+| 8 频段材质、scalar scattering | 63…16000 Hz **9 频段** R/A/T/scattering |
+| 可修改的 native material | 不可变 material，重新绑定到新的 material/mesh |
+| STCore 多项式距离衰减 | SimpleST 物理距离衰减 |
+| STCore GPU/provider/path-cache 设置 | SimpleST CPU pipeline 调度器 |
+| KU100 Resources 表 | 内置 MIT KEMAR HRTF |
+| `exaMeshUpdateVertices` → `exaMeshRefit` | 替换为新网格 |
 
 ## 故障排除
 
@@ -408,16 +358,16 @@ SoundTrace 输出的对比。
 |---|---|
 | 没有声音 | Console 中首个 Manager 初始化错误、Stereo/Best latency、AudioSource clip、是否存在 Manager/Listener |
 | Source/Listener/Object 要求 Manager | 检查级联错误之前记录的 `Failed to initialize SoundTraceManager` 原因 |
-| HRTF 初始化失败 | 所选模式对应的 Resources asset 是否存在，以及文件是否为空 |
-| Geometry 未生效 | `Read/Write Enabled`、MeshFilter/MeshRenderer、子网格位置、注册状态 |
-| 运行时变形 mesh 未生效 | 仅设置 `Update Mode` 不会上传顶点/拓扑；需要单独的底层几何体更新路径 |
-| GPU 未启用 | 检查 `GpuBackendStatus`、Console 回退原因、Object 是否选择 SIMD BVH |
-| Teleport 后音高跳变 | 更改 transform 后立即调用 `ResetMotionState()` |
-| 性能不足 | 按 `Quality → Middle → Fast` 顺序检查，缩小 path cache buffer，然后禁用路径可视化 |
-| 多个声源听起来像梳状滤波 | 使用相同的 `AudioSettings.dspTime` 调用 `PlayScheduled()` |
+| 与旧版本冲突 | 是否已把 STCoreV2 `Assets/SoundTrace` 移出 Assets |
+| Geometry 未生效 | `Read/Write Enabled`、MeshFilter/MeshRenderer、child mesh 位置、注册状态 |
+| 运行时变形 mesh 未生效 | SimpleST 没有 refit。替换为新网格 |
+| FMOD/Wwise 模式下 Listener/Source 被关闭 | 正常 — 渲染由中间件插件负责 |
+| Teleport 后 pitch 跳变 | 更改 transform 后立即调用 `ResetMotionState()` |
+| 性能不足 | 按 `Quality → Middle → Fast`、缩小 Reverb Ray Resolution、禁用 path visualizer 的顺序检查 |
+| 多个声源听起来像 comb filtering | 使用相同的 `AudioSettings.dspTime` 调用 `PlayScheduled()` |
 
 ## 后续文档
 
 - [SDK 概览](./overview.md)
-- [Web SDK](./web.md)
-- [Unreal Engine SDK](./ue.md)
+- [FMOD 插件](./fmod.md) · [Wwise 插件](./wwise.md)
+- [Web SDK](./web.md) · [Unreal Engine SDK](./ue.md)

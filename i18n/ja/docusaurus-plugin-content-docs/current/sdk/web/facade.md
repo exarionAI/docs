@@ -1,13 +1,13 @@
 ---
 title: Facade API
-description: ST と MT で同じように使う soundtrace.js の推奨 API です。
+description: ST と MT で同一に使える soundtrace.js 1.0.0 の推奨 API と、SimpleST 移行で変わったオプション。
 ---
 
 # Facade API
 
-Facade は一般的な Web アプリケーションの推奨エントリーポイントです。`SoundTrace`
-がシーンのライフサイクルを管理し、`Listener`、`Source`、`Mesh` がアプリの 3D
-状態を表現します。
+Facade は一般的な Web アプリケーションの推奨エントリポイントです。`SoundTrace` がシーンのライフサイクルを
+管理し、`Listener`、`Source`、`Mesh` がアプリの 3D 状態を表現します。すべての公開メソッドは
+`thread: 'st'` と `'mt'` で同一に動作し、診断はすべて非同期です。
 
 [Web SDK 概要](../web.md) · [Native API](./native.md)
 
@@ -15,48 +15,40 @@ Facade は一般的な Web アプリケーションの推奨エントリーポ�
 
 ```ts
 const sound = await SoundTrace.create(audioContext, options);
+sound.output.connect(audioContext.destination);
 
 sound.listener.setPose(listenerPose);
 const mesh = sound.addMesh(meshOptions);
 const source = sound.addSource(sourceOptions);
 
-const spatial = await source.play(inputNode);
-spatial.connect(sound.output).connect(audioContext.destination);
-
+await source.play(inputNode);      // 入力キャプチャ。出力は sound.output 1 つ
 await sound.update(0);
 ```
-
-この呼び出しの流れは ST でも worker-hosted MT でも同じです。MT では同期の native
-getter ではなく、`debugSnapshot()` のような非同期リードバックを使用します。
 
 ## `SoundTrace` のオプション
 
 | オプション | 既定値 | 説明 |
 |---|---|---|
-| `mode` | 未指定 | `'single_thread'`、`'multi_thread'`、`'gpu'` のいずれか |
-| `thread` | `'auto'` | 高度な WASM 選択: `'auto'`、`'st'`、`'mt'`。`mode` が優先 |
+| `thread` | `'auto'` | `'st'`（同期伝搬）/ `'mt'`（パイプライン伝搬）。どちらも専用 Worker + pthread WASM |
+| `mode` | 未指定 | `'single_thread'` / `'multi_thread'`。`thread` のエイリアスで `mode` が優先。`'gpu'` は**拒否** |
 | `quality` | `'balanced'` | `'fast'`、`'balanced'`、`'quality'` |
-| `throughput` | 未指定 | MT worker の予算: `'low'`、`'medium'`、`'max'` |
-| `coordinateBasis` | コア座標系 | レンダラーの座標系を SDK の座標系へ変換 |
-| `coreBaseUrl` | パッケージ内 | `st/`、`mt/` を含むコアの URL |
-| `assetBaseUrl` | パッケージ内 | マテリアルと HRTF アセットの URL |
-| `propagationThreadCount` | エンジン既定値 | MT propagation スレッド数の低レベル override |
-| `defaultMeshBuild` | エンジン既定値 | `addMesh()` が使う既定の BVH build オプション |
-| `sceneRatio` | `1.0` | シーンの長さ単位あたりのメートル。ジオメトリの事前スケールとの併用は禁止（二重スケール） |
-| `autoLoadMaterials` | `true` | 既定マテリアルをロードし、名前ベースのマッピングを有効化 |
-| `transmissionModel` | `'surface'` | 直接音がマテリアルを透過する際のエネルギー減衰モデル。[マテリアル透過モデル](#マテリアル透過モデル)を参照 |
-| `debug` | `false` | 初期化診断ログを出力 |
-
-Three.js はカメラが `-Z` を向くため、次の basis から始められます。
+| `earlyReflectionMode` | `'hybrid'` | リアルタイムは常に Hybrid。他の値は拒否 |
+| `coordinateBasis` | エンジン座標系（`+Z` forward） | レンダラーの座標系を SDK 座標系へ変換 |
+| `coreBaseUrl` | パッケージ内部 | `SimpleSTRealtime.mjs/.wasm`、`SimpleSTOffline.mjs` がある URL |
+| `assetBaseUrl` | パッケージ内部 | 材質 JSON と HRTF asset の URL |
+| `propagationThreadCount` | 同期 1 / パイプライン 3 | 計算予算 1 ~ 5（負数 = 5）。パイプラインは最小 3 |
+| `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT ワーカー予算の省略表記 |
+| `sceneRatio` | `1.0` | シーン長さ単位あたりのメートル（cm = 0.01）。ジオメトリの事前スケールとの**併用禁止** |
+| `autoLoadMaterials` | `true` | 既定材質テーブルをロードして名前マッピングを有効化 |
+| `transmissionModel` | `'surface'` | SimpleST は表面 R/A/T のみ対応。`'solid'` は**拒否** |
+| `defaultMeshBuild` | — | STCoreV2 の BVH オプション。指定するとロードを**拒否** |
+| `debug` | `false` | 初期化診断ログを 1 行出力 |
 
 ```ts
 const sound = await SoundTrace.create(audioContext, {
-  mode: 'single_thread',
-  coordinateBasis: {
-    right: [-1, 0, 0],
-    up: [0, 1, 0],
-    forward: [0, 0, -1],
-  },
+  thread: 'mt',
+  quality: 'balanced',
+  coordinateBasis: { right: [-1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }, // Three.js
 });
 ```
 
@@ -66,44 +58,49 @@ const sound = await SoundTrace.create(audioContext, {
 
 | API | 説明 |
 |---|---|
-| `SoundTrace.create(ctx, options?)` | エンジンを生成してロード（コンストラクター + `load()`） |
-| `output` / `audioContext` | master output ノードと、アプリが渡した `AudioContext` |
-| `listener` | シーン唯一のリスナー |
-| `addMesh(options)` | 音響ジオメトリを追加 |
-| `removeMesh(mesh)` | ジオメトリを削除 |
-| `addSource(options)` | 空間音源を追加 |
-| `setQuality(tier)` | 品質プリセットを変更 |
-| `setAudioOption(options)` | ブロックサイズと出力チャンネルを override |
-| `loadHrtf(mode, source?)` | 同梱またはカスタムの HRTF をロード |
-| `loadMaterialAssets()` | マテリアルテーブルを手動ロード（`autoLoadMaterials: false` のとき） |
-| `enableGpu()` | WebGPU 伝播を有効化し成否を返す。非対応なら `false` で CPU を維持 |
-| `update(dt?)` | シーンを更新して propagation を実行 |
-| `debugSnapshot(options?)` | MT 互換の非同期診断スナップショット |
-| `getStatistics(options?)` | valid path・ray・メモリ統計（async） |
-| `getGpuStats()` | GPU の dispatch/fallback カウンター（async） |
-| `getIRs()` | 直近 propagation の path 別インパルス応答（async） |
-| `renderMonoImpulseResponse(source, sec)` | オフライン mono IR レンダリング。出力チャンネルが 1 のときのみ |
-| `reset()` | エンジン状態をリセット（async） |
-| `dispose()` | SDK 所有のリソースを解放。冪等で `using` に対応 |
+| `SoundTrace.create(ctx, options?)` | エンジンを生成してロード（コンストラクタ + `load()`） |
+| `output` / `audioContext` | リスナーマスター出力ノード（ステレオ）と、アプリが渡した `AudioContext` |
+| `listener` | シーンの単一リスナー |
+| `descriptor` | `{ transport: 'worker', thread: 'st' \| 'mt' }` — 診断用。分岐には使わない |
+| `addMesh(options)` / `removeMesh(mesh)` | 音響 geometry の追加/削除 |
+| `addSource(options)` | 空間音源の追加 |
+| `setQuality(tier)` | 品質プリセットの変更（リスナー・音源のレイと深度） |
+| `setAudioOption(options)` | 入力ブロックサイズ、出力チャンネルの override |
+| `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'`（エイリアス `'convolution'` / `'steamaudio'`） |
+| `loadMaterialAssets()` | 材質テーブルの手動ロード（`autoLoadMaterials: false` のとき） |
+| `update(dt?)` | シーンを更新して伝搬を実行。このフレームの有効経路数で resolve |
+| `debugSnapshot(options?)` | 非同期の診断スナップショット。`.simplest` に SimpleST の scene/timing/render/IR 統計 |
+| `getStatistics(options?)` | `debugSnapshot` のラッパー。`validPathCount` と `.simplest` |
+| `getIRs()` | 別の Offline Worker で 9バンド early path IR を再計算 |
+| `renderMonoImpulseResponse(source, sec)` | Offline Worker で 44.1 kHz モノ圧力 IR（最大 30 s） |
+| `enableGpu()` / `getGpuStats()` | **拒否** — SimpleST Web は CPU 専用 |
+| `reset()` | エンジン状態の初期化（async）。Hybrid・材質・品質が再適用される |
+| `dispose()` | SDK が所有するリソースの解放。冪等、`using` 互換 |
 
 ### `Listener`
 
 ```ts
 sound.listener
-  .setPose({ position: [0, 1.6, 0], orientation: [0, 0, 0, 1] })
-  .setRenderOptions({ hrtfQuality: 'medium' });
+  .setPose({ position: [0, 1.6, 0], orientation: camera.quaternion.toArray() })
+  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 })
+  .setOutputMode('hrtf');   // 'hrtf'(バイノーラル) | 'speaker'(ステレオパンニング)
 ```
 
-シーンにリスナーは 1 つです。リスナーは `SoundTrace` が所有するため、個別に
-dispose しません。
+シーンには listener が 1 つで、`SoundTrace` が所有します。`orientation` にはカメラのアクティブな回転
+クォータニオン（XYZW）をそのまま渡します。
 
-出力レンダラーは `setOutputMode()` で切り替えます。既定の `'hrtf'` はバイノーラル
-レンダラー、`'speaker'` は内部の Ambisonic スピーカーレンダラー（1ch/2ch）です。
-HRTF モードとロード済み HRTF テーブルは `'hrtf'` 出力にのみ適用されます。
+`setRenderOptions` が受け取るキー:
 
-```ts
-sound.listener.setOutputMode('speaker');
-```
+| キー | 意味 |
+|---|---|
+| `earlyReflectionMode` | `'hybrid'` のみ許可 |
+| `useDoppler` | 可変遅延 Doppler ピッチ |
+| `useLimiter` | 出力リミッター |
+| `pathFadeTime` | 経路の出現/消滅クロスフェード（秒） |
+| `maxDelaySeconds` | レンダラーが維持する最大経路遅延（秒） |
+| `diffuseEnabled` | late reverb レンダーの on/off |
+
+`hrtfQuality`、`diffuseQuality`、`delayInterpolation`、`hrtfMode` は STCoreV2 専用のため**拒否**されます。
 
 ### `Source`
 
@@ -111,43 +108,29 @@ sound.listener.setOutputMode('speaker');
 const source = sound.addSource({
   position: [2, 1, -1],
   gain: 1,
-  paths: {
-    direct: true,
-    reflection: true,
-    diffraction: true,
-    reverberation: true,
-  },
+  paths: { direct: true, reflection: true, diffraction: true, reverberation: true },
 });
 
-source.setPose({ position: [1, 1, -2] });
-source.setGain(0.8);
+source.setPose({ position: [1, 1, -2], velocity: [0.5, 0, 0] });
+source.setGain(0.8);                          // 圧力ゲイン。エンジンには energy = gain² で渡す
 source.setPathEnabled('reverberation', false);
+source.setDirection([0, 0, -1]);
 ```
 
-`play(input, channels?)` は入力を接続した `AudioWorkletNode` を返します。出力は
-アプリが `sound.output` または別の Web Audio graph に接続します。
+| API | 説明 |
+|---|---|
+| `play(input, channels?)` | 入力を接続した `AudioWorkletNode` を返す。**出力は無音**で、実際の音は `sound.output` |
+| `setPose(pose)` / `setGain(g)` | 位置・速度・方向、ゲイン |
+| `setPathEnabled(path, on)` / `setPathOptions(o)` / `isPathEnabled(path)` | `'direct'`（透過を含む）/ `'reflection'` / `'diffraction'` / `'reverberation'` |
+| `setDirection(v)` | 音源の forward。roll のない最小回転で orientation も同時に更新される |
+| `setDirectivityTable(anglesDeg, attenDbPerBand)` / `setDirectivityEnabled(on)` | 角度ごとの 9バンド減衰テーブルを SimpleST の指向性テーブルに変換して適用 |
+| `dispose()` | 音源とストリームの解放 |
 
 #### 距離減衰
 
-`addSource()` は 5 種類すべての path に、既定の距離減衰係数
-`{ constant: 1, linear: 0, quadratic: 1 }` を適用します。
-
-```text
-gain = 1 / (constant + linear * distance + quadratic * distance^2)
-```
-
-つまり既定のカーブは `1 / (1 + distance²)` です。`constant = 1` が距離 0 付近での
-発散を防ぎ、`quadratic = 1` が逆二乗に近い減衰を作ります。
-
-#### 指向性
-
-音源に指向性を持たせるには、角度ごとの帯域減衰テーブルを登録して有効化します。
-
-```ts
-source.setDirection([0, 0, -1]);
-source.setDirectivityTable(anglesDeg, attenDbPerBand);
-source.setDirectivityEnabled(true);
-```
+STCoreV2 の音源ごとの多項式減衰（`constant / linear / quadratic`）はありません。SimpleST はすべての
+経路に物理 `1/r` 減衰と ISO 9613-1 空気吸収を適用し、参照距離（1 m）・最小距離（1 m）は
+エンジンのポリシーです。
 
 ### `Mesh`
 
@@ -165,83 +148,53 @@ mesh.setPose({
 });
 ```
 
-`indices` はメッシュ全体で 1 つのマテリアルを使う場合に便利です。面ごとに
-マテリアルが必要な場合は、`{ a, b, c, materialIndex }` 形式の `triangles` を
-渡してください。
-
-生成後もマテリアルと更新ポリシーを変更できます。
+`indices` はメッシュ全体が 1 つの材質のときに使います。面ごとの材質が必要な場合は
+`{ a, b, c, materialIndex }` 形式の `triangles` を渡してください。
 
 | API | 説明 |
 |---|---|
-| `setMaterial(material)` | メッシュ全体のマテリアルを差し替え |
-| `setMaterialRange(triStart, triCount, material)` | 三角形の範囲ごとにマテリアルを差し替え |
-| `setUpdateType(type)` / `getUpdateType()` | `'static'`、`'refit'`、`'rebuild'`、`'dynamic'` |
-| `setPose(pose)` | position、orientation、scale を更新 |
-| `dispose()` | メッシュと collider を解放 |
+| `setMaterial(material)` | メッシュ全体の材質を差し替え。SimpleST の材質は不変なので、内部的に新しい材質/メッシュハンドルへ再バインド |
+| `setMaterialRange(triStart, triCount, material)` | triangle 範囲ごとの材質差し替え |
+| `setUpdateType(type)` / `getUpdateType()` | `'static'`（静的 TLAS）/ `'dynamic'`（変換のみ更新）。`'refit'`・`'rebuild'` は互換用で、SimpleST ではメッシュを作り直す |
+| `setPose(pose)` | position、orientation、scale の更新 |
+| `dispose()` | メッシュとオブジェクトの解放 |
 
-動かない壁は `'static'`、頂点だけが変わるジオメトリは `'refit'`、トポロジーが
-変わる場合は `'rebuild'` を使用します。
+BVH は SimpleST が所有します（TinyBVH 既定）。メッシュごとのビルドオプションはありません。
 
-## マテリアル透過モデル
+## STCoreV2 から変わったオプションの要約
 
-`transmissionModel` は、直接音が壁などのマテリアルを通過する際のエネルギーの
-失われ方を選択します。
-
-| 値 | 動作 |
+| 以前 | 現在 |
 |---|---|
-| `'surface'`（既定） | 表面を通過するたびにマテリアルの透過係数を 1 回適用。壁の厚みとは無関係 |
-| `'solid'` | 厚みを考慮: ray が solid 内部を進む距離に、マテリアルごとの帯域別の厚みを適用。厚い壁ほど強く遮る |
-
-```ts
-const sound = await SoundTrace.create(audioContext, {
-  mode: 'single_thread',
-  transmissionModel: 'solid',
-});
-```
-
-`'solid'` は厚みが定義されたマテリアルのみを切り替え、厚みのないマテリアルは
-`'surface'` の動作を維持します。既定のマテリアルテーブルでは 22 種類のうち
-15 種類が厚みを持ちます。
-
-:::warning
-opt-in のオプションです。壁越しの音源の大きさが変わるため、既存シーンのサウンドを
-維持する必要がある場合は既定値のままにしてください。
-:::
-
-## 伝播 path cache
-
-すべてのセッションは propagation path cache が**有効な状態**で開始します（固定
-seed、サイズ 512）。ST と MT の両方で最初のフレーム前に適用され、`reset()` 後にも
-再適用されるため、キャッシュを有効にするために呼ぶ API はありません。
+| `mode: 'gpu'`、`enableGpu()`、`getGpuStats()` | 拒否（CPU 専用） |
+| `transmissionModel: 'solid'` | 拒否（表面 T のみ） |
+| `defaultMeshBuild`、`BvhType` | 拒否（SimpleST が BVH を所有） |
+| `hrtfQuality`、`diffuseQuality`、`delayInterpolation`、`hrtfMode` | 拒否 |
+| `loadHrtf('parametric')`、KU100/H12 テーブル | なし。`'mit-kemar'` / `'sadie-d2'` |
+| path cache（`seedValue`、`pathCacheSize`） | なし |
+| 音源ごとの多項式距離減衰 | 物理減衰（エンジン） |
+| `source.play()` の出力ノード接続 | 出力は `sound.output` 1 つ。`play()` のノードは入力キャプチャ |
+| 8バンド材質 | 9バンド、R+A+T=1 を厳格に検証 |
+| 同期の `getStatistics()` など | すべて `Promise` |
+| `./internal` entry、`SoundTraceMtUnsupportedError` | 削除。`./native` で SimpleST モジュールにアクセス |
 
 ## フレーム更新
-
-pose の変更は高速に記録できますが、propagation update は同時に 1 つだけ実行するのが
-安全です。
 
 ```ts
 let updateInFlight: Promise<number> | undefined;
 
 function frame(dt: number) {
   if (!updateInFlight) {
-    updateInFlight = sound.update(dt).finally(() => {
-      updateInFlight = undefined;
-    });
+    updateInFlight = sound.update(dt).finally(() => { updateInFlight = undefined; });
   }
 }
 ```
 
+pose の変更は高速に記録できますが、伝搬の update は同時に 1 つだけ実行するのが安全です。
+
 ## ライフサイクル
 
-`SoundTrace`、`Source`、`Mesh` は `dispose()` に対応しています。
-`SoundTrace.dispose()` はリスナーを含む SDK 所有のリソースをすべて片付け、複数回
-呼び出しても安全です。
-
-```ts
-source.dispose();
-mesh.dispose();
-sound.dispose();
-```
+`SoundTrace`、`Source`、`Mesh` は `dispose()` をサポートします。`SoundTrace.dispose()` は listener と
+Worker を含め SDK が所有するリソースを片付け、複数回呼んでも安全です。
 
 ## 関連ドキュメント
 

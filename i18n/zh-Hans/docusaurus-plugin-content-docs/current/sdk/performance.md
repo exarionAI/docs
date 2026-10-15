@@ -1,120 +1,109 @@
 ---
 title: Performance Guide
+description: 基于 SimpleST 的集成的性能轴 — 射线预算、lane 周期、Hybrid 早期反射、渲染模式、线程、测量指标。
 ---
 
-# Web SDK Performance Guide
+# Performance Guide
 
-在 soundtrace.js 中，提高 ray count、depth、source count 以及 geometry/BVH 设置，
-可以改善声学路径的稳定性和空间感。同样的设置也会同时提高传播计算时间、内存占用、
-主线程 frame time 和 AudioWorklet 负载。
+在 SimpleST 中，提高听者 guide ray、声源 transport ray、反射深度、声源数和几何体规模，
+路径会更稳定、空间感更好，但传播时间和音频渲染块成本也会随之上升。
+本文整理 Web、Unity、UE、FMOD、Wwise 集成共有的成本轴和起点。
 
-本文是 SDK 集成方选择选项时的性能/质量参考。下面的预设是起点；实际推荐的 source
-数量与各平台上限，会在测量完成后以数值表更新。
+## 固定运行时约定
 
-## 固定运行时契约
-
-| 项目 | 当前契约 |
+| 项目 | 当前约定 |
 |---|---|
-| Listener | 每个 scene 1 个 |
-| Realtime output | stereo/binaural 2ch |
-| 音频渲染路径 | ST/MT 均为 WASM `AudioWorkletProcessor` |
-| Multi-source 音频 | 每个 source 调用 `source.play(input, 2)`（facade）/ ST·direct-native 使用 `createWorkletNode()` |
-| Native source cap | 16 sources（`EXA_MAX_SOUNDSOURCE`） |
-| Ray depth 上限 | 16（`EXA_MAX_DEPTH`） |
-| 默认质量预设 | `quality: 'balanced'` = listener ray `24 x 24`，depth `8` |
-
-`16` 是 native cap，即一个 scene 中可同时存在的 source 数量上限。面向客户应用推荐的
-实时 source 数，必须在该上限之内，按平台、geometry 规模、ray budget、BVH 与 ST/MT
-模式分别测量。
-
-各质量预设设定的 listener ray grid 与 depth 如下。
-
-| Preset | Listener ray | Depth |
-|---|---|---|
-| `fast` | `16 x 16` | `4` |
-| `balanced`（默认） | `24 x 24` | `8` |
-| `quality` | `32 x 32` | `12` |
+| 听者 | 每个实时上下文 1 个 |
+| 输出 | 双耳/声像 2ch，或扬声器布局（HOA3 解码）N 声道 |
+| 引擎采样率 | 固定 44.1 kHz，主机采样率由内置重采样器转换 |
+| 渲染块 | 512 帧（≈11.6 ms @ 44.1 kHz）— 每块渲染成本必须在此预算内才不会断续 |
+| 并发声源流 | 64 个（超出的声源为 dry 或创建失败） |
+| 反射最大深度 | 16 · 透射 64 |
+| 默认 guide ray / 深度 | `16 × 16` / 8（全局），逐声源深度 4 |
+| 默认 transport ray | `16 × 8` |
+| 计算线程 | `maxComputeThreads = 0` → min(性能核数, 6) |
 
 ## 主要选项与取舍
 
 | 选项 | 质量影响 | 性能影响 |
 |---|---|---|
-| Listener ray width/height | 改善以听者为基准的路径发现与方向稳定性 | 传播计算随 ray grid 面积成比例增加 |
-| Listener depth | 允许更深的 reflection/diffraction/reverb 路径 | path search 与 cache pressure 增加 |
-| Source reverb ray width/height | 改善 source 侧 late reverb 覆盖与材质响应稳定性 | 成本随 source 数与 ray grid 面积增加 |
-| Source reverb depth | 增加 source 侧 late reverb 的追踪深度 | depth 越大，path search 与 cache pressure 越高 |
-| Source count | 同时空间化的 emitter 更多 | propagation 与 AudioWorklet mixer 成本增加 |
-| BVH type | 改变 traversal/build 特性 | 依几何体与更新方式，build/refit/traversal 成本不同 |
-| BVH max depth | 控制树深度 | 过浅会导致 traversal 低效，过深会增加 build/memory 成本 |
-| Prims per leaf | 控制每个 leaf 的三角形数 | 依场景结构，traversal/build 的平衡点不同 |
-| Animated/refit geometry | 反映移动的 collider | refit/rebuild 成本增加，作为 stress 项单独测量 |
-| Thread mode | MT 可把 propagation job 分散到 worker 线程 | 需要 cross-origin isolation，线程/内存开销增加 |
+| 听者 guide ray（N×N） | 反射/绕射路径发现与方向稳定性 | 反射/绕射 lane 成本随网格面积成比例增加 |
+| 反射深度 | 允许高阶反射和混合绕射路径 | 路径搜索与 IR tap 数增加 |
+| 声源 transport ray（W×H）× 深度 | late reverb 房间响应与材质响应的稳定性 | 与声源数 × 网格 × 深度成比例 |
+| 声源数 | 同时空间化的发射器 | 传播 + 渲染（tap 数）成本 |
+| 早期反射模式 | Objects = 所有路径单独 HRTF，Hybrid = 预算 + HOA3 bed | **Objects 与路径数成比例**地放大渲染块 |
+| 反射 lane 周期 | 越长，早期反射跟随听者移动越慢 | 对传播 CPU 节省最大 |
+| 渲染模式 | Buffered ≈3 块延迟 / In Callback 最低延迟 | In Callback 把渲染成本放在主机音频线程上 |
+| HRTF 数据集 | SADIE D2（256 tap）> MIT KEMAR（128 tap）分辨率 | 卷积成本与 tap 长度成比例 |
+| 动态对象数 | 反映移动的遮挡物 | 动态 TLAS 重建成本 |
 
-## Reverb ray budget
+## 早期反射：使用 Hybrid
 
-Reverb ray 不是 listener ray 的复制值。source 侧 late reverb 的成本按
-`source count × width × height × depth` 增长，因此生产默认值要与 listener ray 分开，
-按场景逐步提高。QA 基准 sweep 为 source `[4, 8, 12, 16]`，general ray 与 reverb ray
-各自经过 `4 x 4 x 3`、`8 x 8 x 7`、`16 x 16 x 11`、`32 x 32 x 16` 档位，path cache
-`[256, 512, 1024]`。
+这是在有 8 个声源的混响大厅（Sibenik）中测得的渲染块成本。
 
-## 起始预设
+| 模式 | exact 对象 | 块成本 | 判定 |
+|---|---:|---:|---|
+| Objects | ≈650 | 16.8 ms | 超出 11.6 ms 预算 — 断续 |
+| Hybrid | ≈33 | 2.4 ms | 通过 |
 
-在实测表格填好之前，请把下面的值作为起点，并按应用的目标 FPS 与听感质量调整。
+Hybrid 只把听者全局预算（反射 12+4 · 绕射 3+1）作为 exact 对象渲染，其余汇集到 HOA3 bed。
+在 HRTF 多声源下约有 −1 ~ −2 dB 的音量差异。所有官方集成都默认启用 Hybrid，
+Objects 用于基准试听和离线 A/B。
 
-| Preset | Thread | Listener rays | Reverb rays | Depth | BVH | 用途 | 测量状态 |
-|---|---|---:|---:|---:|---|---|---|
-| Mobile conservative | ST | `16 x 16` | `4 x 4` 或 `8 x 8` | `4` | LBVH 或 platform default | 移动端最低基准 | Measurement pending |
-| Desktop balanced | ST 或 MT | `24 x 24` | `8 x 8` | `8` | LBVH_SIMD8 | 桌面基本基准 | Measurement pending |
-| Desktop quality | MT | `32 x 32` | `16 x 16` | `12` | LBVH_SIMD8 | 质量优先桌面 | Measurement pending |
-| Stress only | MT | `32 x 32` | `32 x 32` | `7..16` | BVH matrix | 仅用于极限测量 | 非 realtime 默认值 |
+## 质量预设（按集成）
 
-> **MT 的收益尚未测量，并非必然更快。** 上表 MT 预设的速度收益仍是
-> `Measurement pending`。MT 会把 propagation job 分散到 worker，因此收益出现在
-> **ray 预算与 source 数较大时**（高 ray grid/depth、多 source）；在小场景中，worker
-> 往返与内存开销可能让 ST 更简单也更快。此外 MT 还有 cross-origin isolation
-> （COOP/COEP）的部署成本。小场景与简单页面请从 ST 开始，在预算较大的场景中
-> **实测对比** ST↔MT 后再选择 MT。
+| 集成 | Fast | Balanced / Middle | Quality |
+|---|---|---|---|
+| Web（`quality`） | 8×8，深度 4 | 16×16，深度 6 | 24×24，深度 8 |
+| Unity Listener | 16，深度 4 | 24，深度 8 | 32，深度 12 |
+| UE Listener | 12×12，深度 4 | 16×16，深度 8 | 24×24，深度 8 |
+| UE Source（transport） | 8×4，深度 3 | 16×8，深度 4 | 24×12，深度 6 |
 
-如果空间感偏弱，不要先增加 source 数量；应分别、逐级提高 listener ray 与 source
-reverb ray 的 count/depth。source 数量的增加放到最后测量。
+Web 的声源 transport ray 也遵循同样的值。Unity 声源的 transport ray 默认为 24 / 深度 4。
+
+## 起始 preset
+
+| 场景 | guide ray | transport ray | 深度 | 反射 lane 周期 | 备注 |
+|---|---|---|---|---|---|
+| 移动端 / Web 多声源 | 8×8 ~ 12×12 | 8×4 ~ 8×8 | 4 | 33 ~ 66 ms | Fast 预设 |
+| 桌面游戏 | 16×16 | 16×8 | 8 | 33 ms（UE 默认）~ 0 | Balanced |
+| 质量演示 | 24×24 ~ 32×32 | 24×12 | 8 ~ 12 | 0 ms | Quality，声源 ≤ 8 |
+
+如果空间感偏弱，不要先增加声源数，而是分别逐级提高 guide ray 与 transport ray 和深度来确认。
+性能不足时按 (1) 确认 Hybrid → (2) 降低质量预设 → (3) 提高反射 lane 周期 →
+(4) 关闭路径可视化的顺序调整。
+
+## 线程与 lane
+
+PIPELINED 调度器以独立节奏运行 Direct / Reflection-Diffraction / Reverb lane。
+
+| lane | 默认最小周期 | 含义 |
+|---|---:|---|
+| Direct | 10 ms | 连续执行开始之间的间隔。直达声与透射 — 保持无 dropout |
+| Reflection-Diffraction | 0 ms（立即） | 传播成本的大部分。等待中的请求会合并为一个 |
+| Reverb | 4 ms | 执行完成到下一次的间隔 |
+
+在 PIPELINED 中，`maxComputeThreads` 预算 N 至少为 3（音频 1 + Direct 专用 1 + 通用 N−2）。
+在混合架构 CPU 上，建议用 `st_rt_set_thread_attributes`（UE `Prefer Performance Cores`）固定到性能核。
+实际线程数用 `st_rt_get_thread_inventory` 确认。
 
 ## 需要测量的指标
 
-在客户文档中给出数值时，请在相同 duration/warmup 条件下重复测量同一 scenario，并且
-只公开汇总值而非 raw log。
-
-| 分组 | 指标 |
-|---|---|
-| Browser frame | 平均 FPS、frame time p50/p95/p99、worst frame、dropped frame count |
-| Main-thread stall | `PerformanceObserver` longtask count/total/worst（仅支持的浏览器） |
-| Engine propagation | `scene.tick()` + `scene.updatePropagation()` 时间 p50/p95/p99/worst |
-| Native job timing | propagation job timing frame、worker 分散/等待时间 |
-| Path quality | valid path count 平均/最大值、material/path 变化的听感记录 |
-| Audio | `AudioContext.sampleRate`、`baseLatency`、`outputLatency`、state、setup time |
-| Memory | native memory trace snapshot、JS heap snapshot |
-| Manual observation | drop-out、定位偏弱、thermal、风扇噪音、体感耗电 |
-
-仅靠浏览器 JavaScript 很难可靠地得到跨平台通用的功耗/thermal 数值。功耗与 thermal
-不要作为自动测量值确定，应拆分为 manual observation 或专用设备的测量结果。
-
-## 测量矩阵
-
-| Matrix | 值 |
-|---|---|
-| Baseline | ST/MT 各 1 source，listener `16 x 16 x 3`，source `16 x 8 x 3`，static small geometry |
-| Quality scale | listener `16 x 16`、`32 x 32`；source reverb `4 x 4`、`8 x 8`、`16 x 16`、`32 x 32`；depth `3`、`7`、`11`、`16` |
-| Source scale | `1`、`2`、`4`、`8`、`12`、`16` sources（native cap `16`） |
-| Reverb ray scale | source `[4, 8, 12, 16]`，general ray 步进 `4 x 4 x 3` → `8 x 8 x 7` → `16 x 16 x 11` → `32 x 32 x 16`，reverb ray 同步进，path cache `[256, 512, 1024]` |
-| Geometry/BVH | small/medium/large geometry、HKDtree、LBVH、LBVH_SIMD4/8/16、LBVH_NWAY4/8/16 |
-| Stress only | animated/refit、rebuild-heavy、native source cap、high ray budget |
+| 分组 | 指标 | 来源 |
+|---|---|---|
+| 传播 | 各 lane 的 ms（direct / reflDiff / reverb）、IR 构建 ms | `st_rt_get_timing`（Web `debugSnapshot().simplest.timing`、UE Subsystem） |
+| 渲染块 | `totalUs`、各阶段 µs（sourceInput / exactTaps / bed / send / late / output）、activeSources、exactTaps、sendTaps | `st_rt_render_get_process_stats` |
+| IR 发布 | publishSequence 节奏、bed 单元数、prepare CPU/wall 比例（抢占 vs 慢核） | `st_rt_ir_get_stats` |
+| 场景 | 网格、对象、声源、三角形数 | `st_rt_scene_get_stats` |
+| 音频输入 | queued / capacity / dropped / underrun 帧 | `st_rt_source_get_stream_status` |
+| 延迟 | 输出级延迟（帧）+ 队列 + 固定 DSP 延迟 | `st_rt_render_get_latency_frames` |
+| 主机 | 帧时间 p50/p95/p99、音频回调超时次数 | 平台分析器 |
 
 ## 公开准则
 
 | 项目 | 准则 |
 |---|---|
-| 已实测的值 | 同时标注 platform、browser、SDK commit、STCoreV2 commit 与 scenario |
+| 已实测的值 | 同时标注平台、主机版本、SimpleST commit 与版本、场景 |
 | 未测量的值 | 不要估算数字，标注为 `Measurement pending` |
-| Source cap | 把 native cap `16` 与实际推荐 source 数分开 |
-| Stress 结果 | 作为极限/回归检测用途，而非 realtime 推荐值 |
+| 流上限 | 把引擎上限 64 与实际推荐声源数分开 |
 | Raw log | 不要原样放进客户文档，只公开汇总表与解读 |

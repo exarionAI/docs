@@ -1,47 +1,59 @@
 ---
 title: Web
-description: soundtrace.js WebAssembly SDK의 설치, HRTF, 품질 프리셋, CPU/MT/WebGPU 백엔드 가이드.
+description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK의 설치, 배포 요건, HRTF, 품질 프리셋, 재질, 문제 해결.
 ---
 
 # Web SDK
 
-**soundtrace.js**는 [STCoreV2](../core/stcorev2.md)를 브라우저에서 사용하는
-TypeScript/WebAssembly SDK입니다. Three.js 같은 렌더링 씬의 메시, 재질, 음원,
-리스너를 Sound Tracing 장면으로 연결하고 Web Audio graph에 공간화 출력을 제공합니다.
+**soundtrace.js**는 [SimpleST](../core/simplest.md)를 브라우저에서 사용하는 TypeScript/WebAssembly
+SDK입니다. Three.js 같은 렌더링 씬의 메시·재질·음원·리스너를 Sound Tracing 장면으로 연결하고,
+Web Audio graph에 공간화된 스테레오 출력을 제공합니다.
 
-전체 생성 옵션과 entity API는 [Facade API](./web/facade.md), ST 전용 저수준
-통합은 [Native API](./web/native.md)를 참고하세요.
+1.0.0부터 엔진이 STCoreV2에서 **SimpleST 2.12.0 / ABI 6**으로 바뀌었습니다. `SoundTrace`,
+`Source`, `Mesh`, `Listener` facade는 유지되지만 백엔드·HRTF·재질·옵션 계약이 달라졌습니다.
+전체 옵션과 엔티티 API는 [Facade API](./web/facade.md), 저수준 SimpleST 모듈 접근은
+[Native API](./web/native.md)를 참고하세요.
+
+![soundtrace.js 구조](/img/web/architecture.png)
 
 ## 현재 SDK 핵심
 
-| 항목 | 권장 사용법 |
+| 항목 | 현재 동작 |
 |---|---|
-| HRTF | 기본은 코어 내장 HRIR 테이블(로드 불필요), 파라메트릭 방향 렌더링은 `loadHrtf('parametric')` |
-| 실행 백엔드 | `Single Thread`, `Multi Thread`, `WebGPU` 중 선택 |
-| 품질 | `Fast`, `Balanced`, `Quality` 프리셋으로 선택 |
-| 재질 | `concrete`, `wood`, `glass`, `metal` 같은 이름으로 material preset 지정 |
-| 저수준 설정 | ray resolution, depth, render budget은 프리셋이 관리하므로 일반 통합에서는 직접 조정하지 않음 |
+| 엔진 | SimpleST Realtime(pthreads WASM) + Offline(싱글스레드, IR 분석 전용) |
+| 실행 모드 | `single_thread`(동기 전파) / `multi_thread`(파이프라인 전파). **둘 다 전용 Worker + pthread WASM** |
+| 초기 반사 | 항상 **Hybrid**. 렌더 시작·HRTF 변경·reset 뒤에도 재적용 |
+| HRTF | 내장 MIT KEMAR(`'mit-kemar'`), 동봉 SADIE II D2(`'sadie-d2'`) |
+| 품질 | `fast` / `balanced` / `quality` — 리스너·음원 레이 격자와 반사 깊이를 함께 설정 |
+| 재질 | 9밴드(63 Hz ~ 16 kHz) BRAS 24종 + 데모용 3종, 이름·별칭으로 지정 |
+| 출력 | 음원마다 모노 입력, 리스너 렌더러가 스테레오 1개를 믹스(`sound.output`) |
+| GPU | 없음. `mode: 'gpu'`, `enableGpu()`는 오류 |
 
 ## 요구 사항
 
-- Node.js 20 이상
-- Web Audio API와 AudioWorklet을 지원하는 최신 브라우저
-- `Multi Thread` 사용 시 COOP/COEP와 `crossOriginIsolated === true`
-- `WebGPU` 사용 시 `navigator.gpu`를 제공하는 브라우저와 GPU
-- 라이선스 SDK 배포본
+- Node.js 20 이상(빌드 도구), 최신 Chromium 계열 브라우저 권장
+- HTTPS 또는 localhost
+- AudioWorklet, SharedArrayBuffer, **cross-origin isolation** — ST/MT 모두 필요합니다
+  (비격리 폴백은 없습니다)
+- 라이선스 SDK 배포본(vendor ZIP 또는 npm tgz)
 
 ## 설치
 
-`soundtrace.js`는 라이선스 계약으로 제공되는 비공개 패키지 `@exarionai/soundtrace.js`
-입니다. 배포본을 받은 뒤에는 아래 예제의 import 지정자를 그대로 사용합니다.
+`soundtrace.js`는 라이선스 계약으로 제공되는 비공개 패키지 `@exarionai/soundtrace.js`입니다.
+배포본은 두 형태입니다.
+
+| 형태 | 파일 | 설치 |
+|---|---|---|
+| vendor 트리 | `soundtrace-js-release-vendor.zip` (루트 `sdk/`) | 정적 경로에 풀어 서빙. 동봉 `install.py`가 해시 검증 후 `vendor/sound-tracing/sdk`에 설치 |
+| npm 패키지 | `exarionai-soundtrace.js-1.0.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.0.0.tgz` |
 
 ```ts
 import { SoundTrace } from '@exarionai/soundtrace.js';
 ```
 
-패키지는 WASM 코어(`core/st`, `core/mt`)와 재질·HRTF asset을 함께 담고 있으며 런타임에
-직접 fetch합니다. 번들러가 이 모듈 그래프를 사전 번들링하면 worker와 wasm 로딩이
-깨지므로, Vite에서는 패키지를 사전 번들링 대상에서 제외합니다.
+패키지는 WASM 코어(`core/SimpleSTRealtime.mjs/.wasm`, `core/SimpleSTOffline.mjs`)와 재질·HRTF
+asset을 함께 담고 런타임에 fetch합니다. 번들러가 이 모듈 그래프를 사전 번들링하면 Worker와
+WASM 로딩이 깨지므로 Vite에서는 사전 번들링 대상에서 제외하고 정적 vendor 트리로 제공합니다.
 
 ```ts
 // vite.config.ts
@@ -50,8 +62,17 @@ export default defineConfig({
 });
 ```
 
-코어와 asset을 직접 호스팅해야 하면 `coreBaseUrl`, `assetBaseUrl` 옵션으로 URL을
-지정할 수 있습니다. 자세한 내용은 [Facade API](./web/facade.md)를 참고하세요.
+코어와 asset을 직접 호스팅하면 `coreBaseUrl`, `assetBaseUrl` 옵션으로 URL을 지정합니다.
+`.mjs`는 JavaScript, `.wasm`은 `application/wasm` MIME으로 서빙하세요.
+
+### 배포 헤더
+
+페이지 응답과 **Worker 스크립트 응답 모두**에 다음 헤더가 있어야 합니다.
+
+```text
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
 
 ## 빠른 시작
 
@@ -64,192 +85,169 @@ const audioContext = new AudioContext();
 await audioContext.resume();
 
 const sound = await SoundTrace.create(audioContext, {
-  mode: 'single_thread',
+  thread: 'mt',              // 'st' = 동기 전파, 'mt' = 파이프라인 전파(권장)
   quality: 'balanced',
-  coordinateBasis: {
+  earlyReflectionMode: 'hybrid',
+  coordinateBasis: {         // Three.js: 카메라가 -Z를 본다
     right: [-1, 0, 0],
     up: [0, 1, 0],
     forward: [0, 0, -1],
   },
 });
+sound.output.connect(audioContext.destination);
 
-const room = sound.addMesh({
-  vertices,
-  indices,
-  material: 'concrete',
-});
+const room = sound.addMesh({ vertices, indices, material: 'concrete' });
+const source = sound.addSource({ position: [2, 1.5, -1], gain: 1 });
+sound.listener.setPose({ position: [0, 1.7, 0] });
 
-const source = sound.addSource({
-  position: [2, 1.5, -1],
-  gain: 1,
-});
-
-sound.listener.setPose({
-  position: [0, 1.7, 0],
-});
-
+const player = audioContext.createBufferSource();
+player.buffer = decodedMonoBuffer;
+player.loop = true;
+await source.play(player);     // 입력 캡처 노드. 출력은 무음 — 소리는 sound.output에서 난다
 await sound.update(0);
+player.start();
 ```
 
-Three.js는 카메라가 `-Z`를 바라보므로 위 `coordinateBasis`를 사용합니다. 좌표 basis를
-생략하면 좌우 또는 전후 HRTF 방향이 뒤집혀 들릴 수 있습니다.
+SimpleST의 좌표계는 Unity와 같은 `+Z` forward입니다. Three.js처럼 `-Z`를 보는 렌더러는 위
+`coordinateBasis`를 넣어야 좌우·전후가 맞습니다.
+
+## 실행 모드
+
+| 옵션 | 전파 | 설명 |
+|---|---|---|
+| `thread: 'st'` / `mode: 'single_thread'` | 동기(SYNCHRONOUS) | `update()`가 전파를 끝낸 뒤 반환. 기본 계산 예산 1 |
+| `thread: 'mt'` / `mode: 'multi_thread'` | 파이프라인(PIPELINED) | Direct / Reflection-Diffraction / Reverb 레인이 워커에서 독립 실행. 기본 예산 3 |
+
+두 모드 모두 전용 Worker가 엔진 세션을 소유하고 같은 pthread WASM을 씁니다. 배포 pthread
+pool은 5이고 `propagationThreadCount`는 1 ~ 5입니다. 메인 스레드는 UI와 Web Audio graph만
+유지하며, 위치 갱신은 공유 메모리 레인으로, 생성/삭제/재질 변경은 순서가 보장되는 명령 경로로
+전달됩니다.
 
 ## HRTF 선택
 
-코어는 모든 listener에 min-phase HRIR 테이블을 내장한 상태로 시작합니다. 따라서
-`loadHrtf()`를 호출하지 않아도 바이노럴 렌더링이 동작하며, 이것이 기본 경로입니다.
-
-측정 데이터를 축약한 KU100 parametric 테이블로 바꾸려면 명시적으로 로드합니다.
-
-```ts
-await sound.loadHrtf('parametric');
-```
-
-| 호출 | 사용하는 테이블 | 추가 asset |
+| 호출 | 테이블 | 추가 asset |
 |---|---|---|
-| (호출하지 않음) | 코어 내장 min-phase HRIR | 없음 |
-| `loadHrtf('parametric')` | KU100 parametric | `KU100_bprime.bin` |
-| `loadHrtf('convolution')` | 코어 내장 HRIR(최근접 조회로 전환) | 없음 |
-| `loadHrtf('steamaudio')` | SADIE H12 HRIR | `sadie_h12_steamaudio.bin` |
+| (호출하지 않음) | 엔진 내장 MIT KEMAR — SDK 기본값. `setOutputMode('speaker')`면 스테레오 패닝 | 없음 |
+| `loadHrtf('mit-kemar')` 또는 `'convolution'` | 엔진 내장 MIT KEMAR 128탭 | 없음 |
+| `loadHrtf('sadie-d2')` 또는 `'steamaudio'` | SADIE II D2 KEMAR 8,802방향 256탭 | `SADIE_D2_44K_16bit_256tap.hrtfbin` |
 
-앱이 소유한 테이블을 쓰려면 두 번째 인자로 URL, `ArrayBuffer`, typed array를 넘깁니다.
-
-```ts
-await sound.loadHrtf('parametric', '/assets/my-hrtf.bin');
-```
-
-:::note
-8-band 크기 + ITD로 렌더링하는 `Band8` 스페셜라이저가 코어에 존재하지만 facade에서는
-선택할 수 없습니다. `setRenderOptions()`는 `hrtfMode` 키를 거부하며, 전환은 native
-`setHrtfMode()`를 통해서만 가능합니다.
-:::
-
-## 백엔드 선택
-
-| 모드 | 코드 | 조건 | 동작 |
-|---|---|---|---|
-| Single Thread | `mode: 'single_thread'` | 일반 브라우저 | 가장 단순한 CPU 경로 |
-| Multi Thread | `mode: 'multi_thread'` | COOP/COEP, SharedArrayBuffer | worker-hosted MT CPU 경로 |
-| WebGPU | `mode: 'gpu'` | WebGPU | GPU 전파를 시도하고 불가하면 CPU fallback |
-
-### Multi Thread 배포 헤더
-
-```text
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
-```
-
-MT 모드는 전용 worker가 engine session을 소유합니다. main thread는 UI와 Web Audio
-graph를 유지하고, transform은 빠른 상태 경로로, create/delete/material 변경은 순서가
-보장되는 command 경로로 전달됩니다.
-
-### WebGPU
+구 KU100 parametric / convolution / SADIE H12 테이블과 `Band8` 모드는 더 이상 없습니다.
+`loadHrtf('parametric')`는 오류입니다.
 
 ```ts
-const sound = await SoundTrace.create(audioContext, {
-  mode: 'gpu',
-  quality: 'balanced',
-});
+await sound.loadHrtf('sadie-d2');
+sound.listener.setOutputMode('speaker');   // 'hrtf'(기본) | 'speaker'(스테레오 패닝)
 ```
-
-현재 WebGPU 자동 활성화 경로는 single-thread core와 결합됩니다. `mode: 'gpu'`에
-`thread: 'mt'`를 강제로 함께 지정하지 마십시오. GPU 초기화가 실패하면 SDK는 CPU로
-계속 실행합니다.
 
 ## 품질 프리셋
 
-| 프리셋 | 용도 |
-|---|---|
-| `fast` | 모바일, 저전력 장치, 많은 동시 음원 |
-| `balanced` | 기본값. 일반 데스크톱과 제품 통합 |
-| `quality` | 고성능 데스크톱, 품질 우선 데모 |
+| 프리셋 | 리스너 guide ray | 음원 transport ray | 반사 깊이 | 용도 |
+|---|---|---|---|---|
+| `fast` | `8 × 8` | `8 × 8` | 4 | 모바일, 많은 동시 음원 |
+| `balanced` (기본) | `16 × 16` | `16 × 16` | 6 | 데스크톱 기본 |
+| `quality` | `24 × 24` | `24 × 24` | 8 | 품질 우선 데모 |
 
 ```ts
 sound.setQuality('quality');
 ```
 
-프리셋은 propagation과 HRTF/diffuse render budget을 함께 조정합니다. 성능 문제가
-생기면 개별 ray property를 수정하기 전에 `quality → balanced → fast` 순서로 낮추십시오.
+`'speed'`·`'middle'`은 각각 `fast`·`balanced`의 폐기 예정 별칭입니다. 성능 문제가 생기면 개별
+레이 수를 만지기 전에 `quality → balanced → fast` 순서로 낮추십시오.
+
+## 재질
+
+메시에는 재질 이름, 별칭 또는 인덱스를 지정합니다. 기본 테이블은 SimpleST BRAS 24종에
+데모용 근사값 3종(`Fabric`, `Sand`, `Water` — 측정치가 아닙니다)을 더한 27종이고, 모든 값은
+9밴드 R/A/T/scattering입니다.
+
+| 별칭 | 매핑되는 재질 |
+|---|---|
+| `concrete`, `cement`, `콘크리트` | `BRAS_CR2_concrete` |
+| `glass`, `window`, `유리` | `BRAS_CR2_windows` |
+| `wood`, `timber`, `나무` | `BRAS_CR4_woodPanels` |
+| `fabric`, `cloth`, `carpet`, `curtain`, `천` | `Fabric` |
+| `sand`, `snow`, `모래` | `Sand` |
+| `water`, `waterSurface`, `물` | `Water` |
+
+BRAS 재질 전체 이름(`BRAS_CR2_ceiling`, `BRAS_CR3_seating`, `BRAS_CR4_brickwall` …)도 그대로
+쓸 수 있습니다. 전체 목록은 패키지의 `assets/soundMaterial.json`에 있습니다.
+
+```ts
+sound.addMesh({ vertices, indices, material: 'BRAS_CR4_parquet' });
+```
+
+:::warning
+테이블에 없는 이름은 예외 없이 기본 재질(`defaultMaterialType = 1`, `BRAS_CR2_concrete`)로 조용히
+대체됩니다. 재질이 의도대로 적용됐는지 확인하려면 위 이름을 정확히 쓰세요.
+:::
+
+재질을 직접 정의하려면 밴드마다 `R + A + T = 1`(허용 오차 0.001)을 만족하는 9개 값 네 묶음을
+넘깁니다. 8밴드 값을 복제해 9밴드로 채우지 마세요.
 
 ## Web Audio 연결
 
 ```ts
-const player = audioContext.createBufferSource();
-player.buffer = decodedBuffer;
-player.loop = true;
-
-const spatialNode = await source.play(player);
-spatialNode.connect(sound.output).connect(audioContext.destination);
-player.start();
+const node = await source.play(player);  // AudioWorkletNode: 입력 캡처용, 출력 무음
+sound.output.connect(audioContext.destination);
 ```
 
-`soundtrace.js`는 `AudioContext`를 만들지 않습니다. 앱이 context와 재생 node를 소유하고,
-SDK는 source별 spatial node와 master output을 제공합니다.
+`soundtrace.js`는 `AudioContext`를 만들지 않습니다. 앱이 context와 재생 노드를 소유하고,
+SDK는 음원별 **입력 캡처 노드**와 **리스너 마스터 출력**(`sound.output`) 하나를 제공합니다.
+음원별 출력 이펙트는 `sound.output` 뒤로 옮겨야 합니다.
 
 ## 업데이트와 정리
 
 ```ts
 source.setPose({ position: [1, 1.5, -2] });
-sound.listener.setPose({ position: [0, 1.7, 0.25] });
+sound.listener.setPose({ position: [0, 1.7, 0.25], orientation: camera.quaternion.toArray() });
 room.setPose({ position: [0, 0, 0] });
 
-await sound.update(1 / 60);
+await sound.update(1 / 60);   // 이번 프레임의 유효 경로 수를 돌려준다
 
+source.dispose();
 sound.dispose();
 await audioContext.close();
 ```
 
-## 재질 프리셋
-
-메시에는 material 이름 또는 index를 지정합니다. 기본 재질 테이블은 22종이며, 이름은
-아래 10개 canonical name으로 매핑됩니다.
-
-| Canonical name | 인식되는 별칭(일부) |
-|---|---|
-| `concrete` | cement, beton, pavement, 콘크리트 |
-| `wood` | plank, timber, oak, pine, bamboo, 나무 |
-| `glass` | window, mirror, 유리 |
-| `metal` | steel, iron, aluminum, copper, brass, 금속 |
-| `brick` | tile, ceramic, terracotta, 벽돌 |
-| `fabric` | cloth, textile, carpet, curtain, 천 |
-| `plastic` | rubber, vinyl, pvc, 플라스틱 |
-| `water` | liquid, pool, 물 |
-| `grass` | vegetation, leaves, lawn, 잔디 |
-| `sand` | dirt, gravel, soil, mud, 모래, 흙 |
+## 진단과 IR 분석
 
 ```ts
-sound.addMesh({
-  vertices,
-  indices,
-  material: 'steel',   // metal의 별칭
-});
+const snap = await sound.debugSnapshot();
+snap.simplest.timing;   // { propagationMs, directMs, reflectionDiffractionMs, reverbMs, irMs, renderMs }
+snap.simplest.scene;    // { meshes, objects, sources, triangles }
+snap.simplest.render;   // { blockSequence, activeSources, exactTaps, sendTaps, totalUs }
+
+const irs = await sound.getIRs();                               // 9밴드 early path IR
+const h = await sound.renderMonoImpulseResponse(source, 2.0);   // 44.1 kHz 모노 압력 IR (최대 30 s)
 ```
 
-:::warning
-테이블에 없는 이름은 예외를 던지지 않고 기본 재질(index `0`, `concrete`)로 조용히
-대체됩니다. 오타가 나도 소리는 나므로, 재질이 의도대로 적용됐는지 확인하려면 위
-표의 이름을 사용하세요.
-:::
+IR 분석은 별도 Offline Worker에서 씬을 복제해 계산하므로 실시간 출력은 끊기지 않습니다.
+`renderMonoImpulseResponse`는 HRTF/Hybrid 출력 녹음이 아니라 압력 IR입니다.
 
-처음에는 기본 preset을 사용하고, 8-band reflection/absorption/transmission 값을 직접
-편집하는 작업은 커스텀 음향 재질이 반드시 필요한 경우로 제한하십시오.
+## 데모
+
+공개 데모 저장소 [Sound-tracing](https://github.com/exarionAI/Sound-tracing)에서 Shoebox room,
+Multi-room occlusion, Runtime capability 예제를 실행할 수 있습니다.
+
+![Shoebox room 데모](/img/web/demo-shoebox.png)
+
+![Multi-room occlusion 데모](/img/web/demo-multiroom.png)
 
 ## 문제 해결
 
 | 증상 | 확인할 것 |
 |---|---|
-| 소리가 나지 않음 | 사용자 gesture 안에서 `AudioContext.resume()`을 먼저 호출했는지 확인 |
-| MT 시작 실패 | COOP/COEP, SharedArrayBuffer, `crossOriginIsolated` 확인 |
-| GPU가 활성화되지 않음 | `navigator.gpu`와 브라우저 hardware acceleration 확인. CPU fallback은 정상 동작 |
-| 방향이 반대로 들림 | 렌더러 좌표계에 맞는 `coordinateBasis` 확인 |
-| 재질이 안 먹는 것 같음 | 재질 이름이 위 canonical name/별칭 표에 있는지 확인 (없으면 기본 재질로 대체) |
-| 코어/asset 404 | 번들러가 패키지를 사전 번들링하지 않는지, `coreBaseUrl`·`assetBaseUrl`이 맞는지 확인 |
-| 성능이 부족함 | 먼저 품질 preset을 낮추고, path visualization을 끈 뒤 다시 측정 |
+| 소리가 나지 않음 | 사용자 gesture 안에서 `AudioContext.resume()`을 먼저 호출했는지, `sound.output`을 destination에 연결했는지 |
+| `SoundTrace.create`가 cross-origin isolation 오류로 거부 | 페이지와 Worker 응답의 COOP/COEP 헤더, `crossOriginIsolated === true` (ST도 필요) |
+| `mode: 'gpu'` / `enableGpu()` 오류 | SimpleST Web은 CPU 전용. 옵션을 제거 |
+| `transmissionModel: 'solid'`, `defaultMeshBuild`, `hrtfQuality` 등 거부 | STCoreV2 전용 옵션. [Facade API](./web/facade.md)의 거부 목록 참고 |
+| 방향이 반대로 들림 | 렌더러 좌표계에 맞는 `coordinateBasis`(`-Z` forward면 필수) |
+| 재질이 안 먹는 것 같음 | 이름이 재질 테이블/별칭에 있는지(없으면 콘크리트로 대체) |
+| 코어/asset 404 | 번들러 사전 번들링 제외, `coreBaseUrl`·`assetBaseUrl`, `.wasm` MIME |
+| 성능이 부족함 | 품질 프리셋을 낮추고 `thread: 'mt'` 사용, 경로 시각화 끄기 |
 
 ## 다음 문서
 
-- [Facade API](./web/facade.md) — 생성 옵션, 장면·음원·메시 API, 수명주기
-- [Native API](./web/native.md) — single-thread 저수준 통합의 지원 범위
+- [Facade API](./web/facade.md) — 생성 옵션, 장면·음원·메시 API, 수명주기, 거부되는 구 옵션
+- [Native API](./web/native.md) — SimpleST 모듈 로더와 저수준 어댑터
 - [Performance Guide](./performance.md)
-- [Unity SDK](./unity.md)
-- [Unreal Engine SDK](./ue.md)

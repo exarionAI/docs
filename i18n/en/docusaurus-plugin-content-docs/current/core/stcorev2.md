@@ -1,307 +1,103 @@
 ---
-title: STCoreV2
+sidebar_position: 2
+title: From STCoreV2 to SimpleST
+sidebar_label: STCoreV2 → SimpleST
+description: Concepts that changed and the API mapping table for moving from the previous-generation engine STCoreV2 (exasoundC.h) to the current SimpleST ABI 6.
 ---
 
-# STCoreV2
+# From STCoreV2 to SimpleST
 
-**The next-generation Sound Tracing core with modular acoustic path search and lock-free data delivery.**
+**STCoreV2** (`exaSound`, the `exa*` API in `exasoundC.h`) was the previous-generation core of
+Sound Tracing. As of October 2026 every SDK, plug-in, and demo has been switched to
+[SimpleST](./simplest.md), and the STCoreV2 implementation is no longer distributed. This page
+summarizes the differences teams with an STCoreV2 integration should check when migrating.
 
-STCoreV2 is a C++ library that synthesizes impulse responses (IRs) and spatial audio in real time from meshes, materials, listeners, and sound sources.
+:::info About this URL
+This page's address (`/core/stcorev2`) is where the STCoreV2 reference used to live. The reference
+body has been replaced by [SimpleST](./simplest.md).
+:::
 
-## Overview
+## Changed Concepts
 
-| Item | Value |
-|---|---|
-| Baseline branch | `feat/lock-free-hybrid-v2-reverb` (lock-free reverb) |
-| Primary language | C++ (C++17 build, C API exposed) |
-| Build system | CMake 3.22+ |
-| Platforms | macOS · Windows · Linux |
-| Web build | Emscripten support (`EMSCRIPTEN_KEEPALIVE` export) |
-| Accelerator | Built-in BVH **or** external callback such as a game engine BVH |
-| Max Path Depth | **16** (`EXA_MAX_DEPTH`) |
-| Tests | Google Test (unit + benchmark) |
-| Status | Active development |
-
-## Architecture
-
-```
-                Scene
-                  │
-                  ▼
-        SceneSnapshot  ── lock-free per-tick snapshot
-                  │       (TripleBuffer · POD · immutable)
-                  ▼
-        ┌─────────────────────────────────────────────┐
-        │  Propagation                                │
-        │   ├ IAccelerator                            │
-        │   │   ├ Internal BVH                        │
-        │   │   └ ExternalAccelerator (callback)      │
-        │   └ Path Modules  (IPathModule)             │
-        │       ├ SpecularReflectionModule            │
-        │       ├ UTDDiffractionModule                │
-        │       ├ DiffuseOffsetModule                 │
-        │       └ StaticReverbModule                  │
-        │       (+ ScatterHandoff, ComparisonReport)  │
-        └─────────────────────────────────────────────┘
-                  │
-                  ▼
-        Auralizator (filter / frequence / HRTF / states)
-                  │
-                  ▼
-              Audio Output
-```
-
-The engine has four main layers.
-
-- **Scene → Snapshot** — every tick, scene state is captured into a POD-based `SceneSnapshot` and delivered lock-free to propagation and render threads through `TripleBuffer`.
-- **Propagation (modular)** — four modules run on the common `IPathModule` interface, making it possible to swap algorithms and compare numeric behavior. The accelerator can use an internal BVH or delegate to a host-side BVH through callbacks.
-- **Auralizator** — tracked paths are synthesized into IRs, then filters, frequency decomposition, and HRTF are applied to produce spatial audio.
-- **Audio Output** — channel-mapped output is returned to the caller.
-
-## Module Layout
-
-```
-exaSound/
-├── src/
-│   ├── core/                    # engine core
-│   │   ├── EngineConfig         #  engine settings
-│   │   ├── SceneSnapshot         #  immutable per-tick snapshot
-│   │   ├── SnapshotBuilder       #  snapshot builder
-│   │   ├── ExternalAccelerator   #  external BVH callback
-│   │   ├── IAccelerator          #  accelerator abstraction
-│   │   ├── Handle / Ref / FixedPool / PoolAllocator
-│   │   ├── ThreadAffinity / Telemetry
-│   │   └── PropagationResult
-│   ├── propagation/
-│   │   ├── Propagator            #  top-level dispatch
-│   │   ├── RGC                   #  Ray Generation Cluster
-│   │   ├── module/               #  Path Module abstraction
-│   │   │   ├── IPathModule       #   common interface
-│   │   │   ├── PathModuleRegistry
-│   │   │   ├── reflection/       #   SpecularReflectionModule
-│   │   │   ├── diffraction/      #   UTDDiffractionModule
-│   │   │   ├── diffuse/          #   DiffuseOffsetModule
-│   │   │   └── reverb/           #   StaticReverbModule
-│   │   ├── UTDDiffraction.hpp    #  UTD formula
-│   │   └── Ray/                  #  ray and plane utilities
-│   ├── auralizator/              # auralization
-│   │   ├── core / filter / frequence / HRTF / states
-│   ├── scene/
-│   │   ├── SoundObject           #  Object / Mesh / Preprocessing
-│   │   └── BVH                   #  Native BVH/TLAS
-│   ├── math/, utils/, objects/, config/
-│   ├── exasound.h                # C++ main header
-│   └── exasoundC.h               # **public C API**
-├── tests/                        # Google Test
-└── demo/                         # demos
-```
-
-## Public C API
-
-The public interface is a C linkage API (`exasoundC.h`, **about 120 exports**).
-
-| Category | Representative functions |
-|---|---|
-| Lifecycle | `exaInit`, `exaReset`, `exaGetVersion`, `exaGetPathTypeCount` |
-| Scene | `exaNewScene`, `exaTickScene`, `exaSceneAddObject/Source/Listener` |
-| Object | `exaNewObject`, `exaObjectSetPosition/Rotation/Scale/Mesh`, `exaObjectSetUpdateType` |
-| Mesh | `exaNewMesh`, `exaMeshSetData`, `exaMeshUpdateVertices`, `exaMeshRefit`, `exaMeshSetMaterial` |
-| Material | `exaAddSoundMaterial`, `exaSetSoundMaterial` |
-| SoundSource | `exaNewSoundSource`, `exaSoundSourceSetPosition/Direction/Velocity/Intensity` |
-| Listener (basic) | `exaNewListener`, `exaListenerSetPosition/Orientation/Velocity`, `exaListenerSetRayCount/RayDepth` |
-| Listener (HRTF) | `exaInit` loads the default HRTF once; listener renderers share it |
-| Renderer | `exaCreateRenderer`, `exaRenderSound`, `exaRemoveRenderer` |
-| Results | `exaGetValidPathCount`, `exaGetValidPaths`, `exaGetSortedIRDatas` |
-| Diagnostics/visualization | `exaPropagatorGetGuidePlanes/MirrorPositions`, `exaPropagatorGetProfile`, `exaGetStatistics`, `exaGetMemoryTraceSnapshot`, `exaGetLastError` |
-
-## Getting Started
-
-### Requirements
-
-- CMake 3.22 or newer
-- C++17-compatible compiler
-- macOS · Windows · Linux
-
-### Build
-
-```bash
-cd exaSound
-cmake -S . -B build
-cmake --build build
-```
-
-With tests:
-
-```bash
-cmake -S . -B build -DBUILD_TESTS=ON
-cmake --build build --target unit_tests
-./build/tests/unit/unit_tests
-```
-
-### Minimal Usage Scenario (Pseudocode)
-
-```c
-#include "exasoundC.h"
-
-// 1. Initialize the engine
-exaInit();
-
-// 2. Create a scene
-int sceneID = exaNewScene();
-
-// 3. Register a mesh and assign material
-int meshID = exaNewMesh();
-exaMeshSetData(meshID, vertices, vertexCount, indices, indexCount);
-exaMeshSetMaterial(meshID, materialIndex);
-
-// 4. Attach the mesh to an object and add it to the scene
-int objID = exaNewObject();
-exaObjectSetMesh(objID, meshID);
-exaObjectSetPosition(objID, 0.f, 0.f, 0.f);
-exaSceneAddObject(sceneID, objID);
-
-// 5. Configure source and listener
-int srcID = exaNewSoundSource();
-exaSoundSourceSetPosition(srcID, 1.f, 1.f, 0.f);
-exaSoundSourceSetIntensity(srcID, 1.0f);
-exaSceneAddSource(sceneID, srcID);
-
-int listenerID = exaNewListener();
-exaListenerSetPosition(listenerID, -1.f, 1.f, 0.f);
-exaListenerSetRayCount(listenerID, 4096);
-exaListenerSetRayDepth(listenerID, 16);    // up to EXA_MAX_DEPTH = 16
-exaSceneAddListener(sceneID, listenerID);
-
-// 6. Simulate and render audio each frame
-for (;;) {
-  exaTickScene(sceneID, deltaTime);
-  exaRenderSound(/* render args */);
-  // Query results through exaGetValidPaths / exaGetSortedIRDatas
-}
-
-// 7. Clean up
-exaReset();
-```
-
-> This is pseudocode that shows the API flow. Check `exasoundC.h` for the actual signatures.
-
-## Core Concepts
-
-### Path Module Structure
-
-Propagation algorithms are separated into four modules inside the internal pipeline.
-
-| Module | Path type | Location |
+| Item | STCoreV2 | SimpleST |
 |---|---|---|
-| `SpecularReflectionModule` | specular reflection | `propagation/module/reflection/` |
-| `UTDDiffractionModule` | diffraction (UTD) | `propagation/module/diffraction/` |
-| `DiffuseOffsetModule` | scattering | `propagation/module/diffuse/` |
-| `StaticReverbModule` | static reverb | `propagation/module/reverb/` |
+| Header / prefix | `exasoundC.h`, single `exa*` DLL | `STRealtime.h` (`st_rt_*`) + `STOffline.h` (`st_off_*`) 2-DLL, shared `STTypes.h` |
+| Context | Global `exaInit()` / `exaReset()` | Context object `st_rt_create` / `st_rt_destroy`. Multiple per process allowed |
+| Entity ids | All `int`, **0 = invalid** | Typed handles such as `STMeshId`, **`v < 0` = invalid**, 0 is valid |
+| Scene | `exaNewScene` + `exaSceneAdd*` | The context is the scene. One (implicit) listener per real-time context |
+| Materials | 8 bands (`67.5…8k Hz`), absorption/transmission stored directly on triangles, `reflection = 1 − (A+T)` derived, `Surface` / `Solid Distance` transmission models | **9 bands (63…16k Hz)** with explicit R/A/T/scattering, strict `|R+A+T−1| ≤ 0.001` validation, no automatic derivation, immutable materials (a new material handle to replace) |
+| Distance attenuation | Polynomial `1/(c + l·d + q·d²)` per source and per path | Physical `1/r` + reference/minimum distance (`st_rt_set_physical_distance_attenuation`), ISO 9613-1 air absorption |
+| Source audio | Renderer outputs per source (`exaRenderSound`, `exaCreateRenderer`) | Sources are **mono input streams**; the listener renderer mixes all sources at once to stereo/N channels (`st_rt_render_process`) |
+| Render output | Caller collects per-source buffers | Three modes `DEVICE` / `HOST_PULL` / `HOST_PULL_BUFFERED`, built-in host sample-rate conversion |
+| Early reflections | One object per path | Objects / **Hybrid (exact budget + HOA3 bed)** |
+| HRTF | KU100 parametric / convolution / SADIE H12 table load, Band8 | Panning / embedded **MIT KEMAR** / **SADIE II D2** (one file). No KU100, H12, Band8, or parametric |
+| GPU | WebGPU (Dawn) propagation provider | **None** (CPU pipeline scheduler). `enableGpu`-style calls return an error |
+| Acceleration structure | HKDTree / LBVH / LBVH_SIMD4·8·16 / NWAY, per-mesh build options | Context-global `st_rt_scene_set_accel` (TinyBVH default), no per-mesh options |
+| Skinned meshes | `exaMeshUpdateVertices` → `exaMeshRefit` 2-call refit | **No refit** — a new pose means creating a new mesh (`st_rt_mesh_create`) and swapping it in |
+| Object updates | `STATIC / REFIT / REBUILD / DYNAMIC` | `isDynamic` flag (static = static TLAS, dynamic = transform updates only) |
+| Path cache / seed | `pathCacheSize`, `seedValue` options | `seedValue` only (`STRT_CreateOptions`), no path cache option |
+| Propagation call | `exaTickScene`, synchronous | `st_rt_propagate` — PIPELINED wakes the workers and returns immediately, SYNCHRONOUS runs on the calling thread |
+| Statistics | `exaGetStatistics`, `exaPropagatorGetProfile`, `exaGetMemoryTraceSnapshot` | `st_rt_get_timing`, `st_rt_ir_get_stats`, `st_rt_render_get_process_stats`, `st_rt_scene_get_stats` |
+| Visualization | `exaGetValidPaths` (`ExaPathData`) | `st_rt_debug_set_collect_visual_paths` + `acquire_snapshot` + `copy_visual_paths` |
+| Coordinates | Right-handed, `+Y` up, `-Z` forward, `exaListenerSetCoordinateBasis` | **Left-handed, `+Y` up, `+Z` forward (same as Unity)**, no basis API — the wrapper converts |
+| Units | `ExaSTOption.sceneRatio` | `STRT_CreateOptions.sceneRatio` (once at creation) |
+| Max depth | `EXA_MAX_DEPTH = 16` | Reflection 16, transmission 64 |
 
-Each module implements `IPathModule` and runs in two phases.
+## Function Mapping
 
-1. **Phase 1 — `buildSetupPlanes`**: construct SetupPlanes from guide ray results
-2. **Phase 2 — `validatePaths`**: trace and validate paths, then write valid paths to the output buffer
-
-Path state is handed from Specular to Diffuse through `ScatterHandoffEntry`.
-
-### Lock-Free Snapshot (`SceneSnapshot`)
-
-Scene state is captured every tick as an immutable POD snapshot.
-
-- All structures are flat arrays, non-virtual, and free of heap pointers, so values can be copied into `TripleBuffer` slots
-- Propagation and audio threads read separate slots lock-free
-- Geometry is managed through separate BVH double buffers (Phase 3)
-
-This structure allows simulation and rendering to proceed safely on multiple threads without mutexes.
-
-### Material Model
-
-`SoundTriangle` directly stores **absorption** and **transmission**. There is no separate Material ID/pointer model, and reflection follows this rule.
-
-```
-reflection = 1 - (absorption + transmission)
-```
-
-`ExaRayHit` exposes a `materialId` field, so ray casts can directly identify the hit material.
-
-### Ray Count and Ray Depth
-
-Ray count and maximum reflection depth are configured per listener.
-
-| Function | Effect |
+| STCoreV2 | SimpleST (real-time) |
 |---|---|
-| `exaListenerSetRayCount(id, n)` | Set ray count |
-| `exaListenerSetRayDepth(id, d)` | Set maximum depth (`1 ≤ d ≤ EXA_MAX_DEPTH = 16`) |
+| `exaInit()` / `exaReset()` | `st_rt_create(&opt, &ctx)` / `st_rt_destroy(ctx)` |
+| `exaGetVersion()` | `st_rt_get_version_string()`, `st_rt_get_api_version()`, `st_rt_get_capabilities()` |
+| `exaGetLastError()` | `st_rt_get_last_status(ctx)`, `st_rt_get_last_error(ctx, buf, cap)` |
+| `exaNewScene()` / `exaTickScene()` | (the context) / `st_rt_propagate(ctx)` |
+| `exaAddSoundMaterial()` / `exaSetSoundMaterial()` | `st_rt_material_create(ctx, &mat)` / materials are immutable — create a new material, then `st_rt_mesh_set_material` |
+| Default material table load (SDK side) | `st_rt_material_load_defaults(ctx)` |
+| `exaNewMesh()` + `exaMeshSetData()` + `exaMeshSetMaterial()` | `st_rt_mesh_create(ctx, &mesh, material, triMaterialIndices)` |
+| `exaMeshUpdateVertices()` + `exaMeshRefit()` | None — create a new mesh and replace the object |
+| `exaNewObject()` + `exaObjectSetMesh()` + `exaSceneAddObject()` | `st_rt_object_create(ctx, mesh, &transform, isDynamic)` or `_q` (position, quaternion, scale) |
+| `exaObjectSetPosition/Rotation/Scale()` | `st_rt_object_set_transform[_q]()` |
+| `exaObjectSetUpdateType()` | `isDynamic` at creation; static changes go through `st_rt_build`, dynamic ones through `st_rt_build_dynamic` |
+| `exaNewSoundSource()` + `exaSceneAddSource()` | `st_rt_source_create(ctx, &desc)` |
+| `exaSoundSourceSetPosition/Direction/Velocity()` | `st_rt_source_set_position/direction/velocity()` |
+| `exaSoundSourceSetIntensity()` | `STSourceDesc.intensity` (pressure multiplier) + `st_rt_source_set_energy()` (energy multiplier) |
+| `exaSoundSourceSetRayCount/Depth()` | `st_rt_source_set_ray_count()`, `st_rt_source_set_depth()` |
+| `exaSoundSourceSetReverbSendDb()` | `st_rt_source_set_path_volume(ctx, src, ST_SOURCE_VOLUME_REVERB, linear)` |
+| `exaSoundSourceSetPathEnable()` | `st_rt_source_set_path_enabled(ctx, src, pathType, enabled)` |
+| Per-source directivity table | `st_rt_source_set_directivity()` + `st_rt_source_set_orientation_q()`; the cone formula is `st_rt_source_set_axis_attenuation()` |
+| `exaNewListener()` + `exaSceneAddListener()` | One implicit listener (`st_rt_listener_*`) |
+| `exaListenerSetPosition/Orientation/Velocity()` | `st_rt_listener_set_position/rotation(yaw,pitch)/velocity()` |
+| `exaListenerSetRayCount/RayDepth()` | `st_rt_listener_set_ray_count()`, `st_rt_set_max_depth()` |
+| `exaListenerSetOption()` (`sceneRatio` etc.) | `STRT_CreateOptions.sceneRatio`, the `st_rt_set_*` policy functions |
+| `exaListenerSetCoordinateBasis()` | None — convert in the host wrapper |
+| `exaListenerSetHrtfMode()` / `exaListenerLoadHrtf()` | `st_rt_render_set_spatializer(ctx, 0/1/2)` |
+| `exaCreateRenderer()` / `exaRenderSound()` / `exaRemoveRenderer()` | `st_rt_render_start(ctx, useHrtf)` / `st_rt_render_process(ctx, out, frames)` / `st_rt_render_stop(ctx)` |
+| Source audio input (host mixing) | `st_rt_source_attach_stream()` + `st_rt_source_write_stream()`, or `st_rt_source_set_audio_file()` |
+| `exaGetValidPathCount/Paths()` | `st_rt_debug_set_collect_visual_paths(mask)` → `st_rt_debug_acquire_snapshot()` → `st_rt_debug_copy_visual_paths()` |
+| `exaGetSortedIRDatas()` | Not in the real-time ABI — offline `st_off_ir_compute()` + `st_off_ir_copy_raw_early_taps()` / `render_pressure()` |
+| `exaGetStatistics()` / `exaPropagatorGetProfile()` | `st_rt_get_timing()`, `st_rt_ir_get_stats()`, `st_rt_render_get_process_stats()`, `st_rt_scene_get_stats()` |
+| `exaGetMemoryTraceSnapshot()` | None |
+| `exaPropagatorInitGpu()` / `exaPropagatorSetGpuProvider()` | None (CPU only) |
+| `exaPropagatorGetGuidePlanes/MirrorPositions()` | None (observe guide rays through the visual path collection mask) |
 
-The current build caps path depth at `EXA_MAX_DEPTH = 16`.
+## Migration Checklist
 
-### Diffuse Scattering Options
-
-`ExaSTOption` includes scattering parameters for fine-tuning the simulation.
-
-| Field | Meaning |
-|---|---|
-| `diffuseEnabled` | Enable/disable scattering |
-| `diffuseStartDepth` | Reflection depth where scattering starts, default 5 |
-| `diffuseMaxOffsetRadius` | Scattering offset radius |
-| `diffuseCurveA/B/C` | Scattering curve coefficients for distance and angle |
-| `guideDiffuseEnabled` | Use guide diffuse rays |
-| `guideDiffuseListenerHeadRadius` | Listener head radius, default 0.0875 m |
-
-### HRTF
-
-```c
-exaInit();        // loads the embedded default HRTF once
-exaNewListener(); // renderer starts with the engine default HRTF
-exaReset();       // releases renderer state and the default HRTF
-```
-
-### Querying Results
-
-| Form | Function |
-|---|---|
-| Valid paths for visualization/debugging | `exaGetValidPathCount`, `exaGetValidPaths` |
-| Sorted IR for convolution input | `exaGetSortedIRDatas` |
-| Guide Plane / Mirror Position diagnostics | `exaPropagatorGetGuidePlanes`, `exaPropagatorGetMirrorPositions` |
-
-`ExaPathData` stores `pos[0]=source`, `pos[1..N]=hit points`, and `pos[N+1]=listener`.
-
-### Object Update Type
-
-```c
-exaObjectSetUpdateType(objID, updateType);
-// 0 = EXA_OBJECT_UPDATE_STATIC   : no runtime TLAS/BLAS updates
-// 1 = EXA_OBJECT_UPDATE_REFIT    : deformation - refit BLAS + TLAS bounds
-// 2 = EXA_OBJECT_UPDATE_REBUILD  : topology changes - rebuild
-// 3 = EXA_OBJECT_UPDATE_DYNAMIC  : transform-only - refresh TLAS instance
-```
-
-Static objects avoid per-frame BVH refit cost.
-
-`Refit` is the policy for geometry whose vertices move while the topology stays fixed, such as
-skinned animation. The vertices themselves are uploaded through the mesh-side two-call protocol.
-
-```c
-exaMeshUpdateVertices(meshID, vertices, numVertices);  // CPU skinning path
-exaMeshRefit(meshID);                                  // refit the mesh BVH
-```
-
-`numVertices` must exactly equal the vertex count passed to `exaMeshSetData`; a mismatch is
-rejected with `EXA_ERR_INVALID_ARG`. When the topology (triangle indices) changes, refit does not
-apply: rebuild through `exaMeshSetData` and set the object update type to `Rebuild`.
-
-## Diagnostics and Statistics
-
-| Function | Use |
-|---|---|
-| `exaGetStatistics()` | Ray, path, and timing statistics |
-| `exaPropagatorGetProfile(sceneID)` | Per-stage propagation profile |
-| `exaPropagatorGetGuidePlanes/MirrorPositions` | Internal algorithm state |
-| `exaGetMemoryTraceSnapshot()` | Memory usage snapshot |
-| `exaGetLastError()` | Last error message |
+1. **Re-enter materials as 9 bands.** Do not duplicate the 8-band values to fill them; measure or
+   estimate the 16 kHz value and make R+A+T=1 in every band. The `Solid Distance` transmission
+   distance does not exist in SimpleST, so convert it into a surface transmission coefficient (T).
+2. **Push source audio as mono streams.** Move per-source output nodes and effects behind the
+   listener mix.
+3. If you had an `exaMeshRefit` path, restructure skinned meshes to be **periodically replaced by a
+   new mesh** (the UE plug-in's `SkinnedPoseRefreshSeconds` works this way).
+4. Check the coordinate system. `-Z` forward hosts flip the sign of Z (soundtrace.js handles this
+   with `coordinateBasis`).
+5. Replace `exaRenderSound` with `st_rt_render_process` in the host audio callback, and set
+   `renderOutputMode` and `hostSampleRate` in the create options.
+6. Apply `STRenderOptions.reserved0 = 1` (Hybrid) **after** `st_rt_render_start`.
+7. Check feature availability through the capability bits (`ST_CAP_*`), and fill
+   `structSize`/`apiVersion` before every call.
 
 ## References
 
-- [SDK Overview](../sdk/overview.md)
-- [What Sound Tracing Solves](../intro/what-is-soundtracing.md)
+- [SimpleST](./simplest.md)
+- Changes per SDK: [Web](../sdk/web.md) · [Unity](../sdk/unity.md) · [Unreal Engine](../sdk/ue.md)

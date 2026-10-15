@@ -1,182 +1,286 @@
 ---
 title: Unreal Engine
-description: SoundTracing UE5 プラグインの導入と、オーディオ統合、HRTF、GPU 伝搬、マテリアルプリセット、サンプルプレースホルダーについて説明します。
+description: SoundTracing UE5 プラグイン 0.3.0（SimpleST ABI 6）のインストール、Project Settings、リスナー・音源・オブジェクトコンポーネント、Native/FMOD/Wwise 統合モード、プラットフォームリンク契約。
 ---
 
 # SoundTrace SDK for Unreal Engine
 
-UE5 SDK は Unreal Audio Extension プラグインと Actor Component を通して
-[STCoreV2](../core/stcorev2.md) を接続します。現在のソースプロジェクトは
-Unreal Engine 5.6 を対象とし、ネイティブ Unreal Audio、FMOD、Wwise 統合の
-選択経路を含みます。
+SoundTracing UE5 プラグインは、Unreal Audio Mixer の Spatialization プラグイン + サブミックス、そして
+Actor Component を通して [SimpleST](../core/simplest.md) を接続します。0.3.0 からエンジンが STCoreV2 から
+**SimpleST 2.12.0 / ABI 6** に変わり、プロジェクトに FMOD または Wwise プラグインがあると、同じ
+ソースがそのミドルウェアの SimpleST プラグインへ接続する**統合モード**でビルドされます。
 
 ## 現在の状態
 
-| 項目 | 状態 |
+| 項目 | 内容 |
 |---|---|
-| エンジン | Unreal Engine 5.6 |
-| プラグイン | `Plugins/SoundTracing` |
-| 宣言済みターゲット | Win64、macOS、Linux、Android、iOS |
-| 現在のチェックアウトに含まれるビルド済みバイナリ | Win64 Release |
-| デモシーン | ドキュメント用プレースホルダー 3 件。シーンアセットは未同梱 |
-
-その他のターゲットプラットフォームでは、配布パッケージに対応する STCoreV2
-バイナリが必要です。
+| Engine | Unreal Engine 5.6（5.7 で検証） |
+| Plugin | `Plugins/SoundTracing` 0.3.0（`SoundTracing` ランタイム + `SoundTracingEditor` モジュール、Niagara 依存） |
+| 対応プラットフォーム | Win64、Mac、Linux、Android、IOS |
+| 配布 | `SoundTracing-release.zip`（プラグイン + 独立 Python インストーラー） |
+| エンジンバイナリ | `ThirdParty/SimpleST/Binaries/<Plat>/<Config>/` — UE Debug のみ SDK Debug、他は Release |
+| Demo scene | ドキュメント用プレースホルダー 3 件。配布 scene はまだ未同梱 |
 
 ## インストール
 
-1. プロジェクトを閉じます。
-2. `Plugins/SoundTracing` を対象プロジェクトの `Plugins/` ディレクトリへコピーします。
-3. `.uproject` を開き、`SoundTracing` プラグインを有効にします。
-4. エディターを再起動し、モジュールのコンパイルを完了します。
-5. `Project Settings > Plugins > SoundTracing` を開きます。
+Python 3.9+ がある環境でインストーラーを実行します。プロジェクトの `Plugins/SoundTracing` に同梱の全
+プラットフォームをインストールし、既存のプラグインは `.simplest-backups/` に保管します。プロジェクト設定は変更しません。
+
+```bash
+python3 install.py /path/to/Game.uproject
+python3 install.py /path/to/Game.uproject --dry-run
+```
 
 ```text
 YourProject/
 └─ Plugins/
    └─ SoundTracing/
-      ├─ Content/
-      ├─ Source/
-      └─ ThirdParty/
+      ├─ Content/           Niagara 経路可視化, Material Preset Library
+      ├─ Source/            SoundTracing · SoundTracingEditor
+      └─ ThirdParty/SimpleST/
+         ├─ Include/SimpleST/ABI/
+         ├─ Binaries/<Plat>/<Config>/
+         └─ Resources/HRTF/
 ```
 
-## Unreal Audio 設定
+インストール後、`.uproject` で `SoundTracing` plugin を有効にし、editor を再起動して module compile を
+完了します。インストール物には UE ラッパーソース、アセット、公開 C ABI ヘッダー、プラットフォーム別エンジンバイナリ、HRTF と
+ライセンスのみが含まれます。
 
-各ターゲットプラットフォームで次を選択します。
+## 統合モード — Native / FMOD / Wwise
+
+![統合モードの選択](/img/ue/integration-mode.png)
+
+`SoundTracing.Build.cs` が `.uproject` で有効なプラグインを見て統合を選びます
+（`Wwise` → `FMODStudio` → Native の順、強制は環境変数
+`SOUNDTRACING_UNREAL_INTEGRATION=native|fmod|wwise`）。コンポーネントは 3 つのモードで名前も使い方も同じです。
+
+| | Native | FMOD | Wwise |
+|---|---|---|---|
+| SimpleST コンテキスト・レンダー | SoundTracing（UE Audio Mixer Spatialization + サブミックス） | `SimpleSTFmod`（Source/Listener DSP） | `SimpleSTWwise`（Sound-tracing Renderer） |
+| SoundTracing が行うこと | すべて | ジオメトリ・材質・可視化・統計のみ | 同じ（`sceneRatio = 0.01`、Unreal 軸の通知） |
+| リスナー | UE リスナー / `ListenerComponent` | FMOD リスナー 0 | Wwise リスナー |
+| エンジン DLL の位置 | `ThirdParty/SimpleST/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
+
+FMOD・Wwise モードでは `ListenerComponent` の出力設定（HRTF・出力モード）と Source Settings アセットは
+使われません — ミドルウェアプラグインのパラメータがその役割を担います。
+
+### FMOD モードのインストール
+
+```bash
+python3 install.py /path/to/Game.uproject --fmod <fmod/plugins フォルダー>
+```
+
+`--fmod` は `SimpleSTFmod`・`SimpleSTRealtime`・HRTF を `Plugins/FMODStudio/Binaries/<Plat>/` にコピーし、
+`Config/DefaultEngine.ini` に `+PluginFiles=SimpleSTFmod` を追加します（= Project Settings › FMOD Studio ›
+Plugin Files）。その後、FMOD Studio でマスターバスに SimpleST Listener を、3D イベントのマスタートラックに
+SimpleST Source を入れます — [FMOD プラグイン](./fmod.md)。
+
+![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
+
+### Wwise モードのインストール
+
+```bash
+python3 install.py /path/to/Game.uproject --wwise <wwise/SDK フォルダー>
+```
+
+SoundTracing はモジュール起動時にプラグインを掴んで `sceneRatio = 0.01`（Wwise Unreal の単位 = cm）に設定し、
+`SimpleSTWwise_SetWorldAxes(UNREAL)` で Unreal の軸（+Z 上）を通知します。Wwise for Unreal 2024.1+ は
+位置を軸変換なしで渡すためです — [Wwise プラグイン](./wwise.md)。
+
+![UE Wwise インストール結果](/img/wwise/ue-install.png)
+
+## Unreal Audio 設定（Native モード）
+
+各 target platform の Audio 設定で次の plugin を選択します。
+
+![Audio プラグイン設定](/img/ue/audio-plugin-settings.png)
 
 ```text
 Spatialization Plugin: SoundTracing
 Source Data Override Plugin: SoundTracing
 ```
 
-サンプルプロジェクトは 48 kHz、1024 フレームのコールバック、キューバッファ 1 個を
-使用します。調整前に、現在のプロジェクトのオーディオ予算で動作を確認してください。
+Audio Mixer Sample Rate はどの値でも構いません。SimpleST は 44.1 kHz で動作し、デバイスレートへ変換します
+（44.1 kHz なら変換をスキップします）。
 
-## 最短セットアップ
+## Project Settings › Plugins › SoundTracing
 
-### 1. Project Settings
+![Project Settings](/img/ue/project-settings.png)
 
-最初は次の項目だけを決定します。
+| カテゴリ | 項目 | 既定値 | 説明 |
+|---|---|---:|---|
+| Runtime | `Max Compute Threads` | `0` | SimpleST 計算スレッドの上限。0 = auto（min(パフォーマンスコア, 6)）。再起動が必要 |
+| Runtime | `Prefer Performance Cores` | `true` | 伝搬レーン・計算プールをパフォーマンスコアに固定（Windows 11 EcoQoS を無効化）。ハイブリッド CPU で推奨 |
+| Runtime | `Render Mode` | `Buffered` | `Buffered`（SimpleST レンダースレッドがリングを埋め、コールバックはコピー、≈3 ブロック遅延）/ `In Callback`（Unreal オーディオコールバック内でレンダー、最低遅延） |
+| Runtime | `Max Delay Seconds` | `0` | レンダラーが維持する最大経路遅延。0 = エンジン既定の 2 s |
+| Runtime | `Dry Fallback When Unavailable` | `true` | ランタイムがない、または失敗した場合、音源を無音ではなく dry で再生 |
+| Runtime | `Output Submix Parent` | 空 | 空間化出力サブミックスの親 |
+| Propagation | `Reflection Update Interval (ms)` | `33` | 反射/回折レーンの最小周期。伝搬コストの大半なので、CPU を取り戻すにはここを上げる。0 = 制限なし |
+| Propagation | `Direct Update Interval (ms)` / `Reverb Update Interval (ms)` | `10` / `4` | direct、reverb レーンの最小周期 |
+| Propagation | `Acceleration Structure` | `TinyBVH` | BinnedSAH / HybridKD / TinyBVH / LBVH / LBVH SIMD |
+| Propagation | `Static Rebuild Delay Seconds` | `0.1` | 静的ジオメトリの変更を静的加速構造に畳み込む前の待機（レベルストリーミングのバッチ処理） |
+| Listener | `Default Listener Settings` | — | 下記のリスナー設定構造体 |
+| Sources | `Source Ray Resolution Cap` / `Source Ray Depth Cap` | `0` / `0` | すべての音源アセットの transport ray 格子・深度の上限。0 = アセット値のまま |
+| Materials | `Material Preset Library` | 空 | 起動時に SimpleST へ登録するライブラリ。空ならプラグインのバンドルを使用 |
 
-- HRTF: `Band8` または `Parametric`
-- GPU 伝搬を要求するか
-- 既定の経路有効状態
+## リスナー設定（`FSoundTracingListenerSettings`）
 
-レイ解像度、深度、Early Path 予算は既定値のままにします。
+![リスナー設定](/img/ue/listener-settings.png)
 
-### 2. 音源設定アセット
+プロジェクト既定値は Project Settings に、レベルごとの override は `USoundTracingListenerComponent` に置きます。
 
-Content Browser で再利用可能な `SoundTracing Audio Spatialization Settings`
-アセットを作成します。各 Audio Component を個別編集せず、共有アセットを
-プリセットとして扱います。
+| カテゴリ | 項目 | 既定値 | 選択肢 / 説明 |
+|---|---|---:|---|
+| Quality Preset | `Quality Preset` | `Balanced` | `Custom`（フィールド維持）/ `Fast`（12×12、深度 4）/ `Balanced`（16×16、深度 8 = エンジン既定）/ `Quality`（24×24、深度 8） |
+| Listener Rays | `Ray Resolution` / `Ray Depth` | `16` / `8` | guide ray N×N（`4..64`）、反射の最大次数（`1..16`）。Custom のときのみ編集可 |
+| Listener Rays | `Ray Sampling` | `FibonacciSphere` | LegacyGrid / FibonacciSphere / EqualAreaGrid / SobolSphere / Icosahedral |
+| Output | `Output Mode` | `Headphones` | `Headphones`（バイノーラル HRIR）/ `Speakers (HOA decode)` / `Stereo Panning` |
+| Output | `HRTF Dataset` | `SADIE II D2 KEMAR` | SADIE II D2（8,802 方向・256 タップ、プラグイン同梱）/ MIT KEMAR（128 タップ、エンジン内蔵） |
+| Output | `Speaker Layout` | `Stereo 2.0` | Stereo 2.0 / Laptop Stereo 2.0 / 2.1 / 4.1 / 5.1 / 7.1 |
+| Output | `Early Reflections` | `Hybrid Ambisonic Bed` | Headphones・Stereo Panning 専用。`Objects` は基準聴取用 — 音源 8 個のホールでブロック 16.8 ms（上限 11.6 ms）、Hybrid は 2.4 ms |
+| Render | `Doppler` / `Doppler Gain` | `true` / `Off` | 可変遅延ピッチ / 移動モノポール放射ゲイン |
+| Render | `Late Reverb` / `Late Reverb Coupling` | `true` / `Default` | FDN16 / Off · Subtle 6 dB · Default 9 dB · Strong 12 dB |
+| Render | `Path Fade Time Seconds` | `0.05` | 経路の出現・消滅クロスフェード |
+| Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak |
+| Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 63 ~ 16k Hz 9バンド ±24 dB |
+| Paths | `Enable Direct/Transmission/Reflection/Diffraction/Reverb Path` | すべて `true` | グローバル経路ゲート |
+| Acoustics | `Propagation Delay` / `Direct Occlusion` | `true` / `true` | 無効にすると、それぞれ全経路が直接音の時刻に重なる / 直接音がジオメトリを通過する |
+| Acoustics | `Reference Distance Meters` / `Min Distance Meters` | `1.0` / `1.0` | 物理 `1/r` 減衰の開始距離 / 近接クランプ |
+| Air Absorption | `Air Absorption Enabled`、`Temperature Celsius`、`Relative Humidity Percent`、`Pressure Pa` | `true`、`20`、`50`、`101325` | ISO 9613-1。音速は温度から導出 |
 
-| プリセットアセット | 用途 |
+### `USoundTracingListenerComponent`
+
+任意のコンポーネントです。なくてもプラグインはプロジェクト既定のリスナー設定とオーディオデバイスリスナーの transform で
+動作します。Pawn やカメラに付けてレベルごとの override を与えるか、transform を直接供給します。
+
+| 項目 | 説明 |
 |---|---|
-| `ST_Source_Fast` | 同時発音数が多い音源または背景音源 |
-| `ST_Source_Middle` | 通常のゲームプレイ音源 |
-| `ST_Source_Quality` | ヒーロー音源および品質優先デモ |
+| `Override Project Listener Settings` / `Listener Settings` | 上記の構造体でプロジェクト既定値を上書き |
+| `Drive Listener Transform` | このコンポーネントの world transform・速度をオーディオデバイスリスナーの代わりに SimpleST へ渡す |
+| `ApplyListenerSettings()`、`SetQualityPreset()`、`SetHrtfDataset()`、`SetOutputMode()`、`SetSpeakerLayout()` | Blueprint からのランタイム変更 |
+| `ResetMotionState()` | テレポート・リスポーン後の Doppler スパイク防止 |
 
-現在のプラグインは高度な音源プロパティも公開しますが、多くのプロジェクトでは
-強度、経路有効フラグ、減衰オーバーライドだけを変更してください。
+## 音源設定アセット（`USoundTracingSourceSettings`）
 
-### 3. Audio Component
+![Source Settings アセット](/img/ue/source-settings-asset.png)
 
-共有 SoundTracing 設定アセットを Audio Component または Sound Attenuation の
-Spatialization Plugin Settings に割り当てます。
+Content Browser で `SoundTracing Source Settings` アセットを作成し、Audio Component または Sound
+Attenuation の spatialization plugin settings に接続します。用途別の shared asset を preset のように使ってください。
 
-### 4. ジオメトリ
-
-`SoundTracingObjectComponent` を対象の `StaticMeshComponent` または
-`SkinnedMeshComponent` の直接の子として追加します。現在の実装は直近の親メッシュを
-使用します。
-
-### 5. マテリアル
-
-`Sync Materials From Parent` を実行してレンダーマテリアル名を SoundTrace の
-マテリアルプリセットへマッピングし、誤っているスロットだけを修正します。
-
-## HRTF
-
-主要ガイドでは 2 つのモードを使用します。
-
-| モード | 動作 |
+| preset asset | 用途 |
 |---|---|
-| `Band8` | 外部 HRTF アセットを使わない軽量レンダリング |
-| `Parametric` | KU100 パラメトリックテーブルを使用する計測ベースレンダリング |
+| `ST_Source_Fast` | 多数の同時音源、背景 source |
+| `ST_Source_Balanced` | 一般的な gameplay source |
+| `ST_Source_Quality` | 主役の音源、品質優先 demo |
 
-ソースには高度な `Convolution` と `SteamAudio` モードも含まれます。対応アセットと
-プラットフォームバイナリを検証済みの配布物でのみ使用してください。
+| カテゴリ | 項目 | 既定値 | 説明 |
+|---|---|---:|---|
+| Attenuation | `Preserve Unreal Attenuation` | `false` | 有効にすると Unreal の距離減衰を維持（通常は無効 — SimpleST が物理減衰） |
+| Attenuation | `Disable Unreal Reverb Sends` | `false` | Unreal のリバーブセンドを遮断 |
+| Emission | `Gain Boost Db` | `0` | 入力レベル（±24 dB） |
+| Emission | `Direct/Reflection/Diffraction/Reverb Send Db` | `0` | SimpleST path volume |
+| Emission | `Directivity` | `0` | 0 全指向 ~ 1 カーディオイド |
+| Reverb Rays | `Ray Preset` | `Balanced` | `Fast`（8×4、深度 3）/ `Balanced`（16×8、深度 4 = エンジン既定）/ `Quality`（24×12、深度 6）/ `Custom` |
+| Reverb Rays | `Ray Resolution` / `Ray Depth` | `16` / `4` | N×N/2 transport ray、深度。Custom のときのみ編集可 |
+| Reverb Rays | `Transport Refresh Steps` | `0` | 輸送格子を n 回の伝搬に分けて更新（0 = エンジン既定） |
+| Reverb Rays | `Stationary Emitter` | `false` | 動かないエミッターのヒント |
+| Per-Path Enable | `Direct/Transmission/Reflection/Diffraction/Reverb Path Enabled` | すべて `true` | 音源ごとの経路ゲート |
+| Bypass | `Bypass` | `false` | SimpleST を経由せずに通過 |
 
-## GPU バックエンド
+## ジオメトリ（`USoundTracingObjectComponent`）
 
-`bEnableGpuPropagation` を有効にすると GPU Provider の初期化を要求します。
+![Object Component](/img/ue/object-component.png)
 
-- 初期化に成功すると GPU 伝搬を使用します。
-- Export、デバイス、バックエンドがない場合は CPU で継続します。
-- Win64 パッケージでは `webgpu_dawn.dll` をステージングする必要があります。
-- GPU 配布では互換性のある LBVH 系ジオメトリ設定を使用してください。
+音響 geometry として使う `StaticMeshComponent` または `SkinnedMeshComponent` の**直下の child** として
+追加します。同じメッシュ asset・LOD・材質配置を使うオブジェクトは SimpleST メッシュを 1 つ共有します。
 
-実際の経路は Output Log の `SoundTracing GPU propagation enabled` または
-CPU フォールバック警告で確認します。
+| 項目 | 既定値 | 説明 |
+|---|---:|---|
+| `Acoustic Mobility` | `Auto` | `Auto`（親の Mobility に従う）/ `Static`（静的加速構造、移動すると再ビルド）/ `Movable`（動的インスタンス、伝搬周期ごとに変換を適用） |
+| `Sound Material Slots` | — | レンダー材質スロット → `Sound Material Type`（preset index）。`Auto Set Materials` ボタンが名前・エイリアスで自動配置 |
+| `Skinned Pose Refresh Seconds` | `0` | スキンド親専用。SimpleST には vertex refit がないため、この周期ごとに**新しいメッシュをビルド**して差し替え。0 = 登録時のポーズを維持 |
+| `Auto Register Native Object` / `Sync Transform On Tick` / `Auto Sync Materials` | `true` | 高度な設定 |
+| Debug: `Visualize Acoustic Mesh`、`Visualize BVH`（+ `BVH Depth`、`BVH Leaves Only`） | 無効 | 選択時にアップロードされた三角形・加速構造ノードボックスをエディターに表示 |
 
-## マテリアルプリセット
+専用サーバーでは登録をスキップします。Blueprint から `RegisterNativeObject`、`UnregisterNativeObject`、
+`SyncNativeTransform`、`RefreshNativeMesh`、材質スロットの get/set を呼び出せます。
 
-プラグインコンテンツには既定の `SoundTraceMaterialPresetLibrary` が含まれます。
-`SoundTracingObjectComponent` はレンダーマテリアル名とエイリアスをプリセットへ
-マッピングします。まず同梱プリセットを使用し、8 バンドの反射、吸収、透過、
-散乱値の直接編集は別のカスタムライブラリで行ってください。
+## Material preset
 
-## オブジェクト更新
+プラグイン content の `SoundTraceMaterialPresetLibrary` が BRAS 24 種の 9バンド preset を提供します。
+`Sound Material Slots` は render material 名と alias で最も近い preset を選びます。9バンドの
+reflection・absorption・transmission・scattering を直接編集する作業は、別の Material Preset Library
+asset を作った場合に限ってください。バンドごとに `R + A + T = 1`（±0.001）でなければなりません。
 
-| モード | 用途 |
-|---|---|
-| `Static` | 移動しないレベルジオメトリ |
-| `Dynamic` | Transform のみ移動するドアや小物 |
-| `Refit` | 頂点姿勢が変化するスキンメッシュ |
-| `Rebuild` | トポロジーが変化するジオメトリ |
+## Path visualization
 
-## 経路可視化
+![Path Visualizer](/img/ue/path-visualizer.png)
 
-`SoundTracingPathVisualizerComponent` を追加すると、Niagara ベースの経路セグメントを
-表示できます。これはデバッグ／デモ機能であり、出荷時の性能測定では無効にします。
+Actor に `SoundTracingPathVisualizerComponent` を追加すると、Niagara ベースの path segment を表示します。
+経路の種類（Direct・Reflection・Diffraction・Reverb・Transmission・GuideRay）ごとの色、最大経路数、線幅、
+アルファを調整します。デバッグとデモ用であり、shipping の性能測定では無効にしてください。
 
-## デモシーンのプレースホルダー
+## 統計（`USoundTracingSubsystem`）
 
-現在のチェックアウトには、次の 3 つのデモアセットは含まれていません。シーンの
-配布開始後に接続するドキュメント構造を予約しています。
+Blueprint から読める World Subsystem です — 統合モード、シーンのメッシュ/オブジェクト/音源/三角形数、
+有効経路数、レーン別の伝搬・IR・レンダー時間（ms）、レンダーブロック統計（active sources、exact/send taps）。
+
+## プラットフォームリンク契約
+
+| UE プラットフォーム | SDK パス（`Binaries/` 以下） | リンク |
+|---|---|---|
+| Win64 | `Win64/<Config>/SimpleSTRealtime.dll` | ランタイム export バインディング |
+| Mac | `Mac/<Config>/libSimpleSTRealtime.dylib` | Universal、ランタイムバインディング |
+| Linux | `Linux/<Config>/libSimpleSTRealtime.so` | x86_64、ランタイムバインディング |
+| Android | `Android/<ABI>/<Config>/libSimpleSTRealtime.so` | UPL で APK の ABI 別フォルダーにコピー。HRTF は UFS から抽出 |
+| IOS | `IOS/device` または `IOS/simulator` 以下の `<Config>/libsimplest_static.a` | 静的リンク、直接の関数ポインターバインディング |
+
+UE Debug のみ SDK Debug を使い、Development/DebugGame/Shipping は Release を使います。
+欠落は UBT 段階でエラーになります。ミドルウェアプラグインが静的リンクされる iOS・Web では FMOD/Wwise
+モードはまだサポートされません（デスクトップは Win64 で検証、Mac/Linux は同じコード経路）。
+
+## Demo scene placeholder
+
+現在の SDK checkout には、以下の 3 つのドキュメント用 demo scene は含まれていません。実際の asset が
+追加されたときに Unity ドキュメントと同じパターンで接続する場所です。
 
 ### SampleScene01 — Basic Room
 
-:::note プレースホルダー
-基本的な音源、リスナー、静的ルームジオメトリ、マテリアルプリセット、
-直接／反射経路。
+:::note Placeholder
+基本的な source、listener、static room geometry、material preset、direct/reflection path を
+説明する scene です。
 :::
 
 ### SampleScene02 — Material and Dynamic Door
 
-:::note プレースホルダー
-共有音源プリセット、マテリアル変更、Dynamic Door の遮蔽、CPU/GPU 比較。
+:::note Placeholder
+shared source preset、material の変更、Movable door の遮蔽、Buffered/In Callback レンダーモードの比較を
+説明する scene です。
 :::
 
 ### SampleScene03 — Multiroom
 
-:::note プレースホルダー
-複数音源、部屋間移動、回折／透過、HRTF 方向。
+:::note Placeholder
+複数の source、room 間の移動、diffraction/transmission、HRTF の方向感、late reverb coupling を説明する
+scene です。
 :::
 
 ## トラブルシューティング
 
-| 症状 | 確認項目 |
+| 症状 | 確認すること |
 |---|---|
-| セレクターにプラグインが表示されない | プラグインの有効状態、モジュールコンパイル、プラットフォーム Audio 設定 |
-| ネイティブライブラリの読み込みに失敗する | `ThirdParty/STCoreV2` 内のターゲット別バイナリとステージ済み依存関係 |
-| 音源が空間化されない | SoundTracing 音源設定アセットが Audio Component に割り当てられているか |
-| ジオメトリが無視される | Object Component の直近の親が対応メッシュコンポーネントか |
-| GPU が CPU にフォールバックする | GPU Provider／Export／デバイスと `webgpu_dawn.dll` のステージング |
-| 経路が表示されない | Visualizer Component、Niagara プラグイン、経路有効状態 |
+| plugin が選択リストにない | plugin enable、module compile、target platform の Audio 設定 |
+| native library のロード失敗 | `ThirdParty/SimpleST/Binaries` の target 別 binary、Config（Debug/Release）の一致 |
+| 統合モードが想定と違う | `.uproject` の Wwise/FMODStudio プラグインの有効状態、`SOUNDTRACING_UNREAL_INTEGRATION` |
+| FMOD/Wwise モードで音が空間化されない | FMOD Studio / Wwise プロジェクト側の SimpleST DSP 構成、ランタイムの READY 状態（Output Log） |
+| source が空間化されない（Native） | Audio Component に SoundTracing Source Settings asset が接続されているか |
+| geometry が反映されない | Object Component の immediate parent が対応 mesh component か、`Acoustic Mobility` |
+| レンダーブロック超過（オーディオの途切れ） | `Early Reflections = Hybrid`、`Reflection Update Interval` の引き上げ、Quality Preset の引き下げ |
+| path が見えない | visualizer component、Niagara plugin、path enable の状態 |
 
-## 次に読む
+## 次のドキュメント
 
-- [Unity SDK](./unity.md)
-- [Web SDK](./web.md)
-- [STCoreV2](../core/stcorev2.md)
+- [FMOD プラグイン](./fmod.md) · [Wwise プラグイン](./wwise.md)
+- [Unity SDK](./unity.md) · [Web SDK](./web.md)
+- [SimpleST](../core/simplest.md)

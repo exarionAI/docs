@@ -1,166 +1,109 @@
 ---
 title: Native API
-description: The low-level single-thread API of soundtrace.js and its current support scope.
+description: The low-level soundtrace.js entry point `@exarionai/soundtrace.js/native` — SimpleST WASM module loader, heap helpers, Realtime/Offline adapters.
 ---
 
 # Native API
 
-The Native API is for advanced single-thread integrations that need direct
-control over scenes, listeners, sources, meshes, and BVHs. Ordinary
-applications should use the [Facade API](./facade.md).
+`@exarionai/soundtrace.js/native` exposes the SimpleST module loader and adapters the facade uses
+internally. Ordinary apps should use the [Facade API](./facade.md). This surface follows the
+SimpleST C ABI contract (the `core/Include/SimpleST/ABI/*.h` headers bundled in the package) as is,
+and its cross-version compatibility guarantee is weaker than the facade's.
 
 ```ts
-import { SoundTrace } from '@exarionai/soundtrace.js';
 import {
-  BvhType,
-  PathType,
-  UpdateType,
-  type MeshBuildOptions,
+  SimpleSTRealtime,
+  loadRealtimeModule, loadOfflineModule, analyzeScene,
+  Heap, packMaterial, validateMaterial,
+  ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
+  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
 ## Support scope
 
-:::warning Current public type contract
-`@exarionai/soundtrace.js/native` exports the low-level classes and types, but
-the public return type of `SoundTrace.create()` is still the facade. A complete
-direct-native TypeScript entry flow through factories such as `createScene()`,
-`createListener()`, and `createSource()` is therefore not yet offered as a
-public contract.
-
-Until the public types expand, use the facade. Casts into internal
-implementations and private deep imports carry no version-compatibility
-guarantee.
+:::warning What changed
+The STCoreV2-era `SoundScene` / `SoundListener` / `SoundMesh` / `SoundObject` / `SoundCollider` /
+`MaterialTable` / `Propagator` / `Diagnostics` classes and the `./internal` entry were removed in
+1.0.0. The current low-level contract is the SimpleST ABI 6 headers plus the adapters below.
 :::
 
-Direct-native control is also ST-only. On worker-hosted MT, the following
-surfaces throw `SoundTraceMtUnsupportedError`.
+- All SimpleST `[control]` calls happen in **one Worker** only. The facade keeps a dedicated control
+  Worker and touches the engine only there.
+- Calling a blocking entry point such as `st_rt_propagate` on the main thread fails because
+  `Atomics.wait` is blocked there.
 
-- `createScene()`, `createListener()`, `createSource()`
-- `createMesh()`, `createObject()`, `createCollider()`
-- `materials`, `propagator`, `diagnostics`
-- `createWorkletNode()`
-- Synchronous native getters
+## Components
 
-MT applications should use the facade together with
-`await sound.debugSnapshot()`.
-
-## Object model
-
-| Object | Role |
+| Name | Role |
 |---|---|
-| `SoundScene` | Owns objects, sources, and the single listener; runs propagation |
-| `SoundListener` | Manages listener pose, ray settings, and render options |
-| `SoundSource` | Manages source pose, gain, and per-path options |
-| `SoundMesh` | Manages triangle geometry and its BLAS |
-| `SoundObject` | Manages scene transforms and mesh instances |
-| `SoundCollider` | Binds the lifecycles of a `SoundMesh` and a `SoundObject` |
-| `MaterialTable` | Registers per-frequency-band materials |
-| `Propagator` | Queries valid paths and profiles |
-| `Diagnostics` | Queries ray, memory, and runtime diagnostics |
+| `loadRealtimeModule(baseUrl)` | Loads `SimpleSTRealtime.mjs` + `.wasm` (pthreads) and returns a `SimpleSTModule` |
+| `loadOfflineModule(baseUrl)` | Loads `SimpleSTOffline.mjs` (single-threaded). IR analysis only |
+| `Heap` | Helper for writing and reading PODs on the WASM heap. Includes allocation of structs stamped with `structSize`/`apiVersion` (`stamped`) |
+| `layout` | Offsets/sizes of `STRT_CreateOptions`, `STMaterial`, `STRenderOptions`, `STTiming`, `STSceneStats`, `STProcessStats`, `STIrStats`, etc. |
+| `packMaterial` / `validateMaterial` | Packs 9-band R/A/T/scattering into an `STMaterial` and validates `R+A+T=1` |
+| `SimpleSTRealtime` | Adapter owning one listener and the shared renderer. Translates facade commands into `st_rt_*` calls |
+| `analyzeScene(module, snapshot, …)` | Clones a scene snapshot into an Offline context and computes the Raw IR / pressure IR |
+| `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
-## Scene updates
+## `SimpleSTRealtime`
 
-A low-level scene is advanced in this order.
-
-```ts
-scene.tick(dt);
-scene.updatePropagation();
-```
-
-`scene.update(dt)` is shorthand for running both in sequence.
-
-A scene has exactly one listener.
+The adapter used by the facade's control Worker. When using it directly, follow this order inside
+a Worker.
 
 ```ts
-scene.setListener(listener);
-scene.addSource(source);
-scene.addCollider(collider);
+const M = await loadRealtimeModule(coreBaseUrl);
+const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, material table registration, Hybrid applied
+
+rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
+rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + quality preset applied
+rt.attachStream(handle);                               // st_rt_source_attach_stream (mono)
+rt.sourcePose(handle, cache); rt.listenerPose(cache); rt.meshPose(handle, pose);
+
+const validPaths = rt.frame();                         // st_rt_build[_dynamic] + st_rt_propagate
+rt.writeStream(handle, monoSamples);                   // [audio] st_rt_source_write_stream
+const stereo = rt.render(frames);                      // [audio] st_rt_render_process
+
+const diag = rt.diagnostics();                         // SimpleSTDiagnostics
+rt.reset(); rt.dispose();
 ```
 
-## Geometry changes
+- `setQuality(tier)` sets the listener guide rays, source transport rays, and reflection depth at
+  once (`fast` 8×8/4, `balanced` 16×16/6, `quality` 24×24/8).
+- Source gain is a pressure value and reaches the engine as `st_rt_source_set_energy(gain²)`.
+- The `'direct'` path gate switches Direct and Transmission together.
+- Render option changes (`useDoppler`, `useLimiter`, `diffuseEnabled`) overwrite the matching
+  `STRenderOptions` fields while always keeping `reserved0 = 1` (Hybrid). If Hybrid is lost,
+  `diagnostics()` throws.
 
-| Change | API | Update type |
-|---|---|---|
-| Transform only | `object.setPosition(...)` and friends | Updated to match the object's state |
-| Vertices only | `mesh.updateVerticesAndRefit(...)` | `UpdateType.Refit` |
-| Topology or BVH options | `mesh.setData(...)` | `UpdateType.Rebuild` |
-
-Use refit for animated geometry that keeps its topology — skinned animation and procedural
-deformation — together with a refit-capable LBVH family.
-
-A vertex update is the core's `exaMeshUpdateVertices` → `exaMeshRefit` two-call protocol.
-`mesh.updateVertices()` only uploads the vertices and does not refit the BVH, so call
-`mesh.updateVerticesAndRefit()`, which does both, or follow up with `mesh.refit()` yourself. The
-vertex count must exactly match the count the mesh was built with.
+## Diagnostic snapshot
 
 ```ts
-mesh.updateVerticesAndRefit(vertices);  // updateVertices + refit
-object.setUpdateType(UpdateType.Refit);
-scene.tick(dt);
+interface SimpleSTDiagnostics {
+  engine: 'SimpleST'; abiVersion: number; version: string;
+  scheduler: 'synchronous' | 'pipelined'; earlyReflectionMode: 'hybrid'; spatializer: number;
+  scene:  { meshes; objects; sources; triangles };
+  timing: { propagationMs; directMs; reflectionDiffractionMs; reverbMs; irMs; renderMs };
+  render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
+  ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
+  audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
+}
 ```
 
-`SoundCollider` folds both steps into one call.
+The facade's `debugSnapshot().simplest` and `getStatistics().simplest` return the same object.
+The old STCore profile / memory / ray statistics and the per-source `ExaRenderStats` are gone.
 
-```ts
-collider.refitVertices(vertices);  // updateVerticesAndRefit + setUpdateType(Refit)
-scene.tick(dt);
-```
+## Audio contract
 
-When topology changes, ask for a rebuild explicitly.
-
-```ts
-mesh.setData(vertices, triangles, buildOptions);
-object.setUpdateType(UpdateType.Rebuild);
-scene.tick(dt);
-```
-
-`collider.rebuild(vertices, triangles, buildOptions)` performs the same combination.
-
-## BVH selection
-
-| Type | Use for |
-|---|---|
-| `BvhType.HKDtree` | Static geometry such as walls and floors |
-| `BvhType.LBVH` | Geometry whose vertices change often |
-| `BvhType.LBVH_SIMD*` | LBVH with an explicit SIMD width |
-| `BvhType.LBVH_NWAY*` | N-way LBVH |
-
-`BvhType.Default` is a per-mesh sentinel meaning "follow the engine default".
-Use a concrete BVH type when setting a process-wide default.
-
-```ts
-const buildOptions: MeshBuildOptions = {
-  bvhType: BvhType.HKDtree,
-  bvhMaxDepth: 0,
-  primPerLeaf: 0,
-};
-```
-
-## Audio
-
-Native realtime rendering also uses an `AudioWorkletNode`. The base contract is:
-
-- Sample rate: `AudioContext.sampleRate`
-- Block size: 128 samples
-- Output: 2-channel binaural
-
-The facade's `source.play()` manages this setup and the graph connections. Use
-direct-native `createWorkletNode()` from application code only once its public
-factory types are provided.
-
-## Diagnostics
-
-| What you need | Facade | Native ST |
-|---|---|---|
-| Valid paths and profiles | `await debugSnapshot()` | `Propagator` |
-| Ray and memory statistics | `await debugSnapshot()` | `Diagnostics` |
-| Poses the app has set | Entity state | Native object getters |
-
-On MT, never read propagation results through synchronous getters.
+- The engine's internal rate is 44.1 kHz; put `AudioContext.sampleRate` into
+  `STRT_CreateOptions.hostSampleRate` and the engine converts both input and output.
+- Source input is mono float PCM (`st_rt_source_write_stream`); output is interleaved stereo
+  (`st_rt_render_process`). The output mode is `HOST_PULL_BUFFERED`, and the AudioWorklet copies
+  from the shared ring.
+- There are 64 concurrent stream slots. Creating sources beyond that fails.
 
 ## Related documents
 
 - [Web SDK overview](../web.md)
 - [Facade API](./facade.md)
-- [Performance Guide](../performance.md)
+- [SimpleST engine](../../core/simplest.md) — the full C ABI contract
