@@ -1,6 +1,6 @@
 ---
 title: Facade API
-description: ST と MT で同一に使える soundtrace.js 1.0.0 の推奨 API と、SimpleST 移行で変わったオプション。
+description: ST と MT で同一に使える soundtrace.js 1.1.0 の推奨 API と、SimpleST 移行で変わったオプション。
 ---
 
 # Facade API
@@ -69,7 +69,7 @@ const sound = await SoundTrace.create(audioContext, {
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'`（エイリアス `'convolution'` / `'steamaudio'`） |
 | `loadMaterialAssets()` | 材質テーブルの手動ロード（`autoLoadMaterials: false` のとき） |
 | `update(dt?)` | シーンを更新して伝搬を実行。このフレームの有効経路数で resolve |
-| `debugSnapshot(options?)` | 非同期の診断スナップショット。`.simplest` に SimpleST の scene/timing/render/IR 統計 |
+| `debugSnapshot(options?)` | 非同期の診断スナップショット。`.simplest` に SimpleST の scene/timing/render/IR 統計、1.1.0 から `features`・`output`（リミッター・種類・遅延・マスターゲイン）・`inputs`（ライブ/クリップ音源数） |
 | `getStatistics(options?)` | `debugSnapshot` のラッパー。`validPathCount` と `.simplest` |
 | `getIRs()` | 別の Offline Worker で 9バンド early path IR を再計算 |
 | `renderMonoImpulseResponse(source, sec)` | Offline Worker で 44.1 kHz モノ圧力 IR（最大 30 s） |
@@ -82,7 +82,7 @@ const sound = await SoundTrace.create(audioContext, {
 ```ts
 sound.listener
   .setPose({ position: [0, 1.6, 0], orientation: camera.quaternion.toArray() })
-  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 })
+  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 }) // useLimiter 既定 false
   .setOutputMode('hrtf');   // 'hrtf'(バイノーラル) | 'speaker'(ステレオパンニング)
 ```
 
@@ -94,11 +94,11 @@ sound.listener
 | キー | 意味 |
 |---|---|
 | `earlyReflectionMode` | `'hybrid'` のみ許可 |
-| `useDoppler` | 可変遅延 Doppler ピッチ |
-| `useLimiter` | 出力リミッター |
+| `useDoppler` | 可変遅延 Doppler ピッチ — SimpleST 2.18.1 以降、リアルタイムでは常に有効で `false` は無視されます |
+| `useLimiter` | 出力リミッター。既定 `false` — アプリの Web Audio マスターバスがリミッティングを担います（エンジン 2.18 の生成直後の既定は有効ですが、SDK がレンダー開始・HRTF/出力変更・reset のたびに無効にします）。`true` なら SimpleST 2.18 の true-peak リミッター（−1 dBTP、137 サンプル遅延） |
 | `pathFadeTime` | 経路の出現/消滅クロスフェード（秒） |
 | `maxDelaySeconds` | レンダラーが維持する最大経路遅延（秒） |
-| `diffuseEnabled` | late reverb レンダーの on/off |
+| `diffuseEnabled` | late reverb レンダーの on/off。1.1.0 から 2.18 の 1 次散乱（diffuse rain）レンダーも合わせてオン/オフします |
 
 `hrtfQuality`、`diffuseQuality`、`delayInterpolation`、`hrtfMode` は STCoreV2 専用のため**拒否**されます。
 

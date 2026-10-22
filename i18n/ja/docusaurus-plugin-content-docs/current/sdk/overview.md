@@ -8,17 +8,18 @@ description: SimpleST リアルタイム空間音響エンジンの Web、Unity�
 
 SoundTrace SDK は、[SimpleST](../core/simplest.md) エンジンを Web・ゲームエンジン・オーディオミドルウェアから
 利用できるようにラップする製品群です。すべてのラッパーは同じリポジトリの同じエンジン SDK
-（`out/dist/<platform>_release/SimpleST`）を消費し、**SimpleST 2.12.0 / ABI 6** を基準とします。
+（`out/dist/<platform>_release/SimpleST`）を消費し、**SimpleST 2.18.2 / ABI 6** を基準とします。
+以前のリリース: 2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0。レガシーラインとして引き続き提供されます。
 
 ## 統合ラインアップ
 
 | 名前 | 対象 | 形態 | 状態 |
 |---|---|---|---|
-| [Web](./web.md) | TypeScript · WebAssembly · Web Audio | `@exarionai/soundtrace.js` 1.0.0（vendor ZIP / npm tgz） | 利用可能 |
-| [Unity](./unity.md) | Unity 2022.3 LTS 以降（Unity 6 で検証） | `.unitypackage` 0.3.0 | 利用可能 |
-| [Unreal Engine](./ue.md) | UE 5.6 / 5.7 | `Plugins/SoundTracing` 0.3.0 + Python インストーラー | 利用可能 |
-| [FMOD](./fmod.md) | FMOD Studio / Engine 2.03 ~ 2.04 | `SimpleSTFmod` DSP プラグイン | 利用可能 |
-| [Wwise](./wwise.md) | Wwise 2025.1 | `Sound-tracing`（Object Processor + Metadata）プラグイン | 利用可能（Audiokinetic パートナー承認進行中） |
+| [Web](./web.md) | TypeScript · WebAssembly · Web Audio | `@exarionai/soundtrace.js` 1.1.0（vendor ZIP / npm tgz） | 利用可能 |
+| [Unity](./unity.md) | Unity 2022.3 LTS 以降（Unity 6 で検証） | `.unitypackage` 0.4.0 | 利用可能 |
+| [Unreal Engine](./ue.md) | UE 5.6 / 5.7 | `Plugins/SoundTracing` 0.4.0 + Python インストーラー | 利用可能 |
+| [FMOD](./fmod.md) | FMOD Studio / Engine 2.03 ~ 2.04 | `SimpleSTFmod` DSP プラグイン 0.3.0 | 利用可能 |
+| [Wwise](./wwise.md) | Wwise 2025.1 | `Sound-tracing`（Object Processor + Metadata）プラグイン 0.2.0 | 利用可能（Audiokinetic パートナー承認進行中） |
 | [Python](./python.md) | 解析・研究 | — | 予定 |
 
 UE・Unity ラッパーは、プロジェクトに FMOD または Wwise プラグインがあると自動的にそのミドルウェアの
@@ -33,7 +34,7 @@ SimpleST プラグインへ接続する**統合モード**に切り替わりま�
 | macOS | Universal dylib（arm64 + x86_64） | |
 | Linux x86_64 | `.so`（glibc 2.34+） | |
 | Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 24+ |
-| iOS | device arm64 · simulator arm64/x86_64 静的ライブラリ / XCFramework | iOS 15+ |
+| iOS | device arm64 · simulator arm64 静的ライブラリ / XCFramework | iOS 15+ |
 | Web | pthreads WASM（`SimpleSTRealtime.mjs/.wasm`）+ シングルスレッド Offline | COOP/COEP が必要 |
 
 ## 共通の利用原則
@@ -49,6 +50,9 @@ SimpleST プラグインへ接続する**統合モード**に切り替わりま�
    公開せずエンジン既定ライブラリを使います。直接編集は、バンドごとに R+A+T=1 を満たす検証済みの値に限ります。
 5. レイ解像度・深度・レーン更新周期のような高度なノブは**測定後にのみ**調整します。
 6. 単位はメートルです。cm 単位のホスト（UE、Wwise for Unreal）はラッパーが `sceneRatio = 0.01` を設定します。
+7. **出力リミッターはホストのマスターチェーンの役割**です。エンジン 2.18.0 はコンテキスト生成直後に true-peak リミッター
+   （−1 dBTP、137 サンプル遅延）を有効にしますが、UE・Unity・FMOD・Wwise・Web ラッパーはドキュメント化された既定値どおりリミッターを
+   **無効の状態**に保ちます。有効にする方法は各 SDK ページを参照してください。
 
 ## どこから始めるか
 

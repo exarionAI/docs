@@ -1,6 +1,6 @@
 ---
 title: Wwise
-description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 向け SimpleST Object Processor + Metadata プラグインの構造、インストール、オーサリング、ゲーム側 C API、UE・Unity 統合。
+description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 向け SimpleST Object Processor + Metadata プラグインの構造、インストール、オーサリング、ワンショットとウォーム音源プール、ゲーム側 C API、UE・Unity 統合。
 ---
 
 # Sound-tracing Wwise プラグイン
@@ -12,7 +12,7 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 向け SimpleST Ob
 
 | 項目 | 値 |
 |---|---|
-| プラグインバージョン | v0.1.0（Wwise 2025.1.11 サウンドエンジンで E2E 検証） |
+| プラグインバージョン | v0.2.0（SimpleST 2.18.2）。以前のリリース: v0.1.0（SimpleST 2.12.0、Wwise 2025.1.11 サウンドエンジンで E2E 検証） |
 | Audiokinetic | CompanyID **325**、PluginID 1001（Renderer）· 1002（Source Settings）。ランチャーバンドル `Sound-tracing` |
 | Wwise | 2025.1（プラグインバイナリは SDK バージョンに紐づきます） |
 | プラットフォーム | Windows（vc170）· macOS · Linux · Android · iOS（静的）· Web（静的） |
@@ -41,8 +41,12 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 向け SimpleST Ob
 - **座標**: Wwise はオブジェクト位置をバスのリスナー基準で移動・回転して渡します。レンダラーがバスの
   ゲームオブジェクト（=リスナー）のワールドポーズで元に戻します。Wwise と SimpleST はどちらも左手系、+X right、+Y up、
   +Z forward なので軸変換はありません（Unreal 統合のみ例外 — 下記）。
+- **ボイスとエンジン音源**: オーディオオブジェクト（ボイス）ごとに SimpleST 音源を 1 つ使いますが、終了したボイスのエンジン
+  音源はウォームプールに残り、次のボイスが引き継ぎます — [ワンショットとウォーム音源プール](#ワンショットとウォーム音源プール)。
 - **コアの共有**: FMOD プラグインと同じランタイム層を共有し、`SimpleSTRealtime` を自分のフォルダーから
   動的にバインドし、ゲーム側は `SimpleSTWwise_GetRealtimeProc` で同じモジュールの `st_rt_*` を受け取ります。
+- **出力リミッターは無効にします**: SimpleST 2.18 は生成直後に true-peak リミッターを有効にしますが、Wwise の中ではマスター
+  バスがリミッティングを担います。
 - **ライフサイクル**: ランタイムはサウンドエンジンの Init フック（静的登録）または最初のレンダラーインスタンス生成時に開始し、
   `AK::SoundEngine::Term` のグローバルコールバックで終了します。
 
@@ -106,6 +110,21 @@ Debug プラグインは Debug、Release プラグインは Profile/Release 構�
 CompanyID/PluginID、プロパティ名、AudioEnginePropertyID はプロジェクトとバンクが保存するため、配布後は
 変更しません。
 
+## ワンショットとウォーム音源プール
+
+0.2.0 から、FMOD プラグイン 0.3.0 と同じウォーム音源プールが入ります（共通コア）。音ごとに新しい
+ボイスが来る場合でもボイスごとにエンジン音源を新しく作らないため、新しい音源の 150 ms の経路フェードインと
+最初の IR 待ちがなくなり、短い音が本来の音量で遅れずに聞こえます。Wwise プロジェクトの構成を変更する必要はありません。
+
+- 終了したボイスがすでに渡した PCM を最大 300 ms まで最後まで再生してから音源を停止し（残響は続きます）、最大
+  16 個を 2 秒間ウォーム状態で保持します。
+- 次のボイスは最も近いウォーム音源に割り当てられます。0.25 m 以内なら即座に、それより遠ければ約 25 ms 後に再生します。
+- Unreal の **Wwise AudioLink** のように音ごとに新しいゲームオブジェクトを登録する統合も、この経路で処理されます。
+
+測定値（同じ位置のボイス 16 個のエンジン音源生成 16 → 4、レベル +15.7 dB、移動時 +19.3 dB など）は
+[FMOD プラグイン](./fmod.md#ワンショットとウォーム音源プール)にあります。環境変数 `SIMPLESTFMOD_WARM_SOURCES=0`（共通
+コアのため Wwise 版も同じ名前）にすると、以前のようにボイスごとに新しい音源を作ります（比較用）。
+
 ## ゲーム側 C API
 
 `include/SimpleSTWwise/SimpleSTWwise.h` — SoundEngine ライブラリが export します。**Wwise がロードしたそのモジュール**から
@@ -165,7 +184,8 @@ WwiseConsole でプロジェクト生成 → WAAPI でバス・エフェクト�
 - リスナー 1 個（SimpleST の制約）。同じバスが 2 番目のリスナー用に再度インスタンス化されると、そのインスタンスはすべての
   オブジェクトを Wwise パンニングでミックスします。
 - オーディオオブジェクトには速度がないため SimpleST の Doppler はありません。
-- 新しいオーディオオブジェクトを初めて見たとき、エンジン音源の生成がオーディオスレッドで割り当てを行います（スロットプールは予定）。
+- 新しいオーディオオブジェクトを初めて見たとき、オーディオスレッドで小さなスロットを 1 つ割り当てます。エンジン音源そのものは
+  コントロールスレッドでウォームプールの音源を再利用するか、新しく作ります。
 - ランチャーバンドルは現在 Authoring + Windows_vc170 のみを含みます。Mac・Linux・Android・iOS バンドルと EULA・ロゴは準備中です。
 - Wwise オーサリングツール GUI での手動オーディションはまだ記録されていません。
 
@@ -177,6 +197,7 @@ WwiseConsole でプロジェクト生成 → WAAPI でバス・エフェクト�
 | `SIMPLESTWWISE_LOG_STDERR` | stderr ログ |
 | `SIMPLESTWWISE_RUNTIME_LIBRARY` | SimpleSTRealtime のパスを強制 |
 | `SIMPLESTWWISE_AUDITION_ROOM` | `"W,H,D"` オーディションルーム（m）、`"0"` で無効 |
+| `SIMPLESTFMOD_WARM_SOURCES` | `"0"` でウォーム音源プールを無効にし、ボイスごとに新しいエンジン音源（比較用、共通コアの変数） |
 
 レンダラーの警告は Wwise Capture Log にも表示されます（`PostMonitorMessage`）。
 

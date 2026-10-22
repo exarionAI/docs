@@ -1,6 +1,6 @@
 ---
 title: FMOD
-description: SimpleSTFmod — structure, installation, Studio authoring, game-side C API, and UE/Unity integration of the SimpleST DSP plug-in for FMOD Studio / FMOD Engine.
+description: SimpleSTFmod — structure, installation, Studio authoring, one-shots and the warm source pool, game-side C API, and UE/Unity integration of the SimpleST DSP plug-in for FMOD Studio / FMOD Engine.
 ---
 
 # SimpleST FMOD Plug-in
@@ -12,7 +12,7 @@ uploads geometry.
 
 | Item | Value |
 |---|---|
-| Plug-in version | v0.2.0 |
+| Plug-in version | v0.3.0 (SimpleST 2.18.2). Previous release: v0.2.0 (SimpleST 2.12.0) |
 | FMOD | Studio / Engine 2.03 ~ 2.04 (plug-in SDK 110 build = 2.00 ~ 2.04, 204 build = 2.04+) |
 | Platforms | Windows x64 · macOS · Linux · Android · iOS (static) · Web (static, FMOD HTML5 pthreads) |
 | Distribution | `SimpleST-fmod-release.zip` (per-platform `plugins/` + `install.py`, includes UE and Unity glue) |
@@ -42,7 +42,10 @@ uploads geometry.
   dummy preview instances Studio creates do not hijack the live Listener; if the renderer stalls for
   250 ms another Listener takes over, and if there is none the Sources fall back to dry.
 - Engine sources are created only for Sources that actually received audio (protecting the 64
-  concurrent stream slots).
+  concurrent stream slots). The engine source of a finished voice stays in a warm pool for the next
+  voice to reuse — see [One-shots and the warm source pool](#one-shots-and-the-warm-source-pool).
+- **The output limiter is turned off**: SimpleST 2.18 turns on a true-peak limiter (−1 dBTP,
+  137-sample latency) right after creation, but inside FMOD the master bus handles limiting.
 
 ## Installation
 
@@ -113,6 +116,34 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 
 **Bypassing** the Listener returns the Sources to dry pass-through (for A/B comparison). DSP names and
 parameter names are stored as identifiers in the banks, so they are not changed after release.
+
+## One-shots and the warm source pool
+
+For sounds that get a new voice on every event, the plug-in reuses
+engine sources across voices starting with 0.3.0. No changes to FMOD Studio events or the DSP setup
+are needed.
+
+- The engine fades in every path of a **new source** over 150 ms and waits for its first IR. 0.2.0
+  created a new engine source per voice, so a 25 ms sound came out 15 ~ 20 dB too quiet and late, and it
+  deleted the source as soon as the voice ended, cutting off the tail still left in the stream ring.
+- 0.3.0 **plays out up to 300 ms** of the PCM a finished voice already pushed, then stops the source
+  (reverb keeps ringing) and keeps that source warm — **up to 16 sources, for 2 seconds**.
+- The next voice attaches to the nearest warm source. **Within 0.25 m it starts immediately**;
+  farther away, playback starts about 25 ms later. Warm sources not reused within 2 seconds are
+  released.
+
+Results compared with 0.2.0, measured with the core test (the same runtime without FMOD):
+
+| Item | 0.2.0 (new source per voice) | 0.3.0 (warm pool) |
+|---|---|---|
+| Engine sources created for 16 voices at one spot (120 ms apart) | 16 | 4 |
+| Level, voices at one spot | Baseline | +15.7 dB (full level) |
+| Level, moving voices | Baseline | +19.3 dB (full level) |
+| Voice start → first sound | 92 ms | 69 ms |
+| Audible length of a 350 ms voice | 275 ms | 350 ms |
+
+With the environment variable `SIMPLESTFMOD_WARM_SOURCES=0`, a new source is created per voice as
+before (for comparison).
 
 ## Game-side C API
 
@@ -191,6 +222,7 @@ GUI was verified manually on 2026-10-15.
 | `SIMPLESTFMOD_LOG_STDERR` | Log to stderr |
 | `SIMPLESTFMOD_RUNTIME_LIBRARY` | Force the SimpleSTRealtime path |
 | `SIMPLESTFMOD_AUDITION_ROOM` | `"W,H,D"` audition room (m), `"0"` disables it |
+| `SIMPLESTFMOD_WARM_SOURCES` | `"0"` disables the warm source pool and creates a new engine source per voice (for comparison) |
 
 On Windows, output always also goes to `OutputDebugString`. The control thread logs
 `SimpleST Listener rendering` / `no SimpleST Listener rendering` whenever the renderer state changes.

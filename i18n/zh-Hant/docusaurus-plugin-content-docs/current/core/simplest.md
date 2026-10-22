@@ -17,8 +17,8 @@ description: Sound Tracing 的現行原生引擎 SimpleST — C++20 幾何聲學
 
 | 項目 | 值 |
 |---|---|
-| 引擎版本 | **2.12.0**（`ST_VERSION_STRING`） |
-| 公開 ABI | **ABI 6**（`ST_ABI_VERSION`，3.0 乾淨斷裂） |
+| 引擎版本 | **2.18.2**（`ST_VERSION_STRING`）。前一版本：2.12.0 |
+| 公開 ABI | **ABI 6**（`ST_ABI_VERSION`，3.0 乾淨斷裂）。2.12.0 之後的變更全部為 additive |
 | 主要語言 | C++20（暴露 C ABI，相容 C11 標頭） |
 | 建置系統 | CMake 3.21+ · 平台進入點 `mainBuild.sh` |
 | 平台 | Windows x64 · macOS Universal · Linux x86_64 · Android（arm64-v8a/armeabi-v7a/x86_64）· iOS（device/simulator）· Web（Emscripten，pthreads） |
@@ -62,8 +62,8 @@ SceneManager → STPropagator → STIRConverter ─┬→ STOnlineAuralizator  (
 
 | 標頭 | 上下文 | 函式前綴 | 角色 |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | 即時傳播 + 音訊渲染（121 個 export） |
-| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | 離線 IR 計算與渲染（87 個 export） |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | 即時傳播 + 音訊渲染（143 個 export） |
+| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | 離線 IR 計算與渲染（116 個 export） |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | 共用 POD、enum、capability 位元 |
 
 命名規則為 `st_<dll>_<family>_<verb>[_<what>]`，family 為
@@ -89,16 +89,17 @@ typedef struct STMaterialId { int32_t v; } STMaterialId;
 
 | family | 代表函式 |
 |---|---|
-| 生命週期 | `st_rt_init_create_options`、`st_rt_create`、`st_rt_destroy`、`st_rt_get_api_version`、`st_rt_get_version_string`、`st_rt_get_capabilities`、`st_rt_get_last_status/error` |
+| 生命週期 | `st_rt_init_create_options`、`st_rt_create`、`st_rt_destroy`、`st_rt_get_api_version`、`st_rt_get_version_string`、`st_rt_get_capabilities`、`st_rt_get_capability_word`、`st_rt_get_last_status/error` |
 | material | `st_rt_material_create`、`st_rt_material_load_defaults` |
 | mesh / object | `st_rt_mesh_create`（單一材質或逐三角形材質索引）、`st_rt_mesh_set_material`、`st_rt_object_create[_q]`、`st_rt_object_set_transform[_q]`、`*_destroy` |
 | scene | `st_rt_scene_set_accel`、`st_rt_scene_set_triangle_intersection`、`st_rt_scene_get_stats`、`st_rt_scene_raycast` |
 | source | `st_rt_source_create`、`set_position/direction/velocity`、`set_orientation_q`、`set_directivity`、`set_axis_attenuation`、`set_energy`、`set_path_enabled`、`set_path_volume`、`set_ray_count`、`set_depth`、`set_transport_refresh_steps` |
-| source 音訊輸入 | `st_rt_source_set_audio_file`（WAV/FLAC/MP3/Ogg）、`st_rt_source_attach_stream` + `write_stream` + `get_stream_status`（主機 PCM）、`play/pause/stop`、`clear_audio` |
+| source 音訊輸入 | `st_rt_source_set_audio_file`（WAV/FLAC/MP3/Ogg）、`st_rt_source_attach_stream` + `write_stream` + `get_stream_status`（主機 PCM）、`st_rt_source_set_audio_clip` / `set_audio_clip_asset`（快取片段）、`clear_audio` |
+| source 播放控制 | `st_rt_source_play/pause/stop/seek`、`set_volume`（線性 0 ~ 16）、`set_pitch`（0.25 ~ 4）、`set_loop_count`、`st_rt_source_trigger`、`set_retrigger_interval` |
 | listener | `st_rt_listener_set_position/velocity/rotation`、`set_ray_count`、`set_ray_sampling_method` |
 | 傳播 | `st_rt_build`、`st_rt_build_dynamic`、`st_rt_propagate`、`st_rt_set_max_depth`、`st_rt_set_transmission_max_depth`、`st_rt_set_path_type_enabled`、`st_rt_set_lane_update_interval` |
 | 聲學政策 | `st_rt_set_atmosphere`、`st_rt_set_physical_distance_attenuation`、`st_rt_set_acoustic_feature_enabled`、`st_rt_set_doppler_gain_mode`、`st_rt_set_late_coupling[_preset]`、`st_rt_set_early_late_band_energy_targets` |
-| render | `st_rt_render_start/stop`、`st_rt_render_process`（主機 pull）、`set_options/get_options`、`set_spatializer`、`set_speaker_layout[_custom]`、`set_eq`、`set_limiter_type`、`set_path_fade_time`、`set_max_delay_seconds`、`get_latency_frames`、`get_process_stats` |
+| render | `st_rt_render_start/stop`、`st_rt_render_process`（主機 pull）、`set_options/get_options`、`set_spatializer`、`set_speaker_layout[_custom]`、`set_eq`、`set_master_gain_db`、`set_limiter_type`、`get_limiter_latency_samples`、`set_path_fade_time`、`set_max_delay_seconds`、`get_latency_frames`、`get_process_stats` |
 | 執行緒 | `st_rt_set_thread_attributes`、`st_rt_get_thread_inventory`、`STRT_CreateOptions.maxComputeThreads` |
 | 診斷 | `st_rt_get_timing`、`st_rt_ir_get_stats`、`st_rt_debug_acquire_snapshot`、`st_rt_debug_copy_visual_paths`、`st_rt_debug_copy_mesh/scene_accel_nodes` |
 
@@ -167,12 +168,14 @@ STStreamDesc sd = { sizeof sd, ST_ABI_VERSION, 48000, 1, 0 };     // 單聲道�
 st_rt_source_attach_stream(ctx, srcId, &sd);
 st_rt_source_play(ctx, srcId);
 
-// 5. 建置加速結構 + 啟動渲染 + 選擇 Hybrid 早期反射
+// 5. 建置加速結構 + 啟動渲染 + 明確指定輸出端
 st_rt_build(ctx);
 st_rt_render_start(ctx, /*useHrtf=*/1);
 STRenderOptions ro; st_rt_render_get_options(ctx, &ro);
-ro.reserved0 = 1;                                                   // 1 = hybrid（必須在 render_start 之後！）
+ro.reserved0 = 1;                // 1 = hybrid（2.18.0 預設。在 render_start 之後明確指定）
+ro.useLimiter = 0;               // 由主機主輸出鏈負責限幅時關閉（2.18.0 預設 1 = true-peak）
 st_rt_render_set_options(ctx, &ro);
+st_rt_render_set_master_gain_db(ctx, 0.f);                          // 引擎預設 0 dB
 
 // 6. 遊戲迴圈（控制執行緒）
 st_rt_source_set_position(ctx, srcId, x, y, z);
@@ -186,8 +189,10 @@ st_rt_destroy(ctx);
 ```
 
 :::note
-`st_rt_render_start` 會重設渲染預設，因此 **Hybrid（`reserved0 = 1`）必須在它之後** 套用。
-所有官方外掛都遵守這個順序。
+從 2.18.0 起，建立後的預設值與即時渲染預設（開關揚聲器配置時會重新套用）為
+**Hybrid（`reserved0 = 1`）+ 啟用 true-peak 輸出限幅器（−1 dBTP，137 樣本延遲）**，主增益為 0 dB
+（至 2.12.0 為止為 Objects + 限幅器關閉）。請不要依賴預設值，而是在 **`render_start` 與配置變更之後**
+明確指定 Hybrid 與限幅器。所有官方外掛都依這個順序重新套用各自的預設值。
 :::
 
 ## 核心概念
@@ -252,11 +257,12 @@ typedef struct STMaterial {
 
 | 值 | 行為 | 用途 |
 |---|---|---|
-| `0` Objects | 將所有 early path 渲染為個別的空間化物件 | 基準聆聽、離線 A/B（預設的預設值） |
-| `1` Hybrid | 只有聆聽者全域預算（反射 12+4 · 繞射 3+1）為 exact，其餘進入 HOA3 bed | **即時遊戲** |
+| `0` Objects | 將所有 early path 渲染為個別的空間化物件 | 基準聆聽、離線 A/B（至 2.12.0 為止的預設值） |
+| `1` Hybrid | 只有聆聽者全域預算（反射 12+4 · 繞射 3+1）為 exact，其餘進入 HOA3 bed | **即時遊戲**（2.18.0 起為引擎預設） |
 
 在有 8 個音源的廳堂中，Objects 每區塊 16.8 ms（上限 11.6 ms），Hybrid 為 2.4 ms。
-UE、Unity、FMOD、Wwise、soundtrace.js 全都預設啟用 Hybrid。
+從 2.18.0 起引擎預設值也是 Hybrid，UE、Unity、FMOD、Wwise、soundtrace.js 全都在渲染開始後
+明確啟用 Hybrid。
 
 ### 空間化與輸出
 
@@ -267,7 +273,18 @@ UE、Unity、FMOD、Wwise、soundtrace.js 全都預設啟用 Hybrid。
 | `2` SADIE_D2_KEMAR | 隨附發布的 SADIE II D2 KEMAR HRIR（8,802 個方向 · 256 tap） |
 
 揚聲器輸出透過 `st_rt_render_set_speaker_layout`（2.0 / 2.1 / 4.1 / 5.1 / 7.1 / 筆電近場 2.0）
-或自訂配置啟用，內部以 HOA3 解碼輸出 N 聲道。輸出端有 9 頻段 EQ 與限幅器（Envelope / Lookahead peak）。
+或自訂配置啟用，內部以 HOA3 解碼輸出 N 聲道。輸出端依序為 9 頻段 EQ → 主增益 → 限幅器。
+
+| 輸出端 | 函式 | 2.18.0 預設 |
+|---|---|---|
+| 主增益 | `st_rt_render_set_master_gain_db`（−96 ~ +24 dB，20 ms 斜坡） | 0 dB |
+| 限幅器種類 | `st_rt_render_set_limiter_type` — Envelope(0) / Lookahead peak(1) / True peak(2) | True peak，上限 −1 dBTP |
+| 限幅器開關 | `STRenderOptions.useLimiter` | 開啟（1）。延遲為 `st_rt_render_get_limiter_latency_samples` = 137 樣本 |
+
+限幅器是立體聲與揚聲器配置（N 聲道，聲道連動）所有輸出的最後一級。像中介軟體、遊戲引擎這樣由
+主機主輸出鏈負責限幅的整合，請以 `useLimiter = 0` 關閉。新功能以
+`st_rt_get_capability_word(1)` 的 `ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER` · `ST_CAP1_MASTER_GAIN` 確認
+（word 0 = `st_rt_get_capabilities()` 的位元，請勿混在一起做 AND）。
 
 ### 主機 pull 渲染
 

@@ -16,7 +16,7 @@ import {
   loadRealtimeModule, loadOfflineModule, analyzeScene,
   Heap, packMaterial, validateMaterial,
   ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
-  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTSceneSnapshot,
+  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTFeatures, type SimpleSTSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
@@ -42,7 +42,7 @@ The STCoreV2-era `SoundScene` / `SoundListener` / `SoundMesh` / `SoundObject` / 
 | `Heap` | Helper for writing and reading PODs on the WASM heap. Includes allocation of structs stamped with `structSize`/`apiVersion` (`stamped`) |
 | `layout` | Offsets/sizes of `STRT_CreateOptions`, `STMaterial`, `STRenderOptions`, `STTiming`, `STSceneStats`, `STProcessStats`, `STIrStats`, etc. |
 | `packMaterial` / `validateMaterial` | Packs 9-band R/A/T/scattering into an `STMaterial` and validates `R+A+T=1` |
-| `SimpleSTRealtime` | Adapter owning one listener and the shared renderer. Translates facade commands into `st_rt_*` calls |
+| `SimpleSTRealtime` | Adapter owning one listener and the shared renderer. Translates facade commands into `st_rt_*` calls. `features` (1.1.0) lists the optional features for which the engine has both the capability bit and the export (clip, trigger, playback control, true-peak limiter, master gain) |
 | `analyzeScene(module, snapshot, …)` | Clones a scene snapshot into an Offline context and computes the Raw IR / pressure IR |
 | `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
@@ -75,6 +75,9 @@ rt.reset(); rt.dispose();
 - Render option changes (`useDoppler`, `useLimiter`, `diffuseEnabled`) overwrite the matching
   `STRenderOptions` fields while always keeping `reserved0 = 1` (Hybrid). If Hybrid is lost,
   `diagnostics()` throws.
+- The output stage is set explicitly on every render start: limiter off (true-peak with
+  `useLimiter: true`), master gain 0 dB. It does not rely on SimpleST 2.18's defaults right after
+  creation (true-peak limiter on).
 
 ## Diagnostic snapshot
 
@@ -87,6 +90,9 @@ interface SimpleSTDiagnostics {
   render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
+  features?: SimpleSTFeatures;                                                   // 1.1.0
+  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain };  // 1.1.0, applied output stage
+  inputs?: { live; clip };                                                       // 1.1.0, live/clip source counts
 }
 ```
 

@@ -1,6 +1,6 @@
 ---
 title: FMOD
-description: SimpleSTFmod — FMOD Studio / FMOD Engine용 SimpleST DSP 플러그인의 구조, 설치, Studio 저작, 게임 쪽 C API, UE·Unity 통합.
+description: SimpleSTFmod — FMOD Studio / FMOD Engine용 SimpleST DSP 플러그인의 구조, 설치, Studio 저작, 원샷과 웜 음원 풀, 게임 쪽 C API, UE·Unity 통합.
 ---
 
 # SimpleST FMOD 플러그인
@@ -11,7 +11,7 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine용 SimpleST DSP 플러�
 
 | 항목 | 값 |
 |---|---|
-| 플러그인 버전 | v0.2.0 |
+| 플러그인 버전 | v0.3.0 (SimpleST 2.18.2). 이전 릴리스: v0.2.0 (SimpleST 2.12.0) |
 | FMOD | Studio / Engine 2.03 ~ 2.04 (plug-in SDK 110 빌드 = 2.00 ~ 2.04, 204 빌드 = 2.04+) |
 | 플랫폼 | Windows x64 · macOS · Linux · Android · iOS(정적) · Web(정적, FMOD HTML5 pthreads) |
 | 배포 | `SimpleST-fmod-release.zip` (플랫폼별 `plugins/` + `install.py`, UE·Unity 글루 포함) |
@@ -38,7 +38,10 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine용 SimpleST DSP 플러�
 - 렌더러는 "지금 process가 돌고 있는 Listener"가 매 블록 선출됩니다. Studio가 만드는 미리보기용 더미
   인스턴스가 라이브 Listener를 가로채지 않으며, 렌더러가 250 ms 동안 멈추면 다른 Listener가 넘겨받고
   아무도 없으면 Source들은 dry로 돌아갑니다.
-- 엔진 음원은 오디오가 실제로 들어온 Source에만 만듭니다(동시 스트림 64개 보호).
+- 엔진 음원은 오디오가 실제로 들어온 Source에만 만듭니다(동시 스트림 64개 보호). 끝난 보이스의 엔진
+  음원은 웜 풀에 남겨 다음 보이스가 재사용합니다 — [원샷과 웜 음원 풀](#원샷과-웜-음원-풀).
+- **출력 리미터는 끕니다**: SimpleST 2.18은 생성 직후 true-peak 리미터(−1 dBTP, 137샘플 지연)를 켜지만,
+  FMOD 안에서는 마스터 버스가 리미팅을 맡습니다.
 
 ## 설치
 
@@ -106,6 +109,31 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 
 Listener를 **bypass**하면 Source들이 dry 통과로 돌아갑니다(A/B 비교용). DSP 이름과 파라미터
 이름은 뱅크가 식별자로 저장하므로 배포 후 바꾸지 않습니다.
+
+## 원샷과 웜 음원 풀
+
+이벤트마다 새 보이스가 오는 짧은 소리를 위해, 0.3.0부터 플러그인이 엔진 음원을 보이스
+사이에 재사용합니다. FMOD Studio 이벤트나 DSP 구성은 바꿀 필요가 없습니다.
+
+- 엔진은 **새 음원**의 모든 경로를 150 ms에 걸쳐 페이드인하고 첫 IR을 기다립니다. 0.2.0은 보이스마다
+  엔진 음원을 새로 만들어 25 ms짜리 소리가 15 ~ 20 dB 작고 늦게 들렸고, 보이스가 끝나는 즉시 음원을 지워
+  스트림 링에 남은 끝부분이 잘렸습니다.
+- 0.3.0은 끝난 보이스가 이미 밀어 넣은 PCM을 **최대 300 ms까지 마저 재생**한 뒤 음원을 정지하고(잔향은
+  이어짐), 그 음원을 **최대 16개, 2초 동안** 웜 상태로 둡니다.
+- 다음 보이스는 가장 가까운 웜 음원에 붙습니다. **0.25 m 안이면 바로**, 더 멀면 약 25 ms 뒤에 재생을
+  시작합니다. 2초 안에 다시 쓰이지 않은 웜 음원은 해제됩니다.
+
+코어 테스트(FMOD 없이 같은 런타임)로 잰 0.2.0 대비 결과입니다.
+
+| 항목 | 0.2.0 (보이스마다 새 음원) | 0.3.0 (웜 풀) |
+|---|---|---|
+| 같은 위치 보이스 16개(120 ms 간격)의 엔진 음원 생성 | 16 | 4 |
+| 같은 위치 보이스 레벨 | 기준 | +15.7 dB (제 음량) |
+| 이동하는 보이스 레벨 | 기준 | +19.3 dB (제 음량) |
+| 보이스 시작 → 첫 소리 | 92 ms | 69 ms |
+| 350 ms 보이스의 들리는 길이 | 275 ms | 350 ms |
+
+환경 변수 `SIMPLESTFMOD_WARM_SOURCES=0`이면 예전처럼 보이스마다 새 음원을 만듭니다(비교용).
 
 ## 게임 쪽 C API
 
@@ -179,6 +207,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 | `SIMPLESTFMOD_LOG_STDERR` | stderr 로그 |
 | `SIMPLESTFMOD_RUNTIME_LIBRARY` | SimpleSTRealtime 경로 강제 |
 | `SIMPLESTFMOD_AUDITION_ROOM` | `"W,H,D"` 오디션 룸(m), `"0"` 끔 |
+| `SIMPLESTFMOD_WARM_SOURCES` | `"0"`이면 웜 음원 풀을 끄고 보이스마다 새 엔진 음원(비교용) |
 
 Windows에서는 항상 `OutputDebugString`으로도 나갑니다. 컨트롤 스레드가 렌더러 상태가 바뀔 때마다
 `SimpleST Listener rendering` / `no SimpleST Listener rendering`을 남깁니다.

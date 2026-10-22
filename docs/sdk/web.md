@@ -1,6 +1,6 @@
 ---
 title: Web
-description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK의 설치, 배포 요건, HRTF, 품질 프리셋, 재질, 문제 해결.
+description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK의 설치, 배포 요건, HRTF, 품질 프리셋, 재질, 문제 해결.
 ---
 
 # Web SDK
@@ -9,8 +9,10 @@ description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK의 설치, �
 SDK입니다. Three.js 같은 렌더링 씬의 메시·재질·음원·리스너를 Sound Tracing 장면으로 연결하고,
 Web Audio graph에 공간화된 스테레오 출력을 제공합니다.
 
-1.0.0부터 엔진이 STCoreV2에서 **SimpleST 2.12.0 / ABI 6**으로 바뀌었습니다. `SoundTrace`,
-`Source`, `Mesh`, `Listener` facade는 유지되지만 백엔드·HRTF·재질·옵션 계약이 달라졌습니다.
+1.0.0부터 엔진이 STCoreV2에서 SimpleST로 바뀌었고, 1.1.0은 **SimpleST 2.18.2 / ABI 6**을 씁니다
+(이전 릴리스: 1.0.0 = SimpleST 2.12.0). 기존 호출부는
+바뀌지 않습니다. `SoundTrace`, `Source`, `Mesh`, `Listener` facade는 유지되지만 STCoreV2 대비
+백엔드·HRTF·재질·옵션 계약이 달라졌습니다.
 전체 옵션과 엔티티 API는 [Facade API](./web/facade.md), 저수준 SimpleST 모듈 접근은
 [Native API](./web/native.md)를 참고하세요.
 
@@ -45,7 +47,7 @@ Web Audio graph에 공간화된 스테레오 출력을 제공합니다.
 | 형태 | 파일 | 설치 |
 |---|---|---|
 | vendor 트리 | `soundtrace-js-release-vendor.zip` (루트 `sdk/`) | 정적 경로에 풀어 서빙. 동봉 `install.py`가 해시 검증 후 `vendor/sound-tracing/sdk`에 설치 |
-| npm 패키지 | `exarionai-soundtrace.js-1.0.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.0.0.tgz` |
+| npm 패키지 | `exarionai-soundtrace.js-1.1.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.1.0.tgz` |
 
 ```ts
 import { SoundTrace } from '@exarionai/soundtrace.js';
@@ -215,6 +217,10 @@ sound.output.connect(audioContext.destination);
 `soundtrace.js`는 `AudioContext`를 만들지 않습니다. 앱이 context와 재생 노드를 소유하고,
 SDK는 음원별 **입력 캡처 노드**와 **리스너 마스터 출력**(`sound.output`) 하나를 제공합니다.
 음원별 출력 이펙트는 `sound.output` 뒤로 옮겨야 합니다.
+
+SDK는 출력 리미터를 **끈 상태**로 둡니다. SimpleST 2.18은 생성 직후 true-peak 리미터(−1 dBTP, 137샘플
+지연)를 켜지만, `sound.output` 뒤의 Web Audio 마스터 버스는 앱이 소유하기 때문입니다. 엔진 리미터가
+필요하면 `sound.listener.setRenderOptions({ useLimiter: true })`로 true-peak 리미터를 켭니다.
 
 ## 업데이트와 정리
 

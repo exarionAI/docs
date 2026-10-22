@@ -89,7 +89,8 @@ STCoreV2 實作不再發布。本頁整理擁有 STCoreV2 整合的團隊在遷�
 4. 確認座標系。`-Z` 向前的主機要翻轉 Z 的符號（soundtrace.js 由 `coordinateBasis` 處理）。
 5. 將 `exaRenderSound` 換成主機音訊回呼中的 `st_rt_render_process`，
    並在建立選項中指定 `renderOutputMode` 與 `hostSampleRate`。
-6. 在 `st_rt_render_start` **之後** 套用 `STRenderOptions.reserved0 = 1`（Hybrid）。
+6. 在 `st_rt_render_start` **之後** 套用 `STRenderOptions.reserved0 = 1`（Hybrid）（從 2.18.0 起引擎預設
+   即為 Hybrid，但仍建議明確指定）。若由主機負責輸出限幅器，請在同一處以 `useLimiter = 0` 關閉。
 7. 以 capability 位元（`ST_CAP_*`）確認功能是否存在，並填入 `structSize`/`apiVersion` 再呼叫。
 
 ## 參考

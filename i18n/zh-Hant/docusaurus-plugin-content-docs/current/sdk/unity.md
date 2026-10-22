@@ -1,13 +1,13 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 0.3.0（SimpleST ABI 6）的安裝、元件 Inspector 契約、HRTF 與輸出、材質、FMOD/Wwise 整合模式、WebGL。
+description: SoundTrace Unity SDK 0.4.0（SimpleST 2.18.2 / ABI 6）的安裝、元件 Inspector 契約、HRTF 與輸出、材質、FMOD/Wwise 整合模式、WebGL。
 ---
 
 # SoundTrace SDK for Unity
 
 SoundTrace Unity SDK 是將 Unity 的網格、Renderer 材質插槽、音源與聆聽者連接到
-[SimpleST](../core/simplest.md) 的即時空間聲學外掛。自 0.3.0 起，引擎從 STCoreV2 換成
-**SimpleST 2.12.0 / ABI 6**，渲染器以 **Hybrid** 啟動。
+[SimpleST](../core/simplest.md) 的即時空間聲學外掛。自 0.3.0 起，引擎從 STCoreV2 換成 SimpleST，
+0.4.0 使用 **SimpleST 2.18.2 / ABI 6**（前一版本：0.3.0 = SimpleST 2.12.0）。渲染器以 **Hybrid** 啟動。
 `SoundTraceManager`、`SoundTraceListener`、`SoundTraceSource`、`SoundTraceObject`、
 `SoundTracePathVisualizer` 的元件名稱、指令碼 GUID 與範例場景維持不變。
 
@@ -86,8 +86,10 @@ python3 install.py /path/to/UnityProject
   上序列處理。音訊回呼中不會有場景控制 API 或受控堆積配置。
 - 位置以固定步長的動作取樣（`SoundTraceFixedStepMotion`）估計速度。瞬移之後以
   `ResetMotionState()` 防止 Doppler 尖峰。
-- 原生 `render_start` 會重設選項，因此在 **啟動之後** 套用 Hybrid（`reserved0 = 1`），
-  重新啟動與切換 HRTF 之後也會再次套用。
+- 每次啟動渲染時（包含重新啟動與切換 HRTF），都會明確指定 Hybrid（`reserved0 = 1`）與 **關閉引擎限幅器**，
+  並將主增益維持在 0 dB。限幅由 Unity 混音器負責 — SimpleST 2.18 在建立後會立即啟用 true-peak
+  限幅器（137 樣本延遲），因此由包裝層將其關閉。渲染選項只會在引擎建立時與揚聲器配置變更時以預設
+  重新套用，`render_start` 會維持原樣。
 
 ## SoundTraceManager
 

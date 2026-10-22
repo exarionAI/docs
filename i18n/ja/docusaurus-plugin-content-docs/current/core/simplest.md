@@ -18,8 +18,8 @@ description: Sound Tracing の現行ネイティブエンジン SimpleST — C++
 
 | 項目 | 値 |
 |---|---|
-| エンジンバージョン | **2.12.0**（`ST_VERSION_STRING`） |
-| 公開 ABI | **ABI 6**（`ST_ABI_VERSION`、3.0 クリーンブレーク） |
+| エンジンバージョン | **2.18.2**（`ST_VERSION_STRING`）。以前のリリース: 2.12.0 |
+| 公開 ABI | **ABI 6**（`ST_ABI_VERSION`、3.0 クリーンブレーク）。2.12.0 以降の変更はすべて additive |
 | 主言語 | C++20（C ABI を公開、C11 ヘッダー互換） |
 | ビルドシステム | CMake 3.21+ · プラットフォーム別エントリポイント `mainBuild.sh` |
 | プラットフォーム | Windows x64 · macOS Universal · Linux x86_64 · Android（arm64-v8a/armeabi-v7a/x86_64）· iOS（device/simulator）· Web（Emscripten、pthreads） |
@@ -63,8 +63,8 @@ SceneManager → STPropagator → STIRConverter ─┬→ STOnlineAuralizator  (
 
 | ヘッダー | コンテキスト | 関数プレフィックス | 役割 |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | リアルタイム伝搬 + オーディオレンダー（121 export） |
-| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | オフライン IR 計算・レンダー（87 export） |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | リアルタイム伝搬 + オーディオレンダー（143 export） |
+| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | オフライン IR 計算・レンダー（116 export） |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | 共通 POD・enum・capability ビット |
 
 命名規則は `st_<dll>_<family>_<verb>[_<what>]` で、family は
@@ -90,16 +90,17 @@ typedef struct STMaterialId { int32_t v; } STMaterialId;
 
 | family | 代表的な関数 |
 |---|---|
-| ライフサイクル | `st_rt_init_create_options`、`st_rt_create`、`st_rt_destroy`、`st_rt_get_api_version`、`st_rt_get_version_string`、`st_rt_get_capabilities`、`st_rt_get_last_status/error` |
+| ライフサイクル | `st_rt_init_create_options`、`st_rt_create`、`st_rt_destroy`、`st_rt_get_api_version`、`st_rt_get_version_string`、`st_rt_get_capabilities`、`st_rt_get_capability_word`、`st_rt_get_last_status/error` |
 | material | `st_rt_material_create`、`st_rt_material_load_defaults` |
 | mesh / object | `st_rt_mesh_create`（材質 1 つ、または三角形ごとの材質インデックス）、`st_rt_mesh_set_material`、`st_rt_object_create[_q]`、`st_rt_object_set_transform[_q]`、`*_destroy` |
 | scene | `st_rt_scene_set_accel`、`st_rt_scene_set_triangle_intersection`、`st_rt_scene_get_stats`、`st_rt_scene_raycast` |
 | source | `st_rt_source_create`、`set_position/direction/velocity`、`set_orientation_q`、`set_directivity`、`set_axis_attenuation`、`set_energy`、`set_path_enabled`、`set_path_volume`、`set_ray_count`、`set_depth`、`set_transport_refresh_steps` |
-| source オーディオ入力 | `st_rt_source_set_audio_file`（WAV/FLAC/MP3/Ogg）、`st_rt_source_attach_stream` + `write_stream` + `get_stream_status`（ホスト PCM）、`play/pause/stop`、`clear_audio` |
+| source オーディオ入力 | `st_rt_source_set_audio_file`（WAV/FLAC/MP3/Ogg）、`st_rt_source_attach_stream` + `write_stream` + `get_stream_status`（ホスト PCM）、`st_rt_source_set_audio_clip` / `set_audio_clip_asset`（キャッシュクリップ）、`clear_audio` |
+| source 再生制御 | `st_rt_source_play/pause/stop/seek`、`set_volume`（線形 0 ~ 16）、`set_pitch`（0.25 ~ 4）、`set_loop_count`、`st_rt_source_trigger`、`set_retrigger_interval` |
 | listener | `st_rt_listener_set_position/velocity/rotation`、`set_ray_count`、`set_ray_sampling_method` |
 | 伝搬 | `st_rt_build`、`st_rt_build_dynamic`、`st_rt_propagate`、`st_rt_set_max_depth`、`st_rt_set_transmission_max_depth`、`st_rt_set_path_type_enabled`、`st_rt_set_lane_update_interval` |
 | 音響ポリシー | `st_rt_set_atmosphere`、`st_rt_set_physical_distance_attenuation`、`st_rt_set_acoustic_feature_enabled`、`st_rt_set_doppler_gain_mode`、`st_rt_set_late_coupling[_preset]`、`st_rt_set_early_late_band_energy_targets` |
-| render | `st_rt_render_start/stop`、`st_rt_render_process`（ホスト pull）、`set_options/get_options`、`set_spatializer`、`set_speaker_layout[_custom]`、`set_eq`、`set_limiter_type`、`set_path_fade_time`、`set_max_delay_seconds`、`get_latency_frames`、`get_process_stats` |
+| render | `st_rt_render_start/stop`、`st_rt_render_process`（ホスト pull）、`set_options/get_options`、`set_spatializer`、`set_speaker_layout[_custom]`、`set_eq`、`set_master_gain_db`、`set_limiter_type`、`get_limiter_latency_samples`、`set_path_fade_time`、`set_max_delay_seconds`、`get_latency_frames`、`get_process_stats` |
 | スレッド | `st_rt_set_thread_attributes`、`st_rt_get_thread_inventory`、`STRT_CreateOptions.maxComputeThreads` |
 | 診断 | `st_rt_get_timing`、`st_rt_ir_get_stats`、`st_rt_debug_acquire_snapshot`、`st_rt_debug_copy_visual_paths`、`st_rt_debug_copy_mesh/scene_accel_nodes` |
 
@@ -168,12 +169,14 @@ STStreamDesc sd = { sizeof sd, ST_ABI_VERSION, 48000, 1, 0 };     // モノ, cap
 st_rt_source_attach_stream(ctx, srcId, &sd);
 st_rt_source_play(ctx, srcId);
 
-// 5. 加速構造ビルド + レンダー開始 + Hybrid 初期反射の選択
+// 5. 加速構造ビルド + レンダー開始 + 出力段の明示
 st_rt_build(ctx);
 st_rt_render_start(ctx, /*useHrtf=*/1);
 STRenderOptions ro; st_rt_render_get_options(ctx, &ro);
-ro.reserved0 = 1;                                                   // 1 = hybrid (render_start の後に!)
+ro.reserved0 = 1;                // 1 = hybrid (2.18.0 の既定。render_start の後に明示)
+ro.useLimiter = 0;               // ホストのマスターチェーンがリミッティングを担うならオフ (2.18.0 の既定 1 = true-peak)
 st_rt_render_set_options(ctx, &ro);
+st_rt_render_set_master_gain_db(ctx, 0.f);                          // エンジン既定 0 dB
 
 // 6. ゲームループ(制御スレッド)
 st_rt_source_set_position(ctx, srcId, x, y, z);
@@ -187,8 +190,10 @@ st_rt_destroy(ctx);
 ```
 
 :::note
-`st_rt_render_start` はレンダープリセットを元に戻すため、**Hybrid（`reserved0 = 1`）は必ずその後に**
-適用します。すべての公式プラグインがこの順序を守っています。
+2.18.0 から、生成直後の既定値とリアルタイムレンダープリセット（スピーカーレイアウトのオン/オフで再適用される）は
+**Hybrid（`reserved0 = 1`）+ true-peak 出力リミッター（−1 dBTP、137 サンプル遅延）有効**で、マスターゲインは 0 dB です
+（2.12.0 までは Objects + リミッター無効）。既定値に頼らず、Hybrid・リミッターは **`render_start` とレイアウト変更の
+後に**明示してください。すべての公式プラグインがこの順序で自身の既定値を再適用します。
 :::
 
 ## 主要概念
@@ -254,11 +259,12 @@ typedef struct STMaterial {
 
 | 値 | 動作 | 用途 |
 |---|---|---|
-| `0` Objects | すべての early path を個別の空間化オブジェクトとしてレンダー | 基準聴取・オフライン A/B（プリセット既定） |
-| `1` Hybrid | リスナー全域予算（反射 12+4 · 回折 3+1）のみ exact、残りは HOA3 bed | **リアルタイムゲーム** |
+| `0` Objects | すべての early path を個別の空間化オブジェクトとしてレンダー | 基準聴取・オフライン A/B（2.12.0 までプリセット既定） |
+| `1` Hybrid | リスナー全域予算（反射 12+4 · 回折 3+1）のみ exact、残りは HOA3 bed | **リアルタイムゲーム**（2.18.0 からエンジン既定） |
 
 音源 8 個のホールでは Objects がブロックあたり 16.8 ms（上限 11.6 ms）、Hybrid は 2.4 ms です。
-UE・Unity・FMOD・Wwise・soundtrace.js はすべて Hybrid を既定で適用します。
+2.18.0 からエンジンの既定値も Hybrid で、UE・Unity・FMOD・Wwise・soundtrace.js はすべてレンダー開始後に Hybrid を
+明示的に適用します。
 
 ### 空間化と出力
 
@@ -269,8 +275,19 @@ UE・Unity・FMOD・Wwise・soundtrace.js はすべて Hybrid を既定で適用
 | `2` SADIE_D2_KEMAR | 同梱配布される SADIE II D2 KEMAR HRIR（8,802 方向 · 256 タップ） |
 
 スピーカー出力は `st_rt_render_set_speaker_layout`（2.0 / 2.1 / 4.1 / 5.1 / 7.1 / ラップトップ近接 2.0）
-またはカスタムレイアウトで有効にし、内部の HOA3 デコードで N チャンネルを出力します。出力段には 9バンド EQ と
-リミッター（Envelope / Lookahead peak）があります。
+またはカスタムレイアウトで有効にし、内部の HOA3 デコードで N チャンネルを出力します。出力段は 9バンド EQ → マスターゲイン →
+リミッターの順です。
+
+| 出力段 | 関数 | 2.18.0 の既定 |
+|---|---|---|
+| マスターゲイン | `st_rt_render_set_master_gain_db`（−96 ~ +24 dB、20 ms ランプ） | 0 dB |
+| リミッターの種類 | `st_rt_render_set_limiter_type` — Envelope(0) / Lookahead peak(1) / True peak(2) | True peak、シーリング −1 dBTP |
+| リミッターの有効化 | `STRenderOptions.useLimiter` | 有効（1）。遅延は `st_rt_render_get_limiter_latency_samples` = 137 サンプル |
+
+リミッターはステレオとスピーカーレイアウト（N チャンネル、チャンネルリンク）のすべての出力の最終段です。ミドルウェア・
+ゲームエンジンのようにホストのマスターチェーンがリミッティングを担う統合では `useLimiter = 0` で無効にします。新機能は
+`st_rt_get_capability_word(1)` の `ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER` · `ST_CAP1_MASTER_GAIN` で確認します
+（ワード 0 = `st_rt_get_capabilities()` のビットと混ぜて AND しないでください）。
 
 ### ホスト pull レンダー
 

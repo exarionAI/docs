@@ -1,15 +1,16 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 0.3.0 (SimpleST ABI 6) installation, component Inspector contract, HRTF and output, materials, FMOD/Wwise integration modes, WebGL.
+description: SoundTrace Unity SDK 0.4.0 (SimpleST 2.18.2 / ABI 6) installation, component Inspector contract, HRTF and output, materials, FMOD/Wwise integration modes, WebGL.
 ---
 
 # SoundTrace SDK for Unity
 
 The SoundTrace Unity SDK is a real-time spatial audio plug-in that connects Unity meshes, Renderer
 material slots, sources, and the listener to [SimpleST](../core/simplest.md). From 0.3.0 the engine
-has changed from STCoreV2 to **SimpleST 2.12.0 / ABI 6**, and the renderer starts in **Hybrid**
-mode. The `SoundTraceManager`, `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`, and
-`SoundTracePathVisualizer` component names, script GUIDs, and sample scenes are unchanged.
+has changed from STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.18.2 / ABI 6** (previous release:
+0.3.0 = SimpleST 2.12.0). The renderer starts in **Hybrid** mode. The `SoundTraceManager`,
+`SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`, and `SoundTracePathVisualizer`
+component names, script GUIDs, and sample scenes are unchanged.
 
 ## Requirements and platforms
 
@@ -91,8 +92,11 @@ renders.
   managed heap allocation runs in the audio callback.
 - Positions are sampled with fixed-step motion sampling (`SoundTraceFixedStepMotion`) to estimate
   velocity. After a teleport, call `ResetMotionState()` to prevent a Doppler spike.
-- Because the native `render_start` resets the options, Hybrid (`reserved0 = 1`) is applied
-  **after start**, and re-applied after a restart or HRTF toggle.
+- On every render start (including restarts and HRTF toggles), Hybrid (`reserved0 = 1`) and
+  **engine limiter off** are set explicitly, and the master gain is left at 0 dB. Limiting is handled
+  by the Unity mixer — SimpleST 2.18 turns on a true-peak limiter (137-sample latency) right after
+  creation, so the wrapper turns it off. Render options are re-applied from the preset only at engine
+  creation and on speaker-layout changes; `render_start` leaves them as they are.
 
 ## SoundTraceManager
 

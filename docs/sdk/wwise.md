@@ -1,6 +1,6 @@
 ---
 title: Wwise
-description: Sound-tracing(SimpleSTWwise) — Wwise 2025.1용 SimpleST Object Processor + Metadata 플러그인의 구조, 설치, 저작, 게임 쪽 C API, UE·Unity 통합.
+description: Sound-tracing(SimpleSTWwise) — Wwise 2025.1용 SimpleST Object Processor + Metadata 플러그인의 구조, 설치, 저작, 원샷과 웜 음원 풀, 게임 쪽 C API, UE·Unity 통합.
 ---
 
 # Sound-tracing Wwise 플러그인
@@ -12,7 +12,7 @@ description: Sound-tracing(SimpleSTWwise) — Wwise 2025.1용 SimpleST Object Pr
 
 | 항목 | 값 |
 |---|---|
-| 플러그인 버전 | v0.1.0 (Wwise 2025.1.11 사운드엔진 E2E 검증) |
+| 플러그인 버전 | v0.2.0 (SimpleST 2.18.2). 이전 릴리스: v0.1.0 (SimpleST 2.12.0, Wwise 2025.1.11 사운드엔진 E2E 검증) |
 | Audiokinetic | CompanyID **325**, PluginID 1001(Renderer) · 1002(Source Settings). 런처 번들 `Sound-tracing` |
 | Wwise | 2025.1 (플러그인 바이너리는 SDK 버전에 묶입니다) |
 | 플랫폼 | Windows(vc170) · macOS · Linux · Android · iOS(정적) · Web(정적) |
@@ -41,8 +41,12 @@ description: Sound-tracing(SimpleSTWwise) — Wwise 2025.1용 SimpleST Object Pr
 - **좌표**: Wwise는 오브젝트 위치를 버스 리스너 기준으로 이동·회전해서 줍니다. 렌더러가 버스
   게임오브젝트(=리스너)의 월드 포즈로 되돌립니다. Wwise와 SimpleST는 둘 다 왼손, +X right, +Y up,
   +Z forward라 축 변환이 없습니다(Unreal 통합만 예외 — 아래).
+- **보이스와 엔진 음원**: 오디오 오브젝트(보이스)마다 SimpleST 음원을 하나 쓰지만, 끝난 보이스의 엔진
+  음원은 웜 풀에 남아 다음 보이스가 이어 받습니다 — [원샷과 웜 음원 풀](#원샷과-웜-음원-풀).
 - **코어 공유**: FMOD 플러그인과 같은 런타임 계층을 공유하며, `SimpleSTRealtime`을 자기 폴더에서
   동적 바인딩하고 게임 쪽은 `SimpleSTWwise_GetRealtimeProc`으로 같은 모듈의 `st_rt_*`를 받습니다.
+- **출력 리미터는 끕니다**: SimpleST 2.18은 생성 직후 true-peak 리미터를 켜지만, Wwise 안에서는 마스터
+  버스가 리미팅을 맡습니다.
 - **수명주기**: 런타임은 사운드엔진 Init 훅(정적 등록) 또는 첫 렌더러 인스턴스 생성 시 시작하고,
   `AK::SoundEngine::Term`의 글로벌 콜백에서 종료합니다.
 
@@ -106,6 +110,21 @@ Debug 플러그인은 Debug, Release 플러그인은 Profile/Release 구성에 �
 CompanyID/PluginID, 프로퍼티 이름, AudioEnginePropertyID는 프로젝트와 뱅크가 저장하므로 배포 후
 바꾸지 않습니다.
 
+## 원샷과 웜 음원 풀
+
+0.2.0부터 FMOD 플러그인 0.3.0과 같은 웜 음원 풀이 들어갑니다(공용 코어). 소리마다 새
+보이스가 오는 경우에도 보이스마다 엔진 음원을 새로 만들지 않으므로, 새 음원의 150 ms 경로 페이드인과
+첫 IR 대기가 빠지고 짧은 소리가 제 음량으로 제때 들립니다. Wwise 프로젝트 구성은 바꿀 필요가 없습니다.
+
+- 끝난 보이스가 이미 넘긴 PCM을 최대 300 ms까지 마저 재생한 뒤 음원을 정지하고(잔향은 이어짐), 최대
+  16개를 2초 동안 웜 상태로 둡니다.
+- 다음 보이스는 가장 가까운 웜 음원에 붙습니다. 0.25 m 안이면 바로, 더 멀면 약 25 ms 뒤에 재생합니다.
+- Unreal의 **Wwise AudioLink**처럼 소리마다 새 게임 오브젝트를 등록하는 통합도 이 경로로 처리됩니다.
+
+측정값(같은 위치 보이스 16개의 엔진 음원 생성 16 → 4, 레벨 +15.7 dB, 이동 시 +19.3 dB 등)은
+[FMOD 플러그인](./fmod.md#원샷과-웜-음원-풀)에 있습니다. 환경 변수 `SIMPLESTFMOD_WARM_SOURCES=0`(공용
+코어라 Wwise판도 같은 이름)이면 예전처럼 보이스마다 새 음원을 만듭니다(비교용).
+
 ## 게임 쪽 C API
 
 `include/SimpleSTWwise/SimpleSTWwise.h` — SoundEngine 라이브러리가 export합니다. **Wwise가 로드한 그 모듈**에서
@@ -165,7 +184,8 @@ WwiseConsole로 프로젝트 생성 → WAAPI로 버스·이펙트·메타데이
 - 리스너 1개(SimpleST 제약). 같은 버스가 두 번째 리스너용으로 또 인스턴스되면 그 인스턴스는 모든
   오브젝트를 Wwise 패닝으로 믹스합니다.
 - 오디오 오브젝트에는 속도가 없어 SimpleST Doppler가 없습니다.
-- 새 오디오 오브젝트를 처음 볼 때 엔진 음원 생성이 오디오 스레드에서 할당합니다(슬롯 풀 예정).
+- 새 오디오 오브젝트를 처음 볼 때 오디오 스레드에서 작은 슬롯 하나를 할당합니다. 엔진 음원 자체는
+  컨트롤 스레드에서 웜 풀의 음원을 재사용하거나 새로 만듭니다.
 - 런처 번들은 현재 Authoring + Windows_vc170만 포함합니다. Mac·Linux·Android·iOS 번들과 EULA·로고는 준비 중입니다.
 - Wwise 저작툴 GUI 수동 오디션은 아직 기록되지 않았습니다.
 
@@ -177,6 +197,7 @@ WwiseConsole로 프로젝트 생성 → WAAPI로 버스·이펙트·메타데이
 | `SIMPLESTWWISE_LOG_STDERR` | stderr 로그 |
 | `SIMPLESTWWISE_RUNTIME_LIBRARY` | SimpleSTRealtime 경로 강제 |
 | `SIMPLESTWWISE_AUDITION_ROOM` | `"W,H,D"` 오디션 룸(m), `"0"` 끔 |
+| `SIMPLESTFMOD_WARM_SOURCES` | `"0"`이면 웜 음원 풀을 끄고 보이스마다 새 엔진 음원(비교용, 공용 코어 변수) |
 
 렌더러 경고는 Wwise Capture Log에도 뜹니다(`PostMonitorMessage`).
 

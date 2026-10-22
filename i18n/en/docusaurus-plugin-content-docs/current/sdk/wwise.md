@@ -1,6 +1,6 @@
 ---
 title: Wwise
-description: Sound-tracing (SimpleSTWwise) — structure, installation, authoring, game-side C API, and UE/Unity integration of the SimpleST Object Processor + Metadata plug-in for Wwise 2025.1.
+description: Sound-tracing (SimpleSTWwise) — structure, installation, authoring, one-shots and the warm source pool, game-side C API, and UE/Unity integration of the SimpleST Object Processor + Metadata plug-in for Wwise 2025.1.
 ---
 
 # Sound-tracing Wwise Plug-in
@@ -13,7 +13,7 @@ uploads geometry.
 
 | Item | Value |
 |---|---|
-| Plug-in version | v0.1.0 (E2E verified on the Wwise 2025.1.11 sound engine) |
+| Plug-in version | v0.2.0 (SimpleST 2.18.2). Previous release: v0.1.0 (SimpleST 2.12.0, E2E verified on the Wwise 2025.1.11 sound engine) |
 | Audiokinetic | CompanyID **325**, PluginID 1001 (Renderer) · 1002 (Source Settings). Launcher bundle `Sound-tracing` |
 | Wwise | 2025.1 (plug-in binaries are tied to the SDK version) |
 | Platforms | Windows (vc170) · macOS · Linux · Android · iOS (static) · Web (static) |
@@ -44,9 +44,14 @@ uploads geometry.
   listener. The renderer converts them back using the world pose of the bus game object (= the
   listener). Wwise and SimpleST are both left-handed, +X right, +Y up, +Z forward, so there is no
   axis conversion (the Unreal integration is the only exception — see below).
+- **Voices and engine sources**: each audio object (voice) uses one SimpleST source, but the engine
+  source of a finished voice stays in a warm pool and the next voice picks it up — see
+  [One-shots and the warm source pool](#one-shots-and-the-warm-source-pool).
 - **Shared core**: it shares the same runtime layer as the FMOD plug-in, dynamically binds
   `SimpleSTRealtime` from its own folder, and the game side obtains the `st_rt_*` functions of the
   same module through `SimpleSTWwise_GetRealtimeProc`.
+- **The output limiter is turned off**: SimpleST 2.18 turns on a true-peak limiter right after
+  creation, but inside Wwise the master bus handles limiting.
 - **Lifecycle**: the runtime starts in the sound engine Init hook (static registration) or when the
   first renderer instance is created, and shuts down in the `AK::SoundEngine::Term` global callback.
 
@@ -117,6 +122,26 @@ plug-ins (if the bank `PluginInfo.json` assumes the metadata plug-in's lib name 
 CompanyID/PluginID, property names, and AudioEnginePropertyIDs are stored by projects and banks, so
 they are not changed after release.
 
+## One-shots and the warm source pool
+
+Starting with 0.2.0, the same warm source pool as FMOD plug-in 0.3.0 is included (shared core). Even
+when every sound arrives as a new voice, no new engine source is
+created per voice, so the 150 ms path fade-in of a new source and the wait for its first IR are
+avoided, and short sounds play at full level and on time. No changes to the Wwise project setup are
+needed.
+
+- After a voice ends, the PCM it already handed over is played out for up to 300 ms, then the source
+  is stopped (reverb keeps ringing); up to 16 sources are kept warm for 2 seconds.
+- The next voice attaches to the nearest warm source. Within 0.25 m it plays immediately; farther
+  away, it plays about 25 ms later.
+- Integrations that register a new game object per sound, such as Unreal's **Wwise AudioLink**, are
+  handled through this path as well.
+
+The measurements (engine sources created for 16 voices at one spot 16 → 4, level +15.7 dB, moving
++19.3 dB, etc.) are on the [FMOD plug-in](./fmod.md#one-shots-and-the-warm-source-pool) page. With
+the environment variable `SIMPLESTFMOD_WARM_SOURCES=0` (the same name in the Wwise version, since the
+core is shared), a new source is created per voice as before (for comparison).
+
 ## Game-side C API
 
 `include/SimpleSTWwise/SimpleSTWwise.h` — exported by the SoundEngine library. Bind from **the module
@@ -180,8 +205,8 @@ linking (2026-10-06).
 - One listener (a SimpleST constraint). If the same bus is instantiated again for a second listener,
   that instance mixes every object with Wwise panning.
 - Audio objects carry no velocity, so there is no SimpleST Doppler.
-- Creating the engine source when a new audio object is first seen allocates on the audio thread (a
-  slot pool is planned).
+- When a new audio object is first seen, one small slot is allocated on the audio thread. The engine
+  source itself is reused from the warm pool or newly created on the control thread.
 - The launcher bundle currently contains only Authoring + Windows_vc170. The Mac, Linux, Android, and
   iOS bundles plus the EULA and logo are in preparation.
 - Manual audition in the Wwise authoring GUI has not been recorded yet.
@@ -194,6 +219,7 @@ linking (2026-10-06).
 | `SIMPLESTWWISE_LOG_STDERR` | Log to stderr |
 | `SIMPLESTWWISE_RUNTIME_LIBRARY` | Force the SimpleSTRealtime path |
 | `SIMPLESTWWISE_AUDITION_ROOM` | `"W,H,D"` audition room (m), `"0"` disables it |
+| `SIMPLESTFMOD_WARM_SOURCES` | `"0"` disables the warm source pool and creates a new engine source per voice (for comparison; shared-core variable) |
 
 Renderer warnings also appear in the Wwise Capture Log (`PostMonitorMessage`).
 

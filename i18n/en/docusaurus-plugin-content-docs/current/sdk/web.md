@@ -1,6 +1,6 @@
 ---
 title: Web
-description: soundtrace.js 1.0.0 — installation, deployment requirements, HRTF, quality presets, materials, and troubleshooting for the SimpleST ABI 6 WebAssembly SDK.
+description: soundtrace.js 1.1.0 — installation, deployment requirements, HRTF, quality presets, materials, and troubleshooting for the SimpleST ABI 6 WebAssembly SDK.
 ---
 
 # Web SDK
@@ -9,9 +9,11 @@ description: soundtrace.js 1.0.0 — installation, deployment requirements, HRTF
 browser. It connects the meshes, materials, sources, and listener of a rendering scene such as
 Three.js to a Sound Tracing scene, and provides spatialized stereo output to the Web Audio graph.
 
-From 1.0.0 the engine has changed from STCoreV2 to **SimpleST 2.12.0 / ABI 6**. The `SoundTrace`,
-`Source`, `Mesh`, and `Listener` facades are kept, but the backend, HRTF, material, and option
-contracts have changed. See [Facade API](./web/facade.md) for the full options and entity API, and
+From 1.0.0 the engine has changed from STCoreV2 to SimpleST, and 1.1.0 uses **SimpleST 2.18.2 /
+ABI 6** (previous release: 1.0.0 = SimpleST 2.12.0). Existing call sites do not
+change. The `SoundTrace`, `Source`,
+`Mesh`, and `Listener` facades are kept, but the backend, HRTF, material, and option contracts have
+changed relative to STCoreV2. See [Facade API](./web/facade.md) for the full options and entity API, and
 [Native API](./web/native.md) for low-level access to the SimpleST module.
 
 ![soundtrace.js architecture](/img/web/architecture.png)
@@ -45,7 +47,7 @@ agreement. It is distributed in two forms.
 | Form | File | Installation |
 |---|---|---|
 | vendor tree | `soundtrace-js-release-vendor.zip` (root `sdk/`) | Extract to a static path and serve it. The bundled `install.py` verifies hashes and installs to `vendor/sound-tracing/sdk` |
-| npm package | `exarionai-soundtrace.js-1.0.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.0.0.tgz` |
+| npm package | `exarionai-soundtrace.js-1.1.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.1.0.tgz` |
 
 ```ts
 import { SoundTrace } from '@exarionai/soundtrace.js';
@@ -219,6 +221,11 @@ sound.output.connect(audioContext.destination);
 `soundtrace.js` does not create an `AudioContext`. The app owns the context and the playback nodes;
 the SDK provides a per-source **input capture node** and one **listener master output**
 (`sound.output`). Per-source output effects must be moved behind `sound.output`.
+
+The SDK keeps the output limiter **off**. SimpleST 2.18 turns on a true-peak limiter (−1 dBTP,
+137-sample latency) right after creation, but the Web Audio master bus after `sound.output` is owned
+by the app. If you need the engine limiter, turn on the true-peak limiter with
+`sound.listener.setRenderOptions({ useLimiter: true })`.
 
 ## Update and cleanup
 

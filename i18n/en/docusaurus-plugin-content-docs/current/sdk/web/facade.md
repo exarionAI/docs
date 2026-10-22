@@ -1,6 +1,6 @@
 ---
 title: Facade API
-description: The recommended soundtrace.js 1.0.0 API, identical on ST and MT, and the options that changed with the move to SimpleST.
+description: The recommended soundtrace.js 1.1.0 API, identical on ST and MT, and the options that changed with the move to SimpleST.
 ---
 
 # Facade API
@@ -69,7 +69,7 @@ const sound = await SoundTrace.create(audioContext, {
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'` (aliases `'convolution'` / `'steamaudio'`) |
 | `loadMaterialAssets()` | Load the material table manually (when `autoLoadMaterials: false`) |
 | `update(dt?)` | Updates the scene and runs propagation. Resolves with this frame's valid path count |
-| `debugSnapshot(options?)` | Asynchronous diagnostic snapshot. `.simplest` holds SimpleST scene/timing/render/IR statistics |
+| `debugSnapshot(options?)` | Asynchronous diagnostic snapshot. `.simplest` holds SimpleST scene/timing/render/IR statistics, plus, from 1.1.0, `features`, `output` (limiter, type, latency, master gain), and `inputs` (live/clip source counts) |
 | `getStatistics(options?)` | Wrapper around `debugSnapshot`. `validPathCount` and `.simplest` |
 | `getIRs()` | Recomputes the 9-band early path IR in a separate Offline Worker |
 | `renderMonoImpulseResponse(source, sec)` | 44.1 kHz mono pressure IR from the Offline Worker (max 30 s) |
@@ -82,7 +82,7 @@ const sound = await SoundTrace.create(audioContext, {
 ```ts
 sound.listener
   .setPose({ position: [0, 1.6, 0], orientation: camera.quaternion.toArray() })
-  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 })
+  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 }) // useLimiter defaults to false
   .setOutputMode('hrtf');   // 'hrtf' (binaural) | 'speaker' (stereo panning)
 ```
 
@@ -94,11 +94,11 @@ Keys accepted by `setRenderOptions`:
 | Key | Meaning |
 |---|---|
 | `earlyReflectionMode` | Only `'hybrid'` is allowed |
-| `useDoppler` | Variable-delay Doppler pitch |
-| `useLimiter` | Output limiter |
+| `useDoppler` | Variable-delay Doppler pitch — always on in realtime since SimpleST 2.18.1; `false` is ignored |
+| `useLimiter` | Output limiter. Default `false` — the app's Web Audio master bus handles limiting (engine 2.18 defaults to on right after creation, but the SDK turns it off on every render start, HRTF/output change, and reset). `true` enables the SimpleST 2.18 true-peak limiter (−1 dBTP, 137-sample latency) |
 | `pathFadeTime` | Path appear/disappear crossfade (seconds) |
 | `maxDelaySeconds` | Maximum path delay the renderer keeps (seconds) |
-| `diffuseEnabled` | Late reverb render on/off |
+| `diffuseEnabled` | Late reverb render on/off. From 1.1.0 it also turns 2.18's first-order scattering (diffuse rain) render on and off |
 
 `hrtfQuality`, `diffuseQuality`, `delayInterpolation`, and `hrtfMode` are STCoreV2-only and are
 **rejected**.

@@ -1,13 +1,14 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 0.3.0（SimpleST ABI 6）のインストール、コンポーネントの Inspector 契約、HRTF・出力、材質、FMOD/Wwise 統合モード、WebGL。
+description: SoundTrace Unity SDK 0.4.0（SimpleST 2.18.2 / ABI 6）のインストール、コンポーネントの Inspector 契約、HRTF・出力、材質、FMOD/Wwise 統合モード、WebGL。
 ---
 
 # SoundTrace SDK for Unity
 
 SoundTrace Unity SDK は、Unity のメッシュ、Renderer のマテリアルスロット、音源、リスナーを
 [SimpleST](../core/simplest.md) に接続するリアルタイム空間オーディオプラグインです。0.3.0 からエンジンが
-STCoreV2 から **SimpleST 2.12.0 / ABI 6** に変わり、レンダラーは **Hybrid** で起動します。
+STCoreV2 から SimpleST に変わり、0.4.0 は **SimpleST 2.18.2 / ABI 6** を使います（以前のリリース: 0.3.0 =
+SimpleST 2.12.0）。レンダラーは **Hybrid** で起動します。
 `SoundTraceManager`、`SoundTraceListener`、`SoundTraceSource`、`SoundTraceObject`、
 `SoundTracePathVisualizer` のコンポーネント名とスクリプト GUID、サンプルシーンはそのままです。
 
@@ -89,8 +90,10 @@ python3 install.py /path/to/UnityProject
   直列処理します。オーディオコールバックにはシーン制御 API やマネージドヒープ割り当てが入りません。
 - 位置は固定ステップのモーションサンプリング（`SoundTraceFixedStepMotion`）で速度を推定します。テレポート
   後は `ResetMotionState()` で Doppler スパイクを防ぎます。
-- ネイティブの `render_start` がオプションを元に戻すため、**開始後に** Hybrid（`reserved0 = 1`）を適用し、
-  再起動・HRTF トグルの後にも再適用します。
+- レンダーを開始するたびに（再起動・HRTF トグルを含む）Hybrid（`reserved0 = 1`）と**エンジンリミッター無効**を明示し、
+  マスターゲインは 0 dB にします。リミッティングは Unity ミキサーが担います — SimpleST 2.18 は生成直後に true-peak
+  リミッター（137 サンプル遅延）を有効にするため、ラッパーが無効にします。レンダーオプションはエンジン生成時とスピーカーレイアウト
+  変更時にのみプリセットで再適用され、`render_start` はそのまま維持します。
 
 ## SoundTraceManager
 

@@ -1,6 +1,6 @@
 ---
 title: Web
-description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK のインストール、配信要件、HRTF、品質プリセット、材質、トラブルシューティング。
+description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK のインストール、配信要件、HRTF、品質プリセット、材質、トラブルシューティング。
 ---
 
 # Web SDK
@@ -9,8 +9,10 @@ description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK のインス
 SDK です。Three.js のようなレンダリングシーンのメッシュ・材質・音源・リスナーを Sound Tracing のシーンに接続し、
 Web Audio graph に空間化されたステレオ出力を提供します。
 
-1.0.0 からエンジンが STCoreV2 から **SimpleST 2.12.0 / ABI 6** に変わりました。`SoundTrace`、
-`Source`、`Mesh`、`Listener` の facade は維持されますが、バックエンド・HRTF・材質・オプションの契約が変わっています。
+1.0.0 からエンジンが STCoreV2 から SimpleST に変わり、1.1.0 は **SimpleST 2.18.2 / ABI 6** を使います
+（以前のリリース: 1.0.0 = SimpleST 2.12.0）。既存の
+呼び出し側は変わりません。`SoundTrace`、`Source`、`Mesh`、`Listener` の facade は維持されますが、STCoreV2 と比べて
+バックエンド・HRTF・材質・オプションの契約が変わっています。
 全オプションとエンティティ API は [Facade API](./web/facade.md)、低レベルの SimpleST モジュールアクセスは
 [Native API](./web/native.md) を参照してください。
 
@@ -45,7 +47,7 @@ Web Audio graph に空間化されたステレオ出力を提供します。
 | 形態 | ファイル | インストール |
 |---|---|---|
 | vendor ツリー | `soundtrace-js-release-vendor.zip`（ルート `sdk/`） | 静的パスに展開して配信。同梱の `install.py` がハッシュ検証後に `vendor/sound-tracing/sdk` へインストール |
-| npm パッケージ | `exarionai-soundtrace.js-1.0.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.0.0.tgz` |
+| npm パッケージ | `exarionai-soundtrace.js-1.1.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.1.0.tgz` |
 
 ```ts
 import { SoundTrace } from '@exarionai/soundtrace.js';
@@ -214,6 +216,10 @@ sound.output.connect(audioContext.destination);
 `soundtrace.js` は `AudioContext` を作成しません。アプリが context と再生ノードを所有し、
 SDK は音源ごとの**入力キャプチャノード**と**リスナーマスター出力**（`sound.output`）を 1 つ提供します。
 音源ごとの出力エフェクトは `sound.output` の後ろへ移す必要があります。
+
+SDK は出力リミッターを**無効の状態**にしておきます。SimpleST 2.18 は生成直後に true-peak リミッター（−1 dBTP、137 サンプル
+遅延）を有効にしますが、`sound.output` の後ろの Web Audio マスターバスはアプリが所有するためです。エンジンのリミッターが
+必要なら、`sound.listener.setRenderOptions({ useLimiter: true })` で true-peak リミッターを有効にします。
 
 ## 更新と破棄
 

@@ -92,7 +92,8 @@ STCoreV2 の実装は配布されなくなりました。このページは、ST
    `coordinateBasis` が処理します）。
 5. `exaRenderSound` をホストオーディオコールバックの `st_rt_render_process` に置き換え、
    `renderOutputMode` と `hostSampleRate` を生成オプションに指定します。
-6. `st_rt_render_start` の**後に** `STRenderOptions.reserved0 = 1`（Hybrid）を適用します。
+6. `st_rt_render_start` の**後に** `STRenderOptions.reserved0 = 1`（Hybrid）を適用します（2.18.0 からエンジンの既定は
+   Hybrid ですが、明示を推奨します）。出力リミッターをホストが担う場合は、同じ箇所で `useLimiter = 0` にして無効にします。
 7. capability ビット（`ST_CAP_*`）で機能の有無を確認し、`structSize`/`apiVersion` を埋めて呼び出します。
 
 ## 参考

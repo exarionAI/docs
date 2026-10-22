@@ -8,17 +8,18 @@ description: SimpleST 即時空間聲學引擎的 Web、Unity、Unreal Engine、
 
 SoundTrace SDK 是將 [SimpleST](../core/simplest.md) 引擎包裝起來，讓 Web、遊戲引擎與音訊中介軟體
 能夠使用的產品線。所有包裝層都從同一個儲存庫取用同一份引擎 SDK
-（`out/dist/<platform>_release/SimpleST`），並以 **SimpleST 2.12.0 / ABI 6** 為基準。
+（`out/dist/<platform>_release/SimpleST`），並以 **SimpleST 2.18.2 / ABI 6** 為基準。
+前一版本：2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0。仍作為舊版產品線持續提供。
 
 ## 整合陣容
 
 | 名稱 | 目標 | 形式 | 狀態 |
 |---|---|---|---|
-| [Web](./web.md) | TypeScript · WebAssembly · Web Audio | `@exarionai/soundtrace.js` 1.0.0（vendor ZIP / npm tgz） | 可用 |
-| [Unity](./unity.md) | Unity 2022.3 LTS 以上（已於 Unity 6 驗證） | `.unitypackage` 0.3.0 | 可用 |
-| [Unreal Engine](./ue.md) | UE 5.6 / 5.7 | `Plugins/SoundTracing` 0.3.0 + Python 安裝程式 | 可用 |
-| [FMOD](./fmod.md) | FMOD Studio / Engine 2.03 ~ 2.04 | `SimpleSTFmod` DSP 外掛 | 可用 |
-| [Wwise](./wwise.md) | Wwise 2025.1 | `Sound-tracing`（Object Processor + Metadata）外掛 | 可用（Audiokinetic 合作夥伴核准進行中） |
+| [Web](./web.md) | TypeScript · WebAssembly · Web Audio | `@exarionai/soundtrace.js` 1.1.0（vendor ZIP / npm tgz） | 可用 |
+| [Unity](./unity.md) | Unity 2022.3 LTS 以上（已於 Unity 6 驗證） | `.unitypackage` 0.4.0 | 可用 |
+| [Unreal Engine](./ue.md) | UE 5.6 / 5.7 | `Plugins/SoundTracing` 0.4.0 + Python 安裝程式 | 可用 |
+| [FMOD](./fmod.md) | FMOD Studio / Engine 2.03 ~ 2.04 | `SimpleSTFmod` DSP 外掛 0.3.0 | 可用 |
+| [Wwise](./wwise.md) | Wwise 2025.1 | `Sound-tracing`（Object Processor + Metadata）外掛 0.2.0 | 可用（Audiokinetic 合作夥伴核准進行中） |
 | [Python](./python.md) | 分析與研究 | — | 規劃中 |
 
 若專案中有 FMOD 或 Wwise 外掛，UE 與 Unity 包裝層會自動切換為掛接到該中介軟體 SimpleST 外掛的
@@ -33,7 +34,7 @@ SoundTrace SDK 是將 [SimpleST](../core/simplest.md) 引擎包裝起來，讓 W
 | macOS | Universal dylib（arm64 + x86_64） | |
 | Linux x86_64 | `.so`（glibc 2.34+） | |
 | Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 24+ |
-| iOS | device arm64 · simulator arm64/x86_64 靜態函式庫 / XCFramework | iOS 15+ |
+| iOS | device arm64 · simulator arm64 靜態函式庫 / XCFramework | iOS 15+ |
 | Web | pthreads WASM（`SimpleSTRealtime.mjs/.wasm`）+ 單執行緒 Offline | 需要 COOP/COEP |
 
 ## 共同使用原則
@@ -48,6 +49,9 @@ SoundTrace SDK 是將 [SimpleST](../core/simplest.md) 引擎包裝起來，讓 W
    編輯僅限於每個頻段都滿足 R+A+T=1 的已驗證數值。
 5. 射線解析度、深度、lane 更新週期等進階旋鈕 **只在量測之後** 才調整。
 6. 單位為公尺。以 cm 為單位的主機（UE、Wwise for Unreal）由包裝層代入 `sceneRatio = 0.01`。
+7. **輸出限幅器由主機主輸出鏈負責**。引擎 2.18.0 在上下文建立後會立即啟用 true-peak 限幅器
+   （−1 dBTP，137 樣本延遲），但 UE、Unity、FMOD、Wwise、Web 包裝層依照文件所述的預設值，將限幅器維持在
+   **關閉狀態**。啟用方式請參考各 SDK 頁面。
 
 ## 從哪裡開始
 

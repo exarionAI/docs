@@ -1,6 +1,6 @@
 ---
 title: Facade API
-description: 在 ST 與 MT 上用法一致的 soundtrace.js 1.0.0 建議 API，以及因 SimpleST 轉換而改變的選項。
+description: 在 ST 與 MT 上用法一致的 soundtrace.js 1.1.0 建議 API，以及因 SimpleST 轉換而改變的選項。
 ---
 
 # Facade API
@@ -69,7 +69,7 @@ const sound = await SoundTrace.create(audioContext, {
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'`（別名 `'convolution'` / `'steamaudio'`） |
 | `loadMaterialAssets()` | 手動載入材質表（`autoLoadMaterials: false` 時） |
 | `update(dt?)` | 更新場景並執行傳播。以這一影格的有效路徑數 resolve |
-| `debugSnapshot(options?)` | 非同步診斷快照。`.simplest` 含 SimpleST scene/timing/render/IR 統計 |
+| `debugSnapshot(options?)` | 非同步診斷快照。`.simplest` 含 SimpleST scene/timing/render/IR 統計，1.1.0 起另含 `features`、`output`（限幅器、種類、延遲、主增益）、`inputs`（即時／片段音源數） |
 | `getStatistics(options?)` | `debugSnapshot` 的包裝。`validPathCount` 與 `.simplest` |
 | `getIRs()` | 在獨立的 Offline Worker 中重新計算 9 頻段 early path IR |
 | `renderMonoImpulseResponse(source, sec)` | 在 Offline Worker 中計算 44.1 kHz 單聲道壓力 IR（最長 30 s） |
@@ -82,7 +82,7 @@ const sound = await SoundTrace.create(audioContext, {
 ```ts
 sound.listener
   .setPose({ position: [0, 1.6, 0], orientation: camera.quaternion.toArray() })
-  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 })
+  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 }) // useLimiter 預設 false
   .setOutputMode('hrtf');   // 'hrtf'（雙耳）| 'speaker'（立體聲 panning）
 ```
 
@@ -93,11 +93,11 @@ sound.listener
 | 鍵 | 意義 |
 |---|---|
 | `earlyReflectionMode` | 只允許 `'hybrid'` |
-| `useDoppler` | 可變延遲的 Doppler 音高 |
-| `useLimiter` | 輸出限幅器 |
+| `useDoppler` | 可變延遲的 Doppler 音高 — 自 SimpleST 2.18.1 起即時渲染中一律開啟，`false` 會被忽略 |
+| `useLimiter` | 輸出限幅器。預設 `false` — 由應用程式的 Web Audio 主匯流排負責限幅（引擎 2.18 建立後的預設為開啟，但 SDK 會在每次渲染啟動、HRTF／輸出變更與 reset 時將其關閉）。`true` 時為 SimpleST 2.18 true-peak 限幅器（−1 dBTP，137 樣本延遲） |
 | `pathFadeTime` | 路徑出現／消失的交叉淡化（秒） |
 | `maxDelaySeconds` | 渲染器維持的最大路徑延遲（秒） |
-| `diffuseEnabled` | late reverb 渲染開關 |
+| `diffuseEnabled` | late reverb 渲染開關。1.1.0 起也會一併開關 2.18 的一次散射（diffuse rain）渲染 |
 
 `hrtfQuality`、`diffuseQuality`、`delayInterpolation`、`hrtfMode` 為 STCoreV2 專用，會被 **拒絕**。
 

@@ -33,7 +33,7 @@ i18n/<locale>/docusaurus-plugin-content-docs/current/   # en, ja, zh-Hans, zh-Ha
 static/img/           # 이미지 (아래 플레이스홀더 목록 참고)
 ```
 
-문서 기준: **SimpleST 2.12.0 / ABI 6** (2026-10-15). 엔진·플러그인 사실관계의 원천은
+문서 기준: **SimpleST 2.18.2 / ABI 6** (2026-10-23, 이전 SDK 릴리스: 엔진 2.12.0). 엔진·플러그인 사실관계의 원천은
 SimpleST 저장소의 `engine/ABI/*.h`, `plugins/*/README.md`다.
 
 ## 이미지 플레이스홀더 교체 목록

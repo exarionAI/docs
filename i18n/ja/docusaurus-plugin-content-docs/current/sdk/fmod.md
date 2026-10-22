@@ -1,6 +1,6 @@
 ---
 title: FMOD
-description: SimpleSTFmod — FMOD Studio / FMOD Engine 向け SimpleST DSP プラグインの構造、インストール、Studio でのオーサリング、ゲーム側 C API、UE・Unity 統合。
+description: SimpleSTFmod — FMOD Studio / FMOD Engine 向け SimpleST DSP プラグインの構造、インストール、Studio でのオーサリング、ワンショットとウォーム音源プール、ゲーム側 C API、UE・Unity 統合。
 ---
 
 # SimpleST FMOD プラグイン
@@ -11,7 +11,7 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine 向け SimpleST DSP プ�
 
 | 項目 | 値 |
 |---|---|
-| プラグインバージョン | v0.2.0 |
+| プラグインバージョン | v0.3.0（SimpleST 2.18.2）。以前のリリース: v0.2.0（SimpleST 2.12.0） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 ビルド = 2.00 ~ 2.04、204 ビルド = 2.04+） |
 | プラットフォーム | Windows x64 · macOS · Linux · Android · iOS（静的）· Web（静的、FMOD HTML5 pthreads） |
 | 配布 | `SimpleST-fmod-release.zip`（プラットフォーム別 `plugins/` + `install.py`、UE・Unity グルーを含む） |
@@ -38,7 +38,10 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine 向け SimpleST DSP プ�
 - レンダラーは「今 process が動いている Listener」がブロックごとに選出されます。Studio が作るプレビュー用のダミー
   インスタンスがライブの Listener を横取りすることはなく、レンダラーが 250 ms 停止すると別の Listener が引き継ぎ、
   誰もいなければ Source は dry に戻ります。
-- エンジン音源は、実際にオーディオが入ってきた Source にのみ作られます（同時ストリーム 64 個の保護）。
+- エンジン音源は、実際にオーディオが入ってきた Source にのみ作られます（同時ストリーム 64 個の保護）。終了したボイスの
+  エンジン音源はウォームプールに残し、次のボイスが再利用します — [ワンショットとウォーム音源プール](#ワンショットとウォーム音源プール)。
+- **出力リミッターは無効にします**: SimpleST 2.18 は生成直後に true-peak リミッター（−1 dBTP、137 サンプル遅延）を有効にしますが、
+  FMOD の中ではマスターバスがリミッティングを担います。
 
 ## インストール
 
@@ -106,6 +109,31 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 
 Listener を **bypass** すると Source は dry 通過に戻ります（A/B 比較用）。DSP 名とパラメータ
 名はバンクが識別子として保存するため、配布後は変更しません。
+
+## ワンショットとウォーム音源プール
+
+イベントごとに新しいボイスが来る短い音のために、0.3.0 からプラグインがエンジン音源をボイス間で
+再利用します。FMOD Studio のイベントや DSP 構成を変更する必要はありません。
+
+- エンジンは**新しい音源**のすべての経路を 150 ms かけてフェードインし、最初の IR を待ちます。0.2.0 はボイスごとに
+  エンジン音源を新しく作っていたため 25 ms の音が 15 ~ 20 dB 小さく遅れて聞こえ、ボイスが終わるとすぐに音源を削除して
+  ストリームリングに残った末尾が切れていました。
+- 0.3.0 は、終了したボイスがすでに送り込んだ PCM を**最大 300 ms まで最後まで再生**してから音源を停止し（残響は
+  続きます）、その音源を**最大 16 個、2 秒間**ウォーム状態で保持します。
+- 次のボイスは最も近いウォーム音源に割り当てられます。**0.25 m 以内なら即座に**、それより遠ければ約 25 ms 後に再生を
+  開始します。2 秒以内に再利用されなかったウォーム音源は解放されます。
+
+コアテスト（FMOD なしで同じランタイム）で測定した 0.2.0 との比較結果です。
+
+| 項目 | 0.2.0（ボイスごとに新しい音源） | 0.3.0（ウォームプール） |
+|---|---|---|
+| 同じ位置のボイス 16 個（120 ms 間隔）のエンジン音源生成 | 16 | 4 |
+| 同じ位置のボイスのレベル | 基準 | +15.7 dB（本来の音量） |
+| 移動するボイスのレベル | 基準 | +19.3 dB（本来の音量） |
+| ボイス開始 → 最初の音 | 92 ms | 69 ms |
+| 350 ms ボイスの聞こえる長さ | 275 ms | 350 ms |
+
+環境変数 `SIMPLESTFMOD_WARM_SOURCES=0` にすると、以前のようにボイスごとに新しい音源を作ります（比較用）。
 
 ## ゲーム側 C API
 
@@ -179,6 +207,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 | `SIMPLESTFMOD_LOG_STDERR` | stderr ログ |
 | `SIMPLESTFMOD_RUNTIME_LIBRARY` | SimpleSTRealtime のパスを強制 |
 | `SIMPLESTFMOD_AUDITION_ROOM` | `"W,H,D"` オーディションルーム（m）、`"0"` で無効 |
+| `SIMPLESTFMOD_WARM_SOURCES` | `"0"` でウォーム音源プールを無効にし、ボイスごとに新しいエンジン音源（比較用） |
 
 Windows では常に `OutputDebugString` にも出力されます。コントロールスレッドはレンダラーの状態が変わるたびに
 `SimpleST Listener rendering` / `no SimpleST Listener rendering` を記録します。

@@ -93,7 +93,9 @@ body has been replaced by [SimpleST](./simplest.md).
    with `coordinateBasis`).
 5. Replace `exaRenderSound` with `st_rt_render_process` in the host audio callback, and set
    `renderOutputMode` and `hostSampleRate` in the create options.
-6. Apply `STRenderOptions.reserved0 = 1` (Hybrid) **after** `st_rt_render_start`.
+6. Apply `STRenderOptions.reserved0 = 1` (Hybrid) **after** `st_rt_render_start` (the engine default
+   is Hybrid since 2.18.0, but setting it explicitly is recommended). If the host handles output
+   limiting, turn the output limiter off with `useLimiter = 0` at the same point.
 7. Check feature availability through the capability bits (`ST_CAP_*`), and fill
    `structSize`/`apiVersion` before every call.
 

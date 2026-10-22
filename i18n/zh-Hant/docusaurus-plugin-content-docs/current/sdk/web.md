@@ -1,6 +1,6 @@
 ---
 title: Web
-description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、部署需求、HRTF、品質預設、材質與疑難排解。
+description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、部署需求、HRTF、品質預設、材質與疑難排解。
 ---
 
 # Web SDK
@@ -9,8 +9,10 @@ description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、
 它將 Three.js 之類渲染場景中的網格、材質、音源與聆聽者連接到 Sound Tracing 場景，
 並向 Web Audio graph 提供空間化的立體聲輸出。
 
-自 1.0.0 起，引擎從 STCoreV2 換成 **SimpleST 2.12.0 / ABI 6**。`SoundTrace`、
-`Source`、`Mesh`、`Listener` facade 維持不變，但後端、HRTF、材質與選項契約都已改變。
+自 1.0.0 起，引擎從 STCoreV2 換成 SimpleST，1.1.0 使用 **SimpleST 2.18.2 / ABI 6**
+（前一版本：1.0.0 = SimpleST 2.12.0）。既有的
+呼叫端不需變更。`SoundTrace`、`Source`、`Mesh`、`Listener` facade 維持不變，但相較於 STCoreV2，
+後端、HRTF、材質與選項契約都已改變。
 完整選項與實體 API 請見 [Facade API](./web/facade.md)，低階 SimpleST 模組存取請見
 [Native API](./web/native.md)。
 
@@ -45,7 +47,7 @@ description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、
 | 形式 | 檔案 | 安裝 |
 |---|---|---|
 | vendor 樹 | `soundtrace-js-release-vendor.zip`（根目錄 `sdk/`） | 解壓到靜態路徑後提供服務。隨附的 `install.py` 會在驗證雜湊後安裝到 `vendor/sound-tracing/sdk` |
-| npm 套件 | `exarionai-soundtrace.js-1.0.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.0.0.tgz` |
+| npm 套件 | `exarionai-soundtrace.js-1.1.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.1.0.tgz` |
 
 ```ts
 import { SoundTrace } from '@exarionai/soundtrace.js';
@@ -213,6 +215,10 @@ sound.output.connect(audioContext.destination);
 `soundtrace.js` 不會建立 `AudioContext`。應用程式擁有 context 與播放節點，SDK 提供逐音源的
 **輸入擷取節點** 與一個 **聆聽者主輸出**（`sound.output`）。逐音源的輸出效果必須移到
 `sound.output` 之後。
+
+SDK 將輸出限幅器維持在 **關閉狀態**。SimpleST 2.18 在建立後會立即啟用 true-peak 限幅器（−1 dBTP，
+137 樣本延遲），但 `sound.output` 之後的 Web Audio 主匯流排由應用程式擁有。需要引擎限幅器時，以
+`sound.listener.setRenderOptions({ useLimiter: true })` 啟用 true-peak 限幅器。
 
 ## 更新與清理
 

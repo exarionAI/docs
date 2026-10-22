@@ -1,21 +1,22 @@
 ---
 title: Unreal Engine
-description: SoundTracing UE5 プラグイン 0.3.0（SimpleST ABI 6）のインストール、Project Settings、リスナー・音源・オブジェクトコンポーネント、Native/FMOD/Wwise 統合モード、プラットフォームリンク契約。
+description: SoundTracing UE5 プラグイン 0.4.0（SimpleST 2.18.2 / ABI 6）のインストール、Project Settings、リスナー・音源・オブジェクトコンポーネント、ワンショットサウンド、Native/FMOD/Wwise 統合モード、プラットフォームリンク契約。
 ---
 
 # SoundTrace SDK for Unreal Engine
 
 SoundTracing UE5 プラグインは、Unreal Audio Mixer の Spatialization プラグイン + サブミックス、そして
 Actor Component を通して [SimpleST](../core/simplest.md) を接続します。0.3.0 からエンジンが STCoreV2 から
-**SimpleST 2.12.0 / ABI 6** に変わり、プロジェクトに FMOD または Wwise プラグインがあると、同じ
-ソースがそのミドルウェアの SimpleST プラグインへ接続する**統合モード**でビルドされます。
+SimpleST に変わり、0.4.0 は **SimpleST 2.18.2 / ABI 6** を使います（以前のリリース: 0.3.0 = SimpleST 2.12.0）。
+プロジェクトに FMOD または Wwise プラグインがあると、同じソースがそのミドルウェアの SimpleST プラグインへ接続する
+**統合モード**でビルドされます。
 
 ## 現在の状態
 
 | 項目 | 内容 |
 |---|---|
 | Engine | Unreal Engine 5.6（5.7 で検証） |
-| Plugin | `Plugins/SoundTracing` 0.3.0（`SoundTracing` ランタイム + `SoundTracingEditor` モジュール、Niagara 依存） |
+| Plugin | `Plugins/SoundTracing` 0.4.0（`SoundTracing` ランタイム + `SoundTracingEditor` モジュール、Niagara 依存） |
 | 対応プラットフォーム | Win64、Mac、Linux、Android、IOS |
 | 配布 | `SoundTracing-release.zip`（プラグイン + 独立 Python インストーラー） |
 | エンジンバイナリ | `ThirdParty/SimpleST/Binaries/<Plat>/<Config>/` — UE Debug のみ SDK Debug、他は Release |
@@ -142,7 +143,7 @@ Audio Mixer Sample Rate はどの値でも構いません。SimpleST は 44.1 kH
 | Render | `Doppler` / `Doppler Gain` | `true` / `Off` | 可変遅延ピッチ / 移動モノポール放射ゲイン |
 | Render | `Late Reverb` / `Late Reverb Coupling` | `true` / `Default` | FDN16 / Off · Subtle 6 dB · Default 9 dB · Strong 12 dB |
 | Render | `Path Fade Time Seconds` | `0.05` | 経路の出現・消滅クロスフェード |
-| Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak |
+| Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak / True Peak。`True Peak`（0.4.0）は SimpleST 2.18 の true-peak リミッター（−1 dBTP、137 サンプル遅延）。エンジン 2.18 は生成直後にリミッターを有効にしますが、プラグインの既定は `Off` で、Unreal のマスターチェーンがリミッティングを担います。0.4.0 でスピーカー出力（`Speakers`）でも `Off` が適用されるよう修正 |
 | Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 63 ~ 16k Hz 9バンド ±24 dB |
 | Paths | `Enable Direct/Transmission/Reflection/Diffraction/Reverb Path` | すべて `true` | グローバル経路ゲート |
 | Acoustics | `Propagation Delay` / `Direct Occlusion` | `true` / `true` | 無効にすると、それぞれ全経路が直接音の時刻に重なる / 直接音がジオメトリを通過する |
@@ -187,6 +188,18 @@ Attenuation の spatialization plugin settings に接続します。用途別の
 | Reverb Rays | `Stationary Emitter` | `false` | 動かないエミッターのヒント |
 | Per-Path Enable | `Direct/Transmission/Reflection/Diffraction/Reverb Path Enabled` | すべて `true` | 音源ごとの経路ゲート |
 | Bypass | `Bypass` | `false` | SimpleST を経由せずに通過 |
+
+## ワンショットサウンド
+
+エンジンは**新しい音源**のすべての経路を 150 ms かけてフェードインし最初の IR を待つため、銃声・足音のたびにエンジン
+音源を新しく作ると、短いショットが小さく遅れて聞こえます。プラグインはモードごとにこれを処理します。
+
+- **Native モード**: コンテキスト開始時にエンジン音源プールをあらかじめ作っておき、ボイスが終わるとその音源をプールへ
+  戻して、最も近い次のボイスが引き継ぎます。ショットごとに Audio Component・サウンドを新しく再生しても、エンジン
+  音源は新しく作られません。
+- **FMOD / Wwise モード**: レンダーはミドルウェアプラグインが行うため、そのウォーム音源プール（FMOD 0.3.0 · Wwise 0.2.0）に
+  従います — [FMOD](./fmod.md#ワンショットとウォーム音源プール) · [Wwise](./wwise.md#ワンショットとウォーム音源プール)。
+  **Wwise AudioLink** のように音ごとに新しいゲームオブジェクトを登録する場合も処理されます。
 
 ## ジオメトリ（`USoundTracingObjectComponent`）
 
@@ -282,6 +295,7 @@ scene です。
 | source が空間化されない（Native） | Audio Component に SoundTracing Source Settings asset が接続されているか |
 | geometry が反映されない | Object Component の immediate parent が対応 mesh component か、`Acoustic Mobility` |
 | レンダーブロック超過（オーディオの途切れ） | `Early Reflections = Hybrid`、`Reflection Update Interval` の引き上げ、Quality Preset の引き下げ |
+| 銃声・足音が小さい、または遅れて聞こえる（FMOD/Wwise モード） | FMOD プラグイン 0.3.0 / Wwise プラグイン 0.2.0 以上か、`SIMPLESTFMOD_WARM_SOURCES=0` が設定されていないか |
 | path が見えない | visualizer component、Niagara plugin、path enable の状態 |
 
 ## 次のドキュメント

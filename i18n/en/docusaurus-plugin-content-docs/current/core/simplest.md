@@ -19,8 +19,8 @@ top of its public C ABI.
 
 | Item | Value |
 |---|---|
-| Engine version | **2.12.0** (`ST_VERSION_STRING`) |
-| Public ABI | **ABI 6** (`ST_ABI_VERSION`, 3.0 clean break) |
+| Engine version | **2.18.2** (`ST_VERSION_STRING`). Previous release: 2.12.0 |
+| Public ABI | **ABI 6** (`ST_ABI_VERSION`, 3.0 clean break). All changes since 2.12.0 are additive |
 | Primary language | C++20 (C ABI exposed, C11-header compatible) |
 | Build system | CMake 3.21+ · platform entry point `mainBuild.sh` |
 | Platforms | Windows x64 · macOS Universal · Linux x86_64 · Android (arm64-v8a/armeabi-v7a/x86_64) · iOS (device/simulator) · Web (Emscripten, pthreads) |
@@ -66,8 +66,8 @@ The public ABI is physically split into two DLLs; the shared PODs live in `STTyp
 
 | Header | Context | Function prefix | Role |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | Real-time propagation + audio render (121 exports) |
-| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | Offline IR computation and render (87 exports) |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | Real-time propagation + audio render (143 exports) |
+| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | Offline IR computation and render (116 exports) |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | Shared PODs, enums, capability bits |
 
 The naming rule is `st_<dll>_<family>_<verb>[_<what>]`, where family is one of
@@ -93,16 +93,17 @@ Create functions return the handle by value and **failure is `v < 0`**. `0` is a
 
 | family | Representative functions |
 |---|---|
-| Lifecycle | `st_rt_init_create_options`, `st_rt_create`, `st_rt_destroy`, `st_rt_get_api_version`, `st_rt_get_version_string`, `st_rt_get_capabilities`, `st_rt_get_last_status/error` |
+| Lifecycle | `st_rt_init_create_options`, `st_rt_create`, `st_rt_destroy`, `st_rt_get_api_version`, `st_rt_get_version_string`, `st_rt_get_capabilities`, `st_rt_get_capability_word`, `st_rt_get_last_status/error` |
 | material | `st_rt_material_create`, `st_rt_material_load_defaults` |
 | mesh / object | `st_rt_mesh_create` (one material or per-triangle material indices), `st_rt_mesh_set_material`, `st_rt_object_create[_q]`, `st_rt_object_set_transform[_q]`, `*_destroy` |
 | scene | `st_rt_scene_set_accel`, `st_rt_scene_set_triangle_intersection`, `st_rt_scene_get_stats`, `st_rt_scene_raycast` |
 | source | `st_rt_source_create`, `set_position/direction/velocity`, `set_orientation_q`, `set_directivity`, `set_axis_attenuation`, `set_energy`, `set_path_enabled`, `set_path_volume`, `set_ray_count`, `set_depth`, `set_transport_refresh_steps` |
-| source audio input | `st_rt_source_set_audio_file` (WAV/FLAC/MP3/Ogg), `st_rt_source_attach_stream` + `write_stream` + `get_stream_status` (host PCM), `play/pause/stop`, `clear_audio` |
+| source audio input | `st_rt_source_set_audio_file` (WAV/FLAC/MP3/Ogg), `st_rt_source_attach_stream` + `write_stream` + `get_stream_status` (host PCM), `st_rt_source_set_audio_clip` / `set_audio_clip_asset` (cached clip), `clear_audio` |
+| source playback control | `st_rt_source_play/pause/stop/seek`, `set_volume` (linear 0 ~ 16), `set_pitch` (0.25 ~ 4), `set_loop_count`, `st_rt_source_trigger`, `set_retrigger_interval` |
 | listener | `st_rt_listener_set_position/velocity/rotation`, `set_ray_count`, `set_ray_sampling_method` |
 | Propagation | `st_rt_build`, `st_rt_build_dynamic`, `st_rt_propagate`, `st_rt_set_max_depth`, `st_rt_set_transmission_max_depth`, `st_rt_set_path_type_enabled`, `st_rt_set_lane_update_interval` |
 | Acoustic policy | `st_rt_set_atmosphere`, `st_rt_set_physical_distance_attenuation`, `st_rt_set_acoustic_feature_enabled`, `st_rt_set_doppler_gain_mode`, `st_rt_set_late_coupling[_preset]`, `st_rt_set_early_late_band_energy_targets` |
-| render | `st_rt_render_start/stop`, `st_rt_render_process` (host pull), `set_options/get_options`, `set_spatializer`, `set_speaker_layout[_custom]`, `set_eq`, `set_limiter_type`, `set_path_fade_time`, `set_max_delay_seconds`, `get_latency_frames`, `get_process_stats` |
+| render | `st_rt_render_start/stop`, `st_rt_render_process` (host pull), `set_options/get_options`, `set_spatializer`, `set_speaker_layout[_custom]`, `set_eq`, `set_master_gain_db`, `set_limiter_type`, `get_limiter_latency_samples`, `set_path_fade_time`, `set_max_delay_seconds`, `get_latency_frames`, `get_process_stats` |
 | Threads | `st_rt_set_thread_attributes`, `st_rt_get_thread_inventory`, `STRT_CreateOptions.maxComputeThreads` |
 | Diagnostics | `st_rt_get_timing`, `st_rt_ir_get_stats`, `st_rt_debug_acquire_snapshot`, `st_rt_debug_copy_visual_paths`, `st_rt_debug_copy_mesh/scene_accel_nodes` |
 
@@ -171,12 +172,14 @@ STStreamDesc sd = { sizeof sd, ST_ABI_VERSION, 48000, 1, 0 };     // mono, capac
 st_rt_source_attach_stream(ctx, srcId, &sd);
 st_rt_source_play(ctx, srcId);
 
-// 5. Build acceleration structures + start render + select Hybrid early reflections
+// 5. Build acceleration structures + start render + set the output stage explicitly
 st_rt_build(ctx);
 st_rt_render_start(ctx, /*useHrtf=*/1);
 STRenderOptions ro; st_rt_render_get_options(ctx, &ro);
-ro.reserved0 = 1;                                                   // 1 = hybrid (after render_start!)
+ro.reserved0 = 1;                // 1 = hybrid (2.18.0 default; set it explicitly after render_start)
+ro.useLimiter = 0;               // off when the host master chain handles limiting (2.18.0 default 1 = true-peak)
 st_rt_render_set_options(ctx, &ro);
+st_rt_render_set_master_gain_db(ctx, 0.f);                          // engine default 0 dB
 
 // 6. Game loop (control thread)
 st_rt_source_set_position(ctx, srcId, x, y, z);
@@ -190,8 +193,11 @@ st_rt_destroy(ctx);
 ```
 
 :::note
-`st_rt_render_start` resets the render preset, so **Hybrid (`reserved0 = 1`) must be applied after
-it**. All official plug-ins follow this order.
+Since 2.18.0, the defaults right after creation and the real-time render preset (re-applied whenever
+a speaker layout is turned on or off) are **Hybrid (`reserved0 = 1`) + true-peak output limiter
+(−1 dBTP, 137-sample latency) on**, with a master gain of 0 dB (up to 2.12.0: Objects + limiter off).
+Do not rely on the defaults; set Hybrid and the limiter explicitly **after `render_start` and after any
+layout change**. All official plug-ins re-apply their own defaults in this order.
 :::
 
 ## Core Concepts
@@ -260,11 +266,12 @@ distance attenuation + stereo panning only, which serves as the "Sound Tracing O
 
 | Value | Behavior | Use |
 |---|---|---|
-| `0` Objects | Renders every early path as an individually spatialized object | Reference listening, offline A/B (preset default) |
-| `1` Hybrid | Only a listener-global budget (reflection 12+4 · diffraction 3+1) is exact; the rest goes to the HOA3 bed | **Real-time games** |
+| `0` Objects | Renders every early path as an individually spatialized object | Reference listening, offline A/B (preset default up to 2.12.0) |
+| `1` Hybrid | Only a listener-global budget (reflection 12+4 · diffraction 3+1) is exact; the rest goes to the HOA3 bed | **Real-time games** (engine default since 2.18.0) |
 
 In a hall with 8 sources, Objects costs 16.8 ms per block (budget 11.6 ms) while Hybrid costs 2.4 ms.
-UE, Unity, FMOD, Wwise, and soundtrace.js all apply Hybrid by default.
+Since 2.18.0 the engine default is also Hybrid, and UE, Unity, FMOD, Wwise, and soundtrace.js all
+apply Hybrid explicitly after the render starts.
 
 ### Spatialization and output
 
@@ -276,7 +283,19 @@ UE, Unity, FMOD, Wwise, and soundtrace.js all apply Hybrid by default.
 
 Speaker output is enabled with `st_rt_render_set_speaker_layout` (2.0 / 2.1 / 4.1 / 5.1 / 7.1 /
 laptop near-field 2.0) or a custom layout, and produces N channels through an internal HOA3 decode.
-The output stage has a 9-band EQ and a limiter (Envelope / Lookahead peak).
+The output stage runs 9-band EQ → master gain → limiter, in that order.
+
+| Output stage | Function | 2.18.0 default |
+|---|---|---|
+| Master gain | `st_rt_render_set_master_gain_db` (−96 ~ +24 dB, 20 ms ramp) | 0 dB |
+| Limiter type | `st_rt_render_set_limiter_type` — Envelope (0) / Lookahead peak (1) / True peak (2) | True peak, ceiling −1 dBTP |
+| Limiter on/off | `STRenderOptions.useLimiter` | On (1). Latency is `st_rt_render_get_limiter_latency_samples` = 137 samples |
+
+The limiter is the last stage of every output, both stereo and speaker layouts (N channels,
+channel-linked). Integrations where the host master chain handles limiting, such as middleware and
+game engines, turn it off with `useLimiter = 0`. Check for the new features with
+`ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER` · `ST_CAP1_MASTER_GAIN` from `st_rt_get_capability_word(1)`
+(do not mix them with the word-0 bits of `st_rt_get_capabilities()` in an AND).
 
 ### Host pull render
 

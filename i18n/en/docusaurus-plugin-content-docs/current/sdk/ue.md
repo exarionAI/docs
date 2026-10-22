@@ -1,21 +1,22 @@
 ---
 title: Unreal Engine
-description: SoundTracing UE5 plugin 0.3.0 (SimpleST ABI 6) installation, Project Settings, listener/source/object components, Native/FMOD/Wwise integration modes, platform link contract.
+description: SoundTracing UE5 plugin 0.4.0 (SimpleST 2.18.2 / ABI 6) installation, Project Settings, listener/source/object components, one-shot sounds, Native/FMOD/Wwise integration modes, platform link contract.
 ---
 
 # SoundTrace SDK for Unreal Engine
 
 The SoundTracing UE5 plugin connects [SimpleST](../core/simplest.md) through the Unreal Audio Mixer
 Spatialization plugin + submix and through Actor Components. From 0.3.0 the engine has changed from
-STCoreV2 to **SimpleST 2.12.0 / ABI 6**, and when the project has an FMOD or Wwise plugin the same
-source builds in an **integration mode** that attaches to that middleware's SimpleST plug-in.
+STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.18.2 / ABI 6** (previous release: 0.3.0 =
+SimpleST 2.12.0). When the project has an FMOD or Wwise plugin the same source builds in an
+**integration mode** that attaches to that middleware's SimpleST plug-in.
 
 ## Current status
 
 | Item | Details |
 |---|---|
 | Engine | Unreal Engine 5.6 (verified on 5.7) |
-| Plugin | `Plugins/SoundTracing` 0.3.0 (`SoundTracing` runtime + `SoundTracingEditor` modules, depends on Niagara) |
+| Plugin | `Plugins/SoundTracing` 0.4.0 (`SoundTracing` runtime + `SoundTracingEditor` modules, depends on Niagara) |
 | Supported platforms | Win64, Mac, Linux, Android, IOS |
 | Distribution | `SoundTracing-release.zip` (plugin + standalone Python installer) |
 | Engine binaries | `ThirdParty/SimpleST/Binaries/<Plat>/<Config>/` — only UE Debug uses the SDK Debug build, everything else uses Release |
@@ -144,7 +145,7 @@ Project defaults live in Project Settings; per-level overrides go on `USoundTrac
 | Render | `Doppler` / `Doppler Gain` | `true` / `Off` | Variable-delay pitch / moving-monopole radiation gain |
 | Render | `Late Reverb` / `Late Reverb Coupling` | `true` / `Default` | FDN16 / Off · Subtle 6 dB · Default 9 dB · Strong 12 dB |
 | Render | `Path Fade Time Seconds` | `0.05` | Path appear/disappear crossfade |
-| Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak |
+| Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak / True Peak. `True Peak` (0.4.0) is the SimpleST 2.18 true-peak limiter (−1 dBTP, 137-sample latency). Engine 2.18 turns the limiter on right after creation, but the plugin default is `Off` so that the Unreal master chain handles limiting. 0.4.0 fixes `Off` so it also applies to speaker output (`Speakers`) |
 | Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 9 bands from 63 to 16k Hz, ±24 dB |
 | Paths | `Enable Direct/Transmission/Reflection/Diffraction/Reverb Path` | All `true` | Global path gates |
 | Acoustics | `Propagation Delay` / `Direct Occlusion` | `true` / `true` | When disabled: every path collapses onto the direct-sound time / the direct sound passes through geometry |
@@ -191,6 +192,20 @@ purpose like presets.
 | Reverb Rays | `Stationary Emitter` | `false` | Hint that the emitter never moves |
 | Per-Path Enable | `Direct/Transmission/Reflection/Diffraction/Reverb Path Enabled` | All `true` | Per-source path gates |
 | Bypass | `Bypass` | `false` | Passes through without going through SimpleST |
+
+## One-shot sounds
+
+The engine fades in every path of a **new source** over 150 ms and waits for its first IR, so
+creating a new engine source for every gunshot or footstep makes short shots sound quiet and late.
+The plugin handles this per mode.
+
+- **Native mode**: an engine source pool is created up front when the context starts, and when a
+  voice ends its source returns to the pool so the nearest next voice picks it up. Playing a new
+  Audio Component or sound for every shot does not create a new engine source.
+- **FMOD / Wwise mode**: rendering is done by the middleware plug-in, so this follows its warm source
+  pool (FMOD 0.3.0 · Wwise 0.2.0) — [FMOD](./fmod.md#one-shots-and-the-warm-source-pool) ·
+  [Wwise](./wwise.md#one-shots-and-the-warm-source-pool). Cases that register a new game object per
+  sound, such as **Wwise AudioLink**, are handled as well.
 
 ## Geometry (`USoundTracingObjectComponent`)
 
@@ -292,6 +307,7 @@ directionality, and late reverb coupling.
 | Source is not spatialized (Native) | A SoundTracing Source Settings asset is attached to the Audio Component |
 | Geometry is not reflected | The Object Component's immediate parent is a supported mesh component, `Acoustic Mobility` |
 | Render block overrun (audio dropouts) | `Early Reflections = Hybrid`, raise `Reflection Update Interval`, lower the Quality Preset |
+| Gunshots and footsteps sound quiet or late (FMOD/Wwise mode) | FMOD plug-in 0.3.0 / Wwise plug-in 0.2.0 or later, `SIMPLESTFMOD_WARM_SOURCES=0` is not set |
 | No paths visible | Visualizer component, Niagara plugin, path enable state |
 
 ## Next

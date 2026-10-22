@@ -15,7 +15,7 @@ import {
   loadRealtimeModule, loadOfflineModule, analyzeScene,
   Heap, packMaterial, validateMaterial,
   ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
-  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTSceneSnapshot,
+  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTFeatures, type SimpleSTSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
@@ -40,7 +40,7 @@ STCoreV2 时期的 `SoundScene` / `SoundListener` / `SoundMesh` / `SoundObject` 
 | `Heap` | 向 WASM 堆读写 POD 的辅助工具。包含带 `structSize`/`apiVersion` 戳的结构体分配（`stamped`） |
 | `layout` | `STRT_CreateOptions`、`STMaterial`、`STRenderOptions`、`STTiming`、`STSceneStats`、`STProcessStats`、`STIrStats` 等的偏移/大小 |
 | `packMaterial` / `validateMaterial` | 把 9 频段 R/A/T/scattering 打包为 `STMaterial` 并校验 `R+A+T=1` |
-| `SimpleSTRealtime` | 拥有一个听者和共享渲染器的适配器。把 facade 命令转换为 `st_rt_*` 调用 |
+| `SimpleSTRealtime` | 拥有一个听者和共享渲染器的适配器。把 facade 命令转换为 `st_rt_*` 调用。`features`（1.1.0）表示引擎同时具备 capability 位和 export 的可选功能（剪辑、trigger、播放控制、true-peak 限制器、主增益） |
 | `analyzeScene(module, snapshot, …)` | 把场景快照复制到 Offline 上下文并计算 Raw IR / 压力 IR |
 | `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
@@ -71,6 +71,8 @@ rt.reset(); rt.dispose();
 - `'direct'` 路径门控同时开关 Direct 和 Transmission。
 - 渲染选项变更（`useDoppler`、`useLimiter`、`diffuseEnabled`）会覆盖 `STRenderOptions` 的对应字段，
   但始终保持 `reserved0 = 1`（Hybrid）。如果 Hybrid 被解除，`diagnostics()` 会抛出异常。
+- 每次渲染启动时显式设置输出级：关闭限制器（`useLimiter: true` 时为 true-peak），主增益 0 dB。
+  不依赖 SimpleST 2.18 创建后的默认值（true-peak 限制器开启）。
 
 ## 诊断快照
 
@@ -83,6 +85,9 @@ interface SimpleSTDiagnostics {
   render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
+  features?: SimpleSTFeatures;                                                   // 1.1.0
+  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain };  // 1.1.0，已应用的输出级
+  inputs?: { live; clip };                                                       // 1.1.0，实时/剪辑声源数
 }
 ```
 

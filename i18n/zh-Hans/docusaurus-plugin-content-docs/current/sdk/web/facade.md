@@ -1,6 +1,6 @@
 ---
 title: Facade API
-description: 在 ST 与 MT 上用法一致的 soundtrace.js 1.0.0 推荐 API，以及因切换到 SimpleST 而变化的选项。
+description: 在 ST 与 MT 上用法一致的 soundtrace.js 1.1.0 推荐 API，以及因切换到 SimpleST 而变化的选项。
 ---
 
 # Facade API
@@ -68,7 +68,7 @@ const sound = await SoundTrace.create(audioContext, {
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'`（别名 `'convolution'` / `'steamaudio'`） |
 | `loadMaterialAssets()` | 手动加载材质表（`autoLoadMaterials: false` 时） |
 | `update(dt?)` | 更新场景并执行传播。以本帧的有效路径数 resolve |
-| `debugSnapshot(options?)` | 异步诊断快照。`.simplest` 中包含 SimpleST scene/timing/render/IR 统计 |
+| `debugSnapshot(options?)` | 异步诊断快照。`.simplest` 中包含 SimpleST scene/timing/render/IR 统计，从 1.1.0 起还包含 `features`、`output`（限制器、类型、延迟、主增益）、`inputs`（实时/剪辑声源数） |
 | `getStatistics(options?)` | `debugSnapshot` 的封装。`validPathCount` 与 `.simplest` |
 | `getIRs()` | 在独立 Offline Worker 中重新计算 9 频段 early path IR |
 | `renderMonoImpulseResponse(source, sec)` | 在 Offline Worker 中生成 44.1 kHz 单声道压力 IR（最长 30 s） |
@@ -81,7 +81,7 @@ const sound = await SoundTrace.create(audioContext, {
 ```ts
 sound.listener
   .setPose({ position: [0, 1.6, 0], orientation: camera.quaternion.toArray() })
-  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 })
+  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 }) // useLimiter 默认 false
   .setOutputMode('hrtf');   // 'hrtf'（双耳）| 'speaker'（立体声声像）
 ```
 
@@ -92,11 +92,11 @@ sound.listener
 | 键 | 含义 |
 |---|---|
 | `earlyReflectionMode` | 仅允许 `'hybrid'` |
-| `useDoppler` | 可变延迟 Doppler 音高 |
-| `useLimiter` | 输出限制器 |
+| `useDoppler` | 可变延迟 Doppler 音高 — 自 SimpleST 2.18.1 起实时渲染中始终开启，`false` 会被忽略 |
+| `useLimiter` | 输出限制器。默认 `false` — 由应用的 Web Audio 主总线负责限幅（引擎 2.18 创建后的默认为开启，但 SDK 会在每次渲染启动、HRTF/输出变更、reset 时将其关闭）。为 `true` 时使用 SimpleST 2.18 true-peak 限制器（−1 dBTP，137 采样延迟） |
 | `pathFadeTime` | 路径出现/消失的交叉淡化（秒） |
 | `maxDelaySeconds` | 渲染器保留的最大路径延迟（秒） |
-| `diffuseEnabled` | late reverb 渲染开关 |
+| `diffuseEnabled` | late reverb 渲染开关。从 1.1.0 起也会一并开关 2.18 的一阶散射（diffuse rain）渲染 |
 
 `hrtfQuality`、`diffuseQuality`、`delayInterpolation`、`hrtfMode` 为 STCoreV2 专用，会被**拒绝**。
 

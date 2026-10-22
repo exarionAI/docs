@@ -16,7 +16,7 @@ import {
   loadRealtimeModule, loadOfflineModule, analyzeScene,
   Heap, packMaterial, validateMaterial,
   ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
-  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTSceneSnapshot,
+  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTFeatures, type SimpleSTSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
@@ -41,7 +41,7 @@ STCoreV2 時代の `SoundScene` / `SoundListener` / `SoundMesh` / `SoundObject` 
 | `Heap` | WASM ヒープに POD を書き込み・読み出すヘルパー。`structSize`/`apiVersion` のスタンプが付いた構造体の割り当て（`stamped`）を含む |
 | `layout` | `STRT_CreateOptions`、`STMaterial`、`STRenderOptions`、`STTiming`、`STSceneStats`、`STProcessStats`、`STIrStats` などのオフセット/サイズ |
 | `packMaterial` / `validateMaterial` | 9バンド R/A/T/scattering を `STMaterial` にパックし、`R+A+T=1` を検証 |
-| `SimpleSTRealtime` | リスナー 1 つと共有レンダラーを所有するアダプター。facade のコマンドを `st_rt_*` 呼び出しに変換します |
+| `SimpleSTRealtime` | リスナー 1 つと共有レンダラーを所有するアダプター。facade のコマンドを `st_rt_*` 呼び出しに変換します。`features`（1.1.0）は、エンジンが capability ビットと export の両方を備えたオプション機能（クリップ・trigger・再生制御・true-peak リミッター・マスターゲイン）です |
 | `analyzeScene(module, snapshot, …)` | Offline コンテキストにシーンスナップショットを複製して Raw IR / 圧力 IR を計算 |
 | `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
@@ -73,6 +73,8 @@ rt.reset(); rt.dispose();
 - `'direct'` 経路ゲートは Direct と Transmission を同時に on/off します。
 - レンダーオプションの変更（`useDoppler`、`useLimiter`、`diffuseEnabled`）は `STRenderOptions` の該当フィールドを
   上書きしますが、`reserved0 = 1`（Hybrid）は常に維持します。Hybrid が外れると `diagnostics()` が例外を投げます。
+- レンダー開始のたびに出力段を明示します: リミッター無効（`useLimiter: true` なら true-peak）、マスターゲイン 0 dB。
+  SimpleST 2.18 の生成直後の既定値（true-peak リミッター有効）には頼りません。
 
 ## 診断スナップショット
 
@@ -85,6 +87,9 @@ interface SimpleSTDiagnostics {
   render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
+  features?: SimpleSTFeatures;                                                   // 1.1.0
+  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain };  // 1.1.0、適用された出力段
+  inputs?: { live; clip };                                                       // 1.1.0、ライブ/クリップ音源数
 }
 ```
 

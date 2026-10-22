@@ -1,21 +1,21 @@
 ---
 title: Unreal Engine
-description: SoundTracing UE5 插件 0.3.0（SimpleST ABI 6）的安装、Project Settings、听者/声源/对象组件、Native/FMOD/Wwise 集成模式、平台链接约定。
+description: SoundTracing UE5 插件 0.4.0（SimpleST 2.18.2 / ABI 6）的安装、Project Settings、听者/声源/对象组件、单次音效、Native/FMOD/Wwise 集成模式、平台链接约定。
 ---
 
 # SoundTrace SDK for Unreal Engine
 
 SoundTracing UE5 插件通过 Unreal Audio Mixer 的 Spatialization 插件 + 子混音（submix）以及
 Actor Component 连接 [SimpleST](../core/simplest.md)。从 0.3.0 起，引擎由 STCoreV2 换成了
-**SimpleST 2.12.0 / ABI 6**；如果项目中存在 FMOD 或 Wwise 插件，同一份源码会以挂接到该中间件
-SimpleST 插件的**集成模式**构建。
+SimpleST，0.4.0 使用 **SimpleST 2.18.2 / ABI 6**（上一版本：0.3.0 = SimpleST 2.12.0）。
+如果项目中存在 FMOD 或 Wwise 插件，同一份源码会以挂接到该中间件 SimpleST 插件的**集成模式**构建。
 
 ## 当前状态
 
 | 项目 | 内容 |
 |---|---|
 | Engine | Unreal Engine 5.6（5.7 已验证） |
-| Plugin | `Plugins/SoundTracing` 0.3.0（`SoundTracing` 运行时 + `SoundTracingEditor` 模块，依赖 Niagara） |
+| Plugin | `Plugins/SoundTracing` 0.4.0（`SoundTracing` 运行时 + `SoundTracingEditor` 模块，依赖 Niagara） |
 | 支持平台 | Win64、Mac、Linux、Android、IOS |
 | 分发 | `SoundTracing-release.zip`（插件 + 独立 Python 安装器） |
 | 引擎二进制 | `ThirdParty/SimpleST/Binaries/<Plat>/<Config>/` — 仅 UE Debug 使用 SDK Debug，其余使用 Release |
@@ -141,7 +141,7 @@ Audio Mixer Sample Rate 可以是任意值。SimpleST 以 44.1 kHz 运行并转�
 | Render | `Doppler` / `Doppler Gain` | `true` / `Off` | 可变延迟音高 / 运动单极子辐射增益 |
 | Render | `Late Reverb` / `Late Reverb Coupling` | `true` / `Default` | FDN16 / Off · Subtle 6 dB · Default 9 dB · Strong 12 dB |
 | Render | `Path Fade Time Seconds` | `0.05` | 路径出现/消失的交叉淡化 |
-| Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak |
+| Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak / True Peak。`True Peak`（0.4.0）为 SimpleST 2.18 true-peak 限制器（−1 dBTP，137 采样延迟）。引擎 2.18 在创建后会开启限制器，但插件默认为 `Off`，由 Unreal 主输出链负责限幅。0.4.0 修复为在扬声器输出（`Speakers`）下也会应用 `Off` |
 | Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 63 ~ 16k Hz 9 频段 ±24 dB |
 | Paths | `Enable Direct/Transmission/Reflection/Diffraction/Reverb Path` | 全部 `true` | 全局路径门控 |
 | Acoustics | `Propagation Delay` / `Direct Occlusion` | `true` / `true` | 关闭后分别为：所有路径与直达声同时到达 / 直达声穿过几何体 |
@@ -186,6 +186,17 @@ Sound Attenuation 的 spatialization plugin settings。请按用途把共享资�
 | Reverb Rays | `Stationary Emitter` | `false` | 不移动的发射器提示 |
 | Per-Path Enable | `Direct/Transmission/Reflection/Diffraction/Reverb Path Enabled` | 全部 `true` | 逐声源路径门控 |
 | Bypass | `Bypass` | `false` | 不经过 SimpleST 直接通过 |
+
+## 单次音效
+
+引擎会在 150 ms 内淡入**新声源**的所有路径并等待第一个 IR，因此如果每次枪声、脚步声都新建引擎
+声源，短音效听起来会又小又迟。插件按模式处理这一问题。
+
+- **Native 模式**：在上下文启动时预先创建引擎声源池，voice 结束后把该声源归还到池中，由距离最近的
+  下一个 voice 接手。即使每发都重新播放 Audio Component 和声音，也不会新建引擎声源。
+- **FMOD / Wwise 模式**：渲染由中间件插件完成，因此遵循其预热声源池（FMOD 0.3.0 · Wwise 0.2.0）
+  — [FMOD](./fmod.md#单次音效与预热声源池) · [Wwise](./wwise.md#单次音效与预热声源池)。像
+  **Wwise AudioLink** 这样为每个声音注册新游戏对象的情况也能处理。
 
 ## 几何体（`USoundTracingObjectComponent`）
 
@@ -277,6 +288,7 @@ Mac/Linux 为相同代码路径）。
 | source 未空间化（Native） | Audio Component 是否连接了 SoundTracing Source Settings asset |
 | geometry 未生效 | Object Component 的 immediate parent 是否为支持的 mesh component、`Acoustic Mobility` |
 | 渲染块超时（音频断续） | `Early Reflections = Hybrid`、提高 `Reflection Update Interval`、降低 Quality Preset |
+| 枪声、脚步声偏小或延迟（FMOD/Wwise 模式） | 是否为 FMOD 插件 0.3.0 / Wwise 插件 0.2.0 或更高版本，是否设置了 `SIMPLESTFMOD_WARM_SOURCES=0` |
 | 看不到 path | visualizer component、Niagara plugin、path enable 状态 |
 
 ## 后续文档

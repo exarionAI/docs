@@ -1,13 +1,14 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 0.3.0(SimpleST ABI 6) 설치, 컴포넌트 Inspector 계약, HRTF·출력, 재질, FMOD/Wwise 통합 모드, WebGL.
+description: SoundTrace Unity SDK 0.4.0(SimpleST 2.18.2 / ABI 6) 설치, 컴포넌트 Inspector 계약, HRTF·출력, 재질, FMOD/Wwise 통합 모드, WebGL.
 ---
 
 # SoundTrace SDK for Unity
 
 SoundTrace Unity SDK는 Unity의 메시, Renderer 재질 슬롯, 음원, 리스너를
 [SimpleST](../core/simplest.md)에 연결하는 실시간 공간 음향 플러그인입니다. 0.3.0부터 엔진이
-STCoreV2에서 **SimpleST 2.12.0 / ABI 6**으로 바뀌었고 렌더러는 **Hybrid**로 시작합니다.
+STCoreV2에서 SimpleST로 바뀌었고, 0.4.0은 **SimpleST 2.18.2 / ABI 6**을 씁니다(이전 릴리스: 0.3.0 =
+SimpleST 2.12.0). 렌더러는 **Hybrid**로 시작합니다.
 `SoundTraceManager`, `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`,
 `SoundTracePathVisualizer` 컴포넌트 이름과 스크립트 GUID, 샘플 씬은 그대로입니다.
 
@@ -89,8 +90,10 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
   직렬 처리합니다. 오디오 콜백에는 씬 제어 API나 관리 힙 할당이 들어가지 않습니다.
 - 위치는 고정 스텝 모션 샘플링(`SoundTraceFixedStepMotion`)으로 속도를 추정합니다. 텔레포트
   뒤에는 `ResetMotionState()`로 Doppler 스파이크를 막습니다.
-- 네이티브 `render_start`가 옵션을 되돌리므로 **시작 후** Hybrid(`reserved0 = 1`)를 적용하고,
-  재시작·HRTF 토글 뒤에도 다시 적용합니다.
+- 렌더를 시작할 때마다(재시작·HRTF 토글 포함) Hybrid(`reserved0 = 1`)와 **엔진 리미터 끔**을 명시하고
+  마스터 게인은 0 dB로 둡니다. 리미팅은 Unity 믹서가 맡습니다 — SimpleST 2.18은 생성 직후 true-peak
+  리미터(137샘플 지연)를 켜므로 래퍼가 끕니다. 렌더 옵션은 엔진 생성 시와 스피커 레이아웃 변경 때만 프리셋으로
+  다시 깔리고 `render_start`는 그대로 둡니다.
 
 ## SoundTraceManager
 

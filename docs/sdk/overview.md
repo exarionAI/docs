@@ -8,17 +8,18 @@ description: SimpleST 실시간 공간 음향 엔진의 Web, Unity, Unreal Engin
 
 SoundTrace SDK는 [SimpleST](../core/simplest.md) 엔진을 웹·게임 엔진·오디오 미들웨어에서
 사용할 수 있게 감싸는 제품군입니다. 모든 래퍼는 같은 저장소에서 같은 엔진 SDK
-(`out/dist/<platform>_release/SimpleST`)를 소비하며, **SimpleST 2.12.0 / ABI 6** 기준입니다.
+(`out/dist/<platform>_release/SimpleST`)를 소비하며, **SimpleST 2.18.2 / ABI 6** 기준입니다.
+이전 릴리스: 2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0. 레거시 라인으로 계속 제공됩니다.
 
 ## 통합 라인업
 
 | 이름 | 대상 | 형태 | 상태 |
 |---|---|---|---|
-| [Web](./web.md) | TypeScript · WebAssembly · Web Audio | `@exarionai/soundtrace.js` 1.0.0 (vendor ZIP / npm tgz) | 사용 가능 |
-| [Unity](./unity.md) | Unity 2022.3 LTS 이상 (Unity 6 검증) | `.unitypackage` 0.3.0 | 사용 가능 |
-| [Unreal Engine](./ue.md) | UE 5.6 / 5.7 | `Plugins/SoundTracing` 0.3.0 + Python 설치기 | 사용 가능 |
-| [FMOD](./fmod.md) | FMOD Studio / Engine 2.03 ~ 2.04 | `SimpleSTFmod` DSP 플러그인 | 사용 가능 |
-| [Wwise](./wwise.md) | Wwise 2025.1 | `Sound-tracing` (Object Processor + Metadata) 플러그인 | 사용 가능 (Audiokinetic 파트너 승인 진행 중) |
+| [Web](./web.md) | TypeScript · WebAssembly · Web Audio | `@exarionai/soundtrace.js` 1.1.0 (vendor ZIP / npm tgz) | 사용 가능 |
+| [Unity](./unity.md) | Unity 2022.3 LTS 이상 (Unity 6 검증) | `.unitypackage` 0.4.0 | 사용 가능 |
+| [Unreal Engine](./ue.md) | UE 5.6 / 5.7 | `Plugins/SoundTracing` 0.4.0 + Python 설치기 | 사용 가능 |
+| [FMOD](./fmod.md) | FMOD Studio / Engine 2.03 ~ 2.04 | `SimpleSTFmod` DSP 플러그인 0.3.0 | 사용 가능 |
+| [Wwise](./wwise.md) | Wwise 2025.1 | `Sound-tracing` (Object Processor + Metadata) 플러그인 0.2.0 | 사용 가능 (Audiokinetic 파트너 승인 진행 중) |
 | [Python](./python.md) | 분석·연구 | — | 예정 |
 
 UE·Unity 래퍼는 프로젝트에 FMOD 또는 Wwise 플러그인이 있으면 자동으로 그 미들웨어의
@@ -33,7 +34,7 @@ SimpleST 플러그인에 붙는 **통합 모드**로 전환됩니다(Meta XR Aud
 | macOS | Universal dylib (arm64 + x86_64) | |
 | Linux x86_64 | `.so` (glibc 2.34+) | |
 | Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 24+ |
-| iOS | device arm64 · simulator arm64/x86_64 정적 라이브러리 / XCFramework | iOS 15+ |
+| iOS | device arm64 · simulator arm64 정적 라이브러리 / XCFramework | iOS 15+ |
 | Web | pthreads WASM (`SimpleSTRealtime.mjs/.wasm`) + 싱글스레드 Offline | COOP/COEP 필요 |
 
 ## 공통 사용 원칙
@@ -50,6 +51,9 @@ SimpleST 플러그인에 붙는 **통합 모드**로 전환됩니다(Meta XR Aud
    값에 한합니다.
 5. 레이 해상도·깊이·레인 갱신 주기 같은 고급 노브는 **측정 뒤에만** 조정합니다.
 6. 단위는 미터입니다. cm 단위 호스트(UE, Wwise for Unreal)는 래퍼가 `sceneRatio = 0.01`을 넣습니다.
+7. **출력 리미터는 호스트 마스터 체인의 몫**입니다. 엔진 2.18.0은 컨텍스트 생성 직후 true-peak 리미터
+   (−1 dBTP, 137샘플 지연)를 켜지만, UE·Unity·FMOD·Wwise·Web 래퍼는 문서화된 기본값대로 리미터를 **끈 상태**로
+   유지합니다. 켜는 방법은 각 SDK 페이지를 참고하세요.
 
 ## 어디서 시작할까
 

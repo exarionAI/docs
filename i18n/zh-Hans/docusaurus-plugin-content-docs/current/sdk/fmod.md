@@ -1,6 +1,6 @@
 ---
 title: FMOD
-description: SimpleSTFmod — 面向 FMOD Studio / FMOD Engine 的 SimpleST DSP 插件的结构、安装、Studio 创作、游戏侧 C API、UE/Unity 集成。
+description: SimpleSTFmod — 面向 FMOD Studio / FMOD Engine 的 SimpleST DSP 插件的结构、安装、Studio 创作、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成。
 ---
 
 # SimpleST FMOD 插件
@@ -11,7 +11,7 @@ description: SimpleSTFmod — 面向 FMOD Studio / FMOD Engine 的 SimpleST DSP 
 
 | 项目 | 值 |
 |---|---|
-| 插件版本 | v0.2.0 |
+| 插件版本 | v0.3.0（SimpleST 2.18.2）。上一版本：v0.2.0（SimpleST 2.12.0） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 构建 = 2.00 ~ 2.04，204 构建 = 2.04+） |
 | 平台 | Windows x64 · macOS · Linux · Android · iOS（静态）· Web（静态，FMOD HTML5 pthreads） |
 | 分发 | `SimpleST-fmod-release.zip`（各平台 `plugins/` + `install.py`，含 UE/Unity 胶水代码） |
@@ -38,7 +38,10 @@ description: SimpleSTFmod — 面向 FMOD Studio / FMOD Engine 的 SimpleST DSP 
 - 渲染器在每个块选出"当前正在运行 process 的 Listener"。Studio 创建的预览用虚拟实例不会抢占
   在线 Listener；如果渲染器停止 250 ms，则由其他 Listener 接管，若没有任何 Listener，
   Source 回到 dry 直通。
-- 只为实际有音频输入的 Source 创建引擎声源（保护 64 个并发流）。
+- 只为实际有音频输入的 Source 创建引擎声源（保护 64 个并发流）。已结束 voice 的引擎声源会留在
+  预热池中供下一个 voice 复用 — [单次音效与预热声源池](#单次音效与预热声源池)。
+- **关闭输出限制器**：SimpleST 2.18 在创建后会开启 true-peak 限制器（−1 dBTP，137 采样延迟），
+  但在 FMOD 中由主总线负责限幅。
 
 ## 安装
 
@@ -105,6 +108,31 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 
 将 Listener **bypass** 后，Source 回到 dry 直通（用于 A/B 对比）。DSP 名称和参数名称由 bank
 作为标识符保存，因此发布后不要更改。
+
+## 单次音效与预热声源池
+
+每次事件都会来一个新 voice 的短声音。为此，从 0.3.0 起插件会在 voice 之间复用引擎
+声源。无需修改 FMOD Studio 事件或 DSP 配置。
+
+- 引擎会在 150 ms 内淡入**新声源**的所有路径并等待第一个 IR。0.2.0 为每个 voice 新建引擎声源，
+  导致 25 ms 的短音效听起来小 15 ~ 20 dB 且延迟；而且 voice 一结束就立即删除声源，流环形缓冲中
+  剩余的尾部会被截断。
+- 0.3.0 会把已结束 voice 已经推入的 PCM **最多再播放 300 ms**，然后停止声源（混响继续），并把这些
+  声源**最多 16 个、保留 2 秒**处于预热状态。
+- 下一个 voice 挂接到距离最近的预热声源。**在 0.25 m 以内时立即**开始播放，更远时约 25 ms 后
+  开始播放。2 秒内未被再次使用的预热声源会被释放。
+
+以下是用核心测试（不使用 FMOD 的同一运行时）测得的相对 0.2.0 的结果。
+
+| 项目 | 0.2.0（每个 voice 新建声源） | 0.3.0（预热池） |
+|---|---|---|
+| 同一位置 16 个 voice（间隔 120 ms）的引擎声源创建数 | 16 | 4 |
+| 同一位置 voice 电平 | 基准 | +15.7 dB（应有音量） |
+| 移动 voice 电平 | 基准 | +19.3 dB（应有音量） |
+| voice 开始 → 首次出声 | 92 ms | 69 ms |
+| 350 ms voice 的可听时长 | 275 ms | 350 ms |
+
+环境变量 `SIMPLESTFMOD_WARM_SOURCES=0` 时，会像以前一样为每个 voice 新建声源（用于对比）。
 
 ## 游戏侧 C API
 
@@ -178,6 +206,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 | `SIMPLESTFMOD_LOG_STDERR` | stderr 日志 |
 | `SIMPLESTFMOD_RUNTIME_LIBRARY` | 强制指定 SimpleSTRealtime 路径 |
 | `SIMPLESTFMOD_AUDITION_ROOM` | `"W,H,D"` 试听房间（m），`"0"` 关闭 |
+| `SIMPLESTFMOD_WARM_SOURCES` | 为 `"0"` 时关闭预热声源池，每个 voice 新建引擎声源（用于对比） |
 
 在 Windows 上始终也会通过 `OutputDebugString` 输出。渲染器状态每次变化时，控制线程都会记录
 `SimpleST Listener rendering` / `no SimpleST Listener rendering`。

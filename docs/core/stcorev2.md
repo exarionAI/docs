@@ -92,7 +92,8 @@ STCoreV2 구현은 더 이상 배포되지 않습니다. 이 페이지는 STCore
    `coordinateBasis`가 처리합니다).
 5. `exaRenderSound`를 호스트 오디오 콜백의 `st_rt_render_process`로 바꾸고,
    `renderOutputMode`와 `hostSampleRate`를 생성 옵션에 지정합니다.
-6. `st_rt_render_start` **뒤에** `STRenderOptions.reserved0 = 1`(Hybrid)을 적용합니다.
+6. `st_rt_render_start` **뒤에** `STRenderOptions.reserved0 = 1`(Hybrid)을 적용합니다(2.18.0부터 엔진 기본이
+   Hybrid지만 명시를 권장합니다). 출력 리미터를 호스트가 맡으면 같은 자리에서 `useLimiter = 0`으로 끕니다.
 7. 캐퍼빌리티 비트(`ST_CAP_*`)로 기능 존재를 확인하고, `structSize`/`apiVersion`을 채워 호출합니다.
 
 ## 참고

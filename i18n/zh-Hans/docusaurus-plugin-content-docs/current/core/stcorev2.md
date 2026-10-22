@@ -89,7 +89,8 @@ STCoreV2 实现不再分发。本页整理了拥有 STCoreV2 集成的团队在�
 4. 确认坐标系。`-Z` forward 的主机需要翻转 Z 符号（soundtrace.js 由 `coordinateBasis` 处理）。
 5. 把 `exaRenderSound` 替换为主机音频回调中的 `st_rt_render_process`，并在创建选项中指定
    `renderOutputMode` 和 `hostSampleRate`。
-6. 在 `st_rt_render_start` **之后**应用 `STRenderOptions.reserved0 = 1`（Hybrid）。
+6. 在 `st_rt_render_start` **之后**应用 `STRenderOptions.reserved0 = 1`（Hybrid）（从 2.18.0 起引擎默认
+   就是 Hybrid，但仍建议显式设置）。如果由主机负责输出限制器，在同一位置用 `useLimiter = 0` 将其关闭。
 7. 用 capability 位（`ST_CAP_*`）确认功能是否存在，并填好 `structSize`/`apiVersion` 后再调用。
 
 ## 参考

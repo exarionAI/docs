@@ -1,6 +1,6 @@
 ---
 title: Wwise
-description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Object Processor + Metadata 外掛的結構、安裝、創作、遊戲端 C API、UE 與 Unity 整合。
+description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Object Processor + Metadata 外掛的結構、安裝、創作、單次音效與預熱音源池、遊戲端 C API、UE 與 Unity 整合。
 ---
 
 # Sound-tracing Wwise 外掛
@@ -12,7 +12,7 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Objec
 
 | 項目 | 值 |
 |---|---|
-| 外掛版本 | v0.1.0（已於 Wwise 2025.1.11 音效引擎 E2E 驗證） |
+| 外掛版本 | v0.2.0（SimpleST 2.18.2）。前一版本：v0.1.0（SimpleST 2.12.0，已於 Wwise 2025.1.11 音效引擎 E2E 驗證） |
 | Audiokinetic | CompanyID **325**，PluginID 1001（Renderer）· 1002（Source Settings）。Launcher 套件組 `Sound-tracing` |
 | Wwise | 2025.1（外掛二進位檔綁定於 SDK 版本） |
 | 平台 | Windows（vc170）· macOS · Linux · Android · iOS（靜態）· Web（靜態） |
@@ -40,8 +40,12 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Objec
 - **座標**：Wwise 會將物件位置相對於匯流排聆聽者平移、旋轉後提供。渲染器以匯流排 game object
   （= 聆聽者）的世界姿態還原。Wwise 與 SimpleST 都是左手系、+X 向右、+Y 向上、+Z 向前，
   因此沒有軸轉換（只有 Unreal 整合例外 — 見下文）。
+- **voice 與引擎音源**：每個音訊物件（voice）使用一個 SimpleST 音源，但已結束 voice 的引擎音源會保留在
+  預熱池中，由下一個 voice 接手 — [單次音效與預熱音源池](#單次音效與預熱音源池)。
 - **共用核心**：與 FMOD 外掛共用同一層執行階段，從自己的資料夾動態綁定 `SimpleSTRealtime`，
   遊戲端以 `SimpleSTWwise_GetRealtimeProc` 取得同一模組的 `st_rt_*`。
+- **輸出限幅器會關閉**：SimpleST 2.18 在建立後會立即啟用 true-peak 限幅器，但在 Wwise 中由主匯流排
+  負責限幅。
 - **生命週期**：執行階段在音效引擎 Init 掛勾（靜態註冊）或建立第一個 Renderer 實例時啟動，
   並在 `AK::SoundEngine::Term` 的全域回呼中結束。
 
@@ -104,6 +108,21 @@ lib 名稱為 `SimpleSTWwiseMeta`，可能需要別名）。
 
 CompanyID/PluginID、屬性名稱、AudioEnginePropertyID 會由專案與 bank 儲存，發布後不要更改。
 
+## 單次音效與預熱音源池
+
+從 0.2.0 起加入與 FMOD 外掛 0.3.0 相同的預熱音源池（共用核心）。即使每個聲音都會
+產生新 voice，也不會為每個 voice 新建引擎音源，因此省去了新音源 150 ms 的路徑淡入與等待第一個 IR，
+短聲音能以正常音量準時聽到。不需要變更 Wwise 專案設定。
+
+- 已結束 voice 已交出的 PCM 會最多再播放 300 ms 後才停止音源（殘響會延續），並將最多 16 個音源以預熱
+  狀態保留 2 秒。
+- 下一個 voice 會接到最近的預熱音源。0.25 m 以內立即播放，更遠時約 25 ms 後播放。
+- 像 Unreal 的 **Wwise AudioLink** 這樣每個聲音都註冊新 game object 的整合，也由這條路徑處理。
+
+量測值（同一位置 16 個 voice 的引擎音源建立數 16 → 4、位準 +15.7 dB、移動時 +19.3 dB 等）請見
+[FMOD 外掛](./fmod.md#單次音效與預熱音源池)。環境變數 `SIMPLESTFMOD_WARM_SOURCES=0`（因為是共用核心，
+Wwise 版也使用同一名稱）時，會像以前一樣為每個 voice 新建音源（供比較）。
+
 ## 遊戲端 C API
 
 `include/SimpleSTWwise/SimpleSTWwise.h` — 由 SoundEngine 函式庫 export。請從 **Wwise 載入的那個模組** 綁定
@@ -163,7 +182,8 @@ SimpleSTWwise_InvokeOnControlThread(
 - 聆聽者 1 個（SimpleST 的限制）。若同一匯流排為第二個聆聽者再次實例化，該實例會把所有物件
   以 Wwise panning 混音。
 - 音訊物件沒有速度，因此沒有 SimpleST Doppler。
-- 第一次看到新的音訊物件時，引擎音源的建立會在音訊執行緒上配置記憶體（插槽池規劃中）。
+- 第一次看到新的音訊物件時，會在音訊執行緒上配置一個小插槽。引擎音源本身由控制執行緒從預熱池
+  重複使用或新建。
 - Launcher 套件組目前只包含 Authoring + Windows_vc170。Mac、Linux、Android、iOS 套件組與 EULA、標誌準備中。
 - Wwise 創作工具 GUI 的手動試聽尚未記錄。
 
@@ -175,6 +195,7 @@ SimpleSTWwise_InvokeOnControlThread(
 | `SIMPLESTWWISE_LOG_STDERR` | stderr 記錄 |
 | `SIMPLESTWWISE_RUNTIME_LIBRARY` | 強制指定 SimpleSTRealtime 路徑 |
 | `SIMPLESTWWISE_AUDITION_ROOM` | `"W,H,D"` 試聽室（m），`"0"` 關閉 |
+| `SIMPLESTFMOD_WARM_SOURCES` | `"0"` 時關閉預熱音源池，每個 voice 都新建引擎音源（供比較，共用核心變數） |
 
 渲染器警告也會顯示在 Wwise Capture Log（`PostMonitorMessage`）。
 

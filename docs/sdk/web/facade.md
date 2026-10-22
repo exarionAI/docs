@@ -1,6 +1,6 @@
 ---
 title: Facade API
-description: ST와 MT에서 동일하게 사용하는 soundtrace.js 1.0.0 권장 API와 SimpleST 전환으로 바뀐 옵션.
+description: ST와 MT에서 동일하게 사용하는 soundtrace.js 1.1.0 권장 API와 SimpleST 전환으로 바뀐 옵션.
 ---
 
 # Facade API
@@ -69,7 +69,7 @@ const sound = await SoundTrace.create(audioContext, {
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'` (별칭 `'convolution'` / `'steamaudio'`) |
 | `loadMaterialAssets()` | 재질 테이블 수동 로드 (`autoLoadMaterials: false`일 때) |
 | `update(dt?)` | 장면을 갱신하고 전파 실행. 이번 프레임의 유효 경로 수로 resolve |
-| `debugSnapshot(options?)` | 비동기 진단 스냅샷. `.simplest`에 SimpleST scene/timing/render/IR 통계 |
+| `debugSnapshot(options?)` | 비동기 진단 스냅샷. `.simplest`에 SimpleST scene/timing/render/IR 통계, 1.1.0부터 `features`·`output`(리미터·종류·지연·마스터 게인)·`inputs`(라이브/클립 음원 수) |
 | `getStatistics(options?)` | `debugSnapshot` 래퍼. `validPathCount`와 `.simplest` |
 | `getIRs()` | 별도 Offline Worker에서 9밴드 early path IR 재계산 |
 | `renderMonoImpulseResponse(source, sec)` | Offline Worker에서 44.1 kHz 모노 압력 IR (최대 30 s) |
@@ -82,7 +82,7 @@ const sound = await SoundTrace.create(audioContext, {
 ```ts
 sound.listener
   .setPose({ position: [0, 1.6, 0], orientation: camera.quaternion.toArray() })
-  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 })
+  .setRenderOptions({ useDoppler: true, useLimiter: false, pathFadeTime: 0.05, maxDelaySeconds: 2 }) // useLimiter 기본 false
   .setOutputMode('hrtf');   // 'hrtf'(바이노럴) | 'speaker'(스테레오 패닝)
 ```
 
@@ -94,11 +94,11 @@ sound.listener
 | 키 | 의미 |
 |---|---|
 | `earlyReflectionMode` | `'hybrid'`만 허용 |
-| `useDoppler` | 가변 지연 Doppler 피치 |
-| `useLimiter` | 출력 리미터 |
+| `useDoppler` | 가변 지연 Doppler 피치 — SimpleST 2.18.1부터 실시간에서는 항상 켜지고 `false`는 무시됩니다 |
+| `useLimiter` | 출력 리미터. 기본 `false` — 앱의 Web Audio 마스터 버스가 리미팅을 맡습니다(엔진 2.18 생성 직후 기본은 켜짐이지만 SDK가 렌더 시작·HRTF/출력 변경·reset마다 끕니다). `true`면 SimpleST 2.18 true-peak 리미터(−1 dBTP, 137샘플 지연) |
 | `pathFadeTime` | 경로 등장/소멸 크로스페이드(초) |
 | `maxDelaySeconds` | 렌더러가 유지하는 최대 경로 지연(초) |
-| `diffuseEnabled` | late reverb 렌더 on/off |
+| `diffuseEnabled` | late reverb 렌더 on/off. 1.1.0부터 2.18의 1차 산란(diffuse rain) 렌더도 함께 켜고 끕니다 |
 
 `hrtfQuality`, `diffuseQuality`, `delayInterpolation`, `hrtfMode`는 STCoreV2 전용이라 **거부**됩니다.
 

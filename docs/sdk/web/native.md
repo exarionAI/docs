@@ -16,7 +16,7 @@ import {
   loadRealtimeModule, loadOfflineModule, analyzeScene,
   Heap, packMaterial, validateMaterial,
   ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
-  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTSceneSnapshot,
+  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTFeatures, type SimpleSTSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
@@ -41,7 +41,7 @@ STCoreV2 시절의 `SoundScene` / `SoundListener` / `SoundMesh` / `SoundObject` 
 | `Heap` | WASM 힙에 POD를 쓰고 읽는 헬퍼. `structSize`/`apiVersion` 스탬프가 붙은 구조체 할당(`stamped`) 포함 |
 | `layout` | `STRT_CreateOptions`, `STMaterial`, `STRenderOptions`, `STTiming`, `STSceneStats`, `STProcessStats`, `STIrStats` 등의 오프셋/크기 |
 | `packMaterial` / `validateMaterial` | 9밴드 R/A/T/scattering을 `STMaterial`로 패킹하고 `R+A+T=1` 검증 |
-| `SimpleSTRealtime` | 리스너 하나와 공유 렌더러를 소유하는 어댑터. facade 명령을 `st_rt_*` 호출로 바꿉니다 |
+| `SimpleSTRealtime` | 리스너 하나와 공유 렌더러를 소유하는 어댑터. facade 명령을 `st_rt_*` 호출로 바꿉니다. `features`(1.1.0)는 엔진이 능력 비트와 export를 모두 갖춘 선택 기능(클립·trigger·재생 제어·true-peak 리미터·마스터 게인)입니다 |
 | `analyzeScene(module, snapshot, …)` | Offline 컨텍스트에 씬 스냅샷을 복제해 Raw IR / 압력 IR을 계산 |
 | `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
@@ -73,6 +73,8 @@ rt.reset(); rt.dispose();
 - `'direct'` 경로 게이트는 Direct와 Transmission을 함께 켜고 끕니다.
 - 렌더 옵션 변경(`useDoppler`, `useLimiter`, `diffuseEnabled`)은 `STRenderOptions`의 해당 필드를
   덮어쓰되 `reserved0 = 1`(Hybrid)을 항상 유지합니다. Hybrid가 풀리면 `diagnostics()`가 예외를 던집니다.
+- 렌더 시작마다 출력단을 명시합니다: 리미터 끔(`useLimiter: true`면 true-peak), 마스터 게인 0 dB.
+  SimpleST 2.18의 생성 직후 기본값(true-peak 리미터 켜짐)에 기대지 않습니다.
 
 ## 진단 스냅샷
 
@@ -85,6 +87,9 @@ interface SimpleSTDiagnostics {
   render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
+  features?: SimpleSTFeatures;                                                   // 1.1.0
+  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain };  // 1.1.0, 적용된 출력단
+  inputs?: { live; clip };                                                       // 1.1.0, 라이브/클립 음원 수
 }
 ```
 
