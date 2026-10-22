@@ -78,7 +78,9 @@ Exarion 的私有许可证。
 - Creator: RWTH Aachen University, TU Berlin
 - Source: [BRAS](https://depositonce.tu-berlin.de/handle/11303/13050)
 - License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-- 用途：默认材质库 24 种的 9 频段吸声与散射系数从测量值拟合（fitted）
+- 用途：引擎默认材质库（`st_rt_material_load_defaults`——FMOD、Wwise 运行时及创作工具试听房间）24 种的
+  9 频段吸声与散射系数从测量值拟合（fitted）。Unity、Web、UE SDK 的默认材质不是 BRAS，而是
+  SoundTrace 游戏预设。
 
 ## 仅演示与测试（不包含在 SDK 发行包中）
 

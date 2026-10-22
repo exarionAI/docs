@@ -214,7 +214,12 @@ getters/setters.
 
 ## Material presets
 
-The `SoundTraceMaterialPresetLibrary` in the plugin content provides the 24 BRAS 9-band presets.
+The `SoundTraceMaterialPresetLibrary` in the plugin content provides the 22 SoundTrace game materials
+as 9-band presets, with the same names, order (index 0 `Concrete` ~ 21 `FiberglassReinforcedPlastic`)
+and 9-band values as the Unity and Web SDKs. They are game presets, not measured data, converted from
+the previous 8-band values: reflection R and transmission T are kept, absorption A = 1 − R − T, and the
+16 kHz band repeats the 8 kHz value. Legacy STCoreV2 material libraries and `soundMaterial.json` tables
+are converted the same way on load (including `Import From JSON`); resave converted assets.
 `Sound Material Slots` picks the closest preset from the render material name and aliases. Limit
 direct editing of the 9-band reflection, absorption, transmission, and scattering values to cases
 where you have created a separate Material Preset Library asset. Every band must satisfy

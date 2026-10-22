@@ -208,7 +208,12 @@ Attenuation の spatialization plugin settings に接続します。用途別の
 
 ## Material preset
 
-プラグイン content の `SoundTraceMaterialPresetLibrary` が BRAS 24 種の 9バンド preset を提供します。
+プラグイン content の `SoundTraceMaterialPresetLibrary` が SoundTrace ゲーム材質 22 種の 9バンド preset を
+提供します。Unity・Web SDK と名前・順序（インデックス 0 `Concrete` ~ 21 `FiberglassReinforcedPlastic`）・
+9バンド値がすべて同じです。測定データではなくゲーム用プリセットで、既存の 8バンド値から反射 R と透過 T は
+そのまま残し、吸収は A = 1 − R − T、16 kHz バンドは 8 kHz の値を繰り返して変換しました。旧 STCoreV2 の
+材質ライブラリと `soundMaterial.json` も読み込み時（`Import From JSON` を含む）に同じ規則で変換されるため、
+変換された asset は保存し直してください。
 `Sound Material Slots` は render material 名と alias で最も近い preset を選びます。9バンドの
 reflection・absorption・transmission・scattering を直接編集する作業は、別の Material Preset Library
 asset を作った場合に限ってください。バンドごとに `R + A + T = 1`（±0.001）でなければなりません。

@@ -25,7 +25,7 @@ Web Audio graph に空間化されたステレオ出力を提供します。
 | 初期反射 | 常に **Hybrid**。レンダー開始・HRTF 変更・reset の後も再適用 |
 | HRTF | 内蔵 MIT KEMAR（`'mit-kemar'`）、同梱 SADIE II D2（`'sadie-d2'`） |
 | 品質 | `fast` / `balanced` / `quality` — リスナー・音源のレイ格子と反射深度をまとめて設定 |
-| 材質 | 9バンド（63 Hz ~ 16 kHz）BRAS 24 種 + デモ用 3 種、名前・エイリアスで指定 |
+| 材質 | 9バンド（63 Hz ~ 16 kHz）SoundTrace ゲーム材質 22 種、名前・エイリアス・インデックスで指定 |
 | 出力 | 音源ごとにモノ入力、リスナーレンダラーがステレオ 1 本をミックス（`sound.output`） |
 | GPU | なし。`mode: 'gpu'`、`enableGpu()` はエラー |
 
@@ -156,33 +156,53 @@ sound.setQuality('quality');
 
 ## 材質
 
-メッシュには材質の名前、エイリアス、またはインデックスを指定します。既定テーブルは SimpleST BRAS 24 種に
-デモ用近似値 3 種（`Fabric`、`Sand`、`Water` — 測定値ではありません）を加えた 27 種で、すべての値は
-9バンド R/A/T/scattering です。
+メッシュには材質の名前、エイリアス、またはインデックスを指定します。既定テーブルは SoundTrace ゲーム材質
+22 種で、Unity SDK と同じ表・同じインデックスです。測定データではなくゲーム用プリセットで、すべての値は
+9バンド R/A/T/scattering です。既存の 8バンド（63 Hz ~ 8 kHz）値から反射 R と透過 T はそのまま残し、
+吸収は A = 1 − R − T、16 kHz バンドは 8 kHz の値を繰り返し、scattering は 9バンドに同じ値として変換しました。
 
-| エイリアス | マッピングされる材質 |
-|---|---|
-| `concrete`、`cement`、`콘크리트` | `BRAS_CR2_concrete` |
-| `glass`、`window`、`유리` | `BRAS_CR2_windows` |
-| `wood`、`timber`、`나무` | `BRAS_CR4_woodPanels` |
-| `fabric`、`cloth`、`carpet`、`curtain`、`천` | `Fabric` |
-| `sand`、`snow`、`모래` | `Sand` |
-| `water`、`waterSurface`、`물` | `Water` |
+名前とエイリアスは大文字・小文字を区別しません。材質名は元の綴りのままです（`Sherdded-woodFiberborad`）。
 
-BRAS 材質のフルネーム（`BRAS_CR2_ceiling`、`BRAS_CR3_seating`、`BRAS_CR4_brickwall` …）もそのまま
-使えます。全リストはパッケージの `assets/soundMaterial.json` にあります。
+| インデックス | 材質名 | エイリアス |
+|---:|---|---|
+| 0 | `Concrete` | `cement`、`콘크리트` |
+| 1 | `Fabric` | `cloth`、`carpet`、`curtain`、`천`、`카펫` |
+| 2 | `Wood` | `timber`、`나무`、`목재` |
+| 3 | `Brick` | `bricks`、`벽돌` |
+| 4 | `ConcreteBlock` | `concrete block`、`cinder block`、`블록` |
+| 5 | `Glass` | `window`、`유리`、`창문` |
+| 6 | `Gravel` | `자갈` |
+| 7 | `GypsumBoard` | `gypsum`、`drywall`、`석고보드` |
+| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`、`rubber`、`tile`、`vinyl`、`리놀륨`、`고무` |
+| 9 | `Marble` | `대리석` |
+| 10 | `Plaster` | `회반죽`、`플라스터` |
+| 11 | `Plywood` | `합판` |
+| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`、`woodFiberboard`、`fiberboard`、`목모보드` |
+| 13 | `Snow` | `눈` |
+| 14 | `Soil` | `dirt`、`earth`、`ground`、`흙` |
+| 15 | `Steel` | `metal`、`iron`、`철`、`금속` |
+| 16 | `Stone` | `rock`、`돌` |
+| 17 | `WaterSurface` | `water`、`물` |
+| 18 | `TunableAbsorber` | `absorber` |
+| 19 | `LowVarianceTarget` | — |
+| 20 | `ConcreteBlockPainted` | `painted concrete block` |
+| 21 | `FiberglassReinforcedPlastic` | `fiberglass`、`frp` |
+
+エイリアスの正本はパッケージの `assets/soundMaterialAlias.json`、材質の値は `assets/soundMaterial.json` です。
 
 ```ts
-sound.addMesh({ vertices, indices, material: 'BRAS_CR4_parquet' });
+sound.addMesh({ vertices, indices, material: 'GypsumBoard' });
+sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
 ```
 
 :::warning
-テーブルにない名前は例外を出さず、既定材質（`defaultMaterialType = 1`、`BRAS_CR2_concrete`）に黙って
-置き換えられます。材質が意図どおり適用されているか確認するには、上の名前を正確に使ってください。
+テーブルにない名前は例外を出さず、既定材質（`defaultMaterialType = 0`、`Concrete`）に黙って
+置き換えられます。以前のドキュメントの `BRAS_*` 名もテーブルにないため `Concrete` になります。材質が
+意図どおり適用されているか確認するには、上の名前かエイリアスを正確に使ってください。
 :::
 
 材質を直接定義するには、バンドごとに `R + A + T = 1`（許容誤差 0.001）を満たす 9 個の値を 4 組
-渡します。8バンドの値を複製して 9バンドに埋めないでください。
+渡します。配列の長さが 9 でなければエラーです。
 
 ## Web Audio への接続
 

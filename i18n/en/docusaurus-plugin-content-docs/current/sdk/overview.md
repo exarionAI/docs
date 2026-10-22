@@ -46,8 +46,10 @@ visualization, and the middleware plug-in does the rendering.
    Objects mode is for reference listening and offline comparison.
 3. **There are two HRTFs.** The MIT KEMAR embedded in the engine, and the bundled SADIE II D2 KEMAR.
    Speaker output is an HOA3 decode (2.0 ~ 7.1), with a lightweight stereo panning fallback.
-4. **Materials map to the 9-band presets** (24 BRAS materials) by name. Direct editing is limited to
-   validated values with R+A+T=1 in every band.
+4. **Materials map to the 9-band presets** by name. Unity, Web and UE all default to the same 22
+   SoundTrace game materials (game presets, not measured data; same names, order and 9-band values);
+   FMOD and Wwise use the engine default library and do not expose material names. Direct editing is
+   limited to validated values with R+A+T=1 in every band.
 5. Advanced knobs such as ray resolution, depth, and lane update intervals are adjusted **only after
    measuring**.
 6. Units are meters. For cm-based hosts (UE, Wwise for Unreal) the wrapper sets `sceneRatio = 0.01`.

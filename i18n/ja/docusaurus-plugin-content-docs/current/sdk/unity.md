@@ -101,7 +101,7 @@ python3 install.py /path/to/UnityProject
 | フィールド | 既定値 | 動作 |
 |---|---:|---|
 | `Propagate On Start` | `true` | `Start()` で初期 scene graph と transform を同期した後、最初の伝搬を要求します。 |
-| `Load Default Materials On Enable` | `true` | `OnEnable()` でバンドル済み Material Preset Library（BRAS 24 種）をネイティブ材質テーブルに登録します。 |
+| `Load Default Materials On Enable` | `true` | `OnEnable()` でバンドル済み Material Preset Library（SoundTrace ゲーム材質 22 種）をネイティブ材質テーブルに登録します。 |
 | `Propagation Thread Count` | `-1` | SimpleST 計算プールの幅（`maxComputeThreads`）。`-1` は自動（論理スレッド数基準、エンジンが min(パフォーマンスコア, 6) に調整）、`0`/`1` はシングル、`2` 以上は指定数。ネイティブ初期化前に適用されます。 |
 
 ### 公開プロパティ
@@ -249,9 +249,22 @@ mesh がなく child が geometry を所有する場合は `Add To Child Meshes`
 
 周波数帯域の中心は `63`、`125`、`250`、`500`、`1000`、`2000`、`4000`、`8000`、`16000 Hz` です。
 各バンドの `R + A + T` は `1` でなければならず、許容誤差は `0.001` です。不正な長さと係数はエラーとして
-報告され、8バンドを複製して 9バンドに埋めることはしません。既定材質は SimpleST `material3.txt` の
-BRAS 24 種です。既存シーンのスロットインデックスは維持されますが、以前の STCore 材質と音響結果が同じには
-ならないため、ユーザー材質は 9バンドで再入力します。
+報告され、8バンドの入力を 9バンドに自動で埋めることはしません。
+
+既定材質は SoundTrace ゲーム材質 22 種で、以前のバージョンと名前・インデックスが同じです。既存シーンの
+材質スロットインデックスは元の材質をそのまま指します。
+
+| インデックス | 材質 |
+|---|---|
+| 0 ~ 5 | `Concrete`, `Fabric`, `Wood`, `Brick`, `ConcreteBlock`, `Glass` |
+| 6 ~ 11 | `Gravel`, `GypsumBoard`, `Linoleum,RubberOrAsphaltTile`, `Marble`, `Plaster`, `Plywood` |
+| 12 ~ 17 | `Sherdded-woodFiberborad`, `Snow`, `Soil`, `Steel`, `Stone`, `WaterSurface` |
+| 18 ~ 21 | `TunableAbsorber`, `LowVarianceTarget`, `ConcreteBlockPainted`, `FiberglassReinforcedPlastic` |
+
+測定データではなくゲーム用プリセットです。既存の 8バンド（63 Hz ~ 8 kHz）値から反射 R と透過 T は
+そのまま残し、吸収は A = 1 − R − T、16 kHz バンドは 8 kHz の値を繰り返し、scattering は 9バンドに
+同じ値として変換しました。エンジンとバンド構成が変わったため、STCore と音響結果は完全には同じに
+なりません。ユーザー材質は 9バンドで再入力します。
 
 ![材質の帯域別グラフ編集](/img/unity/Image_Mat_02.png)
 

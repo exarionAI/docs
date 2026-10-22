@@ -25,7 +25,7 @@ Web Audio graph에 공간화된 스테레오 출력을 제공합니다.
 | 초기 반사 | 항상 **Hybrid**. 렌더 시작·HRTF 변경·reset 뒤에도 재적용 |
 | HRTF | 내장 MIT KEMAR(`'mit-kemar'`), 동봉 SADIE II D2(`'sadie-d2'`) |
 | 품질 | `fast` / `balanced` / `quality` — 리스너·음원 레이 격자와 반사 깊이를 함께 설정 |
-| 재질 | 9밴드(63 Hz ~ 16 kHz) BRAS 24종 + 데모용 3종, 이름·별칭으로 지정 |
+| 재질 | 9밴드(63 Hz ~ 16 kHz) SoundTrace 게임 재질 22종, 이름·별칭·인덱스로 지정 |
 | 출력 | 음원마다 모노 입력, 리스너 렌더러가 스테레오 1개를 믹스(`sound.output`) |
 | GPU | 없음. `mode: 'gpu'`, `enableGpu()`는 오류 |
 
@@ -156,33 +156,54 @@ sound.setQuality('quality');
 
 ## 재질
 
-메시에는 재질 이름, 별칭 또는 인덱스를 지정합니다. 기본 테이블은 SimpleST BRAS 24종에
-데모용 근사값 3종(`Fabric`, `Sand`, `Water` — 측정치가 아닙니다)을 더한 27종이고, 모든 값은
-9밴드 R/A/T/scattering입니다.
+메시에는 재질 이름, 별칭 또는 인덱스를 지정합니다. 기본 테이블은 SoundTrace 게임 재질 22종으로
+Unity SDK와 같은 표·같은 인덱스입니다. 측정 데이터가 아닌 게임용 프리셋이며, 모든 값은 9밴드
+R/A/T/scattering입니다. 기존 8밴드(63 Hz ~ 8 kHz) 값에서 반사 R과 투과 T는 그대로 두고, 흡수는
+A = 1 − R − T, 16 kHz 밴드는 8 kHz 값을 반복, scattering은 9밴드에 같은 값으로 변환했습니다.
 
-| 별칭 | 매핑되는 재질 |
-|---|---|
-| `concrete`, `cement`, `콘크리트` | `BRAS_CR2_concrete` |
-| `glass`, `window`, `유리` | `BRAS_CR2_windows` |
-| `wood`, `timber`, `나무` | `BRAS_CR4_woodPanels` |
-| `fabric`, `cloth`, `carpet`, `curtain`, `천` | `Fabric` |
-| `sand`, `snow`, `모래` | `Sand` |
-| `water`, `waterSurface`, `물` | `Water` |
+이름과 별칭은 대소문자를 구분하지 않습니다. 재질 이름은 원본 철자 그대로입니다
+(`Sherdded-woodFiberborad`).
 
-BRAS 재질 전체 이름(`BRAS_CR2_ceiling`, `BRAS_CR3_seating`, `BRAS_CR4_brickwall` …)도 그대로
-쓸 수 있습니다. 전체 목록은 패키지의 `assets/soundMaterial.json`에 있습니다.
+| 인덱스 | 재질 이름 | 별칭 |
+|---:|---|---|
+| 0 | `Concrete` | `cement`, `콘크리트` |
+| 1 | `Fabric` | `cloth`, `carpet`, `curtain`, `천`, `카펫` |
+| 2 | `Wood` | `timber`, `나무`, `목재` |
+| 3 | `Brick` | `bricks`, `벽돌` |
+| 4 | `ConcreteBlock` | `concrete block`, `cinder block`, `블록` |
+| 5 | `Glass` | `window`, `유리`, `창문` |
+| 6 | `Gravel` | `자갈` |
+| 7 | `GypsumBoard` | `gypsum`, `drywall`, `석고보드` |
+| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`, `rubber`, `tile`, `vinyl`, `리놀륨`, `고무` |
+| 9 | `Marble` | `대리석` |
+| 10 | `Plaster` | `회반죽`, `플라스터` |
+| 11 | `Plywood` | `합판` |
+| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`, `woodFiberboard`, `fiberboard`, `목모보드` |
+| 13 | `Snow` | `눈` |
+| 14 | `Soil` | `dirt`, `earth`, `ground`, `흙` |
+| 15 | `Steel` | `metal`, `iron`, `철`, `금속` |
+| 16 | `Stone` | `rock`, `돌` |
+| 17 | `WaterSurface` | `water`, `물` |
+| 18 | `TunableAbsorber` | `absorber` |
+| 19 | `LowVarianceTarget` | — |
+| 20 | `ConcreteBlockPainted` | `painted concrete block` |
+| 21 | `FiberglassReinforcedPlastic` | `fiberglass`, `frp` |
+
+별칭의 정본은 패키지의 `assets/soundMaterialAlias.json`, 재질 값은 `assets/soundMaterial.json`입니다.
 
 ```ts
-sound.addMesh({ vertices, indices, material: 'BRAS_CR4_parquet' });
+sound.addMesh({ vertices, indices, material: 'GypsumBoard' });
+sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
 ```
 
 :::warning
-테이블에 없는 이름은 예외 없이 기본 재질(`defaultMaterialType = 1`, `BRAS_CR2_concrete`)로 조용히
-대체됩니다. 재질이 의도대로 적용됐는지 확인하려면 위 이름을 정확히 쓰세요.
+테이블에 없는 이름은 예외 없이 기본 재질(`defaultMaterialType = 0`, `Concrete`)로 조용히
+대체됩니다. 이전 문서의 `BRAS_*` 이름도 이제 테이블에 없으므로 `Concrete`가 됩니다. 재질이 의도대로
+적용됐는지 확인하려면 위 이름이나 별칭을 정확히 쓰세요.
 :::
 
 재질을 직접 정의하려면 밴드마다 `R + A + T = 1`(허용 오차 0.001)을 만족하는 9개 값 네 묶음을
-넘깁니다. 8밴드 값을 복제해 9밴드로 채우지 마세요.
+넘깁니다. 배열 길이가 9가 아니면 오류입니다.
 
 ## Web Audio 연결
 

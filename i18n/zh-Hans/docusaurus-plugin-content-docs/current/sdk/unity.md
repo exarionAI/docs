@@ -98,7 +98,7 @@ python3 install.py /path/to/UnityProject
 | 字段 | 默认值 | 行为 |
 |---|---:|---|
 | `Propagate On Start` | `true` | 在 `Start()` 中同步初始 scene graph 和 transform，然后请求第一次传播。 |
-| `Load Default Materials On Enable` | `true` | 在 `OnEnable()` 中把随包 Material Preset Library（BRAS 24 种）注册到原生材质表。 |
+| `Load Default Materials On Enable` | `true` | 在 `OnEnable()` 中把随包 Material Preset Library（SoundTrace 游戏材质 22 种）注册到原生材质表。 |
 | `Propagation Thread Count` | `-1` | SimpleST 计算池宽度（`maxComputeThreads`）。`-1` 为自动（按逻辑线程数，引擎调整为 min(性能核数, 6)），`0`/`1` 为单线程，`2` 及以上为指定数量。在原生初始化之前生效。 |
 
 ### 公开属性
@@ -242,9 +242,22 @@ SimpleST 没有 vertex refit。要反映变形后的几何体，请烘焙新 Mes
 ![Material Preset Library](/img/unity/Image_Mat_01.png)
 
 频段中心为 `63`、`125`、`250`、`500`、`1000`、`2000`、`4000`、`8000`、`16000 Hz`。
-每个频段的 `R + A + T` 必须为 `1`，容差 `0.001`。错误的长度和系数会报错，并且不会复制 8 频段
-来填充 9 频段。默认材质是 SimpleST `material3.txt` 中的 BRAS 24 种。现有场景的槽位索引会保留，
-但与之前 STCore 材质的声学结果并不相同，因此用户材质需要重新按 9 频段录入。
+每个频段的 `R + A + T` 必须为 `1`，容差 `0.001`。错误的长度和系数会报错，并且不会把 8 频段输入
+自动填充为 9 频段。
+
+默认材质是 SoundTrace 游戏材质 22 种，名称和索引与之前版本相同。现有场景的材质槽位索引仍然指向
+原来的材质。
+
+| 索引 | 材质 |
+|---|---|
+| 0 ~ 5 | `Concrete`, `Fabric`, `Wood`, `Brick`, `ConcreteBlock`, `Glass` |
+| 6 ~ 11 | `Gravel`, `GypsumBoard`, `Linoleum,RubberOrAsphaltTile`, `Marble`, `Plaster`, `Plywood` |
+| 12 ~ 17 | `Sherdded-woodFiberborad`, `Snow`, `Soil`, `Steel`, `Stone`, `WaterSurface` |
+| 18 ~ 21 | `TunableAbsorber`, `LowVarianceTarget`, `ConcreteBlockPainted`, `FiberglassReinforcedPlastic` |
+
+这些是游戏用预设，不是测量数据。转换方式：保留原 8 频段（63 Hz ~ 8 kHz）的反射 R 和透射 T，
+吸收 A = 1 − R − T，16 kHz 频段重复 8 kHz 的值，scattering 在 9 个频段上取相同值。由于引擎和频段
+构成已改变，声学结果与 STCore 并不完全相同。用户材质需要重新按 9 频段录入。
 
 ![按频段编辑材质图表](/img/unity/Image_Mat_02.png)
 

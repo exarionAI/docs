@@ -101,7 +101,7 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 | 필드 | 기본값 | 동작 |
 |---|---:|---|
 | `Propagate On Start` | `true` | `Start()`에서 초기 scene graph와 transform을 동기화한 뒤 첫 전파를 요청합니다. |
-| `Load Default Materials On Enable` | `true` | `OnEnable()`에서 번들 Material Preset Library(BRAS 24종)를 네이티브 재질 테이블에 등록합니다. |
+| `Load Default Materials On Enable` | `true` | `OnEnable()`에서 번들 Material Preset Library(SoundTrace 게임 재질 22종)를 네이티브 재질 테이블에 등록합니다. |
 | `Propagation Thread Count` | `-1` | SimpleST 계산 풀 폭(`maxComputeThreads`). `-1`은 자동(논리 스레드 수 기준, 엔진이 min(퍼포먼스 코어, 6)로 조정), `0`/`1`은 싱글, `2` 이상은 지정 수. 네이티브 초기화 전에 적용됩니다. |
 
 ### 공개 프로퍼티
@@ -249,9 +249,22 @@ mesh가 없고 child가 geometry를 소유하면 `Add To Child Meshes`를 사용
 
 주파수 대역 중심은 `63`, `125`, `250`, `500`, `1000`, `2000`, `4000`, `8000`, `16000 Hz`입니다.
 각 밴드의 `R + A + T`는 `1`이어야 하며 허용오차는 `0.001`입니다. 잘못된 길이와 계수는 오류로
-보고하고, 8밴드를 복제해 9밴드로 채우지 않습니다. 기본 재질은 SimpleST `material3.txt`의
-BRAS 24종입니다. 기존 씬의 슬롯 인덱스는 유지되지만 이전 STCore 재질과 음향 결과가 같지는
-않으므로 사용자 재질은 9밴드로 다시 입력합니다.
+보고하고, 8밴드 입력을 9밴드로 자동으로 채우지 않습니다.
+
+기본 재질은 SoundTrace 게임 재질 22종으로, 이전 버전과 이름·인덱스가 같습니다. 기존 씬의 재질
+슬롯 인덱스는 원래 재질을 그대로 가리킵니다.
+
+| 인덱스 | 재질 |
+|---|---|
+| 0 ~ 5 | `Concrete`, `Fabric`, `Wood`, `Brick`, `ConcreteBlock`, `Glass` |
+| 6 ~ 11 | `Gravel`, `GypsumBoard`, `Linoleum,RubberOrAsphaltTile`, `Marble`, `Plaster`, `Plywood` |
+| 12 ~ 17 | `Sherdded-woodFiberborad`, `Snow`, `Soil`, `Steel`, `Stone`, `WaterSurface` |
+| 18 ~ 21 | `TunableAbsorber`, `LowVarianceTarget`, `ConcreteBlockPainted`, `FiberglassReinforcedPlastic` |
+
+측정 데이터가 아닌 게임용 프리셋입니다. 기존 8밴드(63 Hz ~ 8 kHz) 값에서 반사 R과 투과 T는 그대로
+두고, 흡수는 A = 1 − R − T, 16 kHz 밴드는 8 kHz 값을 반복, scattering은 9밴드에 같은 값으로
+변환했습니다. 엔진과 밴드 구성이 바뀌었으므로 STCore와 음향 결과가 똑같지는 않습니다. 사용자 재질은
+9밴드로 다시 입력합니다.
 
 ![재질 대역별 그래프 편집](/img/unity/Image_Mat_02.png)
 

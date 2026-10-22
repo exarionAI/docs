@@ -206,7 +206,11 @@ Attenuation 的 spatialization plugin settings。請依用途把共用資產當�
 
 ## Material preset
 
-外掛 content 中的 `SoundTraceMaterialPresetLibrary` 提供 BRAS 24 種的 9 頻段 preset。
+外掛 content 中的 `SoundTraceMaterialPresetLibrary` 提供 SoundTrace 遊戲材質 22 種的 9 頻段 preset，
+名稱、順序（索引 0 `Concrete` ~ 21 `FiberglassReinforcedPlastic`）與 9 頻段數值都與 Unity、Web SDK 相同。
+這些是遊戲用預設，並非量測資料。轉換方式：保留原 8 頻段的反射 R 與穿透 T，吸收 A = 1 − R − T，16 kHz
+頻段重複 8 kHz 的值。舊 STCoreV2 材質庫與 `soundMaterial.json` 在載入時（包括 `Import From JSON`）也依
+相同規則轉換，請重新儲存轉換後的資產。
 `Sound Material Slots` 依 render material 名稱與 alias 選擇最接近的 preset。直接編輯 9 頻段
 reflection、absorption、transmission、scattering 的工作，請限制在另行建立 Material Preset Library
 資產的情況。每個頻段都必須滿足 `R + A + T = 1`（±0.001）。

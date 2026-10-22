@@ -78,7 +78,9 @@ SimpleST 엔진 바이너리와 각 SDK 배포물(UE · Unity · FMOD · Wwise �
 - Creator: RWTH Aachen University, TU Berlin
 - Source: [BRAS](https://depositonce.tu-berlin.de/handle/11303/13050)
 - License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-- 용도: 기본 재질 라이브러리 24종의 9밴드 흡음·산란 계수를 측정값에서 적합(fitted)
+- 용도: 엔진 기본 재질 라이브러리(`st_rt_material_load_defaults` — FMOD·Wwise 런타임, 저작툴 오디션 룸)
+  24종의 9밴드 흡음·산란 계수를 측정값에서 적합(fitted). Unity·Web·UE SDK의 기본 재질은 BRAS가 아닌
+  SoundTrace 게임 프리셋입니다.
 
 ## 데모·테스트 전용 (SDK 배포물에 미포함)
 

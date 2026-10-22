@@ -103,7 +103,7 @@ renders.
 | Field | Default | Behavior |
 |---|---:|---|
 | `Propagate On Start` | `true` | In `Start()`, synchronizes the initial scene graph and transforms, then requests the first propagation. |
-| `Load Default Materials On Enable` | `true` | In `OnEnable()`, registers the bundled Material Preset Library (24 BRAS materials) in the native material table. |
+| `Load Default Materials On Enable` | `true` | In `OnEnable()`, registers the bundled Material Preset Library (22 SoundTrace game materials) in the native material table. |
 | `Propagation Thread Count` | `-1` | Width of the SimpleST compute pool (`maxComputeThreads`). `-1` is auto (based on the logical thread count, adjusted by the engine to min(performance cores, 6)), `0`/`1` is single, `2` or more is the given count. Applied before native initialization. |
 
 ### Public properties
@@ -252,10 +252,23 @@ In `SoundTrace > Material Preset Library` you can:
 
 The band centers are `63`, `125`, `250`, `500`, `1000`, `2000`, `4000`, `8000`, and `16000 Hz`.
 `R + A + T` in every band must be `1`, with a tolerance of `0.001`. Wrong lengths and coefficients
-are reported as errors, and 8-band values are not duplicated to fill 9 bands. The default materials
-are the 24 BRAS materials from SimpleST's `material3.txt`. Slot indices in existing scenes are kept,
-but the acoustic result is not identical to the old STCore materials, so re-enter custom materials
-as 9 bands.
+are reported as errors, and 8-band input is not padded to 9 bands automatically.
+
+The default materials are the 22 SoundTrace game materials, with the same names and indices as
+earlier versions. Material slot indices in existing scenes still point at the original materials.
+
+| Index | Materials |
+|---|---|
+| 0 ~ 5 | `Concrete`, `Fabric`, `Wood`, `Brick`, `ConcreteBlock`, `Glass` |
+| 6 ~ 11 | `Gravel`, `GypsumBoard`, `Linoleum,RubberOrAsphaltTile`, `Marble`, `Plaster`, `Plywood` |
+| 12 ~ 17 | `Sherdded-woodFiberborad`, `Snow`, `Soil`, `Steel`, `Stone`, `WaterSurface` |
+| 18 ~ 21 | `TunableAbsorber`, `LowVarianceTarget`, `ConcreteBlockPainted`, `FiberglassReinforcedPlastic` |
+
+These are game presets, not measured data. They were converted from the previous 8-band
+(63 Hz ~ 8 kHz) values: reflection R and transmission T are kept, absorption A = 1 − R − T, the
+16 kHz band repeats the 8 kHz value, and scattering takes the same value in all 9 bands. The engine
+and band layout have changed, so the acoustic result is not identical to STCore. Re-enter custom
+materials as 9 bands.
 
 ![Editing the per-band material graphs](/img/unity/Image_Mat_02.png)
 

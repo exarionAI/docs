@@ -208,7 +208,12 @@ Attenuation의 spatialization plugin settings에 연결합니다. 용도별 shar
 
 ## Material preset
 
-플러그인 content의 `SoundTraceMaterialPresetLibrary`가 BRAS 24종 9밴드 preset을 제공합니다.
+플러그인 content의 `SoundTraceMaterialPresetLibrary`가 SoundTrace 게임 재질 22종 9밴드 preset을
+제공합니다. Unity·Web SDK와 이름·순서(인덱스 0 `Concrete` ~ 21 `FiberglassReinforcedPlastic`)와 9밴드
+값이 모두 같습니다. 측정 데이터가 아닌 게임용 프리셋으로, 기존 8밴드 값에서 반사 R과 투과 T는 그대로
+두고 흡수는 A = 1 − R − T, 16 kHz 밴드는 8 kHz 값을 반복해 변환했습니다. 옛 STCoreV2 재질 라이브러리와
+`soundMaterial.json`도 로드할 때(`Import From JSON` 포함) 같은 규칙으로 변환되므로 변환된 asset은
+다시 저장하십시오.
 `Sound Material Slots`는 render material 이름과 alias로 가장 가까운 preset을 선택합니다. 9밴드
 reflection·absorption·transmission·scattering을 직접 편집하는 작업은 별도 Material Preset Library
 asset을 만든 경우로 제한하십시오. 밴드마다 `R + A + T = 1`(±0.001)이어야 합니다.

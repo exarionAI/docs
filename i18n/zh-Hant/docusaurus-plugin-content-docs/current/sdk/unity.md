@@ -98,7 +98,7 @@ python3 install.py /path/to/UnityProject
 | 欄位 | 預設值 | 行為 |
 |---|---:|---|
 | `Propagate On Start` | `true` | 在 `Start()` 中同步初始 scene graph 與 transform，然後要求第一次傳播。 |
-| `Load Default Materials On Enable` | `true` | 在 `OnEnable()` 中將隨附的 Material Preset Library（BRAS 24 種）註冊到原生材質表。 |
+| `Load Default Materials On Enable` | `true` | 在 `OnEnable()` 中將隨附的 Material Preset Library（SoundTrace 遊戲材質 22 種）註冊到原生材質表。 |
 | `Propagation Thread Count` | `-1` | SimpleST 計算池寬度（`maxComputeThreads`）。`-1` 為自動（以邏輯執行緒數為基準，引擎調整為 min(效能核心數, 6)），`0`/`1` 為單執行緒，`2` 以上為指定數。在原生初始化之前套用。 |
 
 ### 公開屬性
@@ -243,8 +243,21 @@ SimpleST 沒有 vertex refit。要反映變形後的幾何體，請烘焙新的 
 
 頻段中心為 `63`、`125`、`250`、`500`、`1000`、`2000`、`4000`、`8000`、`16000 Hz`。
 每個頻段的 `R + A + T` 必須為 `1`，容許誤差 `0.001`。錯誤的長度與係數會回報為錯誤，
-不會複製 8 頻段來填成 9 頻段。預設材質為 SimpleST `material3.txt` 的 BRAS 24 種。
-既有場景的插槽索引會保留，但聲學結果與先前的 STCore 材質並不相同，請以 9 頻段重新輸入使用者材質。
+不會把 8 頻段輸入自動填成 9 頻段。
+
+預設材質為 SoundTrace 遊戲材質 22 種，名稱與索引皆與先前版本相同。既有場景的材質插槽索引仍指向
+原本的材質。
+
+| 索引 | 材質 |
+|---|---|
+| 0 ~ 5 | `Concrete`, `Fabric`, `Wood`, `Brick`, `ConcreteBlock`, `Glass` |
+| 6 ~ 11 | `Gravel`, `GypsumBoard`, `Linoleum,RubberOrAsphaltTile`, `Marble`, `Plaster`, `Plywood` |
+| 12 ~ 17 | `Sherdded-woodFiberborad`, `Snow`, `Soil`, `Steel`, `Stone`, `WaterSurface` |
+| 18 ~ 21 | `TunableAbsorber`, `LowVarianceTarget`, `ConcreteBlockPainted`, `FiberglassReinforcedPlastic` |
+
+這些是遊戲用預設，並非量測資料。轉換方式：保留原 8 頻段（63 Hz ~ 8 kHz）的反射 R 與穿透 T，
+吸收 A = 1 − R − T，16 kHz 頻段重複 8 kHz 的值，scattering 在 9 個頻段取相同值。由於引擎與頻段
+構成已改變，聲學結果與 STCore 並不完全相同。請以 9 頻段重新輸入使用者材質。
 
 ![逐頻段材質圖表編輯](/img/unity/Image_Mat_02.png)
 

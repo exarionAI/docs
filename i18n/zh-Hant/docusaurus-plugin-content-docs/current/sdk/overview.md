@@ -43,7 +43,9 @@ SoundTrace SDK 是將 [SimpleST](../core/simplest.md) 引擎包裝起來，讓 W
 2. **早期反射使用 Hybrid**。所有整合都會在渲染啟動後套用 Hybrid。Objects 模式用於基準聆聽與離線比較。
 3. **HRTF 有兩種**：引擎內建的 MIT KEMAR，以及隨附發布的 SADIE II D2 KEMAR。
    揚聲器輸出為 HOA3 解碼（2.0 ~ 7.1），另有輕量的立體聲 panning 回退。
-4. **材質以 9 頻段預設**（BRAS 24 種）依名稱對應。直接編輯僅限於每個頻段都滿足 R+A+T=1 的已驗證數值。
+4. **材質以 9 頻段預設**依名稱對應。Unity、Web、UE 預設使用同一套 SoundTrace 遊戲材質 22 種（遊戲預設，
+   並非量測資料；名稱、順序與 9 頻段數值相同）；FMOD、Wwise 不公開材質名稱，使用引擎預設材質庫。直接
+   編輯僅限於每個頻段都滿足 R+A+T=1 的已驗證數值。
 5. 射線解析度、深度、lane 更新週期等進階旋鈕 **只在量測之後** 才調整。
 6. 單位為公尺。以 cm 為單位的主機（UE、Wwise for Unreal）由包裝層代入 `sceneRatio = 0.01`。
 

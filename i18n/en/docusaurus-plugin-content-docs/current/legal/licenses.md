@@ -80,7 +80,10 @@ Exarion's proprietary license.
 - Creator: RWTH Aachen University, TU Berlin
 - Source: [BRAS](https://depositonce.tu-berlin.de/handle/11303/13050)
 - License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-- Use: the 9-band absorption and scattering coefficients of the 24 default materials are fitted from the measurements
+- Use: the 9-band absorption and scattering coefficients of the 24 materials in the engine default
+  library (`st_rt_material_load_defaults` — FMOD and Wwise runtimes, authoring-tool audition room)
+  are fitted from the measurements. The Unity, Web and UE SDK default materials are SoundTrace game
+  presets, not BRAS.
 
 ## Demo and test only (not included in SDK distributions)
 

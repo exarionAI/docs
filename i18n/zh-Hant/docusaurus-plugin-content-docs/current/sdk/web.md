@@ -25,7 +25,7 @@ description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、
 | 早期反射 | 永遠是 **Hybrid**。渲染啟動、HRTF 變更、reset 之後都會重新套用 |
 | HRTF | 內建 MIT KEMAR（`'mit-kemar'`）、隨附 SADIE II D2（`'sadie-d2'`） |
 | 品質 | `fast` / `balanced` / `quality` — 同時設定聆聽者與音源的射線格網及反射深度 |
-| 材質 | 9 頻段（63 Hz ~ 16 kHz）BRAS 24 種 + 示範用 3 種，以名稱或別名指定 |
+| 材質 | 9 頻段（63 Hz ~ 16 kHz）SoundTrace 遊戲材質 22 種，以名稱、別名或索引指定 |
 | 輸出 | 每個音源為單聲道輸入，聆聽者渲染器混出一路立體聲（`sound.output`） |
 | GPU | 無。`mode: 'gpu'`、`enableGpu()` 會出錯 |
 
@@ -155,32 +155,53 @@ sound.setQuality('quality');
 
 ## 材質
 
-網格可指定材質名稱、別名或索引。預設表為 SimpleST BRAS 24 種加上示範用近似值 3 種
-（`Fabric`、`Sand`、`Water` — 並非量測值），共 27 種，所有值都是 9 頻段 R/A/T/scattering。
+網格可指定材質名稱、別名或索引。預設表為 SoundTrace 遊戲材質 22 種，與 Unity SDK 使用同一張表、
+同一組索引。這些是遊戲用預設，並非量測資料，所有值都是 9 頻段 R/A/T/scattering。轉換方式：保留原
+8 頻段（63 Hz ~ 8 kHz）的反射 R 與穿透 T，吸收 A = 1 − R − T，16 kHz 頻段重複 8 kHz 的值，
+scattering 在 9 個頻段取相同值。
 
-| 別名 | 對應的材質 |
-|---|---|
-| `concrete`、`cement`、`콘크리트` | `BRAS_CR2_concrete` |
-| `glass`、`window`、`유리` | `BRAS_CR2_windows` |
-| `wood`、`timber`、`나무` | `BRAS_CR4_woodPanels` |
-| `fabric`、`cloth`、`carpet`、`curtain`、`천` | `Fabric` |
-| `sand`、`snow`、`모래` | `Sand` |
-| `water`、`waterSurface`、`물` | `Water` |
+名稱與別名不區分大小寫。材質名稱保留原始拼寫（`Sherdded-woodFiberborad`）。
 
-BRAS 材質的完整名稱（`BRAS_CR2_ceiling`、`BRAS_CR3_seating`、`BRAS_CR4_brickwall` …）也可直接使用。
-完整清單在套件的 `assets/soundMaterial.json`。
+| 索引 | 材質名稱 | 別名 |
+|---:|---|---|
+| 0 | `Concrete` | `cement`、`콘크리트` |
+| 1 | `Fabric` | `cloth`、`carpet`、`curtain`、`천`、`카펫` |
+| 2 | `Wood` | `timber`、`나무`、`목재` |
+| 3 | `Brick` | `bricks`、`벽돌` |
+| 4 | `ConcreteBlock` | `concrete block`、`cinder block`、`블록` |
+| 5 | `Glass` | `window`、`유리`、`창문` |
+| 6 | `Gravel` | `자갈` |
+| 7 | `GypsumBoard` | `gypsum`、`drywall`、`석고보드` |
+| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`、`rubber`、`tile`、`vinyl`、`리놀륨`、`고무` |
+| 9 | `Marble` | `대리석` |
+| 10 | `Plaster` | `회반죽`、`플라스터` |
+| 11 | `Plywood` | `합판` |
+| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`、`woodFiberboard`、`fiberboard`、`목모보드` |
+| 13 | `Snow` | `눈` |
+| 14 | `Soil` | `dirt`、`earth`、`ground`、`흙` |
+| 15 | `Steel` | `metal`、`iron`、`철`、`금속` |
+| 16 | `Stone` | `rock`、`돌` |
+| 17 | `WaterSurface` | `water`、`물` |
+| 18 | `TunableAbsorber` | `absorber` |
+| 19 | `LowVarianceTarget` | — |
+| 20 | `ConcreteBlockPainted` | `painted concrete block` |
+| 21 | `FiberglassReinforcedPlastic` | `fiberglass`、`frp` |
+
+別名以套件的 `assets/soundMaterialAlias.json` 為準，材質數值在 `assets/soundMaterial.json`。
 
 ```ts
-sound.addMesh({ vertices, indices, material: 'BRAS_CR4_parquet' });
+sound.addMesh({ vertices, indices, material: 'GypsumBoard' });
+sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
 ```
 
 :::warning
-不在表中的名稱不會擲出例外，而是靜默替換為預設材質（`defaultMaterialType = 1`，`BRAS_CR2_concrete`）。
-要確認材質如預期套用，請精確使用上述名稱。
+不在表中的名稱不會擲出例外，而是靜默替換為預設材質（`defaultMaterialType = 0`，`Concrete`）。
+舊文件中的 `BRAS_*` 名稱已不在表中，因此也會變成 `Concrete`。要確認材質如預期套用，請精確使用
+上述名稱或別名。
 :::
 
 要自行定義材質，請傳入四組各 9 個值，且每個頻段滿足 `R + A + T = 1`（容許誤差 0.001）。
-不要複製 8 頻段的值來填成 9 頻段。
+陣列長度不是 9 時會回報錯誤。
 
 ## 連接 Web Audio
 

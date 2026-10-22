@@ -78,7 +78,9 @@ SimpleST エンジンバイナリと各 SDK 配布物（UE · Unity · FMOD · W
 - Creator: RWTH Aachen University, TU Berlin
 - Source: [BRAS](https://depositonce.tu-berlin.de/handle/11303/13050)
 - License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-- 用途: 既定材質ライブラリ 24 種の 9バンド吸音・散乱係数を測定値からフィット（fitted）
+- 用途: エンジン既定材質ライブラリ（`st_rt_material_load_defaults` — FMOD・Wwise ランタイム、オーサリング
+  ツールの試聴ルーム）24 種の 9バンド吸音・散乱係数を測定値からフィット（fitted）。Unity・Web・UE SDK の
+  既定材質は BRAS ではなく SoundTrace ゲームプリセットです。
 
 ## デモ・テスト専用（SDK 配布物には含まれません）
 

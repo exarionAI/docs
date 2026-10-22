@@ -25,7 +25,7 @@ contracts have changed. See [Facade API](./web/facade.md) for the full options a
 | Early reflections | Always **Hybrid**. Re-applied after render start, HRTF change, and reset |
 | HRTF | Embedded MIT KEMAR (`'mit-kemar'`), bundled SADIE II D2 (`'sadie-d2'`) |
 | Quality | `fast` / `balanced` / `quality` — sets the listener and source ray grids and reflection depth together |
-| Materials | 9-band (63 Hz ~ 16 kHz), 24 BRAS materials + 3 demo materials, selected by name or alias |
+| Materials | 9-band (63 Hz ~ 16 kHz), 22 SoundTrace game materials, selected by name, alias, or index |
 | Output | Mono input per source; the listener renderer mixes one stereo output (`sound.output`) |
 | GPU | None. `mode: 'gpu'` and `enableGpu()` are errors |
 
@@ -157,34 +157,57 @@ problems, step down `quality → balanced → fast` before touching individual r
 
 ## Materials
 
-A mesh takes a material name, alias, or index. The default table is the 24 SimpleST BRAS materials
-plus 3 demo approximations (`Fabric`, `Sand`, `Water` — not measured values), 27 in total, and every
-entry is 9-band R/A/T/scattering.
+A mesh takes a material name, alias, or index. The default table is the 22 SoundTrace game
+materials, the same table and indices as the Unity SDK. These are game presets, not measured data,
+and every entry is 9-band R/A/T/scattering. They were converted from the previous 8-band
+(63 Hz ~ 8 kHz) values: reflection R and transmission T are kept, absorption A = 1 − R − T, the
+16 kHz band repeats the 8 kHz value, and scattering takes the same value in all 9 bands.
 
-| Alias | Mapped material |
-|---|---|
-| `concrete`, `cement`, `콘크리트` | `BRAS_CR2_concrete` |
-| `glass`, `window`, `유리` | `BRAS_CR2_windows` |
-| `wood`, `timber`, `나무` | `BRAS_CR4_woodPanels` |
-| `fabric`, `cloth`, `carpet`, `curtain`, `천` | `Fabric` |
-| `sand`, `snow`, `모래` | `Sand` |
-| `water`, `waterSurface`, `물` | `Water` |
+Names and aliases are case-insensitive. Material names keep their original spelling
+(`Sherdded-woodFiberborad`).
 
-Full BRAS material names (`BRAS_CR2_ceiling`, `BRAS_CR3_seating`, `BRAS_CR4_brickwall` …) can be
-used as they are. The complete list is in the package's `assets/soundMaterial.json`.
+| Index | Material name | Aliases |
+|---:|---|---|
+| 0 | `Concrete` | `cement`, `콘크리트` |
+| 1 | `Fabric` | `cloth`, `carpet`, `curtain`, `천`, `카펫` |
+| 2 | `Wood` | `timber`, `나무`, `목재` |
+| 3 | `Brick` | `bricks`, `벽돌` |
+| 4 | `ConcreteBlock` | `concrete block`, `cinder block`, `블록` |
+| 5 | `Glass` | `window`, `유리`, `창문` |
+| 6 | `Gravel` | `자갈` |
+| 7 | `GypsumBoard` | `gypsum`, `drywall`, `석고보드` |
+| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`, `rubber`, `tile`, `vinyl`, `리놀륨`, `고무` |
+| 9 | `Marble` | `대리석` |
+| 10 | `Plaster` | `회반죽`, `플라스터` |
+| 11 | `Plywood` | `합판` |
+| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`, `woodFiberboard`, `fiberboard`, `목모보드` |
+| 13 | `Snow` | `눈` |
+| 14 | `Soil` | `dirt`, `earth`, `ground`, `흙` |
+| 15 | `Steel` | `metal`, `iron`, `철`, `금속` |
+| 16 | `Stone` | `rock`, `돌` |
+| 17 | `WaterSurface` | `water`, `물` |
+| 18 | `TunableAbsorber` | `absorber` |
+| 19 | `LowVarianceTarget` | — |
+| 20 | `ConcreteBlockPainted` | `painted concrete block` |
+| 21 | `FiberglassReinforcedPlastic` | `fiberglass`, `frp` |
+
+The alias source of truth is the package's `assets/soundMaterialAlias.json`; material values are in
+`assets/soundMaterial.json`.
 
 ```ts
-sound.addMesh({ vertices, indices, material: 'BRAS_CR4_parquet' });
+sound.addMesh({ vertices, indices, material: 'GypsumBoard' });
+sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
 ```
 
 :::warning
 A name that is not in the table is silently replaced by the default material
-(`defaultMaterialType = 1`, `BRAS_CR2_concrete`) without throwing. Use the exact names above to make
-sure the intended material is applied.
+(`defaultMaterialType = 0`, `Concrete`) without throwing. The `BRAS_*` names from earlier docs are no
+longer in the table, so they also become `Concrete`. Use the exact names or aliases above to make sure
+the intended material is applied.
 :::
 
 To define a material yourself, pass four sets of 9 values satisfying `R + A + T = 1` (tolerance
-0.001) in every band. Do not fill 9 bands by duplicating 8-band values.
+0.001) in every band. Arrays whose length is not 9 are rejected with an error.
 
 ## Web Audio connection
 

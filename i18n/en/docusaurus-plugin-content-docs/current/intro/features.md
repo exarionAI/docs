@@ -8,7 +8,7 @@ title: Features
 ## Acoustic Simulation
 
 - **Path-tracing-based propagation** — finds direct, transmission, specular reflection (up to order 16), and UTD diffraction paths directly from the geometry
-- **9-band material model** — reflection, absorption, transmission, and scattering per octave band from `63 Hz ~ 16 kHz`, with 24 presets fitted from BRAS measurements
+- **9-band material model** — reflection, absorption, transmission, and scattering per octave band from `63 Hz ~ 16 kHz`. The engine's default validation library is 24 presets fitted from BRAS measurements; the Unity, Web and UE SDKs default to the 22 SoundTrace game materials
 - **Physical attenuation** — `1/r` distance attenuation, ISO 9613-1 air absorption, speed of sound derived from temperature, humidity, and pressure
 - **Late reverb** — FDN16 driven by the diffuse scattering of source transport rays, with late coupling attenuation
 - **Doppler** — variable-delay pitch, optional moving-monopole radiation gain

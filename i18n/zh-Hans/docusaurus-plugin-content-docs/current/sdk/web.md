@@ -24,7 +24,7 @@ description: soundtrace.js 1.0.0 — SimpleST ABI 6 WebAssembly SDK 的安装、
 | 早期反射 | 始终为 **Hybrid**。渲染启动、HRTF 更改、reset 之后也会重新应用 |
 | HRTF | 内置 MIT KEMAR（`'mit-kemar'`），随包 SADIE II D2（`'sadie-d2'`） |
 | 质量 | `fast` / `balanced` / `quality` — 同时设置听者与声源射线网格和反射深度 |
-| 材质 | 9 频段（63 Hz ~ 16 kHz）BRAS 24 种 + 演示用 3 种，按名称或别名指定 |
+| 材质 | 9 频段（63 Hz ~ 16 kHz）SoundTrace 游戏材质 22 种，按名称、别名或索引指定 |
 | 输出 | 每个声源单声道输入，听者渲染器混合为一路立体声（`sound.output`） |
 | GPU | 无。`mode: 'gpu'`、`enableGpu()` 报错 |
 
@@ -153,32 +153,53 @@ sound.setQuality('quality');
 
 ## 材质
 
-网格可以指定材质名称、别名或索引。默认表由 SimpleST BRAS 24 种加上 3 种演示用近似值
-（`Fabric`、`Sand`、`Water` — 不是测量值）共 27 种组成，所有值都是 9 频段 R/A/T/scattering。
+网格可以指定材质名称、别名或索引。默认表是 SoundTrace 游戏材质 22 种，与 Unity SDK 使用同一张表、
+同一套索引。这些是游戏用预设，不是测量数据，所有值都是 9 频段 R/A/T/scattering。转换方式：保留原
+8 频段（63 Hz ~ 8 kHz）的反射 R 和透射 T，吸收 A = 1 − R − T，16 kHz 频段重复 8 kHz 的值，
+scattering 在 9 个频段上取相同值。
 
-| 别名 | 映射到的材质 |
-|---|---|
-| `concrete`, `cement`, `콘크리트` | `BRAS_CR2_concrete` |
-| `glass`, `window`, `유리` | `BRAS_CR2_windows` |
-| `wood`, `timber`, `나무` | `BRAS_CR4_woodPanels` |
-| `fabric`, `cloth`, `carpet`, `curtain`, `천` | `Fabric` |
-| `sand`, `snow`, `모래` | `Sand` |
-| `water`, `waterSurface`, `물` | `Water` |
+名称和别名不区分大小写。材质名称保留原始拼写（`Sherdded-woodFiberborad`）。
 
-BRAS 材质的完整名称（`BRAS_CR2_ceiling`、`BRAS_CR3_seating`、`BRAS_CR4_brickwall` …）也可以直接使用。
-完整列表在包内的 `assets/soundMaterial.json`。
+| 索引 | 材质名称 | 别名 |
+|---:|---|---|
+| 0 | `Concrete` | `cement`, `콘크리트` |
+| 1 | `Fabric` | `cloth`, `carpet`, `curtain`, `천`, `카펫` |
+| 2 | `Wood` | `timber`, `나무`, `목재` |
+| 3 | `Brick` | `bricks`, `벽돌` |
+| 4 | `ConcreteBlock` | `concrete block`, `cinder block`, `블록` |
+| 5 | `Glass` | `window`, `유리`, `창문` |
+| 6 | `Gravel` | `자갈` |
+| 7 | `GypsumBoard` | `gypsum`, `drywall`, `석고보드` |
+| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`, `rubber`, `tile`, `vinyl`, `리놀륨`, `고무` |
+| 9 | `Marble` | `대리석` |
+| 10 | `Plaster` | `회반죽`, `플라스터` |
+| 11 | `Plywood` | `합판` |
+| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`, `woodFiberboard`, `fiberboard`, `목모보드` |
+| 13 | `Snow` | `눈` |
+| 14 | `Soil` | `dirt`, `earth`, `ground`, `흙` |
+| 15 | `Steel` | `metal`, `iron`, `철`, `금속` |
+| 16 | `Stone` | `rock`, `돌` |
+| 17 | `WaterSurface` | `water`, `물` |
+| 18 | `TunableAbsorber` | `absorber` |
+| 19 | `LowVarianceTarget` | — |
+| 20 | `ConcreteBlockPainted` | `painted concrete block` |
+| 21 | `FiberglassReinforcedPlastic` | `fiberglass`, `frp` |
+
+别名以包内的 `assets/soundMaterialAlias.json` 为准，材质数值在 `assets/soundMaterial.json`。
 
 ```ts
-sound.addMesh({ vertices, indices, material: 'BRAS_CR4_parquet' });
+sound.addMesh({ vertices, indices, material: 'GypsumBoard' });
+sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
 ```
 
 :::warning
-表中不存在的名称不会抛出异常，而是静默回退到默认材质（`defaultMaterialType = 1`，`BRAS_CR2_concrete`）。
-要确认材质是否按预期生效，请准确使用上面的名称。
+表中不存在的名称不会抛出异常，而是静默回退到默认材质（`defaultMaterialType = 0`，`Concrete`）。
+旧文档中的 `BRAS_*` 名称已不在表中，因此也会变成 `Concrete`。要确认材质是否按预期生效，请准确使用
+上面的名称或别名。
 :::
 
 若要自定义材质，请传入四组各 9 个值，每个频段满足 `R + A + T = 1`（容差 0.001）。
-不要复制 8 频段值来填充 9 频段。
+数组长度不是 9 时会报错。
 
 ## 连接 Web Audio
 
