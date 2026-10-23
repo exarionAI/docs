@@ -9,7 +9,7 @@ description: SimpleST 实时空间声学引擎的 Web、Unity、Unreal Engine、
 SoundTrace SDK 是把 [SimpleST](../core/simplest.md) 引擎封装到 Web、游戏引擎和音频中间件中的
 产品线。所有封装都在同一仓库中消费同一份引擎 SDK（`out/dist/<platform>_release/SimpleST`），
 基于 **SimpleST 2.18.2 / ABI 6**。
-当前 SDK 发行版为 2.18.2-jhj.3（2026-10-23）。引擎加入了[声源内存预算](#声源数量上限)，封装版本
+当前 SDK 发行版为 2.18.2-jhj.4（2026-10-23）。引擎加入了[声源内存预算](#声源数量上限)，封装版本
 保持不变。
 上一版本：2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0。作为旧版产品线继续提供。
 
@@ -57,7 +57,7 @@ SoundTrace SDK 是把 [SimpleST](../core/simplest.md) 引擎封装到 Web、游�
 
 ## 声源数量上限
 
-从 SDK 发行版 2.18.2-jhj.3 起，引擎按平台对并发声源数和声源内存设有上限 — 桌面
+从 SDK 发行版 2.18.2-jhj.4 起，引擎按平台对并发声源数和声源内存设有上限 — 桌面
 128 个声源 · 内存无限制 · 延迟环上限 2.0 s，Android/iOS 48 个声源 · 96 MiB · 1.0 s，Web 32 个声源 · 64 MiB · 0.5 s。
 超出上限的声源由引擎拒绝创建（`ST_STATUS_BUDGET_EXCEEDED`），游戏不会因此停止。桌面
 默认 128 个声源相对以前（无限制）是一项**行为变更**。引擎侧细节请参见

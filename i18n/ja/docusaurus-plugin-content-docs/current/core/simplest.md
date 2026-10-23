@@ -18,7 +18,7 @@ description: Sound Tracing の現行ネイティブエンジン SimpleST — C++
 
 | 項目 | 値 |
 |---|---|
-| エンジンバージョン | **2.18.2**（`ST_VERSION_STRING`）、SDK リリース 2.18.2-jhj.3。以前のリリース: 2.12.0 |
+| エンジンバージョン | **2.18.2**（`ST_VERSION_STRING`）、SDK リリース 2.18.2-jhj.4。以前のリリース: 2.12.0 |
 | 公開 ABI | **ABI 6**（`ST_ABI_VERSION`、3.0 クリーンブレーク）。2.12.0 以降の変更はすべて additive |
 | 主言語 | C++20（C ABI を公開、C11 ヘッダー互換） |
 | ビルドシステム | CMake 3.21+ · プラットフォーム別エントリポイント `mainBuild.sh` |
@@ -316,7 +316,7 @@ UE・FMOD・Wwise・Unity の統合は既定で `BUFFERED` です。`hostSampleR
 
 ### 音源メモリ予算
 
-SDK リリース 2.18.2-jhj.3 から、リアルタイムコンテキストは同時に生存する音源数と音源メモリに上限を設けます。
+SDK リリース 2.18.2-jhj.4 から、リアルタイムコンテキストは同時に生存する音源数と音源メモリに上限を設けます。
 ABI 6 の additive 変更で、`st_rt_get_capability_word(1)` の `ST_CAP1_MEMORY_BUDGET` で確認します。音源 1 つの
 メモリは固定コスト（伝搬・IR コピー・transport・ストリームリング）と遅延リング、経路レーンで構成されます。
 

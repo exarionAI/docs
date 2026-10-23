@@ -148,7 +148,7 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal 軸**：Wwise for Unreal 2024.1+ 直接傳遞 Unreal 向量（+Z 向上），因此必須呼叫
   `SetWorldAxes(UNREAL)`，渲染器才會轉換為 (Y, Z, X)，與遊戲上傳的幾何體一致。若不呼叫，
   聆聽者與音源會被錯誤的牆壁遮蔽（2026-10-15 修正）。
-- **音源上限**（SDK 發行版 2.18.2-jhj.3）：`SimpleSTWwise_Config.maxSources` 是引擎音源數上限（0 = 平台
+- **音源上限**（SDK 發行版 2.18.2-jhj.4）：`SimpleSTWwise_Config.maxSources` 是引擎音源數上限（0 = 平台
   預設）。超過時引擎會拒絕建立音源，該 voice 以 dry 播放。這是附加在結構末端的欄位，因此傳入舊版較短
   結構的主機也能運作 — [音源記憶體預算](../core/simplest.md#音源記憶體預算)。
 
@@ -158,7 +158,7 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // 關閉。1 = 開啟（預設）
 ```
 
-SDK 發行版 2.18.2-jhj.3 新增的遊戲端 A/B 開關。套用於執行中的執行階段，並在控制執行緒上以非同步方式
+SDK 發行版 2.18.2-jhj.4 新增的遊戲端 A/B 開關。套用於執行中的執行階段，並在控制執行緒上以非同步方式
 反映。行為與 [FMOD 版](./fmod.md#開啟與關閉-sound-tracing) 相同。
 
 - **關閉時** 會啟用 SimpleST 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空預熱音源池後不再

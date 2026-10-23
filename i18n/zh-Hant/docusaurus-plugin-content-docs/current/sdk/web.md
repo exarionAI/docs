@@ -10,7 +10,7 @@ description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、
 並向 Web Audio graph 提供空間化的立體聲輸出。
 
 自 1.0.0 起，引擎從 STCoreV2 換成 SimpleST，1.1.0 使用 **SimpleST 2.18.2 / ABI 6**
-（前一版本：1.0.0 = SimpleST 2.12.0）。SDK 發行版 2.18.2-jhj.3 中套件版本維持不變，加入了 `maxSources`
+（前一版本：1.0.0 = SimpleST 2.12.0）。SDK 發行版 2.18.2-jhj.4 中套件版本維持不變，加入了 `maxSources`
 選項（音源數上限）。既有的
 呼叫端不需變更。`SoundTrace`、`Source`、`Mesh`、`Listener` facade 維持不變，但相較於 STCoreV2，
 後端、HRTF、材質與選項契約都已改變。

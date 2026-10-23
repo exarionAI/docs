@@ -168,7 +168,7 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal axes**: Wwise for Unreal 2024.1+ passes Unreal vectors unchanged (+Z up), so you must call
   `SetWorldAxes(UNREAL)` for the renderer to convert to (Y, Z, X) and match the geometry the game
   uploaded. Without it, the listener and sources are occluded by the wrong walls (fixed 2026-10-15).
-- **Source cap** (SDK release 2.18.2-jhj.3): `SimpleSTWwise_Config.maxSources` is the engine source
+- **Source cap** (SDK release 2.18.2-jhj.4): `SimpleSTWwise_Config.maxSources` is the engine source
   count cap (0 = platform default). Beyond it the engine rejects source creation and that voice plays
   dry. The field is appended to the end of the struct, so hosts that pass the older, shorter struct
   still work — see [Source memory budget](../core/simplest.md#source-memory-budget).
@@ -179,7 +179,7 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // off. 1 = on (default)
 ```
 
-A game-side A/B switch added in SDK release 2.18.2-jhj.3. It applies to the running runtime and takes
+A game-side A/B switch added in SDK release 2.18.2-jhj.4. It applies to the running runtime and takes
 effect asynchronously on the control thread. It behaves the same as the
 [FMOD version](./fmod.md#turning-sound-tracing-on-and-off).
 

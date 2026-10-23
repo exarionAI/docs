@@ -11,7 +11,7 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine용 SimpleST DSP 플러�
 
 | 항목 | 값 |
 |---|---|
-| 플러그인 버전 | v0.3.0 (SimpleST 2.18.2). 이전 릴리스: v0.2.0 (SimpleST 2.12.0). FMOD가 보는 DSP 디스크립션 버전은 SDK 릴리스 2.18.2-jhj.3부터 0.3.0입니다(그 전 0.3.0 배포본은 0.2.0으로 표시) |
+| 플러그인 버전 | v0.3.0 (SimpleST 2.18.2). 이전 릴리스: v0.2.0 (SimpleST 2.12.0). FMOD가 보는 DSP 디스크립션 버전은 SDK 릴리스 2.18.2-jhj.4부터 0.3.0입니다(그 전 0.3.0 배포본은 0.2.0으로 표시) |
 | FMOD | Studio / Engine 2.03 ~ 2.04 (plug-in SDK 110 빌드 = 2.00 ~ 2.04, 204 빌드 = 2.04+) |
 | 플랫폼 | Windows x64 · macOS · Linux · Android · iOS(정적) · Web(정적, FMOD HTML5 pthreads) |
 | 배포 | `SimpleST-fmod-release.zip` (플랫폼별 `plugins/` + `install.py`, UE·Unity 글루 포함) |
@@ -166,7 +166,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
   변환이 SoundTracing UE 플러그인의 변환과 동일합니다.
 - 플러그인 컨텍스트에는 기본 재질 라이브러리가 먼저 등록되어 있습니다. `defaultMaterialId`부터 preset
   index를 더해 쓰십시오.
-- **음원 상한**(SDK 릴리스 2.18.2-jhj.3): `SimpleSTFmod_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
+- **음원 상한**(SDK 릴리스 2.18.2-jhj.4): `SimpleSTFmod_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
   기본). 넘으면 엔진이 음원 생성을 거절하고 그 보이스는 dry로 재생됩니다. 구조체 끝에 덧붙인 필드라 이전의 짧은
   구조체를 넘기는 호스트도 동작합니다 — [음원 메모리 예산](../core/simplest.md#음원-메모리-예산).
 
@@ -176,7 +176,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // 끄기. 1 = 켜기(기본)
 ```
 
-SDK 릴리스 2.18.2-jhj.3에서 추가된 게임 쪽 A/B 스위치입니다. 런타임 하나(`systemIndex < 0` = 가장 최근)에 적용되며
+SDK 릴리스 2.18.2-jhj.4에서 추가된 게임 쪽 A/B 스위치입니다. 런타임 하나(`systemIndex < 0` = 가장 최근)에 적용되며
 컨트롤 스레드에서 비동기로 반영됩니다.
 
 - **끄면** SimpleST 렌더러 바이패스(`st_rt_render_set_sound_tracing_enabled`)가 걸리고, 웜 음원 풀을 비운 뒤 다시

@@ -17,7 +17,7 @@ description: Sound Tracing 的现行原生引擎 SimpleST — C++20 几何声学
 
 | 项目 | 值 |
 |---|---|
-| 引擎版本 | **2.18.2**（`ST_VERSION_STRING`），SDK 发行版 2.18.2-jhj.3。上一版本：2.12.0 |
+| 引擎版本 | **2.18.2**（`ST_VERSION_STRING`），SDK 发行版 2.18.2-jhj.4。上一版本：2.12.0 |
 | 公开 ABI | **ABI 6**（`ST_ABI_VERSION`，3.0 clean break）。2.12.0 之后的变更全部为 additive |
 | 主要语言 | C++20（暴露 C ABI，兼容 C11 头文件） |
 | 构建系统 | CMake 3.21+ · 平台入口 `mainBuild.sh` |
@@ -312,7 +312,7 @@ UE、FMOD、Wwise、Unity 集成默认为 `BUFFERED`。指定 `hostSampleRate` �
 
 ### 声源内存预算
 
-从 SDK 发行版 2.18.2-jhj.3 起，实时上下文对同时存活的声源数和声源内存设有上限。
+从 SDK 发行版 2.18.2-jhj.4 起，实时上下文对同时存活的声源数和声源内存设有上限。
 这是 ABI 6 additive 变更，可通过 `st_rt_get_capability_word(1)` 的 `ST_CAP1_MEMORY_BUDGET` 确认。单个声源的
 内存由固定开销（传播、IR 副本、transport、流环形缓冲）、延迟环和路径 lane 组成。
 

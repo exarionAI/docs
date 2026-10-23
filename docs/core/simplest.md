@@ -18,7 +18,7 @@ description: Sound Tracing의 현행 네이티브 엔진 SimpleST — C++20 기�
 
 | 항목 | 값 |
 |---|---|
-| 엔진 버전 | **2.18.2** (`ST_VERSION_STRING`), SDK 릴리스 2.18.2-jhj.3. 이전 릴리스: 2.12.0 |
+| 엔진 버전 | **2.18.2** (`ST_VERSION_STRING`), SDK 릴리스 2.18.2-jhj.4. 이전 릴리스: 2.12.0 |
 | 공개 ABI | **ABI 6** (`ST_ABI_VERSION`, 3.0 클린 브레이크). 2.12.0 이후 변경은 전부 additive |
 | 주 언어 | C++20 (C ABI 노출, C11 헤더 호환) |
 | 빌드 시스템 | CMake 3.21+ · 플랫폼 진입점 `mainBuild.sh` |
@@ -316,7 +316,7 @@ UE·FMOD·Wwise·Unity 통합은 기본 `BUFFERED`입니다. `hostSampleRate`를
 
 ### 음원 메모리 예산
 
-SDK 릴리스 2.18.2-jhj.3부터 실시간 컨텍스트는 동시에 살아 있는 음원 수와 음원 메모리에 상한을 둡니다.
+SDK 릴리스 2.18.2-jhj.4부터 실시간 컨텍스트는 동시에 살아 있는 음원 수와 음원 메모리에 상한을 둡니다.
 ABI 6 additive이고 `st_rt_get_capability_word(1)`의 `ST_CAP1_MEMORY_BUDGET`으로 확인합니다. 음원 하나의
 메모리는 고정 비용(전파·IR 사본·수송·스트림 링)과 지연 링, 경로 레인으로 이루어집니다.
 

@@ -10,7 +10,7 @@ SDK です。Three.js のようなレンダリングシーンのメッシュ・�
 Web Audio graph に空間化されたステレオ出力を提供します。
 
 1.0.0 からエンジンが STCoreV2 から SimpleST に変わり、1.1.0 は **SimpleST 2.18.2 / ABI 6** を使います
-（以前のリリース: 1.0.0 = SimpleST 2.12.0）。SDK リリース 2.18.2-jhj.3 ではパッケージバージョンはそのままで、`maxSources`
+（以前のリリース: 1.0.0 = SimpleST 2.12.0）。SDK リリース 2.18.2-jhj.4 ではパッケージバージョンはそのままで、`maxSources`
 オプション（音源数の上限）が入りました。既存の
 呼び出し側は変わりません。`SoundTrace`、`Source`、`Mesh`、`Listener` の facade は維持されますが、STCoreV2 と比べて
 バックエンド・HRTF・材質・オプションの契約が変わっています。

@@ -10,7 +10,7 @@ browser. It connects the meshes, materials, sources, and listener of a rendering
 Three.js to a Sound Tracing scene, and provides spatialized stereo output to the Web Audio graph.
 
 From 1.0.0 the engine has changed from STCoreV2 to SimpleST, and 1.1.0 uses **SimpleST 2.18.2 /
-ABI 6** (previous release: 1.0.0 = SimpleST 2.12.0). In SDK release 2.18.2-jhj.3 the package version
+ABI 6** (previous release: 1.0.0 = SimpleST 2.12.0). In SDK release 2.18.2-jhj.4 the package version
 is unchanged; it adds the `maxSources` option (source count limit). Existing call sites do not
 change. The `SoundTrace`, `Source`,
 `Mesh`, and `Listener` facades are kept, but the backend, HRTF, material, and option contracts have

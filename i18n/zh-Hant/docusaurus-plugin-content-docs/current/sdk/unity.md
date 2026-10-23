@@ -7,7 +7,7 @@ description: SoundTrace Unity SDK 0.4.0（SimpleST 2.18.2 / ABI 6）的安裝、
 
 SoundTrace Unity SDK 是將 Unity 的網格、Renderer 材質插槽、音源與聆聽者連接到
 [SimpleST](../core/simplest.md) 的即時空間聲學外掛。自 0.3.0 起，引擎從 STCoreV2 換成 SimpleST，
-0.4.0 使用 **SimpleST 2.18.2 / ABI 6**（前一版本：0.3.0 = SimpleST 2.12.0）。渲染器以 **Hybrid** 啟動。SDK 發行版 2.18.2-jhj.3 中套件版本維持不變，
+0.4.0 使用 **SimpleST 2.18.2 / ABI 6**（前一版本：0.3.0 = SimpleST 2.12.0）。渲染器以 **Hybrid** 啟動。SDK 發行版 2.18.2-jhj.4 中套件版本維持不變，
 加入了[音源數上限](#音源數上限)與 Android 最低 API 28。
 `SoundTraceManager`、`SoundTraceListener`、`SoundTraceSource`、`SoundTraceObject`、
 `SoundTracePathVisualizer` 的元件名稱、指令碼 GUID 與範例場景維持不變。
@@ -153,8 +153,11 @@ SoundTraceRuntime.MaxSources = 64;   // 在第一個 Listener 啟用之前
 | `Max Delay Seconds` | `0` | `0..5 s`；逐音源延遲環的上限。`0` = 引擎平台上限（桌面 2 s · Android/iOS 1 s · WebGL 0.5 s）。非 0 時覆寫上限（小於 0.012 s 時為 0.012 s） |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`；路徑出現／消失的交叉淡化 |
 
-`Max Delay Seconds` 預設值在 SDK 發行版 2.18.2-jhj.3 中由 `2` → `0`（引擎政策）。引擎只為每個音源配置
+`Max Delay Seconds` 預設值在 SDK 發行版 2.18.2-jhj.4 中由 `2` → `0`（引擎政策）。引擎只為每個音源配置
 路徑所需長度的延遲環，並僅將此值作為上限。已儲存 `2` 的既有場景會照以前的方式運作。
+從未儲存過此值的聆聽者（包括隨附範例 01–03）使用 `0`。桌面平台上限仍為 2 s，因此沒有變化；但在 Android/iOS 上
+超過 1 s、在 WebGL 上超過 0.5 s 的路徑將不再渲染。若要在這些平台上維持以前的範圍，請將聆聽者的
+`maxDelaySeconds` 設為 `2`。
 
 選擇 `Fast`、`Middle`、`Quality` 時會一併套用 ray 值並在 Inspector 中鎖定。
 要直接編輯，請選擇 `Custom`。

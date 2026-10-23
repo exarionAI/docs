@@ -9,7 +9,7 @@ description: Overview of the Web, Unity, Unreal Engine, FMOD, and Wwise integrat
 The SoundTrace SDKs wrap the [SimpleST](../core/simplest.md) engine for use on the web, in game
 engines, and in audio middleware. All wrappers consume the same engine SDK from the same
 repository (`out/dist/<platform>_release/SimpleST`) and are based on **SimpleST 2.18.2 / ABI 6**.
-The current SDK release is 2.18.2-jhj.3 (2026-10-23). It adds a [source memory budget](#source-count-limit)
+The current SDK release is 2.18.2-jhj.4 (2026-10-23). It adds a [source memory budget](#source-count-limit)
 to the engine; the wrapper versions are unchanged.
 Previous release: 2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0. It remains
 available as a legacy line.
@@ -64,7 +64,7 @@ visualization, and the middleware plug-in does the rendering.
 
 ## Source Count Limit
 
-Starting with SDK release 2.18.2-jhj.3, the engine caps the number of concurrent sources and the
+Starting with SDK release 2.18.2-jhj.4, the engine caps the number of concurrent sources and the
 source memory per platform — desktop 128 sources · unlimited memory · delay ring ceiling 2.0 s,
 Android/iOS 48 sources · 96 MiB · 1.0 s, web 32 sources · 64 MiB · 0.5 s. The engine rejects
 creating sources beyond the cap (`ST_STATUS_BUDGET_EXCEEDED`), and the game does not stop. The

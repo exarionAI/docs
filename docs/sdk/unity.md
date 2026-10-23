@@ -8,7 +8,7 @@ description: SoundTrace Unity SDK 0.4.0(SimpleST 2.18.2 / ABI 6) 설치, 컴포�
 SoundTrace Unity SDK는 Unity의 메시, Renderer 재질 슬롯, 음원, 리스너를
 [SimpleST](../core/simplest.md)에 연결하는 실시간 공간 음향 플러그인입니다. 0.3.0부터 엔진이
 STCoreV2에서 SimpleST로 바뀌었고, 0.4.0은 **SimpleST 2.18.2 / ABI 6**을 씁니다(이전 릴리스: 0.3.0 =
-SimpleST 2.12.0). 렌더러는 **Hybrid**로 시작합니다. SDK 릴리스 2.18.2-jhj.3에서 패키지 버전은 그대로이고
+SimpleST 2.12.0). 렌더러는 **Hybrid**로 시작합니다. SDK 릴리스 2.18.2-jhj.4에서 패키지 버전은 그대로이고
 [음원 수 상한](#음원-수-상한)과 Android 최소 API 28이 들어갔습니다.
 `SoundTraceManager`, `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`,
 `SoundTracePathVisualizer` 컴포넌트 이름과 스크립트 GUID, 샘플 씬은 그대로입니다.
@@ -157,8 +157,11 @@ SoundTraceRuntime.MaxSources = 64;   // 첫 Listener 활성화 전
 | `Max Delay Seconds` | `0` | `0..5 s`; 음원별 지연 링의 천장. `0` = 엔진 플랫폼 천장(데스크톱 2 s · Android/iOS 1 s · WebGL 0.5 s). 0이 아니면 천장을 덮어씁니다(0.012 s 미만은 0.012 s) |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`; 경로 등장/소멸 크로스페이드 |
 
-`Max Delay Seconds` 기본값은 SDK 릴리스 2.18.2-jhj.3에서 `2` → `0`(엔진 정책)으로 바뀌었습니다. 엔진은 음원마다
+`Max Delay Seconds` 기본값은 SDK 릴리스 2.18.2-jhj.4에서 `2` → `0`(엔진 정책)으로 바뀌었습니다. 엔진은 음원마다
 경로가 필요한 만큼만 지연 링을 잡고 이 값을 천장으로만 씁니다. `2`가 저장된 기존 씬은 종전처럼 동작합니다.
+이 값을 저장한 적이 없는 리스너(번들 샘플 01–03 포함)는 `0`을 씁니다. 데스크톱은 천장이 그대로 2 s라 달라지지 않지만,
+Android/iOS는 1 s, WebGL은 0.5 s를 넘는 경로가 렌더되지 않습니다. 그 플랫폼에서 종전 거리를 유지하려면 리스너의
+`maxDelaySeconds`를 `2`로 지정하십시오.
 
 `Fast`, `Middle`, `Quality`를 선택하면 ray 값이 함께 적용되고 Inspector에서 잠깁니다. 직접
 편집하려면 `Custom`을 선택하십시오.

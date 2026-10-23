@@ -8,7 +8,7 @@ description: SoundTracing UE5 플러그인 0.4.0(SimpleST 2.18.2 / ABI 6) 설치
 SoundTracing UE5 플러그인은 Unreal Audio Mixer의 Spatialization 플러그인 + 서브믹스, 그리고
 Actor Component를 통해 [SimpleST](../core/simplest.md)를 연결합니다. 0.3.0부터 엔진이 STCoreV2에서
 SimpleST로 바뀌었고, 0.4.0은 **SimpleST 2.18.2 / ABI 6**을 씁니다(이전 릴리스: 0.3.0 = SimpleST 2.12.0).
-SDK 릴리스 2.18.2-jhj.3에서 플러그인 버전은 그대로이고 `Max Sources` 설정, FMOD/Wwise 모드의 사운드 트레이싱
+SDK 릴리스 2.18.2-jhj.4에서 플러그인 버전은 그대로이고 `Max Sources` 설정, FMOD/Wwise 모드의 사운드 트레이싱
 스위치 전달, 광선 샘플러 정리가 들어갔습니다.
 프로젝트에 FMOD 또는 Wwise 플러그인이 있으면 같은 소스가 그 미들웨어의 SimpleST 플러그인에 붙는
 **통합 모드**로 빌드됩니다.
@@ -249,7 +249,7 @@ Blueprint에서 읽을 수 있는 World Subsystem입니다 — 통합 모드, �
 
 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()`로 사운드 트레이싱 전체를 켜고 끕니다. 꺼져 있는
 동안에는 리스너·음원이 움직여도 전파 레인을 깨우지 않고, 시각화 경로도 모으지 않아 마지막 경로가 남지 않습니다.
-FMOD·Wwise 모드에서는 SDK 릴리스 2.18.2-jhj.3부터 이 스위치를 미들웨어 플러그인에 넘깁니다
+FMOD·Wwise 모드에서는 SDK 릴리스 2.18.2-jhj.4부터 이 스위치를 미들웨어 플러그인에 넘깁니다
 (`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`). 그 전에는 플러그인이 소유한
 컨텍스트라 끄기가 효과가 없었습니다. 새 런타임에 붙은 뒤에도 꺼진 상태를 다시 보내고, 이 export가 없는 구형
 플러그인이면 경고를 남깁니다. SimpleST에는 전파 일시정지가 없으므로 음원이 남아 있는 동안 레인은 자체 주기로

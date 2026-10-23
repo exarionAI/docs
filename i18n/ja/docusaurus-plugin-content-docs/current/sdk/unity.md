@@ -8,7 +8,7 @@ description: SoundTrace Unity SDK 0.4.0（SimpleST 2.18.2 / ABI 6）のインス
 SoundTrace Unity SDK は、Unity のメッシュ、Renderer のマテリアルスロット、音源、リスナーを
 [SimpleST](../core/simplest.md) に接続するリアルタイム空間オーディオプラグインです。0.3.0 からエンジンが
 STCoreV2 から SimpleST に変わり、0.4.0 は **SimpleST 2.18.2 / ABI 6** を使います（以前のリリース: 0.3.0 =
-SimpleST 2.12.0）。レンダラーは **Hybrid** で起動します。SDK リリース 2.18.2-jhj.3 ではパッケージバージョンはそのままで、
+SimpleST 2.12.0）。レンダラーは **Hybrid** で起動します。SDK リリース 2.18.2-jhj.4 ではパッケージバージョンはそのままで、
 [音源数の上限](#音源数の上限)と Android 最小 API 28 が入りました。
 `SoundTraceManager`、`SoundTraceListener`、`SoundTraceSource`、`SoundTraceObject`、
 `SoundTracePathVisualizer` のコンポーネント名とスクリプト GUID、サンプルシーンはそのままです。
@@ -157,8 +157,11 @@ SoundTraceRuntime.MaxSources = 64;   // 最初の Listener 有効化の前
 | `Max Delay Seconds` | `0` | `0..5 s`。音源ごとの遅延リングの天井。`0` = エンジンのプラットフォーム天井（デスクトップ 2 s · Android/iOS 1 s · WebGL 0.5 s）。0 以外なら天井を上書きします（0.012 s 未満は 0.012 s） |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`。経路の出現/消滅クロスフェード |
 
-`Max Delay Seconds` の既定値は SDK リリース 2.18.2-jhj.3 で `2` → `0`（エンジンポリシー）に変わりました。エンジンは音源ごとに
+`Max Delay Seconds` の既定値は SDK リリース 2.18.2-jhj.4 で `2` → `0`（エンジンポリシー）に変わりました。エンジンは音源ごとに
 経路が必要とする分だけ遅延リングを確保し、この値を天井としてのみ使います。`2` が保存された既存シーンは従来どおり動作します。
+この値を保存したことのないリスナー（同梱サンプル 01–03 を含む）は `0` を使います。デスクトップは天井が 2 s のままなので変わりませんが、
+Android/iOS では 1 s、WebGL では 0.5 s を超える経路がレンダリングされなくなります。これらのプラットフォームで従来の到達距離を保つには、リスナーの
+`maxDelaySeconds` を `2` に設定してください。
 
 `Fast`、`Middle`、`Quality` を選ぶと ray 値が一緒に適用され、Inspector でロックされます。直接
 編集するには `Custom` を選んでください。

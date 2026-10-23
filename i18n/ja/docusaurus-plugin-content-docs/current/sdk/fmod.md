@@ -11,7 +11,7 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine 向け SimpleST DSP プ�
 
 | 項目 | 値 |
 |---|---|
-| プラグインバージョン | v0.3.0（SimpleST 2.18.2）。以前のリリース: v0.2.0（SimpleST 2.12.0）。FMOD が参照する DSP ディスクリプションのバージョンは SDK リリース 2.18.2-jhj.3 から 0.3.0 です（それ以前の 0.3.0 配布物は 0.2.0 と表示） |
+| プラグインバージョン | v0.3.0（SimpleST 2.18.2）。以前のリリース: v0.2.0（SimpleST 2.12.0）。FMOD が参照する DSP ディスクリプションのバージョンは SDK リリース 2.18.2-jhj.4 から 0.3.0 です（それ以前の 0.3.0 配布物は 0.2.0 と表示） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 ビルド = 2.00 ~ 2.04、204 ビルド = 2.04+） |
 | プラットフォーム | Windows x64 · macOS · Linux · Android · iOS（静的）· Web（静的、FMOD HTML5 pthreads） |
 | 配布 | `SimpleST-fmod-release.zip`（プラットフォーム別 `plugins/` + `install.py`、UE・Unity グルーを含む） |
@@ -166,7 +166,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
   変換は SoundTracing UE プラグインの変換と同一です。
 - プラグインのコンテキストには既定材質ライブラリが先に登録されています。`defaultMaterialId` に preset
   index を加えて使ってください。
-- **音源の上限**（SDK リリース 2.18.2-jhj.3）: `SimpleSTFmod_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
+- **音源の上限**（SDK リリース 2.18.2-jhj.4）: `SimpleSTFmod_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
   既定）。超えるとエンジンが音源の生成を拒否し、そのボイスは dry で再生されます。構造体の末尾に追加したフィールドなので、以前の短い
   構造体を渡すホストも動作します — [音源メモリ予算](../core/simplest.md#音源メモリ予算)。
 
@@ -176,7 +176,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // オフ。1 = オン(既定)
 ```
 
-SDK リリース 2.18.2-jhj.3 で追加されたゲーム側の A/B スイッチです。1 つのランタイム（`systemIndex < 0` = 最新）に適用され、
+SDK リリース 2.18.2-jhj.4 で追加されたゲーム側の A/B スイッチです。1 つのランタイム（`systemIndex < 0` = 最新）に適用され、
 コントロールスレッドで非同期に反映されます。
 
 - **オフにすると** SimpleST レンダラーのバイパス（`st_rt_render_set_sound_tracing_enabled`）がかかり、ウォーム音源プールを空にした後は再び
