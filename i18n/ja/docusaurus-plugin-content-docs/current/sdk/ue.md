@@ -8,6 +8,8 @@ description: SoundTracing UE5 プラグイン 0.4.0（SimpleST 2.18.2 / ABI 6）
 SoundTracing UE5 プラグインは、Unreal Audio Mixer の Spatialization プラグイン + サブミックス、そして
 Actor Component を通して [SimpleST](../core/simplest.md) を接続します。0.3.0 からエンジンが STCoreV2 から
 SimpleST に変わり、0.4.0 は **SimpleST 2.18.2 / ABI 6** を使います（以前のリリース: 0.3.0 = SimpleST 2.12.0）。
+SDK リリース 2.18.2-jhj.3 ではプラグインバージョンはそのままで、`Max Sources` 設定、FMOD/Wwise モードへのサウンドトレーシング
+スイッチの受け渡し、レイサンプラーの整理が入りました。
 プロジェクトに FMOD または Wwise プラグインがあると、同じソースがそのミドルウェアの SimpleST プラグインへ接続する
 **統合モード**でビルドされます。
 
@@ -114,7 +116,8 @@ Audio Mixer Sample Rate はどの値でも構いません。SimpleST は 44.1 kH
 | Runtime | `Max Compute Threads` | `0` | SimpleST 計算スレッドの上限。0 = auto（min(パフォーマンスコア, 6)）。再起動が必要 |
 | Runtime | `Prefer Performance Cores` | `true` | 伝搬レーン・計算プールをパフォーマンスコアに固定（Windows 11 EcoQoS を無効化）。ハイブリッド CPU で推奨 |
 | Runtime | `Render Mode` | `Buffered` | `Buffered`（SimpleST レンダースレッドがリングを埋め、コールバックはコピー、≈3 ブロック遅延）/ `In Callback`（Unreal オーディオコールバック内でレンダー、最低遅延） |
-| Runtime | `Max Delay Seconds` | `0` | レンダラーが維持する最大経路遅延。0 = エンジン既定の 2 s |
+| Runtime | `Max Sources` | `0` | 高度な設定。同時に生存するエンジン音源数の上限。0 = エンジンのプラットフォーム既定（デスクトップ 128、Android/iOS 48）。超えた音源はエンジンが拒否し（`ST_STATUS_BUDGET_EXCEEDED`、ログに表示）、コンポーネントは dry 経路にフォールバックします。SoundTracing がコンテキストを作る Native モードで生成時に適用（再起動が必要）。FMOD/Wwise モードはプラグインの設定に従います — [音源メモリ予算](../core/simplest.md#音源メモリ予算) |
+| Runtime | `Max Delay Seconds` | `0` | 高度な設定。音源ごとの遅延リングの天井。0 = エンジンのプラットフォーム既定（デスクトップ 2 s、Android/iOS 1 s）。リングは経路が必要とする分だけ伸びます |
 | Runtime | `Dry Fallback When Unavailable` | `true` | ランタイムがない、または失敗した場合、音源を無音ではなく dry で再生 |
 | Runtime | `Output Submix Parent` | 空 | 空間化出力サブミックスの親 |
 | Propagation | `Reflection Update Interval (ms)` | `33` | 反射/回折レーンの最小周期。伝搬コストの大半なので、CPU を取り戻すにはここを上げる。0 = 制限なし |
@@ -135,7 +138,7 @@ Audio Mixer Sample Rate はどの値でも構いません。SimpleST は 44.1 kH
 |---|---|---:|---|
 | Quality Preset | `Quality Preset` | `Balanced` | `Custom`（フィールド維持）/ `Fast`（12×12、深度 4）/ `Balanced`（16×16、深度 8 = エンジン既定）/ `Quality`（24×24、深度 8） |
 | Listener Rays | `Ray Resolution` / `Ray Depth` | `16` / `8` | guide ray N×N（`4..64`）、反射の最大次数（`1..16`）。Custom のときのみ編集可 |
-| Listener Rays | `Ray Sampling` | `FibonacciSphere` | LegacyGrid / FibonacciSphere / EqualAreaGrid / SobolSphere / Icosahedral |
+| Listener Rays | `Ray Sampling` | `FibonacciSphere` | `FibonacciSphere` のみ。SimpleST 2.18 は Fibonacci しか受け付けないため、残り 4 種（LegacyGrid / EqualAreaGrid / SobolSphere / Icosahedral）はエディターで非表示になり、保存された値は FibonacciSphere に送られ、警告を一度残します |
 | Output | `Output Mode` | `Headphones` | `Headphones`（バイノーラル HRIR）/ `Speakers (HOA decode)` / `Stereo Panning` |
 | Output | `HRTF Dataset` | `SADIE II D2 KEMAR` | SADIE II D2（8,802 方向・256 タップ、プラグイン同梱）/ MIT KEMAR（128 タップ、エンジン内蔵） |
 | Output | `Speaker Layout` | `Stereo 2.0` | Stereo 2.0 / Laptop Stereo 2.0 / 2.1 / 4.1 / 5.1 / 7.1 |
@@ -244,6 +247,14 @@ Actor に `SoundTracingPathVisualizerComponent` を追加すると、Niagara ベ
 Blueprint から読める World Subsystem です — 統合モード、シーンのメッシュ/オブジェクト/音源/三角形数、
 有効経路数、レーン別の伝搬・IR・レンダー時間（ms）、レンダーブロック統計（active sources、exact/send taps）。
 
+`SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` でサウンドトレーシング全体をオン・オフします。オフの
+間は、リスナー・音源が動いても伝搬レーンを起こさず、可視化経路も集めないため、最後の経路が残りません。
+FMOD・Wwise モードでは、SDK リリース 2.18.2-jhj.3 からこのスイッチをミドルウェアプラグインに渡します
+（`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`）。それ以前はプラグインが所有する
+コンテキストのため、オフにしても効果がありませんでした。新しいランタイムに接続した後もオフの状態を再送し、この export がない旧版
+プラグインなら警告を残します。SimpleST には伝搬の一時停止がないため、音源が残っている間、レーンは独自の周期で
+動き続けます。
+
 ## プラットフォームリンク契約
 
 | UE プラットフォーム | SDK パス（`Binaries/` 以下） | リンク |
@@ -296,7 +307,9 @@ scene です。
 | geometry が反映されない | Object Component の immediate parent が対応 mesh component か、`Acoustic Mobility` |
 | レンダーブロック超過（オーディオの途切れ） | `Early Reflections = Hybrid`、`Reflection Update Interval` の引き上げ、Quality Preset の引き下げ |
 | 銃声・足音が小さい、または遅れて聞こえる（FMOD/Wwise モード） | FMOD プラグイン 0.3.0 / Wwise プラグイン 0.2.0 以上か、`SIMPLESTFMOD_WARM_SOURCES=0` が設定されていないか |
-| path が見えない | visualizer component、Niagara plugin、path enable の状態 |
+| 一部の音源が dry で再生される（Native） | Output Log の `ST_STATUS_BUDGET_EXCEEDED` — 音源を減らすか `Max Sources` を上げる |
+| FMOD/Wwise モードでサウンドトレーシングをオフにしても変わらない | プラグインが `*_SetSoundTracingEnabled` を export するバージョンか（ない場合は Output Log に警告） |
+| path が見えない | visualizer component、Niagara plugin、path enable の状態、サウンドトレーシングがオフになっていないか |
 
 ## 次のドキュメント
 

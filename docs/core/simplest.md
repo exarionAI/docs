@@ -18,7 +18,7 @@ description: Sound Tracing의 현행 네이티브 엔진 SimpleST — C++20 기�
 
 | 항목 | 값 |
 |---|---|
-| 엔진 버전 | **2.18.2** (`ST_VERSION_STRING`). 이전 릴리스: 2.12.0 |
+| 엔진 버전 | **2.18.2** (`ST_VERSION_STRING`), SDK 릴리스 2.18.2-jhj.3. 이전 릴리스: 2.12.0 |
 | 공개 ABI | **ABI 6** (`ST_ABI_VERSION`, 3.0 클린 브레이크). 2.12.0 이후 변경은 전부 additive |
 | 주 언어 | C++20 (C ABI 노출, C11 헤더 호환) |
 | 빌드 시스템 | CMake 3.21+ · 플랫폼 진입점 `mainBuild.sh` |
@@ -63,7 +63,7 @@ SceneManager → STPropagator → STIRConverter ─┬→ STOnlineAuralizator  (
 
 | 헤더 | 컨텍스트 | 함수 접두 | 역할 |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | 실시간 전파 + 오디오 렌더 (143 export) |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | 실시간 전파 + 오디오 렌더 (146 export) |
 | `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | 오프라인 IR 계산·렌더 (116 export) |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | 공통 POD·enum·capability 비트 |
 
@@ -102,6 +102,7 @@ typedef struct STMaterialId { int32_t v; } STMaterialId;
 | 음향 정책 | `st_rt_set_atmosphere`, `st_rt_set_physical_distance_attenuation`, `st_rt_set_acoustic_feature_enabled`, `st_rt_set_doppler_gain_mode`, `st_rt_set_late_coupling[_preset]`, `st_rt_set_early_late_band_energy_targets` |
 | render | `st_rt_render_start/stop`, `st_rt_render_process`(호스트 pull), `set_options/get_options`, `set_spatializer`, `set_speaker_layout[_custom]`, `set_eq`, `set_master_gain_db`, `set_limiter_type`, `get_limiter_latency_samples`, `set_path_fade_time`, `set_max_delay_seconds`, `get_latency_frames`, `get_process_stats` |
 | 스레드 | `st_rt_set_thread_attributes`, `st_rt_get_thread_inventory`, `STRT_CreateOptions.maxComputeThreads` |
+| 메모리 예산 | `st_rt_set_memory_budget`, `st_rt_get_memory_budget`, `st_rt_get_memory_stats`, `STRT_CreateOptions.maxSources` — [음원 메모리 예산](#음원-메모리-예산) |
 | 진단 | `st_rt_get_timing`, `st_rt_ir_get_stats`, `st_rt_debug_acquire_snapshot`, `st_rt_debug_copy_visual_paths`, `st_rt_debug_copy_mesh/scene_accel_nodes` |
 
 ### 스레드 태그
@@ -312,6 +313,58 @@ UE·FMOD·Wwise·Unity 통합은 기본 `BUFFERED`입니다. `hostSampleRate`를
 - `maxComputeThreads = 0`은 auto(= min(퍼포먼스 코어, 6))이고, 종류별 우선순위·코어 선호는
   `st_rt_set_thread_attributes`(FMOD `Thread_SetAttributes`와 같은 자리)로 **create 전에** 지정합니다.
 - `st_rt_get_thread_inventory`가 실제로 떠 있는 스레드 수를 종류별로 돌려줍니다.
+
+### 음원 메모리 예산
+
+SDK 릴리스 2.18.2-jhj.3부터 실시간 컨텍스트는 동시에 살아 있는 음원 수와 음원 메모리에 상한을 둡니다.
+ABI 6 additive이고 `st_rt_get_capability_word(1)`의 `ST_CAP1_MEMORY_BUDGET`으로 확인합니다. 음원 하나의
+메모리는 고정 비용(전파·IR 사본·수송·스트림 링)과 지연 링, 경로 레인으로 이루어집니다.
+
+- **동적 지연 링** — 음원별 지연 링은 그 음원의 경로가 요구하는 최대 지연 × 1.25 + 50 ms(125 ms 단위
+  올림, 바닥 0.25 s)로 잡힙니다. 더 필요해지면 컨트롤 스레드가 큰 링을 준비하고 오디오 스레드가 복사·할당
+  없이 바꿔 낍니다. `st_rt_render_set_max_delay_seconds`는 이제 모든 음원에 같은 길이를 잡는 값이 아니라
+  **천장**입니다. 박스룸 측정에서 60음원 기준 음원당 메모리는 6.89 → 2.70 MiB입니다.
+- **플랫폼 기본값** — `st_rt_create`가 빌드 타깃에 따라 겁니다.
+
+| 플랫폼 | 최대 음원 수 | 음원 메모리 상한 | 지연 링 천장 |
+|---|---:|---:|---:|
+| 데스크톱 (Windows · macOS · Linux) | 128 | 무제한 | 2.0 s |
+| 모바일 (Android · iOS) | 48 | 96 MiB | 1.0 s |
+| 웹 (Emscripten) | 32 | 64 MiB | 0.5 s |
+
+- **상한을 넘으면** `st_rt_source_create`가 실패 핸들(`v < 0`)을 돌려주고 마지막 상태는
+  `ST_STATUS_BUDGET_EXCEEDED`(11)입니다. 이것이 기본 정책 `ST_MEMORY_REJECT_NEW`입니다.
+  `ST_MEMORY_EVICT_FARTHEST`로 바꾸면 리스너에서 가장 먼 음원을 `st_rt_source_destroy`와 같은 경로로 내보내고
+  새 음원을 받습니다(내보낸 id는 `STMemoryStats.lastEvictedSource`). UE·Unity·FMOD·Wwise 래퍼는 거절된 음원을 dry로 재생합니다.
+- **설정** — 생성 시에는 `STRT_CreateOptions.maxSources`(0 = 플랫폼 기본), 생성 뒤에는
+  `st_rt_set_memory_budget`으로 바꿉니다. `STMemoryBudget`에서 0인 필드는 기본값을 유지합니다. 상한을 줄여도
+  이미 있는 음원은 남고 새 생성부터 적용됩니다. `st_rt_get_memory_stats`는 음원 수, 추적·추정 바이트,
+  거절·퇴거 횟수를 돌려줍니다.
+
+```c
+typedef struct STMemoryBudget {
+    uint32_t structSize, apiVersion;
+    uint32_t maxSources;            /* 0 = 플랫폼 기본 */
+    int32_t  rejectPolicy;          /* ST_MEMORY_REJECT_NEW(0, 기본) / ST_MEMORY_EVICT_FARTHEST(1) */
+    uint64_t sourceBudgetBytes;     /* 0 = 무제한(관측만) */
+    uint64_t fixedPerSourceBytes;   /* 0 = 엔진 기본(2.5 MiB). 추정에만 쓴다 */
+    float    ringFloorSeconds;      /* 0 = 0.25 */
+    float    ringGrowthHeadroom;    /* 0 = 1.25 */
+    int32_t  allowShrink;           /* 0 = 축소 없음(세션 중 최대치 유지) */
+    uint32_t reserved[5];
+} STMemoryBudget;
+```
+
+:::caution 행동 변경
+- 데스크톱 기본 최대 음원 수가 **128**입니다(종전 무제한). 더 필요한 호스트는 `st_rt_set_memory_budget`으로
+  올립니다.
+- 모바일·웹은 지연 링 천장 기본이 1.0 s / 0.5 s라 343 m / 171 m를 넘는 초기 경로는 렌더되지 않습니다. 종전
+  값이 필요하면 `st_rt_render_set_max_delay_seconds`로 지정합니다.
+- 오프라인 DLL(`st_off_*`)은 예산 대상이 아닙니다(무제한).
+- 모바일·웹은 Hybrid 초기 반사가 전제입니다. Objects 모드는 음원당 30 MB가 넘습니다.
+:::
+
+래퍼별 설정은 [SDK 개요](../sdk/overview.md#음원-수-상한)에 모아 두었습니다.
 
 ### Late reverb
 

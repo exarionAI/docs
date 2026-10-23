@@ -17,7 +17,7 @@ description: Sound Tracing 的现行原生引擎 SimpleST — C++20 几何声学
 
 | 项目 | 值 |
 |---|---|
-| 引擎版本 | **2.18.2**（`ST_VERSION_STRING`）。上一版本：2.12.0 |
+| 引擎版本 | **2.18.2**（`ST_VERSION_STRING`），SDK 发行版 2.18.2-jhj.3。上一版本：2.12.0 |
 | 公开 ABI | **ABI 6**（`ST_ABI_VERSION`，3.0 clean break）。2.12.0 之后的变更全部为 additive |
 | 主要语言 | C++20（暴露 C ABI，兼容 C11 头文件） |
 | 构建系统 | CMake 3.21+ · 平台入口 `mainBuild.sh` |
@@ -62,7 +62,7 @@ SceneManager → STPropagator → STIRConverter ─┬→ STOnlineAuralizator  (
 
 | 头文件 | 上下文 | 函数前缀 | 作用 |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | 实时传播 + 音频渲染（143 个 export） |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | 实时传播 + 音频渲染（146 个 export） |
 | `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | 离线 IR 计算与渲染（116 个 export） |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | 公共 POD、enum、capability 位 |
 
@@ -101,6 +101,7 @@ typedef struct STMaterialId { int32_t v; } STMaterialId;
 | 声学策略 | `st_rt_set_atmosphere`, `st_rt_set_physical_distance_attenuation`, `st_rt_set_acoustic_feature_enabled`, `st_rt_set_doppler_gain_mode`, `st_rt_set_late_coupling[_preset]`, `st_rt_set_early_late_band_energy_targets` |
 | render | `st_rt_render_start/stop`, `st_rt_render_process`（主机 pull）, `set_options/get_options`, `set_spatializer`, `set_speaker_layout[_custom]`, `set_eq`, `set_master_gain_db`, `set_limiter_type`, `get_limiter_latency_samples`, `set_path_fade_time`, `set_max_delay_seconds`, `get_latency_frames`, `get_process_stats` |
 | 线程 | `st_rt_set_thread_attributes`, `st_rt_get_thread_inventory`, `STRT_CreateOptions.maxComputeThreads` |
+| 内存预算 | `st_rt_set_memory_budget`, `st_rt_get_memory_budget`, `st_rt_get_memory_stats`, `STRT_CreateOptions.maxSources` — [声源内存预算](#声源内存预算) |
 | 诊断 | `st_rt_get_timing`, `st_rt_ir_get_stats`, `st_rt_debug_acquire_snapshot`, `st_rt_debug_copy_visual_paths`, `st_rt_debug_copy_mesh/scene_accel_nodes` |
 
 ### 线程标签
@@ -308,6 +309,58 @@ UE、FMOD、Wwise、Unity 集成默认为 `BUFFERED`。指定 `hostSampleRate` �
 - `maxComputeThreads = 0` 为 auto（= min(性能核数, 6)），各类线程的优先级和核心偏好在 **create 之前**
   用 `st_rt_set_thread_attributes`（与 FMOD `Thread_SetAttributes` 同一位置）指定。
 - `st_rt_get_thread_inventory` 按类型返回实际存在的线程数。
+
+### 声源内存预算
+
+从 SDK 发行版 2.18.2-jhj.3 起，实时上下文对同时存活的声源数和声源内存设有上限。
+这是 ABI 6 additive 变更，可通过 `st_rt_get_capability_word(1)` 的 `ST_CAP1_MEMORY_BUDGET` 确认。单个声源的
+内存由固定开销（传播、IR 副本、transport、流环形缓冲）、延迟环和路径 lane 组成。
+
+- **动态延迟环** — 每个声源的延迟环按该声源路径所需的最大延迟 × 1.25 + 50 ms 分配（以 125 ms 为单位
+  向上取整，下限 0.25 s）。需要更长时，控制线程准备更大的环，音频线程在不复制、不分配的情况下将其替换。
+  `st_rt_render_set_max_delay_seconds` 不再是为所有声源分配同一长度的值，而是**上限**。在箱形房间测量中，
+  以 60 个声源计，每个声源的内存从 6.89 MiB 降至 2.70 MiB。
+- **平台默认值** — `st_rt_create` 按构建目标设置。
+
+| 平台 | 最大声源数 | 声源内存上限 | 延迟环上限 |
+|---|---:|---:|---:|
+| 桌面（Windows · macOS · Linux） | 128 | 无限制 | 2.0 s |
+| 移动（Android · iOS） | 48 | 96 MiB | 1.0 s |
+| Web（Emscripten） | 32 | 64 MiB | 0.5 s |
+
+- **超出上限时**，`st_rt_source_create` 返回失败句柄（`v < 0`），最后状态为
+  `ST_STATUS_BUDGET_EXCEEDED`（11）。这就是默认策略 `ST_MEMORY_REJECT_NEW`。
+  改为 `ST_MEMORY_EVICT_FARTHEST` 后，会以与 `st_rt_source_destroy` 相同的路径移出距听者最远的声源，
+  并接受新声源（被移出的 id 为 `STMemoryStats.lastEvictedSource`）。UE、Unity、FMOD、Wwise 封装以 dry 播放被拒绝的声源。
+- **设置** — 创建时用 `STRT_CreateOptions.maxSources`（0 = 平台默认），创建之后用
+  `st_rt_set_memory_budget` 修改。`STMemoryBudget` 中为 0 的字段保持默认值。降低上限时
+  已有的声源会保留，从新的创建开始生效。`st_rt_get_memory_stats` 返回声源数、跟踪与估算字节数、
+  拒绝与移出次数。
+
+```c
+typedef struct STMemoryBudget {
+    uint32_t structSize, apiVersion;
+    uint32_t maxSources;            /* 0 = 平台默认 */
+    int32_t  rejectPolicy;          /* ST_MEMORY_REJECT_NEW(0, 默认) / ST_MEMORY_EVICT_FARTHEST(1) */
+    uint64_t sourceBudgetBytes;     /* 0 = 无限制（仅观测） */
+    uint64_t fixedPerSourceBytes;   /* 0 = 引擎默认（2.5 MiB）。仅用于估算 */
+    float    ringFloorSeconds;      /* 0 = 0.25 */
+    float    ringGrowthHeadroom;    /* 0 = 1.25 */
+    int32_t  allowShrink;           /* 0 = 不收缩（会话期间保持最大值） */
+    uint32_t reserved[5];
+} STMemoryBudget;
+```
+
+:::caution 行为变更
+- 桌面默认最大声源数为 **128**（以前无限制）。需要更多的主机用 `st_rt_set_memory_budget`
+  调高。
+- 移动和 Web 的延迟环上限默认为 1.0 s / 0.5 s，因此超过 343 m / 171 m 的早期路径不会被渲染。需要以前的
+  值时，用 `st_rt_render_set_max_delay_seconds` 指定。
+- 离线 DLL（`st_off_*`）不受预算约束（无限制）。
+- 移动和 Web 以 Hybrid 早期反射为前提。Objects 模式下每个声源超过 30 MB。
+:::
+
+各封装的设置汇总在 [SDK 概览](../sdk/overview.md#声源数量上限)中。
 
 ### Late reverb
 

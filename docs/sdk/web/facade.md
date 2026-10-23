@@ -39,6 +39,7 @@ await sound.update(0);
 | `propagationThreadCount` | 동기 1 / 파이프라인 3 | 계산 예산 1 ~ 5 (음수 = 5). 파이프라인은 최소 3 |
 | `throughput` | 미지정 | `'low'` / `'medium'` / `'max'` — MT 워커 예산 단축 표기 |
 | `sceneRatio` | `1.0` | 장면 길이 단위당 미터(cm = 0.01). 지오메트리 사전 스케일과 **혼용 금지** |
+| `maxSources` | `0` | 동시에 살아 있는 엔진 음원 수 상한(0 ~ 512 정수). `0` = wasm 플랫폼 기본(32음원 · 음원 메모리 64 MiB · 지연 링 천장 0.5 s — 힙이 256 MiB 고정이라 보수적). 넘는 음원 생성은 엔진이 status 11(`BUDGET_EXCEEDED`)로 거절하고 기존 음원은 계속 렌더됩니다. SDK 릴리스 2.18.2-jhj.3부터 |
 | `autoLoadMaterials` | `true` | 기본 재질 테이블을 로드해 이름 매핑 활성화 |
 | `transmissionModel` | `'surface'` | SimpleST는 표면 R/A/T만 지원. `'solid'`는 **거부** |
 | `defaultMeshBuild` | — | STCoreV2 BVH 옵션. 지정하면 로드 **거부** |
@@ -97,7 +98,7 @@ sound.listener
 | `useDoppler` | 가변 지연 Doppler 피치 — SimpleST 2.18.1부터 실시간에서는 항상 켜지고 `false`는 무시됩니다 |
 | `useLimiter` | 출력 리미터. 기본 `false` — 앱의 Web Audio 마스터 버스가 리미팅을 맡습니다(엔진 2.18 생성 직후 기본은 켜짐이지만 SDK가 렌더 시작·HRTF/출력 변경·reset마다 끕니다). `true`면 SimpleST 2.18 true-peak 리미터(−1 dBTP, 137샘플 지연) |
 | `pathFadeTime` | 경로 등장/소멸 크로스페이드(초) |
-| `maxDelaySeconds` | 렌더러가 유지하는 최대 경로 지연(초) |
+| `maxDelaySeconds` | 음원별 지연 링의 천장(초). 엔진은 음원마다 경로가 필요한 만큼만 링을 잡습니다(바닥 0.25 s). 웹 플랫폼 기본 천장은 0.5 s |
 | `diffuseEnabled` | late reverb 렌더 on/off. 1.1.0부터 2.18의 1차 산란(diffuse rain) 렌더도 함께 켜고 끕니다 |
 
 `hrtfQuality`, `diffuseQuality`, `delayInterpolation`, `hrtfMode`는 STCoreV2 전용이라 **거부**됩니다.

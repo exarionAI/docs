@@ -11,7 +11,7 @@ description: SimpleSTFmod — 面向 FMOD Studio / FMOD Engine 的 SimpleST DSP 
 
 | 项目 | 值 |
 |---|---|
-| 插件版本 | v0.3.0（SimpleST 2.18.2）。上一版本：v0.2.0（SimpleST 2.12.0） |
+| 插件版本 | v0.3.0（SimpleST 2.18.2）。上一版本：v0.2.0（SimpleST 2.12.0）。从 SDK 发行版 2.18.2-jhj.3 起，FMOD 看到的 DSP 描述版本为 0.3.0（此前的 0.3.0 发行包显示为 0.2.0） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 构建 = 2.00 ~ 2.04，204 构建 = 2.04+） |
 | 平台 | Windows x64 · macOS · Linux · Android · iOS（静态）· Web（静态，FMOD HTML5 pthreads） |
 | 分发 | `SimpleST-fmod-release.zip`（各平台 `plugins/` + `install.py`，含 UE/Unity 胶水代码） |
@@ -144,6 +144,7 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 SimpleSTFmod_Config cfg; SimpleSTFmod_InitConfig(&cfg);
 cfg.renderMode = SIMPLESTFMOD_RENDER_BUFFERED;   // 默认。IN_CALLBACK = 在 FMOD 混音器回调内渲染
 cfg.sceneRatio = 0.f;                            // 0 = 1.0（FMOD UE/Unity 集成的单位是米）
+cfg.maxSources = 0;                              // 0 = 引擎平台默认（桌面 128，Android/iOS 48，Web 32）
 SimpleSTFmod_Configure(&cfg);                    // 运行时启动前（第一个 SimpleST DSP 创建前）
 
 SimpleSTFmod_Status st = { sizeof st };
@@ -163,6 +164,28 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 - FMOD 与 SimpleST 的坐标系相同（左手系，+Y up，+Z forward）。FMOD UE 集成的 `(UE.Y, UE.Z, UE.X)/100`
   转换与 SoundTracing UE 插件的转换一致。
 - 插件上下文中已预先注册默认材质库。请从 `defaultMaterialId` 开始加上 preset index 使用。
+- **声源上限**（SDK 发行版 2.18.2-jhj.3）：`SimpleSTFmod_Config.maxSources` 是引擎声源数上限（0 = 平台
+  默认）。超出时引擎拒绝创建声源，该 voice 以 dry 播放。这是追加在结构体末尾的字段，因此传入旧版较短
+  结构体的主机也能正常工作 — [声源内存预算](../core/simplest.md#声源内存预算)。
+
+### 开启和关闭 Sound Tracing
+
+```c
+SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // 关闭。1 = 开启（默认）
+```
+
+这是 SDK 发行版 2.18.2-jhj.3 中新增的游戏侧 A/B 开关。它作用于一个运行时（`systemIndex < 0` = 最新的运行时），
+并在控制线程上异步生效。
+
+- **关闭时**，会启用 SimpleST 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空预热声源池后不再
+  重新填充，插件也不会唤醒传播 lane。
+- **传播 lane 不会完全停止。** SimpleST 没有传播暂停，因此只要还有声源存在，lane 就会按自身周期
+  继续运行。
+- **开启时**，会重新应用插件的渲染选项。
+- 成功入队时返回 1，没有运行时时返回 0。之后启动的运行时以开启状态启动。
+- 这是可选 export，游戏 API 版本仍为 1。请先查找该 export，不存在时跳过。
+
+UE SoundTracing 的 `SetSoundTracingEnabled` 在 FMOD 模式下会调用此函数 — [Unreal Engine SDK](./ue.md)。
 
 ## UE · Unity 集成
 
@@ -193,6 +216,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 ## 已知限制
 
 - 1 个听者（无 roll），64 个并发流（超出部分 dry），仅立体声输出（未暴露扬声器布局）。
+- 引擎声源数不会超过平台上限（`maxSources`）。超出的 voice 为 dry。
 - Source 之后的事件效果器/发送只收到静音（SimpleST 混音在 Listener 总线上输出）。
 - `Overall Gain`（用于虚拟化的可听度）是基于距离的估计值。
 - FMOD Studio 可能创建多个 System，每个 System 会生成一个 SimpleST 上下文。

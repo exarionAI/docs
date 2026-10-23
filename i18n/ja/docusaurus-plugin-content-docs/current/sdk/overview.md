@@ -9,6 +9,8 @@ description: SimpleST リアルタイム空間音響エンジンの Web、Unity�
 SoundTrace SDK は、[SimpleST](../core/simplest.md) エンジンを Web・ゲームエンジン・オーディオミドルウェアから
 利用できるようにラップする製品群です。すべてのラッパーは同じリポジトリの同じエンジン SDK
 （`out/dist/<platform>_release/SimpleST`）を消費し、**SimpleST 2.18.2 / ABI 6** を基準とします。
+現在の SDK リリースは 2.18.2-jhj.3（2026-10-23）です。エンジンに[音源メモリ予算](#音源数の上限)が入り、ラッパーのバージョンは
+そのままです。
 以前のリリース: 2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0。レガシーラインとして引き続き提供されます。
 
 ## 統合ラインアップ
@@ -33,7 +35,7 @@ SimpleST プラグインへ接続する**統合モード**に切り替わりま�
 | Windows x64 | `SimpleSTRealtime.dll` | Wwise Authoring プラグインは Windows DLL |
 | macOS | Universal dylib（arm64 + x86_64） | |
 | Linux x86_64 | `.so`（glibc 2.34+） | |
-| Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 24+ |
+| Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 28+（エンジン `.so` が `libaaudio` を直接リンク） |
 | iOS | device arm64 · simulator arm64 静的ライブラリ / XCFramework | iOS 15+ |
 | Web | pthreads WASM（`SimpleSTRealtime.mjs/.wasm`）+ シングルスレッド Offline | COOP/COEP が必要 |
 
@@ -53,6 +55,22 @@ SimpleST プラグインへ接続する**統合モード**に切り替わりま�
 7. **出力リミッターはホストのマスターチェーンの役割**です。エンジン 2.18.0 はコンテキスト生成直後に true-peak リミッター
    （−1 dBTP、137 サンプル遅延）を有効にしますが、UE・Unity・FMOD・Wwise・Web ラッパーはドキュメント化された既定値どおりリミッターを
    **無効の状態**に保ちます。有効にする方法は各 SDK ページを参照してください。
+
+## 音源数の上限
+
+SDK リリース 2.18.2-jhj.3 から、エンジンがプラットフォームごとに同時音源数と音源メモリに上限を設けます — デスクトップ
+128 音源 · メモリ無制限 · 遅延リングの天井 2.0 s、Android/iOS 48 音源 · 96 MiB · 1.0 s、Web 32 音源 · 64 MiB · 0.5 s。
+上限を超える音源はエンジンが生成を拒否し（`ST_STATUS_BUDGET_EXCEEDED`）、ゲームは停止しません。デスクトップの
+既定 128 音源は従来（無制限）からの**挙動の変更**です。エンジン側の詳細は
+[SimpleST — 音源メモリ予算](../core/simplest.md#音源メモリ予算)を参照してください。
+
+| SDK | 音源数の設定（0 = プラットフォーム既定） | 拒否された音源 | 遅延リングの天井 |
+|---|---|---|---|
+| [Unreal Engine](./ue.md) | Project Settings `Max Sources` | dry 経路にフォールバック | `Max Delay Seconds`（0 = プラットフォーム既定） |
+| [Unity](./unity.md) | `SoundTraceRuntime.MaxSources` | 警告を残し `AudioSource` を dry | `SoundTraceListener.maxDelaySeconds`（既定 0 = プラットフォーム既定） |
+| [Web](./web.md) | `SoundTrace.create` オプション `maxSources` | 生成を拒否（status 11）、既存の音源はレンダーを継続 | `setRenderOptions({ maxDelaySeconds })` |
+| [FMOD](./fmod.md) | `SimpleSTFmod_Config.maxSources` | そのボイスを dry で再生 | エンジンのプラットフォーム既定 |
+| [Wwise](./wwise.md) | `SimpleSTWwise_Config.maxSources` | そのボイスを dry で再生 | エンジンのプラットフォーム既定 |
 
 ## どこから始めるか
 

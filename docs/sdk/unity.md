@@ -8,7 +8,8 @@ description: SoundTrace Unity SDK 0.4.0(SimpleST 2.18.2 / ABI 6) 설치, 컴포�
 SoundTrace Unity SDK는 Unity의 메시, Renderer 재질 슬롯, 음원, 리스너를
 [SimpleST](../core/simplest.md)에 연결하는 실시간 공간 음향 플러그인입니다. 0.3.0부터 엔진이
 STCoreV2에서 SimpleST로 바뀌었고, 0.4.0은 **SimpleST 2.18.2 / ABI 6**을 씁니다(이전 릴리스: 0.3.0 =
-SimpleST 2.12.0). 렌더러는 **Hybrid**로 시작합니다.
+SimpleST 2.12.0). 렌더러는 **Hybrid**로 시작합니다. SDK 릴리스 2.18.2-jhj.3에서 패키지 버전은 그대로이고
+[음원 수 상한](#음원-수-상한)과 Android 최소 API 28이 들어갔습니다.
 `SoundTraceManager`, `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`,
 `SoundTracePathVisualizer` 컴포넌트 이름과 스크립트 GUID, 샘플 씬은 그대로입니다.
 
@@ -18,7 +19,7 @@ SimpleST 2.12.0). 렌더러는 **Hybrid**로 시작합니다.
 |---|---|
 | Unity | 2022.3 LTS 이상 (2022.3.62f2 · 6000.3 검증) |
 | 패키지 | `SoundTrace-SimpleST-release.unitypackage` → `Assets/SoundTrace` |
-| 번들 네이티브 플러그인 | Windows x64 · macOS Universal · Linux x86_64 · Android(ARMv7/ARM64/x86_64, API 24+) · iOS 15+(device/simulator XCFramework) · WebGL |
+| 번들 네이티브 플러그인 | Windows x64 · macOS Universal · Linux x86_64 · Android(ARMv7/ARM64/x86_64, API 28+ — 엔진 `.so`가 `libaaudio`를 직접 링크하므로 빌드 단계에서 검사) · iOS 15+(device/simulator XCFramework) · WebGL |
 | WebGL | 지원 — 독립 pthread WASM + AudioWorklet 경로 (`OnAudioFilterRead` 미사용) |
 | GPU | 없음. `SoundTraceManager.IsGpuPropagate`는 항상 `false` |
 
@@ -126,6 +127,18 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 |---|---|
 | `ResetMotionState()` | teleport, respawn, scene 전환 직후 모든 Listener와 Source의 motion history를 초기화합니다. |
 
+### 음원 수 상한
+
+`SoundTraceRuntime.MaxSources`(정적 `uint`, 기본 `0`)는 동시에 살아 있는 엔진 음원 수의 상한입니다.
+`0`이면 엔진 플랫폼 기본(데스크톱 128 · Android/iOS 48 · WebGL 32)을 씁니다. 첫 `SoundTraceListener`가 활성화되기
+**전에** 설정합니다(`STRT_CreateOptions.maxSources`로 전달). 상한을 넘는 음원은 예외를 던지지 않습니다 —
+`SoundSourceCore`가 `ST_STATUS_BUDGET_EXCEEDED`를 한 번 경고하고 그 `AudioSource`를 dry로 둡니다.
+엔진 정책은 [SimpleST — 음원 메모리 예산](../core/simplest.md#음원-메모리-예산)을 참고하세요.
+
+```csharp
+SoundTraceRuntime.MaxSources = 64;   // 첫 Listener 활성화 전
+```
+
 ## SoundTraceListener
 
 ![SoundTraceListener Inspector](/img/unity/Img_STListener.png)
@@ -141,8 +154,11 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 | `Ray Depth` | `4` | `1..16`; 반사 최대 깊이 |
 | `Output Mode` | `Headset` | `Headset`(바이노럴), `Speaker`(스테레오 패닝) |
 | `HRTF` | `HRIR Interpolated` | 아래 세 모드 |
-| `Max Delay Seconds` | `2.0 s` | `0.012..5 s`; 렌더러가 유지하는 최대 경로 지연 |
+| `Max Delay Seconds` | `0` | `0..5 s`; 음원별 지연 링의 천장. `0` = 엔진 플랫폼 천장(데스크톱 2 s · Android/iOS 1 s · WebGL 0.5 s). 0이 아니면 천장을 덮어씁니다(0.012 s 미만은 0.012 s) |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`; 경로 등장/소멸 크로스페이드 |
+
+`Max Delay Seconds` 기본값은 SDK 릴리스 2.18.2-jhj.3에서 `2` → `0`(엔진 정책)으로 바뀌었습니다. 엔진은 음원마다
+경로가 필요한 만큼만 지연 링을 잡고 이 값을 천장으로만 씁니다. `2`가 저장된 기존 씬은 종전처럼 동작합니다.
 
 `Fast`, `Middle`, `Quality`를 선택하면 ray 값이 함께 적용되고 Inspector에서 잠깁니다. 직접
 편집하려면 `Custom`을 선택하십시오.
@@ -386,6 +402,8 @@ source/listener 이동, material preset 변경, Unity 원본 audio와 SoundTrace
 | Geometry가 반영되지 않음 | `Read/Write Enabled`, MeshFilter/MeshRenderer, child mesh 위치, 등록 상태 |
 | 실행 중 변형 mesh가 반영되지 않음 | SimpleST는 refit이 없음. 새 메시로 교체 |
 | FMOD/Wwise 모드에서 Listener/Source가 꺼짐 | 정상 — 렌더는 미들웨어 플러그인이 담당 |
+| 일부 음원이 공간화되지 않고 dry로 들림 | Console의 `ST_STATUS_BUDGET_EXCEEDED` 경고 — 음원을 줄이거나 `SoundTraceRuntime.MaxSources`를 올림 |
+| Android 빌드가 `SimpleST requires Android API 28 or newer`로 실패 | Player Settings › Minimum API Level을 28 이상으로 |
 | Teleport 뒤 pitch가 튐 | transform 변경 직후 `ResetMotionState()` 호출 |
 | 성능이 부족함 | `Quality → Middle → Fast`, Reverb Ray Resolution 축소, path visualizer 비활성화 순서로 확인 |
 | 여러 음원이 comb filtering처럼 들림 | 동일한 `AudioSettings.dspTime`으로 `PlayScheduled()` 실행 |

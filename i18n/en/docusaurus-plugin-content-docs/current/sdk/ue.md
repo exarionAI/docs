@@ -8,7 +8,9 @@ description: SoundTracing UE5 plugin 0.4.0 (SimpleST 2.18.2 / ABI 6) installatio
 The SoundTracing UE5 plugin connects [SimpleST](../core/simplest.md) through the Unreal Audio Mixer
 Spatialization plugin + submix and through Actor Components. From 0.3.0 the engine has changed from
 STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.18.2 / ABI 6** (previous release: 0.3.0 =
-SimpleST 2.12.0). When the project has an FMOD or Wwise plugin the same source builds in an
+SimpleST 2.12.0). In SDK release 2.18.2-jhj.3 the plugin version is unchanged; it adds the
+`Max Sources` setting, forwarding of the sound tracing switch in FMOD/Wwise mode, and a ray sampler
+cleanup. When the project has an FMOD or Wwise plugin the same source builds in an
 **integration mode** that attaches to that middleware's SimpleST plug-in.
 
 ## Current status
@@ -116,7 +118,8 @@ conversion is skipped at 44.1 kHz).
 | Runtime | `Max Compute Threads` | `0` | Upper bound of SimpleST compute threads. 0 = auto (min(performance cores, 6)). Requires restart |
 | Runtime | `Prefer Performance Cores` | `true` | Pins the propagation lanes and compute pool to performance cores (disables Windows 11 EcoQoS). Recommended on hybrid CPUs |
 | Runtime | `Render Mode` | `Buffered` | `Buffered` (the SimpleST render thread fills a ring and the callback copies, ≈3 blocks of latency) / `In Callback` (renders inside the Unreal audio callback, lowest latency) |
-| Runtime | `Max Delay Seconds` | `0` | Maximum path delay the renderer keeps. 0 = engine default 2 s |
+| Runtime | `Max Sources` | `0` | Advanced. Cap on the number of simultaneously live engine sources. 0 = engine platform default (desktop 128, Android/iOS 48). The engine rejects sources beyond it (`ST_STATUS_BUDGET_EXCEEDED`, shown in the log) and the component falls back to the dry path. Applied at creation in Native mode, where SoundTracing creates the context (requires restart). FMOD/Wwise modes follow the plug-in settings — see [Source memory budget](../core/simplest.md#source-memory-budget) |
+| Runtime | `Max Delay Seconds` | `0` | Advanced. Ceiling of the per-source delay ring. 0 = engine platform default (desktop 2 s, Android/iOS 1 s). The ring grows only as far as the paths need |
 | Runtime | `Dry Fallback When Unavailable` | `true` | When the runtime is missing or fails, plays sources dry instead of silent |
 | Runtime | `Output Submix Parent` | Empty | Parent of the spatialized output submix |
 | Propagation | `Reflection Update Interval (ms)` | `33` | Minimum interval of the reflection/diffraction lane. It is most of the propagation cost, so raise this to buy back CPU. 0 = no limit |
@@ -137,7 +140,7 @@ Project defaults live in Project Settings; per-level overrides go on `USoundTrac
 |---|---|---:|---|
 | Quality Preset | `Quality Preset` | `Balanced` | `Custom` (keeps the fields) / `Fast` (12×12, depth 4) / `Balanced` (16×16, depth 8 = engine default) / `Quality` (24×24, depth 8) |
 | Listener Rays | `Ray Resolution` / `Ray Depth` | `16` / `8` | Guide rays N×N (`4..64`), maximum reflection order (`1..16`). Editable only in Custom |
-| Listener Rays | `Ray Sampling` | `FibonacciSphere` | LegacyGrid / FibonacciSphere / EqualAreaGrid / SobolSphere / Icosahedral |
+| Listener Rays | `Ray Sampling` | `FibonacciSphere` | `FibonacciSphere` only. SimpleST 2.18 accepts only Fibonacci, so the other four (LegacyGrid / EqualAreaGrid / SobolSphere / Icosahedral) are hidden in the editor; saved values are sent as FibonacciSphere with a one-time warning |
 | Output | `Output Mode` | `Headphones` | `Headphones` (binaural HRIR) / `Speakers (HOA decode)` / `Stereo Panning` |
 | Output | `HRTF Dataset` | `SADIE II D2 KEMAR` | SADIE II D2 (8,802 directions, 256 taps, bundled with the plugin) / MIT KEMAR (128 taps, embedded in the engine) |
 | Output | `Speaker Layout` | `Stereo 2.0` | Stereo 2.0 / Laptop Stereo 2.0 / 2.1 / 4.1 / 5.1 / 7.1 |
@@ -255,6 +258,16 @@ A World Subsystem readable from Blueprint — integration mode, scene mesh/objec
 counts, valid path count, per-lane propagation/IR/render time (ms), and render block statistics
 (active sources, exact/send taps).
 
+`SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` turn sound tracing on and off as a whole.
+While it is off, moving the listener or sources does not wake the propagation lanes, and
+visualization paths are not collected either, so no stale paths remain. In FMOD and Wwise modes,
+starting with SDK release 2.18.2-jhj.3, this switch is passed on to the middleware plug-in
+(`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`). Before that, the
+context was owned by the plug-in, so turning it off had no effect. The off state is sent again after
+attaching to a new runtime, and a warning is logged if the plug-in is an older one without this
+export. SimpleST has no propagation pause, so while sources remain the lanes keep running at their
+own cadence.
+
 ## Platform link contract
 
 | UE platform | SDK path (under `Binaries/`) | Linking |
@@ -308,7 +321,9 @@ directionality, and late reverb coupling.
 | Geometry is not reflected | The Object Component's immediate parent is a supported mesh component, `Acoustic Mobility` |
 | Render block overrun (audio dropouts) | `Early Reflections = Hybrid`, raise `Reflection Update Interval`, lower the Quality Preset |
 | Gunshots and footsteps sound quiet or late (FMOD/Wwise mode) | FMOD plug-in 0.3.0 / Wwise plug-in 0.2.0 or later, `SIMPLESTFMOD_WARM_SOURCES=0` is not set |
-| No paths visible | Visualizer component, Niagara plugin, path enable state |
+| Some sources play dry (Native) | `ST_STATUS_BUDGET_EXCEEDED` in the Output Log — reduce the sources or raise `Max Sources` |
+| Turning sound tracing off has no effect in FMOD/Wwise mode | Whether the plug-in version exports `*_SetSoundTracingEnabled` (if not, a warning appears in the Output Log) |
+| No paths visible | Visualizer component, Niagara plugin, path enable state, sound tracing is not turned off |
 
 ## Next
 

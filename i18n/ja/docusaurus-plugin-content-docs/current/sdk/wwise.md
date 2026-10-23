@@ -134,6 +134,7 @@ CompanyID/PluginID、プロパティ名、AudioEnginePropertyID はプロジェ�
 ```c
 SimpleSTWwise_Config cfg; SimpleSTWwise_InitConfig(&cfg);
 cfg.sceneRatio = 0.01f;                          // Wwise for Unreal(cm)。Unity は 0(=1.0, m)
+cfg.maxSources = 0;                              // 0 = エンジンのプラットフォーム既定(デスクトップ 128, Android/iOS 48, Web 32)
 SimpleSTWwise_Configure(&cfg);                   // AK::SoundEngine::Init の前
 SimpleSTWwise_SetWorldAxes(SIMPLESTWWISE_AXES_UNREAL);   // Unreal のみ。Unity は既定(WWISE)
 
@@ -149,6 +150,29 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal の軸**: Wwise for Unreal 2024.1+ は Unreal のベクトルをそのまま渡すため（+Z 上）、`SetWorldAxes(UNREAL)` を
   呼ばないとレンダラーが (Y, Z, X) に変換せず、ゲームが登録したジオメトリと合いません。呼ばないとリスナー・音源が
   見当違いの壁に遮蔽されます（2026-10-15 修正）。
+- **音源の上限**（SDK リリース 2.18.2-jhj.3）: `SimpleSTWwise_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
+  既定）。超えるとエンジンが音源の生成を拒否し、そのボイスは dry で再生されます。構造体の末尾に追加したフィールドなので、以前の短い
+  構造体を渡すホストも動作します — [音源メモリ予算](../core/simplest.md#音源メモリ予算)。
+
+### サウンドトレーシングのオンオフ
+
+```c
+SimpleSTWwise_SetSoundTracingEnabled(0);   // オフ。1 = オン(既定)
+```
+
+SDK リリース 2.18.2-jhj.3 で追加されたゲーム側の A/B スイッチです。実行中のランタイムに適用され、コントロールスレッドで
+非同期に反映されます。動作は [FMOD 版](./fmod.md#サウンドトレーシングのオンオフ)と同じです。
+
+- **オフにすると** SimpleST レンダラーのバイパス（`st_rt_render_set_sound_tracing_enabled`）がかかり、ウォーム音源プールを空にした後は再び
+  満たさず、プラグインが伝搬レーンを起こしません。
+- **伝搬レーンが完全に止まるわけではありません。** SimpleST には伝搬の一時停止がないため、音源が残っている間、レーンは
+  独自の周期で動き続けます。
+- **オンにすると**プラグインのレンダーオプションを再適用します。
+- キューに入れば 1、実行中のランタイムがなければ 0 を返します。後から開始されたランタイムはオンの状態で開始するため、ランタイムの
+  準備ができた後に状態を再送してください。
+- ゲーム API バージョン 1 のままの任意 export です。export を探し、なければスキップしてください。
+
+UE SoundTracing の `SetSoundTracingEnabled` が Wwise モードでこの関数を呼びます — [Unreal Engine SDK](./ue.md)。
 
 ## UE · Unity 統合
 
@@ -184,6 +208,7 @@ WwiseConsole でプロジェクト生成 → WAAPI でバス・エフェクト�
 - リスナー 1 個（SimpleST の制約）。同じバスが 2 番目のリスナー用に再度インスタンス化されると、そのインスタンスはすべての
   オブジェクトを Wwise パンニングでミックスします。
 - オーディオオブジェクトには速度がないため SimpleST の Doppler はありません。
+- エンジン音源数はプラットフォームの上限（`maxSources`）を超えません。超過したボイスは dry です。
 - 新しいオーディオオブジェクトを初めて見たとき、オーディオスレッドで小さなスロットを 1 つ割り当てます。エンジン音源そのものは
   コントロールスレッドでウォームプールの音源を再利用するか、新しく作ります。
 - ランチャーバンドルは現在 Authoring + Windows_vc170 のみを含みます。Mac・Linux・Android・iOS バンドルと EULA・ロゴは準備中です。

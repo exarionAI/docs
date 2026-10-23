@@ -8,7 +8,9 @@ description: SoundTrace Unity SDK 0.4.0 (SimpleST 2.18.2 / ABI 6) installation, 
 The SoundTrace Unity SDK is a real-time spatial audio plug-in that connects Unity meshes, Renderer
 material slots, sources, and the listener to [SimpleST](../core/simplest.md). From 0.3.0 the engine
 has changed from STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.18.2 / ABI 6** (previous release:
-0.3.0 = SimpleST 2.12.0). The renderer starts in **Hybrid** mode. The `SoundTraceManager`,
+0.3.0 = SimpleST 2.12.0). The renderer starts in **Hybrid** mode. In SDK release 2.18.2-jhj.3 the
+package version is unchanged; it adds a [source count limit](#source-count-limit) and a minimum
+Android API of 28. The `SoundTraceManager`,
 `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`, and `SoundTracePathVisualizer`
 component names, script GUIDs, and sample scenes are unchanged.
 
@@ -18,7 +20,7 @@ component names, script GUIDs, and sample scenes are unchanged.
 |---|---|
 | Unity | 2022.3 LTS or later (verified on 2022.3.62f2 · 6000.3) |
 | Package | `SoundTrace-SimpleST-release.unitypackage` → `Assets/SoundTrace` |
-| Bundled native plug-ins | Windows x64 · macOS Universal · Linux x86_64 · Android (ARMv7/ARM64/x86_64, API 24+) · iOS 15+ (device/simulator XCFramework) · WebGL |
+| Bundled native plug-ins | Windows x64 · macOS Universal · Linux x86_64 · Android (ARMv7/ARM64/x86_64, API 28+ — the engine `.so` links `libaaudio` directly, so this is checked at build time) · iOS 15+ (device/simulator XCFramework) · WebGL |
 | WebGL | Supported — standalone pthread WASM + AudioWorklet path (`OnAudioFilterRead` not used) |
 | GPU | None. `SoundTraceManager.IsGpuPropagate` is always `false` |
 
@@ -129,6 +131,19 @@ renders.
 |---|---|
 | `ResetMotionState()` | Resets the motion history of every Listener and Source right after a teleport, respawn, or scene transition. |
 
+### Source count limit
+
+`SoundTraceRuntime.MaxSources` (static `uint`, default `0`) is the cap on the number of
+simultaneously live engine sources. `0` uses the engine platform default (desktop 128 · Android/iOS
+48 · WebGL 32). Set it **before** the first `SoundTraceListener` is enabled (it is passed as
+`STRT_CreateOptions.maxSources`). Sources beyond the cap do not throw an exception —
+`SoundSourceCore` warns once about `ST_STATUS_BUDGET_EXCEEDED` and leaves that `AudioSource` dry.
+For the engine policy see [SimpleST — Source memory budget](../core/simplest.md#source-memory-budget).
+
+```csharp
+SoundTraceRuntime.MaxSources = 64;   // before the first Listener is enabled
+```
+
 ## SoundTraceListener
 
 ![SoundTraceListener Inspector](/img/unity/Img_STListener.png)
@@ -144,8 +159,12 @@ Usually added to the Main Camera.
 | `Ray Depth` | `4` | `1..16`; maximum reflection depth |
 | `Output Mode` | `Headset` | `Headset` (binaural), `Speaker` (stereo panning) |
 | `HRTF` | `HRIR Interpolated` | The three modes below |
-| `Max Delay Seconds` | `2.0 s` | `0.012..5 s`; maximum path delay the renderer keeps |
+| `Max Delay Seconds` | `0` | `0..5 s`; ceiling of the per-source delay ring. `0` = engine platform ceiling (desktop 2 s · Android/iOS 1 s · WebGL 0.5 s). A nonzero value overrides the ceiling (values below 0.012 s become 0.012 s) |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`; path appear/disappear crossfade |
+
+The `Max Delay Seconds` default changed from `2` → `0` (engine policy) in SDK release 2.18.2-jhj.3.
+The engine allocates a delay ring per source only as large as its paths need and uses this value
+only as a ceiling. Existing scenes saved with `2` behave as before.
 
 Selecting `Fast`, `Middle`, or `Quality` applies the ray values together and locks them in the
 Inspector. Select `Custom` to edit them directly.
@@ -396,6 +415,8 @@ and the room response.
 | Geometry is not reflected | `Read/Write Enabled`, MeshFilter/MeshRenderer, child mesh placement, registration status |
 | Deformed meshes are not reflected at runtime | SimpleST has no refit. Replace with a new mesh |
 | Listener/Source disabled in FMOD/Wwise mode | Expected — the middleware plug-in renders |
+| Some sources are not spatialized and sound dry | The `ST_STATUS_BUDGET_EXCEEDED` warning in the Console — reduce the sources or raise `SoundTraceRuntime.MaxSources` |
+| Android build fails with `SimpleST requires Android API 28 or newer` | Set Player Settings › Minimum API Level to 28 or higher |
 | Pitch jumps after a teleport | Call `ResetMotionState()` right after changing the transform |
 | Not enough performance | In order: `Quality → Middle → Fast`, lower Reverb Ray Resolution, disable the path visualizer |
 | Multiple sources sound like comb filtering | Run `PlayScheduled()` against the same `AudioSettings.dspTime` |

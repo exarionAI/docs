@@ -10,7 +10,8 @@ SDK です。Three.js のようなレンダリングシーンのメッシュ・�
 Web Audio graph に空間化されたステレオ出力を提供します。
 
 1.0.0 からエンジンが STCoreV2 から SimpleST に変わり、1.1.0 は **SimpleST 2.18.2 / ABI 6** を使います
-（以前のリリース: 1.0.0 = SimpleST 2.12.0）。既存の
+（以前のリリース: 1.0.0 = SimpleST 2.12.0）。SDK リリース 2.18.2-jhj.3 ではパッケージバージョンはそのままで、`maxSources`
+オプション（音源数の上限）が入りました。既存の
 呼び出し側は変わりません。`SoundTrace`、`Source`、`Mesh`、`Listener` の facade は維持されますが、STCoreV2 と比べて
 バックエンド・HRTF・材質・オプションの契約が変わっています。
 全オプションとエンティティ API は [Facade API](./web/facade.md)、低レベルの SimpleST モジュールアクセスは
@@ -29,6 +30,7 @@ Web Audio graph に空間化されたステレオ出力を提供します。
 | 品質 | `fast` / `balanced` / `quality` — リスナー・音源のレイ格子と反射深度をまとめて設定 |
 | 材質 | 9バンド（63 Hz ~ 16 kHz）SoundTrace ゲーム材質 22 種、名前・エイリアス・インデックスで指定 |
 | 出力 | 音源ごとにモノ入力、リスナーレンダラーがステレオ 1 本をミックス（`sound.output`） |
+| 音源の上限 | 既定 32 音源 · 音源メモリ 64 MiB · 遅延リングの天井 0.5 s。音源数は `maxSources` オプションで変更します — [音源メモリ予算](../core/simplest.md#音源メモリ予算) |
 | GPU | なし。`mode: 'gpu'`、`enableGpu()` はエラー |
 
 ## 要件

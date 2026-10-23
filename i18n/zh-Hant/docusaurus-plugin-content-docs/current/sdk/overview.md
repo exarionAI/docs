@@ -9,6 +9,8 @@ description: SimpleST 即時空間聲學引擎的 Web、Unity、Unreal Engine、
 SoundTrace SDK 是將 [SimpleST](../core/simplest.md) 引擎包裝起來，讓 Web、遊戲引擎與音訊中介軟體
 能夠使用的產品線。所有包裝層都從同一個儲存庫取用同一份引擎 SDK
 （`out/dist/<platform>_release/SimpleST`），並以 **SimpleST 2.18.2 / ABI 6** 為基準。
+目前的 SDK 發行版為 2.18.2-jhj.3（2026-10-23）。引擎加入了[音源記憶體預算](#音源數上限)，包裝層版本
+維持不變。
 前一版本：2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0。仍作為舊版產品線持續提供。
 
 ## 整合陣容
@@ -33,7 +35,7 @@ SoundTrace SDK 是將 [SimpleST](../core/simplest.md) 引擎包裝起來，讓 W
 | Windows x64 | `SimpleSTRealtime.dll` | Wwise Authoring 外掛為 Windows DLL |
 | macOS | Universal dylib（arm64 + x86_64） | |
 | Linux x86_64 | `.so`（glibc 2.34+） | |
-| Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 24+ |
+| Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 28+（引擎 `.so` 直接連結 `libaaudio`） |
 | iOS | device arm64 · simulator arm64 靜態函式庫 / XCFramework | iOS 15+ |
 | Web | pthreads WASM（`SimpleSTRealtime.mjs/.wasm`）+ 單執行緒 Offline | 需要 COOP/COEP |
 
@@ -52,6 +54,22 @@ SoundTrace SDK 是將 [SimpleST](../core/simplest.md) 引擎包裝起來，讓 W
 7. **輸出限幅器由主機主輸出鏈負責**。引擎 2.18.0 在上下文建立後會立即啟用 true-peak 限幅器
    （−1 dBTP，137 樣本延遲），但 UE、Unity、FMOD、Wwise、Web 包裝層依照文件所述的預設值，將限幅器維持在
    **關閉狀態**。啟用方式請參考各 SDK 頁面。
+
+## 音源數上限
+
+從 SDK 發行版 2.18.2-jhj.3 起，引擎會依平台對同時音源數與音源記憶體設定上限 — 桌面
+128 個音源 · 記憶體無限制 · 延遲環上限 2.0 s，Android/iOS 48 個音源 · 96 MiB · 1.0 s，Web 32 個音源 · 64 MiB · 0.5 s。
+超過上限的音源會被引擎拒絕建立（`ST_STATUS_BUDGET_EXCEEDED`），遊戲不會因此停止。桌面
+預設 128 個音源相對於以前（無限制）是 **行為變更**。引擎端的細節請參考
+[SimpleST — 音源記憶體預算](../core/simplest.md#音源記憶體預算)。
+
+| SDK | 音源數設定（0 = 平台預設） | 被拒絕的音源 | 延遲環上限 |
+|---|---|---|---|
+| [Unreal Engine](./ue.md) | Project Settings `Max Sources` | 回退到 dry 路徑 | `Max Delay Seconds`（0 = 平台預設） |
+| [Unity](./unity.md) | `SoundTraceRuntime.MaxSources` | 記錄警告並讓 `AudioSource` 為 dry | `SoundTraceListener.maxDelaySeconds`（預設 0 = 平台預設） |
+| [Web](./web.md) | `SoundTrace.create` 選項 `maxSources` | 拒絕建立（status 11），既有音源繼續渲染 | `setRenderOptions({ maxDelaySeconds })` |
+| [FMOD](./fmod.md) | `SimpleSTFmod_Config.maxSources` | 該 voice 以 dry 播放 | 引擎平台預設 |
+| [Wwise](./wwise.md) | `SimpleSTWwise_Config.maxSources` | 該 voice 以 dry 播放 | 引擎平台預設 |
 
 ## 從哪裡開始
 

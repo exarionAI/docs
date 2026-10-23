@@ -9,6 +9,8 @@ description: Overview of the Web, Unity, Unreal Engine, FMOD, and Wwise integrat
 The SoundTrace SDKs wrap the [SimpleST](../core/simplest.md) engine for use on the web, in game
 engines, and in audio middleware. All wrappers consume the same engine SDK from the same
 repository (`out/dist/<platform>_release/SimpleST`) and are based on **SimpleST 2.18.2 / ABI 6**.
+The current SDK release is 2.18.2-jhj.3 (2026-10-23). It adds a [source memory budget](#source-count-limit)
+to the engine; the wrapper versions are unchanged.
 Previous release: 2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0. It remains
 available as a legacy line.
 
@@ -35,7 +37,7 @@ visualization, and the middleware plug-in does the rendering.
 | Windows x64 | `SimpleSTRealtime.dll` | The Wwise Authoring plug-in is a Windows DLL |
 | macOS | Universal dylib (arm64 + x86_64) | |
 | Linux x86_64 | `.so` (glibc 2.34+) | |
-| Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 24+ |
+| Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 28+ (the engine `.so` links `libaaudio` directly) |
 | iOS | device arm64 · simulator arm64 static library / XCFramework | iOS 15+ |
 | Web | pthreads WASM (`SimpleSTRealtime.mjs/.wasm`) + single-threaded Offline | COOP/COEP required |
 
@@ -59,6 +61,23 @@ visualization, and the middleware plug-in does the rendering.
    (−1 dBTP, 137-sample latency) right after context creation, but the UE, Unity, FMOD, Wwise, and
    Web wrappers keep the limiter **off**, as their documented default. See each SDK page for how to turn
    it on.
+
+## Source Count Limit
+
+Starting with SDK release 2.18.2-jhj.3, the engine caps the number of concurrent sources and the
+source memory per platform — desktop 128 sources · unlimited memory · delay ring ceiling 2.0 s,
+Android/iOS 48 sources · 96 MiB · 1.0 s, web 32 sources · 64 MiB · 0.5 s. The engine rejects
+creating sources beyond the cap (`ST_STATUS_BUDGET_EXCEEDED`), and the game does not stop. The
+desktop default of 128 sources is a **behavior change** from before (unlimited). For engine-side
+details see [SimpleST — Source memory budget](../core/simplest.md#source-memory-budget).
+
+| SDK | Source count setting (0 = platform default) | Rejected sources | Delay ring ceiling |
+|---|---|---|---|
+| [Unreal Engine](./ue.md) | Project Settings `Max Sources` | Fall back to the dry path | `Max Delay Seconds` (0 = platform default) |
+| [Unity](./unity.md) | `SoundTraceRuntime.MaxSources` | Logs a warning; the `AudioSource` stays dry | `SoundTraceListener.maxDelaySeconds` (default 0 = platform default) |
+| [Web](./web.md) | `SoundTrace.create` option `maxSources` | Creation rejected (status 11); existing sources keep rendering | `setRenderOptions({ maxDelaySeconds })` |
+| [FMOD](./fmod.md) | `SimpleSTFmod_Config.maxSources` | That voice plays dry | Engine platform default |
+| [Wwise](./wwise.md) | `SimpleSTWwise_Config.maxSources` | That voice plays dry | Engine platform default |
 
 ## Where to Start
 

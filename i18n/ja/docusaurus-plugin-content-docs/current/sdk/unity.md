@@ -8,7 +8,8 @@ description: SoundTrace Unity SDK 0.4.0（SimpleST 2.18.2 / ABI 6）のインス
 SoundTrace Unity SDK は、Unity のメッシュ、Renderer のマテリアルスロット、音源、リスナーを
 [SimpleST](../core/simplest.md) に接続するリアルタイム空間オーディオプラグインです。0.3.0 からエンジンが
 STCoreV2 から SimpleST に変わり、0.4.0 は **SimpleST 2.18.2 / ABI 6** を使います（以前のリリース: 0.3.0 =
-SimpleST 2.12.0）。レンダラーは **Hybrid** で起動します。
+SimpleST 2.12.0）。レンダラーは **Hybrid** で起動します。SDK リリース 2.18.2-jhj.3 ではパッケージバージョンはそのままで、
+[音源数の上限](#音源数の上限)と Android 最小 API 28 が入りました。
 `SoundTraceManager`、`SoundTraceListener`、`SoundTraceSource`、`SoundTraceObject`、
 `SoundTracePathVisualizer` のコンポーネント名とスクリプト GUID、サンプルシーンはそのままです。
 
@@ -18,7 +19,7 @@ SimpleST 2.12.0）。レンダラーは **Hybrid** で起動します。
 |---|---|
 | Unity | 2022.3 LTS 以降（2022.3.62f2 · 6000.3 で検証） |
 | パッケージ | `SoundTrace-SimpleST-release.unitypackage` → `Assets/SoundTrace` |
-| バンドル済みネイティブプラグイン | Windows x64 · macOS Universal · Linux x86_64 · Android（ARMv7/ARM64/x86_64、API 24+）· iOS 15+（device/simulator XCFramework）· WebGL |
+| バンドル済みネイティブプラグイン | Windows x64 · macOS Universal · Linux x86_64 · Android（ARMv7/ARM64/x86_64、API 28+ — エンジン `.so` が `libaaudio` を直接リンクするため、ビルド段階で検査）· iOS 15+（device/simulator XCFramework）· WebGL |
 | WebGL | 対応 — 独立した pthread WASM + AudioWorklet 経路（`OnAudioFilterRead` は未使用） |
 | GPU | なし。`SoundTraceManager.IsGpuPropagate` は常に `false` |
 
@@ -126,6 +127,18 @@ python3 install.py /path/to/UnityProject
 |---|---|
 | `ResetMotionState()` | teleport、respawn、scene 切り替えの直後に、すべての Listener と Source の motion history を初期化します。 |
 
+### 音源数の上限
+
+`SoundTraceRuntime.MaxSources`（静的 `uint`、既定 `0`）は、同時に生存するエンジン音源数の上限です。
+`0` ならエンジンのプラットフォーム既定（デスクトップ 128 · Android/iOS 48 · WebGL 32）を使います。最初の `SoundTraceListener` が有効になる
+**前に**設定します（`STRT_CreateOptions.maxSources` として渡されます）。上限を超える音源は例外を投げません —
+`SoundSourceCore` が `ST_STATUS_BUDGET_EXCEEDED` を一度警告し、その `AudioSource` を dry のままにします。
+エンジンのポリシーは [SimpleST — 音源メモリ予算](../core/simplest.md#音源メモリ予算)を参照してください。
+
+```csharp
+SoundTraceRuntime.MaxSources = 64;   // 最初の Listener 有効化の前
+```
+
 ## SoundTraceListener
 
 ![SoundTraceListener Inspector](/img/unity/Img_STListener.png)
@@ -141,8 +154,11 @@ python3 install.py /path/to/UnityProject
 | `Ray Depth` | `4` | `1..16`。反射の最大深度 |
 | `Output Mode` | `Headset` | `Headset`（バイノーラル）、`Speaker`（ステレオパンニング） |
 | `HRTF` | `HRIR Interpolated` | 下記 3 モード |
-| `Max Delay Seconds` | `2.0 s` | `0.012..5 s`。レンダラーが維持する最大経路遅延 |
+| `Max Delay Seconds` | `0` | `0..5 s`。音源ごとの遅延リングの天井。`0` = エンジンのプラットフォーム天井（デスクトップ 2 s · Android/iOS 1 s · WebGL 0.5 s）。0 以外なら天井を上書きします（0.012 s 未満は 0.012 s） |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`。経路の出現/消滅クロスフェード |
+
+`Max Delay Seconds` の既定値は SDK リリース 2.18.2-jhj.3 で `2` → `0`（エンジンポリシー）に変わりました。エンジンは音源ごとに
+経路が必要とする分だけ遅延リングを確保し、この値を天井としてのみ使います。`2` が保存された既存シーンは従来どおり動作します。
 
 `Fast`、`Middle`、`Quality` を選ぶと ray 値が一緒に適用され、Inspector でロックされます。直接
 編集するには `Custom` を選んでください。
@@ -386,6 +402,8 @@ source/listener の移動、material preset の変更、Unity 元のオーディ
 | Geometry が反映されない | `Read/Write Enabled`、MeshFilter/MeshRenderer、child mesh の位置、登録状態 |
 | 実行中に変形した mesh が反映されない | SimpleST には refit がない。新しいメッシュへ差し替え |
 | FMOD/Wwise モードで Listener/Source が無効になる | 正常 — レンダーはミドルウェアプラグインが担当 |
+| 一部の音源が空間化されず dry で聞こえる | Console の `ST_STATUS_BUDGET_EXCEEDED` 警告 — 音源を減らすか `SoundTraceRuntime.MaxSources` を上げる |
+| Android ビルドが `SimpleST requires Android API 28 or newer` で失敗する | Player Settings › Minimum API Level を 28 以上に |
 | Teleport 後に pitch が跳ねる | transform 変更の直後に `ResetMotionState()` を呼ぶ |
 | 性能が足りない | `Quality → Middle → Fast`、Reverb Ray Resolution の縮小、path visualizer の無効化の順に確認 |
 | 複数の音源が comb filtering のように聞こえる | 同一の `AudioSettings.dspTime` で `PlayScheduled()` を実行 |

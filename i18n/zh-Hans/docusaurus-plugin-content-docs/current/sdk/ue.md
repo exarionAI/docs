@@ -8,6 +8,8 @@ description: SoundTracing UE5 插件 0.4.0（SimpleST 2.18.2 / ABI 6）的安装
 SoundTracing UE5 插件通过 Unreal Audio Mixer 的 Spatialization 插件 + 子混音（submix）以及
 Actor Component 连接 [SimpleST](../core/simplest.md)。从 0.3.0 起，引擎由 STCoreV2 换成了
 SimpleST，0.4.0 使用 **SimpleST 2.18.2 / ABI 6**（上一版本：0.3.0 = SimpleST 2.12.0）。
+SDK 发行版 2.18.2-jhj.3 中插件版本保持不变，新增了 `Max Sources` 设置、FMOD/Wwise 模式下 Sound Tracing
+开关的传递，以及射线采样器的整理。
 如果项目中存在 FMOD 或 Wwise 插件，同一份源码会以挂接到该中间件 SimpleST 插件的**集成模式**构建。
 
 ## 当前状态
@@ -112,7 +114,8 @@ Audio Mixer Sample Rate 可以是任意值。SimpleST 以 44.1 kHz 运行并转�
 | Runtime | `Max Compute Threads` | `0` | SimpleST 计算线程上限。0 = auto（min(性能核数, 6)）。需要重启 |
 | Runtime | `Prefer Performance Cores` | `true` | 把传播 lane 和计算池固定到性能核（关闭 Windows 11 EcoQoS）。混合架构 CPU 推荐 |
 | Runtime | `Render Mode` | `Buffered` | `Buffered`（SimpleST 渲染线程填充环形缓冲，回调只复制，约 3 块延迟）/ `In Callback`（在 Unreal 音频回调内渲染，最低延迟） |
-| Runtime | `Max Delay Seconds` | `0` | 渲染器保留的最大路径延迟。0 = 引擎默认 2 s |
+| Runtime | `Max Sources` | `0` | 高级。同时存活的引擎声源数上限。0 = 引擎平台默认（桌面 128，Android/iOS 48）。超出的声源由引擎拒绝（`ST_STATUS_BUDGET_EXCEEDED`，显示在日志中），组件回退到 dry 路径。在由 SoundTracing 创建上下文的 Native 模式下于创建时应用（需要重启）。FMOD/Wwise 模式遵循插件设置 — [声源内存预算](../core/simplest.md#声源内存预算) |
+| Runtime | `Max Delay Seconds` | `0` | 高级。每个声源延迟环的上限。0 = 引擎平台默认（桌面 2 s，Android/iOS 1 s）。环只按路径所需增长 |
 | Runtime | `Dry Fallback When Unavailable` | `true` | 运行时不存在或失败时，声源以 dry 播放而非静音 |
 | Runtime | `Output Submix Parent` | 空 | 空间化输出子混音的父级 |
 | Propagation | `Reflection Update Interval (ms)` | `33` | 反射/绕射 lane 的最小周期。它占传播成本的大部分，要回收 CPU 就提高此值。0 = 无限制 |
@@ -133,7 +136,7 @@ Audio Mixer Sample Rate 可以是任意值。SimpleST 以 44.1 kHz 运行并转�
 |---|---|---:|---|
 | Quality Preset | `Quality Preset` | `Balanced` | `Custom`（保留字段）/ `Fast`（12×12，深度 4）/ `Balanced`（16×16，深度 8 = 引擎默认）/ `Quality`（24×24，深度 8） |
 | Listener Rays | `Ray Resolution` / `Ray Depth` | `16` / `8` | guide ray N×N（`4..64`），反射最大阶数（`1..16`）。仅 Custom 时可编辑 |
-| Listener Rays | `Ray Sampling` | `FibonacciSphere` | LegacyGrid / FibonacciSphere / EqualAreaGrid / SobolSphere / Icosahedral |
+| Listener Rays | `Ray Sampling` | `FibonacciSphere` | 仅 `FibonacciSphere`。SimpleST 2.18 只接受 Fibonacci，因此其余 4 种（LegacyGrid / EqualAreaGrid / SobolSphere / Icosahedral）已在编辑器中隐藏，已保存的值会转为 FibonacciSphere 并输出一次警告 |
 | Output | `Output Mode` | `Headphones` | `Headphones`（双耳 HRIR）/ `Speakers (HOA decode)` / `Stereo Panning` |
 | Output | `HRTF Dataset` | `SADIE II D2 KEMAR` | SADIE II D2（8,802 方向 · 256 tap，插件随包）/ MIT KEMAR（128 tap，引擎内置） |
 | Output | `Speaker Layout` | `Stereo 2.0` | Stereo 2.0 / Laptop Stereo 2.0 / 2.1 / 4.1 / 5.1 / 7.1 |
@@ -240,6 +243,13 @@ asset 的情况。每个频段必须满足 `R + A + T = 1`（±0.001）。
 可在 Blueprint 中读取的 World Subsystem — 集成模式、场景网格/对象/声源/三角形数、有效路径数、
 各 lane 的传播/IR/渲染时间（ms）、渲染块统计（active sources、exact/send taps）。
 
+用 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` 整体开启和关闭 Sound Tracing。关闭期间，
+即使听者和声源移动也不会唤醒传播 lane，也不收集可视化路径，因此不会残留最后的路径。
+在 FMOD 和 Wwise 模式下，从 SDK 发行版 2.18.2-jhj.3 起会把此开关传给中间件插件
+（`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`）。此前上下文由插件拥有，
+因此关闭不起作用。挂接到新运行时后也会重新发送关闭状态；如果是没有此 export 的旧版插件，则输出警告。
+SimpleST 没有传播暂停，因此只要还有声源存在，lane 就会按自身周期继续运行。
+
 ## 平台链接约定
 
 | UE 平台 | SDK 路径（`Binaries/` 之下） | 链接 |
@@ -289,7 +299,9 @@ Mac/Linux 为相同代码路径）。
 | geometry 未生效 | Object Component 的 immediate parent 是否为支持的 mesh component、`Acoustic Mobility` |
 | 渲染块超时（音频断续） | `Early Reflections = Hybrid`、提高 `Reflection Update Interval`、降低 Quality Preset |
 | 枪声、脚步声偏小或延迟（FMOD/Wwise 模式） | 是否为 FMOD 插件 0.3.0 / Wwise 插件 0.2.0 或更高版本，是否设置了 `SIMPLESTFMOD_WARM_SOURCES=0` |
-| 看不到 path | visualizer component、Niagara plugin、path enable 状态 |
+| 部分声源以 dry 播放（Native） | Output Log 中的 `ST_STATUS_BUDGET_EXCEEDED` — 减少声源或调高 `Max Sources` |
+| FMOD/Wwise 模式下关闭 Sound Tracing 后没有变化 | 插件是否为导出 `*_SetSoundTracingEnabled` 的版本（没有时 Output Log 中有警告） |
+| 看不到 path | visualizer component、Niagara plugin、path enable 状态、Sound Tracing 是否被关闭 |
 
 ## 后续文档
 

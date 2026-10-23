@@ -134,6 +134,7 @@ CompanyID/PluginID, 프로퍼티 이름, AudioEnginePropertyID는 프로젝트�
 ```c
 SimpleSTWwise_Config cfg; SimpleSTWwise_InitConfig(&cfg);
 cfg.sceneRatio = 0.01f;                          // Wwise for Unreal(cm). Unity는 0(=1.0, m)
+cfg.maxSources = 0;                              // 0 = 엔진 플랫폼 기본(데스크톱 128, Android/iOS 48, 웹 32)
 SimpleSTWwise_Configure(&cfg);                   // AK::SoundEngine::Init 전
 SimpleSTWwise_SetWorldAxes(SIMPLESTWWISE_AXES_UNREAL);   // Unreal만. Unity는 기본(WWISE)
 
@@ -149,6 +150,29 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal 축**: Wwise for Unreal 2024.1+는 언리얼 벡터를 그대로 넘기므로(+Z 위) `SetWorldAxes(UNREAL)`을
   불러야 렌더러가 (Y, Z, X)로 바꿔 게임이 올린 지오메트리와 맞습니다. 안 부르면 리스너·음원이
   엉뚱한 벽에 차폐됩니다(2026-10-15 수정).
+- **음원 상한**(SDK 릴리스 2.18.2-jhj.3): `SimpleSTWwise_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
+  기본). 넘으면 엔진이 음원 생성을 거절하고 그 보이스는 dry로 재생됩니다. 구조체 끝에 덧붙인 필드라 이전의 짧은
+  구조체를 넘기는 호스트도 동작합니다 — [음원 메모리 예산](../core/simplest.md#음원-메모리-예산).
+
+### 사운드 트레이싱 켜고 끄기
+
+```c
+SimpleSTWwise_SetSoundTracingEnabled(0);   // 끄기. 1 = 켜기(기본)
+```
+
+SDK 릴리스 2.18.2-jhj.3에서 추가된 게임 쪽 A/B 스위치입니다. 실행 중인 런타임에 적용되며 컨트롤 스레드에서
+비동기로 반영됩니다. 동작은 [FMOD판](./fmod.md#사운드-트레이싱-켜고-끄기)과 같습니다.
+
+- **끄면** SimpleST 렌더러 바이패스(`st_rt_render_set_sound_tracing_enabled`)가 걸리고, 웜 음원 풀을 비운 뒤 다시
+  채우지 않으며, 플러그인이 전파 레인을 깨우지 않습니다.
+- **전파 레인이 완전히 멈추지는 않습니다.** SimpleST에는 전파 일시정지가 없어, 음원이 남아 있는 동안 레인은
+  자체 주기로 계속 돕니다.
+- **켜면** 플러그인의 렌더 옵션을 다시 겁니다.
+- 큐에 넣으면 1, 실행 중인 런타임이 없으면 0을 돌려줍니다. 나중에 시작된 런타임은 켜진 상태로 시작하므로, 런타임이
+  준비된 뒤 상태를 다시 보내십시오.
+- 게임 API 버전 1은 그대로인 선택 export입니다. export를 찾아보고 없으면 건너뛰십시오.
+
+UE SoundTracing의 `SetSoundTracingEnabled`가 Wwise 모드에서 이 함수를 부릅니다 — [Unreal Engine SDK](./ue.md).
 
 ## UE · Unity 통합
 
@@ -184,6 +208,7 @@ WwiseConsole로 프로젝트 생성 → WAAPI로 버스·이펙트·메타데이
 - 리스너 1개(SimpleST 제약). 같은 버스가 두 번째 리스너용으로 또 인스턴스되면 그 인스턴스는 모든
   오브젝트를 Wwise 패닝으로 믹스합니다.
 - 오디오 오브젝트에는 속도가 없어 SimpleST Doppler가 없습니다.
+- 엔진 음원 수는 플랫폼 상한(`maxSources`)을 넘지 않습니다. 초과 보이스는 dry입니다.
 - 새 오디오 오브젝트를 처음 볼 때 오디오 스레드에서 작은 슬롯 하나를 할당합니다. 엔진 음원 자체는
   컨트롤 스레드에서 웜 풀의 음원을 재사용하거나 새로 만듭니다.
 - 런처 번들은 현재 Authoring + Windows_vc170만 포함합니다. Mac·Linux·Android·iOS 번들과 EULA·로고는 준비 중입니다.

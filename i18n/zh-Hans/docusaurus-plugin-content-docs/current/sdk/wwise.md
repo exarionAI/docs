@@ -132,6 +132,7 @@ Wwise 版也使用同一名称）时，会像以前一样为每个 voice 新建�
 ```c
 SimpleSTWwise_Config cfg; SimpleSTWwise_InitConfig(&cfg);
 cfg.sceneRatio = 0.01f;                          // Wwise for Unreal（cm）。Unity 为 0（=1.0，m）
+cfg.maxSources = 0;                              // 0 = 引擎平台默认（桌面 128，Android/iOS 48，Web 32）
 SimpleSTWwise_Configure(&cfg);                   // AK::SoundEngine::Init 之前
 SimpleSTWwise_SetWorldAxes(SIMPLESTWWISE_AXES_UNREAL);   // 仅 Unreal。Unity 使用默认（WWISE）
 
@@ -147,6 +148,29 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal 坐标轴**：Wwise for Unreal 2024.1+ 会原样传递 Unreal 向量（+Z 向上），因此必须调用
   `SetWorldAxes(UNREAL)`，渲染器才会转换为 (Y, Z, X)，与游戏上传的几何体一致。不调用的话，
   听者和声源会被错误的墙体遮挡（2026-10-15 修复）。
+- **声源上限**（SDK 发行版 2.18.2-jhj.3）：`SimpleSTWwise_Config.maxSources` 是引擎声源数上限（0 = 平台
+  默认）。超出时引擎拒绝创建声源，该 voice 以 dry 播放。这是追加在结构体末尾的字段，因此传入旧版较短
+  结构体的主机也能正常工作 — [声源内存预算](../core/simplest.md#声源内存预算)。
+
+### 开启和关闭 Sound Tracing
+
+```c
+SimpleSTWwise_SetSoundTracingEnabled(0);   // 关闭。1 = 开启（默认）
+```
+
+这是 SDK 发行版 2.18.2-jhj.3 中新增的游戏侧 A/B 开关。它作用于正在运行的运行时，并在控制线程上
+异步生效。行为与 [FMOD 版](./fmod.md#开启和关闭-sound-tracing)相同。
+
+- **关闭时**，会启用 SimpleST 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空预热声源池后不再
+  重新填充，插件也不会唤醒传播 lane。
+- **传播 lane 不会完全停止。** SimpleST 没有传播暂停，因此只要还有声源存在，lane 就会按自身周期
+  继续运行。
+- **开启时**，会重新应用插件的渲染选项。
+- 成功入队时返回 1，没有正在运行的运行时时返回 0。之后启动的运行时以开启状态启动，因此请在运行时
+  就绪后重新发送状态。
+- 这是可选 export，游戏 API 版本仍为 1。请先查找该 export，不存在时跳过。
+
+UE SoundTracing 的 `SetSoundTracingEnabled` 在 Wwise 模式下会调用此函数 — [Unreal Engine SDK](./ue.md)。
 
 ## UE · Unity 集成
 
@@ -182,6 +206,7 @@ Android 两个 ABI 构建通过，iOS device/simulator 和 Web 最终链接通�
 - 1 个听者（SimpleST 的限制）。如果同一总线为第二个听者再次实例化，该实例会把所有对象用
   Wwise 声像混合。
 - 音频对象没有速度，因此没有 SimpleST Doppler。
+- 引擎声源数不会超过平台上限（`maxSources`）。超出的 voice 为 dry。
 - 首次看到新音频对象时，会在音频线程上分配一个小槽位。引擎声源本身在控制线程上复用预热池中的
   声源或新建。
 - Launcher 包目前只包含 Authoring + Windows_vc170。Mac、Linux、Android、iOS 包以及 EULA 和 logo 正在准备中。

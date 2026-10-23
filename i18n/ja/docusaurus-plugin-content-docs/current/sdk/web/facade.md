@@ -39,6 +39,7 @@ await sound.update(0);
 | `propagationThreadCount` | 同期 1 / パイプライン 3 | 計算予算 1 ~ 5（負数 = 5）。パイプラインは最小 3 |
 | `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT ワーカー予算の省略表記 |
 | `sceneRatio` | `1.0` | シーン長さ単位あたりのメートル（cm = 0.01）。ジオメトリの事前スケールとの**併用禁止** |
+| `maxSources` | `0` | 同時に生存するエンジン音源数の上限（0 ~ 512 の整数）。`0` = wasm プラットフォーム既定（32 音源 · 音源メモリ 64 MiB · 遅延リングの天井 0.5 s — ヒープが 256 MiB 固定のため保守的）。超える音源の生成はエンジンが status 11（`BUDGET_EXCEEDED`）で拒否し、既存の音源はレンダーを継続します。SDK リリース 2.18.2-jhj.3 から |
 | `autoLoadMaterials` | `true` | 既定材質テーブルをロードして名前マッピングを有効化 |
 | `transmissionModel` | `'surface'` | SimpleST は表面 R/A/T のみ対応。`'solid'` は**拒否** |
 | `defaultMeshBuild` | — | STCoreV2 の BVH オプション。指定するとロードを**拒否** |
@@ -97,7 +98,7 @@ sound.listener
 | `useDoppler` | 可変遅延 Doppler ピッチ — SimpleST 2.18.1 以降、リアルタイムでは常に有効で `false` は無視されます |
 | `useLimiter` | 出力リミッター。既定 `false` — アプリの Web Audio マスターバスがリミッティングを担います（エンジン 2.18 の生成直後の既定は有効ですが、SDK がレンダー開始・HRTF/出力変更・reset のたびに無効にします）。`true` なら SimpleST 2.18 の true-peak リミッター（−1 dBTP、137 サンプル遅延） |
 | `pathFadeTime` | 経路の出現/消滅クロスフェード（秒） |
-| `maxDelaySeconds` | レンダラーが維持する最大経路遅延（秒） |
+| `maxDelaySeconds` | 音源ごとの遅延リングの天井（秒）。エンジンは音源ごとに経路が必要とする分だけリングを確保します（下限 0.25 s）。Web プラットフォームの既定の天井は 0.5 s |
 | `diffuseEnabled` | late reverb レンダーの on/off。1.1.0 から 2.18 の 1 次散乱（diffuse rain）レンダーも合わせてオン/オフします |
 
 `hrtfQuality`、`diffuseQuality`、`delayInterpolation`、`hrtfMode` は STCoreV2 専用のため**拒否**されます。

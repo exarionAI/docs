@@ -39,6 +39,7 @@ await sound.update(0);
 | `propagationThreadCount` | Synchronous 1 / pipelined 3 | Compute budget 1 ~ 5 (negative = 5). Pipelined needs at least 3 |
 | `throughput` | unset | `'low'` / `'medium'` / `'max'` — shorthand for the MT worker budget |
 | `sceneRatio` | `1.0` | Meters per scene length unit (cm = 0.01). **Never combine** with pre-scaled geometry |
+| `maxSources` | `0` | Cap on the number of simultaneously live engine sources (integer 0 ~ 512). `0` = wasm platform default (32 sources · source memory 64 MiB · delay ring ceiling 0.5 s — conservative because the heap is fixed at 256 MiB). The engine rejects creating sources beyond it with status 11 (`BUDGET_EXCEEDED`), and existing sources keep rendering. Since SDK release 2.18.2-jhj.3 |
 | `autoLoadMaterials` | `true` | Loads the default material table and enables name mapping |
 | `transmissionModel` | `'surface'` | SimpleST supports surface R/A/T only. `'solid'` is **rejected** |
 | `defaultMeshBuild` | — | STCoreV2 BVH option. Load is **rejected** if specified |
@@ -97,7 +98,7 @@ Keys accepted by `setRenderOptions`:
 | `useDoppler` | Variable-delay Doppler pitch — always on in realtime since SimpleST 2.18.1; `false` is ignored |
 | `useLimiter` | Output limiter. Default `false` — the app's Web Audio master bus handles limiting (engine 2.18 defaults to on right after creation, but the SDK turns it off on every render start, HRTF/output change, and reset). `true` enables the SimpleST 2.18 true-peak limiter (−1 dBTP, 137-sample latency) |
 | `pathFadeTime` | Path appear/disappear crossfade (seconds) |
-| `maxDelaySeconds` | Maximum path delay the renderer keeps (seconds) |
+| `maxDelaySeconds` | Ceiling of the per-source delay ring (seconds). The engine allocates a ring per source only as large as its paths need (floor 0.25 s). The default ceiling on the web platform is 0.5 s |
 | `diffuseEnabled` | Late reverb render on/off. From 1.1.0 it also turns 2.18's first-order scattering (diffuse rain) render on and off |
 
 `hrtfQuality`, `diffuseQuality`, `delayInterpolation`, and `hrtfMode` are STCoreV2-only and are

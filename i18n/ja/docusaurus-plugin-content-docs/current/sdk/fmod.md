@@ -11,7 +11,7 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine 向け SimpleST DSP プ�
 
 | 項目 | 値 |
 |---|---|
-| プラグインバージョン | v0.3.0（SimpleST 2.18.2）。以前のリリース: v0.2.0（SimpleST 2.12.0） |
+| プラグインバージョン | v0.3.0（SimpleST 2.18.2）。以前のリリース: v0.2.0（SimpleST 2.12.0）。FMOD が参照する DSP ディスクリプションのバージョンは SDK リリース 2.18.2-jhj.3 から 0.3.0 です（それ以前の 0.3.0 配布物は 0.2.0 と表示） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 ビルド = 2.00 ~ 2.04、204 ビルド = 2.04+） |
 | プラットフォーム | Windows x64 · macOS · Linux · Android · iOS（静的）· Web（静的、FMOD HTML5 pthreads） |
 | 配布 | `SimpleST-fmod-release.zip`（プラットフォーム別 `plugins/` + `install.py`、UE・Unity グルーを含む） |
@@ -145,6 +145,7 @@ Listener を **bypass** すると Source は dry 通過に戻ります（A/B 比
 SimpleSTFmod_Config cfg; SimpleSTFmod_InitConfig(&cfg);
 cfg.renderMode = SIMPLESTFMOD_RENDER_BUFFERED;   // 既定。IN_CALLBACK = FMOD ミキサーコールバック内でレンダー
 cfg.sceneRatio = 0.f;                            // 0 = 1.0 (FMOD UE/Unity 統合の単位はメートル)
+cfg.maxSources = 0;                              // 0 = エンジンのプラットフォーム既定(デスクトップ 128, Android/iOS 48, Web 32)
 SimpleSTFmod_Configure(&cfg);                    // ランタイム開始前(最初の SimpleST DSP 生成前)
 
 SimpleSTFmod_Status st = { sizeof st };
@@ -165,6 +166,28 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
   変換は SoundTracing UE プラグインの変換と同一です。
 - プラグインのコンテキストには既定材質ライブラリが先に登録されています。`defaultMaterialId` に preset
   index を加えて使ってください。
+- **音源の上限**（SDK リリース 2.18.2-jhj.3）: `SimpleSTFmod_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
+  既定）。超えるとエンジンが音源の生成を拒否し、そのボイスは dry で再生されます。構造体の末尾に追加したフィールドなので、以前の短い
+  構造体を渡すホストも動作します — [音源メモリ予算](../core/simplest.md#音源メモリ予算)。
+
+### サウンドトレーシングのオンオフ
+
+```c
+SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // オフ。1 = オン(既定)
+```
+
+SDK リリース 2.18.2-jhj.3 で追加されたゲーム側の A/B スイッチです。1 つのランタイム（`systemIndex < 0` = 最新）に適用され、
+コントロールスレッドで非同期に反映されます。
+
+- **オフにすると** SimpleST レンダラーのバイパス（`st_rt_render_set_sound_tracing_enabled`）がかかり、ウォーム音源プールを空にした後は再び
+  満たさず、プラグインが伝搬レーンを起こしません。
+- **伝搬レーンが完全に止まるわけではありません。** SimpleST には伝搬の一時停止がないため、音源が残っている間、レーンは
+  独自の周期で動き続けます。
+- **オンにすると**プラグインのレンダーオプションを再適用します。
+- キューに入れば 1、ランタイムがなければ 0 を返します。後から開始されたランタイムはオンの状態で開始します。
+- ゲーム API バージョン 1 のままの任意 export です。export を探し、なければスキップしてください。
+
+UE SoundTracing の `SetSoundTracingEnabled` が FMOD モードでこの関数を呼びます — [Unreal Engine SDK](./ue.md)。
 
 ## UE · Unity 統合
 
@@ -194,6 +217,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 ## 既知の制限
 
 - リスナー 1 個（roll なし）、同時ストリーム 64 個（超過分は dry）、出力はステレオのみ（スピーカーレイアウト未公開）。
+- エンジン音源数はプラットフォームの上限（`maxSources`）を超えません。超過したボイスは dry です。
 - Source の後ろのイベントエフェクト/センドは無音を受け取ります（SimpleST のミックスは Listener バスから出ます）。
 - `Overall Gain`（仮想化用の可聴度）は距離に基づく推定値です。
 - FMOD Studio は System を複数作ることがあり、System ごとに SimpleST コンテキストができます。

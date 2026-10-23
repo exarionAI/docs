@@ -10,7 +10,8 @@ SDK입니다. Three.js 같은 렌더링 씬의 메시·재질·음원·리스너
 Web Audio graph에 공간화된 스테레오 출력을 제공합니다.
 
 1.0.0부터 엔진이 STCoreV2에서 SimpleST로 바뀌었고, 1.1.0은 **SimpleST 2.18.2 / ABI 6**을 씁니다
-(이전 릴리스: 1.0.0 = SimpleST 2.12.0). 기존 호출부는
+(이전 릴리스: 1.0.0 = SimpleST 2.12.0). SDK 릴리스 2.18.2-jhj.3에서 패키지 버전은 그대로이고 `maxSources`
+옵션(음원 수 상한)이 들어갔습니다. 기존 호출부는
 바뀌지 않습니다. `SoundTrace`, `Source`, `Mesh`, `Listener` facade는 유지되지만 STCoreV2 대비
 백엔드·HRTF·재질·옵션 계약이 달라졌습니다.
 전체 옵션과 엔티티 API는 [Facade API](./web/facade.md), 저수준 SimpleST 모듈 접근은
@@ -29,6 +30,7 @@ Web Audio graph에 공간화된 스테레오 출력을 제공합니다.
 | 품질 | `fast` / `balanced` / `quality` — 리스너·음원 레이 격자와 반사 깊이를 함께 설정 |
 | 재질 | 9밴드(63 Hz ~ 16 kHz) SoundTrace 게임 재질 22종, 이름·별칭·인덱스로 지정 |
 | 출력 | 음원마다 모노 입력, 리스너 렌더러가 스테레오 1개를 믹스(`sound.output`) |
+| 음원 상한 | 기본 32음원 · 음원 메모리 64 MiB · 지연 링 천장 0.5 s. 음원 수는 `maxSources` 옵션으로 바꿉니다 — [음원 메모리 예산](../core/simplest.md#음원-메모리-예산) |
 | GPU | 없음. `mode: 'gpu'`, `enableGpu()`는 오류 |
 
 ## 요구 사항

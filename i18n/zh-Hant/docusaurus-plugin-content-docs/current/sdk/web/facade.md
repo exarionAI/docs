@@ -39,6 +39,7 @@ await sound.update(0);
 | `propagationThreadCount` | 同步 1 / 管線 3 | 計算預算 1 ~ 5（負數 = 5）。管線至少 3 |
 | `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT worker 預算的簡寫 |
 | `sceneRatio` | `1.0` | 每個場景長度單位對應的公尺數（cm = 0.01）。**禁止** 與預先縮放的幾何體混用 |
+| `maxSources` | `0` | 同時存活的引擎音源數上限（0 ~ 512 的整數）。`0` = wasm 平台預設（32 個音源 · 音源記憶體 64 MiB · 延遲環上限 0.5 s — 因堆積固定為 256 MiB 而偏保守）。超出的音源建立會被引擎以 status 11（`BUDGET_EXCEEDED`）拒絕，既有音源繼續渲染。自 SDK 發行版 2.18.2-jhj.3 起 |
 | `autoLoadMaterials` | `true` | 載入預設材質表，啟用名稱對應 |
 | `transmissionModel` | `'surface'` | SimpleST 只支援表面 R/A/T。`'solid'` 會被 **拒絕** |
 | `defaultMeshBuild` | — | STCoreV2 的 BVH 選項。指定時載入會被 **拒絕** |
@@ -96,7 +97,7 @@ sound.listener
 | `useDoppler` | 可變延遲的 Doppler 音高 — 自 SimpleST 2.18.1 起即時渲染中一律開啟，`false` 會被忽略 |
 | `useLimiter` | 輸出限幅器。預設 `false` — 由應用程式的 Web Audio 主匯流排負責限幅（引擎 2.18 建立後的預設為開啟，但 SDK 會在每次渲染啟動、HRTF／輸出變更與 reset 時將其關閉）。`true` 時為 SimpleST 2.18 true-peak 限幅器（−1 dBTP，137 樣本延遲） |
 | `pathFadeTime` | 路徑出現／消失的交叉淡化（秒） |
-| `maxDelaySeconds` | 渲染器維持的最大路徑延遲（秒） |
+| `maxDelaySeconds` | 逐音源延遲環的上限（秒）。引擎只為每個音源配置路徑所需長度的環（下限 0.25 s）。Web 平台預設上限為 0.5 s |
 | `diffuseEnabled` | late reverb 渲染開關。1.1.0 起也會一併開關 2.18 的一次散射（diffuse rain）渲染 |
 
 `hrtfQuality`、`diffuseQuality`、`delayInterpolation`、`hrtfMode` 為 STCoreV2 專用，會被 **拒絕**。

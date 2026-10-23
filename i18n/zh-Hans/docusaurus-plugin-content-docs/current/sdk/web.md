@@ -10,7 +10,8 @@ description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安装、
 并向 Web Audio graph 提供空间化的立体声输出。
 
 从 1.0.0 起，引擎由 STCoreV2 换成了 SimpleST，1.1.0 使用 **SimpleST 2.18.2 / ABI 6**
-（上一版本：1.0.0 = SimpleST 2.12.0）。现有调用代码
+（上一版本：1.0.0 = SimpleST 2.12.0）。SDK 发行版 2.18.2-jhj.3 中包版本保持不变，新增了 `maxSources`
+选项（声源数量上限）。现有调用代码
 无需修改。`SoundTrace`、`Source`、`Mesh`、`Listener` facade 保持不变，但相对 STCoreV2，后端、HRTF、
 材质和选项约定发生了变化。完整选项和实体 API 见
 [Facade API](./web/facade.md)，低层 SimpleST 模块访问见 [Native API](./web/native.md)。
@@ -28,6 +29,7 @@ description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安装、
 | 质量 | `fast` / `balanced` / `quality` — 同时设置听者与声源射线网格和反射深度 |
 | 材质 | 9 频段（63 Hz ~ 16 kHz）SoundTrace 游戏材质 22 种，按名称、别名或索引指定 |
 | 输出 | 每个声源单声道输入，听者渲染器混合为一路立体声（`sound.output`） |
+| 声源上限 | 默认 32 个声源 · 声源内存 64 MiB · 延迟环上限 0.5 s。声源数用 `maxSources` 选项修改 — [声源内存预算](../core/simplest.md#声源内存预算) |
 | GPU | 无。`mode: 'gpu'`、`enableGpu()` 报错 |
 
 ## 要求

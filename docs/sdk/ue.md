@@ -8,6 +8,8 @@ description: SoundTracing UE5 플러그인 0.4.0(SimpleST 2.18.2 / ABI 6) 설치
 SoundTracing UE5 플러그인은 Unreal Audio Mixer의 Spatialization 플러그인 + 서브믹스, 그리고
 Actor Component를 통해 [SimpleST](../core/simplest.md)를 연결합니다. 0.3.0부터 엔진이 STCoreV2에서
 SimpleST로 바뀌었고, 0.4.0은 **SimpleST 2.18.2 / ABI 6**을 씁니다(이전 릴리스: 0.3.0 = SimpleST 2.12.0).
+SDK 릴리스 2.18.2-jhj.3에서 플러그인 버전은 그대로이고 `Max Sources` 설정, FMOD/Wwise 모드의 사운드 트레이싱
+스위치 전달, 광선 샘플러 정리가 들어갔습니다.
 프로젝트에 FMOD 또는 Wwise 플러그인이 있으면 같은 소스가 그 미들웨어의 SimpleST 플러그인에 붙는
 **통합 모드**로 빌드됩니다.
 
@@ -114,7 +116,8 @@ Audio Mixer Sample Rate는 어떤 값이든 됩니다. SimpleST는 44.1 kHz로 �
 | Runtime | `Max Compute Threads` | `0` | SimpleST 계산 스레드 상한. 0 = auto(min(퍼포먼스 코어, 6)). 재시작 필요 |
 | Runtime | `Prefer Performance Cores` | `true` | 전파 레인·계산 풀을 퍼포먼스 코어에 고정(Windows 11 EcoQoS 끔). 하이브리드 CPU 권장 |
 | Runtime | `Render Mode` | `Buffered` | `Buffered`(SimpleST 렌더 스레드가 링을 채우고 콜백은 복사, ≈3 블록 지연) / `In Callback`(Unreal 오디오 콜백 안에서 렌더, 최저 지연) |
-| Runtime | `Max Delay Seconds` | `0` | 렌더러가 유지하는 최대 경로 지연. 0 = 엔진 기본 2 s |
+| Runtime | `Max Sources` | `0` | 고급. 동시에 살아 있는 엔진 음원 수 상한. 0 = 엔진 플랫폼 기본(데스크톱 128, Android/iOS 48). 넘는 음원은 엔진이 거절하고(`ST_STATUS_BUDGET_EXCEEDED`, 로그에 표시) 컴포넌트는 dry 경로로 폴백합니다. SoundTracing이 컨텍스트를 만드는 Native 모드에서 생성 때 적용(재시작 필요). FMOD/Wwise 모드는 플러그인 설정을 따릅니다 — [음원 메모리 예산](../core/simplest.md#음원-메모리-예산) |
+| Runtime | `Max Delay Seconds` | `0` | 고급. 음원별 지연 링의 천장. 0 = 엔진 플랫폼 기본(데스크톱 2 s, Android/iOS 1 s). 링은 경로가 필요한 만큼만 자랍니다 |
 | Runtime | `Dry Fallback When Unavailable` | `true` | 런타임이 없거나 실패하면 음원을 무음 대신 dry로 재생 |
 | Runtime | `Output Submix Parent` | 비어 있음 | 공간화 출력 서브믹스의 부모 |
 | Propagation | `Reflection Update Interval (ms)` | `33` | 반사/회절 레인 최소 주기. 전파 비용의 대부분이라 CPU를 되사려면 여기를 올림. 0 = 제한 없음 |
@@ -135,7 +138,7 @@ Audio Mixer Sample Rate는 어떤 값이든 됩니다. SimpleST는 44.1 kHz로 �
 |---|---|---:|---|
 | Quality Preset | `Quality Preset` | `Balanced` | `Custom`(필드 유지) / `Fast`(12×12, 깊이 4) / `Balanced`(16×16, 깊이 8 = 엔진 기본) / `Quality`(24×24, 깊이 8) |
 | Listener Rays | `Ray Resolution` / `Ray Depth` | `16` / `8` | guide ray N×N (`4..64`), 반사 최대 차수 (`1..16`). Custom일 때만 편집 |
-| Listener Rays | `Ray Sampling` | `FibonacciSphere` | LegacyGrid / FibonacciSphere / EqualAreaGrid / SobolSphere / Icosahedral |
+| Listener Rays | `Ray Sampling` | `FibonacciSphere` | `FibonacciSphere`만. SimpleST 2.18은 Fibonacci만 받으므로 나머지 4종(LegacyGrid / EqualAreaGrid / SobolSphere / Icosahedral)은 에디터에서 숨겨졌고, 저장된 값은 FibonacciSphere로 보내며 경고를 한 번 남깁니다 |
 | Output | `Output Mode` | `Headphones` | `Headphones`(바이노럴 HRIR) / `Speakers (HOA decode)` / `Stereo Panning` |
 | Output | `HRTF Dataset` | `SADIE II D2 KEMAR` | SADIE II D2(8,802방향·256탭, 플러그인 동봉) / MIT KEMAR(128탭, 엔진 내장) |
 | Output | `Speaker Layout` | `Stereo 2.0` | Stereo 2.0 / Laptop Stereo 2.0 / 2.1 / 4.1 / 5.1 / 7.1 |
@@ -244,6 +247,14 @@ Actor에 `SoundTracingPathVisualizerComponent`를 추가하면 Niagara 기반 pa
 Blueprint에서 읽을 수 있는 World Subsystem입니다 — 통합 모드, 씬 메시/오브젝트/음원/삼각형 수,
 유효 경로 수, 레인별 전파·IR·렌더 시간(ms), 렌더 블록 통계(active sources, exact/send taps).
 
+`SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()`로 사운드 트레이싱 전체를 켜고 끕니다. 꺼져 있는
+동안에는 리스너·음원이 움직여도 전파 레인을 깨우지 않고, 시각화 경로도 모으지 않아 마지막 경로가 남지 않습니다.
+FMOD·Wwise 모드에서는 SDK 릴리스 2.18.2-jhj.3부터 이 스위치를 미들웨어 플러그인에 넘깁니다
+(`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`). 그 전에는 플러그인이 소유한
+컨텍스트라 끄기가 효과가 없었습니다. 새 런타임에 붙은 뒤에도 꺼진 상태를 다시 보내고, 이 export가 없는 구형
+플러그인이면 경고를 남깁니다. SimpleST에는 전파 일시정지가 없으므로 음원이 남아 있는 동안 레인은 자체 주기로
+계속 돕니다.
+
 ## 플랫폼 링크 계약
 
 | UE 플랫폼 | SDK 경로 (`Binaries/` 아래) | 연결 |
@@ -296,7 +307,9 @@ scene입니다.
 | geometry가 반영되지 않음 | Object Component의 immediate parent가 지원 mesh component인지, `Acoustic Mobility` |
 | 렌더 블록 초과 (오디오 끊김) | `Early Reflections = Hybrid`, `Reflection Update Interval` 상향, Quality Preset 하향 |
 | 총성·발소리가 작거나 늦게 들림 (FMOD/Wwise 모드) | FMOD 플러그인 0.3.0 / Wwise 플러그인 0.2.0 이상인지, `SIMPLESTFMOD_WARM_SOURCES=0`이 설정되어 있지 않은지 |
-| path가 보이지 않음 | visualizer component, Niagara plugin, path enable 상태 |
+| 일부 음원이 dry로 재생됨 (Native) | Output Log의 `ST_STATUS_BUDGET_EXCEEDED` — 음원을 줄이거나 `Max Sources`를 올림 |
+| FMOD/Wwise 모드에서 사운드 트레이싱을 꺼도 그대로임 | 플러그인이 `*_SetSoundTracingEnabled`를 export하는 버전인지(없으면 Output Log에 경고) |
+| path가 보이지 않음 | visualizer component, Niagara plugin, path enable 상태, 사운드 트레이싱이 꺼져 있지 않은지 |
 
 ## 다음 문서
 

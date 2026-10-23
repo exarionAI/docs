@@ -18,7 +18,7 @@ description: Sound Tracing の現行ネイティブエンジン SimpleST — C++
 
 | 項目 | 値 |
 |---|---|
-| エンジンバージョン | **2.18.2**（`ST_VERSION_STRING`）。以前のリリース: 2.12.0 |
+| エンジンバージョン | **2.18.2**（`ST_VERSION_STRING`）、SDK リリース 2.18.2-jhj.3。以前のリリース: 2.12.0 |
 | 公開 ABI | **ABI 6**（`ST_ABI_VERSION`、3.0 クリーンブレーク）。2.12.0 以降の変更はすべて additive |
 | 主言語 | C++20（C ABI を公開、C11 ヘッダー互換） |
 | ビルドシステム | CMake 3.21+ · プラットフォーム別エントリポイント `mainBuild.sh` |
@@ -63,7 +63,7 @@ SceneManager → STPropagator → STIRConverter ─┬→ STOnlineAuralizator  (
 
 | ヘッダー | コンテキスト | 関数プレフィックス | 役割 |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | リアルタイム伝搬 + オーディオレンダー（143 export） |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | リアルタイム伝搬 + オーディオレンダー（146 export） |
 | `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | オフライン IR 計算・レンダー（116 export） |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | 共通 POD・enum・capability ビット |
 
@@ -102,6 +102,7 @@ typedef struct STMaterialId { int32_t v; } STMaterialId;
 | 音響ポリシー | `st_rt_set_atmosphere`、`st_rt_set_physical_distance_attenuation`、`st_rt_set_acoustic_feature_enabled`、`st_rt_set_doppler_gain_mode`、`st_rt_set_late_coupling[_preset]`、`st_rt_set_early_late_band_energy_targets` |
 | render | `st_rt_render_start/stop`、`st_rt_render_process`（ホスト pull）、`set_options/get_options`、`set_spatializer`、`set_speaker_layout[_custom]`、`set_eq`、`set_master_gain_db`、`set_limiter_type`、`get_limiter_latency_samples`、`set_path_fade_time`、`set_max_delay_seconds`、`get_latency_frames`、`get_process_stats` |
 | スレッド | `st_rt_set_thread_attributes`、`st_rt_get_thread_inventory`、`STRT_CreateOptions.maxComputeThreads` |
+| メモリ予算 | `st_rt_set_memory_budget`、`st_rt_get_memory_budget`、`st_rt_get_memory_stats`、`STRT_CreateOptions.maxSources` — [音源メモリ予算](#音源メモリ予算) |
 | 診断 | `st_rt_get_timing`、`st_rt_ir_get_stats`、`st_rt_debug_acquire_snapshot`、`st_rt_debug_copy_visual_paths`、`st_rt_debug_copy_mesh/scene_accel_nodes` |
 
 ### スレッドタグ
@@ -312,6 +313,58 @@ UE・FMOD・Wwise・Unity の統合は既定で `BUFFERED` です。`hostSampleR
 - `maxComputeThreads = 0` は auto（= min(パフォーマンスコア, 6)）で、種類別の優先度・コア選好は
   `st_rt_set_thread_attributes`（FMOD `Thread_SetAttributes` と同じ位置づけ）で **create の前に**指定します。
 - `st_rt_get_thread_inventory` が実際に起動しているスレッド数を種類別に返します。
+
+### 音源メモリ予算
+
+SDK リリース 2.18.2-jhj.3 から、リアルタイムコンテキストは同時に生存する音源数と音源メモリに上限を設けます。
+ABI 6 の additive 変更で、`st_rt_get_capability_word(1)` の `ST_CAP1_MEMORY_BUDGET` で確認します。音源 1 つの
+メモリは固定コスト（伝搬・IR コピー・transport・ストリームリング）と遅延リング、経路レーンで構成されます。
+
+- **動的遅延リング** — 音源ごとの遅延リングは、その音源の経路が要求する最大遅延 × 1.25 + 50 ms（125 ms 単位で
+  切り上げ、下限 0.25 s）で確保されます。さらに必要になると、コントロールスレッドが大きなリングを用意し、オーディオスレッドが
+  コピー・割り当てなしで差し替えます。`st_rt_render_set_max_delay_seconds` は、すべての音源に同じ長さを確保する値ではなく
+  **天井（上限値）**になりました。ボックスルームの測定では、60 音源時の音源あたりメモリは 6.89 → 2.70 MiB です。
+- **プラットフォーム既定値** — `st_rt_create` がビルドターゲットに応じて設定します。
+
+| プラットフォーム | 最大音源数 | 音源メモリ上限 | 遅延リングの天井 |
+|---|---:|---:|---:|
+| デスクトップ（Windows · macOS · Linux） | 128 | 無制限 | 2.0 s |
+| モバイル（Android · iOS） | 48 | 96 MiB | 1.0 s |
+| Web（Emscripten） | 32 | 64 MiB | 0.5 s |
+
+- **上限を超えると** `st_rt_source_create` が失敗ハンドル（`v < 0`）を返し、最後のステータスは
+  `ST_STATUS_BUDGET_EXCEEDED`(11) です。これが既定ポリシー `ST_MEMORY_REJECT_NEW` です。
+  `ST_MEMORY_EVICT_FARTHEST` に切り替えると、リスナーから最も遠い音源を `st_rt_source_destroy` と同じ経路で追い出し、
+  新しい音源を受け入れます（追い出した id は `STMemoryStats.lastEvictedSource`）。UE・Unity・FMOD・Wwise ラッパーは拒否された音源を dry で再生します。
+- **設定** — 生成時は `STRT_CreateOptions.maxSources`（0 = プラットフォーム既定）、生成後は
+  `st_rt_set_memory_budget` で変更します。`STMemoryBudget` で 0 のフィールドは既定値を維持します。上限を下げても
+  既存の音源は残り、新規生成から適用されます。`st_rt_get_memory_stats` は音源数、追跡・推定バイト数、
+  拒否・追い出し回数を返します。
+
+```c
+typedef struct STMemoryBudget {
+    uint32_t structSize, apiVersion;
+    uint32_t maxSources;            /* 0 = プラットフォーム既定 */
+    int32_t  rejectPolicy;          /* ST_MEMORY_REJECT_NEW(0, 既定) / ST_MEMORY_EVICT_FARTHEST(1) */
+    uint64_t sourceBudgetBytes;     /* 0 = 無制限（観測のみ） */
+    uint64_t fixedPerSourceBytes;   /* 0 = エンジン既定(2.5 MiB)。推定にのみ使う */
+    float    ringFloorSeconds;      /* 0 = 0.25 */
+    float    ringGrowthHeadroom;    /* 0 = 1.25 */
+    int32_t  allowShrink;           /* 0 = 縮小なし（セッション中の最大値を維持） */
+    uint32_t reserved[5];
+} STMemoryBudget;
+```
+
+:::caution 挙動の変更
+- デスクトップの既定最大音源数は **128** です（従来は無制限）。それ以上必要なホストは `st_rt_set_memory_budget` で
+  引き上げます。
+- モバイル・Web は遅延リングの天井の既定が 1.0 s / 0.5 s のため、343 m / 171 m を超える初期経路はレンダーされません。従来の
+  値が必要な場合は `st_rt_render_set_max_delay_seconds` で指定します。
+- オフライン DLL（`st_off_*`）は予算の対象外です（無制限）。
+- モバイル・Web は Hybrid 初期反射が前提です。Objects モードは音源あたり 30 MB を超えます。
+:::
+
+ラッパーごとの設定は [SDK 概要](../sdk/overview.md#音源数の上限)にまとめています。
 
 ### Late reverb
 

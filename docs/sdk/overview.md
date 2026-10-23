@@ -9,6 +9,8 @@ description: SimpleST 실시간 공간 음향 엔진의 Web, Unity, Unreal Engin
 SoundTrace SDK는 [SimpleST](../core/simplest.md) 엔진을 웹·게임 엔진·오디오 미들웨어에서
 사용할 수 있게 감싸는 제품군입니다. 모든 래퍼는 같은 저장소에서 같은 엔진 SDK
 (`out/dist/<platform>_release/SimpleST`)를 소비하며, **SimpleST 2.18.2 / ABI 6** 기준입니다.
+현재 SDK 릴리스는 2.18.2-jhj.3(2026-10-23)입니다. 엔진에 [음원 메모리 예산](#음원-수-상한)이 들어갔고, 래퍼 버전은
+그대로입니다.
 이전 릴리스: 2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0. 레거시 라인으로 계속 제공됩니다.
 
 ## 통합 라인업
@@ -33,7 +35,7 @@ SimpleST 플러그인에 붙는 **통합 모드**로 전환됩니다(Meta XR Aud
 | Windows x64 | `SimpleSTRealtime.dll` | Wwise Authoring 플러그인은 Windows DLL |
 | macOS | Universal dylib (arm64 + x86_64) | |
 | Linux x86_64 | `.so` (glibc 2.34+) | |
-| Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 24+ |
+| Android | arm64-v8a · armeabi-v7a · x86_64 `.so` | API 28+ (엔진 `.so`가 `libaaudio`를 직접 링크) |
 | iOS | device arm64 · simulator arm64 정적 라이브러리 / XCFramework | iOS 15+ |
 | Web | pthreads WASM (`SimpleSTRealtime.mjs/.wasm`) + 싱글스레드 Offline | COOP/COEP 필요 |
 
@@ -54,6 +56,22 @@ SimpleST 플러그인에 붙는 **통합 모드**로 전환됩니다(Meta XR Aud
 7. **출력 리미터는 호스트 마스터 체인의 몫**입니다. 엔진 2.18.0은 컨텍스트 생성 직후 true-peak 리미터
    (−1 dBTP, 137샘플 지연)를 켜지만, UE·Unity·FMOD·Wwise·Web 래퍼는 문서화된 기본값대로 리미터를 **끈 상태**로
    유지합니다. 켜는 방법은 각 SDK 페이지를 참고하세요.
+
+## 음원 수 상한
+
+SDK 릴리스 2.18.2-jhj.3부터 엔진이 플랫폼별로 동시 음원 수와 음원 메모리에 상한을 둡니다 — 데스크톱
+128음원 · 메모리 무제한 · 지연 링 천장 2.0 s, Android/iOS 48음원 · 96 MiB · 1.0 s, 웹 32음원 · 64 MiB · 0.5 s.
+상한을 넘는 음원은 엔진이 생성을 거절하고(`ST_STATUS_BUDGET_EXCEEDED`), 게임은 멈추지 않습니다. 데스크톱
+기본 128음원은 종전(무제한) 대비 **행동 변경**입니다. 엔진 쪽 세부는
+[SimpleST — 음원 메모리 예산](../core/simplest.md#음원-메모리-예산)을 참고하세요.
+
+| SDK | 음원 수 설정 (0 = 플랫폼 기본) | 거절된 음원 | 지연 링 천장 |
+|---|---|---|---|
+| [Unreal Engine](./ue.md) | Project Settings `Max Sources` | dry 경로로 폴백 | `Max Delay Seconds`(0 = 플랫폼 기본) |
+| [Unity](./unity.md) | `SoundTraceRuntime.MaxSources` | 경고를 남기고 `AudioSource` dry | `SoundTraceListener.maxDelaySeconds`(기본 0 = 플랫폼 기본) |
+| [Web](./web.md) | `SoundTrace.create` 옵션 `maxSources` | 생성 거절(status 11), 기존 음원은 계속 렌더 | `setRenderOptions({ maxDelaySeconds })` |
+| [FMOD](./fmod.md) | `SimpleSTFmod_Config.maxSources` | 그 보이스를 dry로 재생 | 엔진 플랫폼 기본 |
+| [Wwise](./wwise.md) | `SimpleSTWwise_Config.maxSources` | 그 보이스를 dry로 재생 | 엔진 플랫폼 기본 |
 
 ## 어디서 시작할까
 

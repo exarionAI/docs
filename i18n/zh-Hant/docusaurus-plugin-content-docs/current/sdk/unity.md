@@ -7,7 +7,8 @@ description: SoundTrace Unity SDK 0.4.0（SimpleST 2.18.2 / ABI 6）的安裝、
 
 SoundTrace Unity SDK 是將 Unity 的網格、Renderer 材質插槽、音源與聆聽者連接到
 [SimpleST](../core/simplest.md) 的即時空間聲學外掛。自 0.3.0 起，引擎從 STCoreV2 換成 SimpleST，
-0.4.0 使用 **SimpleST 2.18.2 / ABI 6**（前一版本：0.3.0 = SimpleST 2.12.0）。渲染器以 **Hybrid** 啟動。
+0.4.0 使用 **SimpleST 2.18.2 / ABI 6**（前一版本：0.3.0 = SimpleST 2.12.0）。渲染器以 **Hybrid** 啟動。SDK 發行版 2.18.2-jhj.3 中套件版本維持不變，
+加入了[音源數上限](#音源數上限)與 Android 最低 API 28。
 `SoundTraceManager`、`SoundTraceListener`、`SoundTraceSource`、`SoundTraceObject`、
 `SoundTracePathVisualizer` 的元件名稱、指令碼 GUID 與範例場景維持不變。
 
@@ -17,7 +18,7 @@ SoundTrace Unity SDK 是將 Unity 的網格、Renderer 材質插槽、音源與�
 |---|---|
 | Unity | 2022.3 LTS 以上（已於 2022.3.62f2 · 6000.3 驗證） |
 | 套件 | `SoundTrace-SimpleST-release.unitypackage` → `Assets/SoundTrace` |
-| 隨附原生外掛 | Windows x64 · macOS Universal · Linux x86_64 · Android（ARMv7/ARM64/x86_64，API 24+）· iOS 15+（device/simulator XCFramework）· WebGL |
+| 隨附原生外掛 | Windows x64 · macOS Universal · Linux x86_64 · Android（ARMv7/ARM64/x86_64，API 28+ — 引擎 `.so` 直接連結 `libaaudio`，因此在建置階段檢查）· iOS 15+（device/simulator XCFramework）· WebGL |
 | WebGL | 支援 — 獨立的 pthread WASM + AudioWorklet 路徑（不使用 `OnAudioFilterRead`） |
 | GPU | 無。`SoundTraceManager.IsGpuPropagate` 永遠為 `false` |
 
@@ -122,6 +123,18 @@ python3 install.py /path/to/UnityProject
 |---|---|
 | `ResetMotionState()` | 在 teleport、respawn、scene 切換後，立即重設所有 Listener 與 Source 的 motion history。 |
 
+### 音源數上限
+
+`SoundTraceRuntime.MaxSources`（靜態 `uint`，預設 `0`）是同時存活的引擎音源數上限。
+`0` 時使用引擎平台預設（桌面 128 · Android/iOS 48 · WebGL 32）。請在第一個 `SoundTraceListener` 啟用
+**之前** 設定（透過 `STRT_CreateOptions.maxSources` 傳遞）。超過上限的音源不會擲回例外 —
+`SoundSourceCore` 會對 `ST_STATUS_BUDGET_EXCEEDED` 警告一次，並讓該 `AudioSource` 維持 dry。
+引擎政策請參考 [SimpleST — 音源記憶體預算](../core/simplest.md#音源記憶體預算)。
+
+```csharp
+SoundTraceRuntime.MaxSources = 64;   // 在第一個 Listener 啟用之前
+```
+
 ## SoundTraceListener
 
 ![SoundTraceListener Inspector](/img/unity/Img_STListener.png)
@@ -137,8 +150,11 @@ python3 install.py /path/to/UnityProject
 | `Ray Depth` | `4` | `1..16`；反射最大深度 |
 | `Output Mode` | `Headset` | `Headset`（雙耳）、`Speaker`（立體聲 panning） |
 | `HRTF` | `HRIR Interpolated` | 下列三種模式 |
-| `Max Delay Seconds` | `2.0 s` | `0.012..5 s`；渲染器維持的最大路徑延遲 |
+| `Max Delay Seconds` | `0` | `0..5 s`；逐音源延遲環的上限。`0` = 引擎平台上限（桌面 2 s · Android/iOS 1 s · WebGL 0.5 s）。非 0 時覆寫上限（小於 0.012 s 時為 0.012 s） |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`；路徑出現／消失的交叉淡化 |
+
+`Max Delay Seconds` 預設值在 SDK 發行版 2.18.2-jhj.3 中由 `2` → `0`（引擎政策）。引擎只為每個音源配置
+路徑所需長度的延遲環，並僅將此值作為上限。已儲存 `2` 的既有場景會照以前的方式運作。
 
 選擇 `Fast`、`Middle`、`Quality` 時會一併套用 ray 值並在 Inspector 中鎖定。
 要直接編輯，請選擇 `Custom`。
@@ -376,6 +392,8 @@ Unity WebGL 不提供 `OnAudioFilterRead`，因此使用另一條路徑。傳遞
 | Geometry 沒有反映 | `Read/Write Enabled`、MeshFilter/MeshRenderer、child mesh 位置、註冊狀態 |
 | 執行中變形的 mesh 沒有反映 | SimpleST 沒有 refit。替換為新網格 |
 | FMOD/Wwise 模式下 Listener/Source 被停用 | 正常 — 渲染由中介軟體外掛負責 |
+| 部分音源沒有空間化而聽起來是 dry | Console 中的 `ST_STATUS_BUDGET_EXCEEDED` 警告 — 減少音源或提高 `SoundTraceRuntime.MaxSources` |
+| Android 建置以 `SimpleST requires Android API 28 or newer` 失敗 | 將 Player Settings › Minimum API Level 設為 28 以上 |
 | Teleport 後 pitch 跳動 | 在 transform 變更後立即呼叫 `ResetMotionState()` |
 | 效能不足 | 依 `Quality → Middle → Fast`、縮小 Reverb Ray Resolution、停用 path visualizer 的順序確認 |
 | 多個音源聽起來像 comb filtering | 以相同的 `AudioSettings.dspTime` 執行 `PlayScheduled()` |

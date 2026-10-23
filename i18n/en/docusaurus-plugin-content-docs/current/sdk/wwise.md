@@ -152,6 +152,7 @@ engine per process).
 ```c
 SimpleSTWwise_Config cfg; SimpleSTWwise_InitConfig(&cfg);
 cfg.sceneRatio = 0.01f;                          // Wwise for Unreal (cm). Unity: 0 (= 1.0, metres)
+cfg.maxSources = 0;                              // 0 = engine platform default (desktop 128, Android/iOS 48, web 32)
 SimpleSTWwise_Configure(&cfg);                   // before AK::SoundEngine::Init
 SimpleSTWwise_SetWorldAxes(SIMPLESTWWISE_AXES_UNREAL);   // Unreal only. Unity keeps the default (WWISE)
 
@@ -167,6 +168,33 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal axes**: Wwise for Unreal 2024.1+ passes Unreal vectors unchanged (+Z up), so you must call
   `SetWorldAxes(UNREAL)` for the renderer to convert to (Y, Z, X) and match the geometry the game
   uploaded. Without it, the listener and sources are occluded by the wrong walls (fixed 2026-10-15).
+- **Source cap** (SDK release 2.18.2-jhj.3): `SimpleSTWwise_Config.maxSources` is the engine source
+  count cap (0 = platform default). Beyond it the engine rejects source creation and that voice plays
+  dry. The field is appended to the end of the struct, so hosts that pass the older, shorter struct
+  still work — see [Source memory budget](../core/simplest.md#source-memory-budget).
+
+### Turning sound tracing on and off
+
+```c
+SimpleSTWwise_SetSoundTracingEnabled(0);   // off. 1 = on (default)
+```
+
+A game-side A/B switch added in SDK release 2.18.2-jhj.3. It applies to the running runtime and takes
+effect asynchronously on the control thread. It behaves the same as the
+[FMOD version](./fmod.md#turning-sound-tracing-on-and-off).
+
+- **Turning it off** engages the SimpleST renderer bypass (`st_rt_render_set_sound_tracing_enabled`),
+  empties the warm source pool without refilling it, and the plug-in stops waking the propagation lanes.
+- **The propagation lanes do not stop completely.** SimpleST has no propagation pause, so while
+  sources remain the lanes keep running at their own cadence.
+- **Turning it on** reapplies the plug-in's render options.
+- Returns 1 when queued, 0 when no runtime is running. Runtimes started later start in the on state,
+  so send the state again once the runtime is ready.
+- It is an optional export; the game API version stays 1. Look up the export and skip it if it is
+  missing.
+
+UE SoundTracing's `SetSoundTracingEnabled` calls this function in Wwise mode — see
+[Unreal Engine SDK](./ue.md).
 
 ## UE and Unity integration
 
@@ -205,6 +233,7 @@ linking (2026-10-06).
 - One listener (a SimpleST constraint). If the same bus is instantiated again for a second listener,
   that instance mixes every object with Wwise panning.
 - Audio objects carry no velocity, so there is no SimpleST Doppler.
+- The engine source count does not exceed the platform cap (`maxSources`). Excess voices are dry.
 - When a new audio object is first seen, one small slot is allocated on the audio thread. The engine
   source itself is reused from the warm pool or newly created on the control thread.
 - The launcher bundle currently contains only Authoring + Windows_vc170. The Mac, Linux, Android, and

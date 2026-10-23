@@ -19,7 +19,7 @@ top of its public C ABI.
 
 | Item | Value |
 |---|---|
-| Engine version | **2.18.2** (`ST_VERSION_STRING`). Previous release: 2.12.0 |
+| Engine version | **2.18.2** (`ST_VERSION_STRING`), SDK release 2.18.2-jhj.3. Previous release: 2.12.0 |
 | Public ABI | **ABI 6** (`ST_ABI_VERSION`, 3.0 clean break). All changes since 2.12.0 are additive |
 | Primary language | C++20 (C ABI exposed, C11-header compatible) |
 | Build system | CMake 3.21+ · platform entry point `mainBuild.sh` |
@@ -66,7 +66,7 @@ The public ABI is physically split into two DLLs; the shared PODs live in `STTyp
 
 | Header | Context | Function prefix | Role |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | Real-time propagation + audio render (143 exports) |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | Real-time propagation + audio render (146 exports) |
 | `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | Offline IR computation and render (116 exports) |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | Shared PODs, enums, capability bits |
 
@@ -105,6 +105,7 @@ Create functions return the handle by value and **failure is `v < 0`**. `0` is a
 | Acoustic policy | `st_rt_set_atmosphere`, `st_rt_set_physical_distance_attenuation`, `st_rt_set_acoustic_feature_enabled`, `st_rt_set_doppler_gain_mode`, `st_rt_set_late_coupling[_preset]`, `st_rt_set_early_late_band_energy_targets` |
 | render | `st_rt_render_start/stop`, `st_rt_render_process` (host pull), `set_options/get_options`, `set_spatializer`, `set_speaker_layout[_custom]`, `set_eq`, `set_master_gain_db`, `set_limiter_type`, `get_limiter_latency_samples`, `set_path_fade_time`, `set_max_delay_seconds`, `get_latency_frames`, `get_process_stats` |
 | Threads | `st_rt_set_thread_attributes`, `st_rt_get_thread_inventory`, `STRT_CreateOptions.maxComputeThreads` |
+| Memory budget | `st_rt_set_memory_budget`, `st_rt_get_memory_budget`, `st_rt_get_memory_stats`, `STRT_CreateOptions.maxSources` — [Source memory budget](#source-memory-budget) |
 | Diagnostics | `st_rt_get_timing`, `st_rt_ir_get_stats`, `st_rt_debug_acquire_snapshot`, `st_rt_debug_copy_visual_paths`, `st_rt_debug_copy_mesh/scene_accel_nodes` |
 
 ### Thread tags
@@ -321,6 +322,64 @@ resampling is needed. There are **64** concurrent host stream slots.
   preferences are set **before create** with `st_rt_set_thread_attributes` (the counterpart of
   FMOD `Thread_SetAttributes`).
 - `st_rt_get_thread_inventory` returns the number of threads actually running, per kind.
+
+### Source memory budget
+
+Starting with SDK release 2.18.2-jhj.3, the real-time context caps the number of simultaneously
+live sources and the source memory. This is an ABI 6 additive change, detected with
+`ST_CAP1_MEMORY_BUDGET` from `st_rt_get_capability_word(1)`. The memory of one source consists of a
+fixed cost (propagation · IR copies · transport · stream ring), the delay ring, and the path lanes.
+
+- **Dynamic delay ring** — each source's delay ring is sized to the maximum delay its paths require
+  × 1.25 + 50 ms (rounded up in 125 ms units, floor 0.25 s). When more is needed, the control thread
+  prepares a larger ring and the audio thread swaps it in without copying or allocating.
+  `st_rt_render_set_max_delay_seconds` is now a **ceiling**, not a length allocated identically to
+  every source. In a box-room measurement with 60 sources, memory per source went from
+  6.89 → 2.70 MiB.
+- **Platform defaults** — applied by `st_rt_create` according to the build target.
+
+| Platform | Max sources | Source memory cap | Delay ring ceiling |
+|---|---:|---:|---:|
+| Desktop (Windows · macOS · Linux) | 128 | Unlimited | 2.0 s |
+| Mobile (Android · iOS) | 48 | 96 MiB | 1.0 s |
+| Web (Emscripten) | 32 | 64 MiB | 0.5 s |
+
+- **When the cap is exceeded**, `st_rt_source_create` returns a failure handle (`v < 0`) and the last
+  status is `ST_STATUS_BUDGET_EXCEEDED` (11). This is the default policy, `ST_MEMORY_REJECT_NEW`.
+  Switching to `ST_MEMORY_EVICT_FARTHEST` evicts the source farthest from the listener through the
+  same path as `st_rt_source_destroy` and accepts the new source (the evicted id is in
+  `STMemoryStats.lastEvictedSource`). The UE, Unity, FMOD, and Wwise wrappers play rejected sources dry.
+- **Configuration** — at creation time use `STRT_CreateOptions.maxSources` (0 = platform default);
+  after creation change it with `st_rt_set_memory_budget`. Fields that are 0 in `STMemoryBudget`
+  keep their default. Lowering the cap leaves existing sources in place and applies from the next
+  creation on. `st_rt_get_memory_stats` returns the source count, tracked and estimated bytes, and
+  the reject and evict counts.
+
+```c
+typedef struct STMemoryBudget {
+    uint32_t structSize, apiVersion;
+    uint32_t maxSources;            /* 0 = platform default */
+    int32_t  rejectPolicy;          /* ST_MEMORY_REJECT_NEW(0, default) / ST_MEMORY_EVICT_FARTHEST(1) */
+    uint64_t sourceBudgetBytes;     /* 0 = unlimited (observe only) */
+    uint64_t fixedPerSourceBytes;   /* 0 = engine default (2.5 MiB). Used only for estimation */
+    float    ringFloorSeconds;      /* 0 = 0.25 */
+    float    ringGrowthHeadroom;    /* 0 = 1.25 */
+    int32_t  allowShrink;           /* 0 = no shrinking (keeps the session maximum) */
+    uint32_t reserved[5];
+} STMemoryBudget;
+```
+
+:::caution Behavior change
+- The default max source count on desktop is **128** (previously unlimited). Hosts that need more
+  raise it with `st_rt_set_memory_budget`.
+- On mobile and web the default delay ring ceiling is 1.0 s / 0.5 s, so early paths longer than
+  343 m / 171 m are not rendered. If you need the previous value, set it with
+  `st_rt_render_set_max_delay_seconds`.
+- The offline DLL (`st_off_*`) is not subject to the budget (unlimited).
+- Mobile and web assume Hybrid early reflections. Objects mode exceeds 30 MB per source.
+:::
+
+Per-wrapper settings are collected in the [SDK overview](../sdk/overview.md#source-count-limit).
 
 ### Late reverb
 

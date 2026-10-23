@@ -12,7 +12,7 @@ uploads geometry.
 
 | Item | Value |
 |---|---|
-| Plug-in version | v0.3.0 (SimpleST 2.18.2). Previous release: v0.2.0 (SimpleST 2.12.0) |
+| Plug-in version | v0.3.0 (SimpleST 2.18.2). Previous release: v0.2.0 (SimpleST 2.12.0). The DSP description version FMOD sees is 0.3.0 starting with SDK release 2.18.2-jhj.3 (earlier 0.3.0 builds showed 0.2.0) |
 | FMOD | Studio / Engine 2.03 ~ 2.04 (plug-in SDK 110 build = 2.00 ~ 2.04, 204 build = 2.04+) |
 | Platforms | Windows x64 · macOS · Linux · Android · iOS (static) · Web (static, FMOD HTML5 pthreads) |
 | Distribution | `SimpleST-fmod-release.zip` (per-platform `plugins/` + `install.py`, includes UE and Unity glue) |
@@ -155,6 +155,7 @@ loaded**. Make every call from the game thread, and make SimpleST `[control]` ca
 SimpleSTFmod_Config cfg; SimpleSTFmod_InitConfig(&cfg);
 cfg.renderMode = SIMPLESTFMOD_RENDER_BUFFERED;   // default. IN_CALLBACK = render inside the FMOD mixer callback
 cfg.sceneRatio = 0.f;                            // 0 = 1.0 (FMOD UE/Unity integrations use metres)
+cfg.maxSources = 0;                              // 0 = engine platform default (desktop 128, Android/iOS 48, web 32)
 SimpleSTFmod_Configure(&cfg);                    // before the runtime starts (before the first SimpleST DSP is created)
 
 SimpleSTFmod_Status st = { sizeof st };
@@ -177,6 +178,31 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
   SoundTracing UE plugin.
 - The default material library is registered in the plug-in context first. Add the preset index to
   `defaultMaterialId`.
+- **Source cap** (SDK release 2.18.2-jhj.3): `SimpleSTFmod_Config.maxSources` is the engine source
+  count cap (0 = platform default). Beyond it the engine rejects source creation and that voice plays
+  dry. The field is appended to the end of the struct, so hosts that pass the older, shorter struct
+  still work — see [Source memory budget](../core/simplest.md#source-memory-budget).
+
+### Turning sound tracing on and off
+
+```c
+SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // off. 1 = on (default)
+```
+
+A game-side A/B switch added in SDK release 2.18.2-jhj.3. It applies to one runtime
+(`systemIndex < 0` = the most recent) and takes effect asynchronously on the control thread.
+
+- **Turning it off** engages the SimpleST renderer bypass (`st_rt_render_set_sound_tracing_enabled`),
+  empties the warm source pool without refilling it, and the plug-in stops waking the propagation lanes.
+- **The propagation lanes do not stop completely.** SimpleST has no propagation pause, so while
+  sources remain the lanes keep running at their own cadence.
+- **Turning it on** reapplies the plug-in's render options.
+- Returns 1 when queued, 0 when there is no runtime. Runtimes started later start in the on state.
+- It is an optional export; the game API version stays 1. Look up the export and skip it if it is
+  missing.
+
+UE SoundTracing's `SetSoundTracingEnabled` calls this function in FMOD mode — see
+[Unreal Engine SDK](./ue.md).
 
 ## UE and Unity integration
 
@@ -208,6 +234,7 @@ GUI was verified manually on 2026-10-15.
 
 - One listener (no roll), 64 concurrent streams (excess goes dry), stereo output only (speaker
   layouts not exposed).
+- The engine source count does not exceed the platform cap (`maxSources`). Excess voices are dry.
 - Event effects/sends after the Source receive silence (the SimpleST mix comes out of the Listener bus).
 - `Overall Gain` (audibility for virtualization) is a distance-based estimate.
 - FMOD Studio may create multiple Systems, so each System gets its own SimpleST context.
