@@ -11,7 +11,7 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine 用 SimpleST DSP 外掛�
 
 | 項目 | 值 |
 |---|---|
-| 外掛版本 | v0.3.0（SimpleST 2.18.2）。前一版本：v0.2.0（SimpleST 2.12.0）。FMOD 看到的 DSP 描述版本從 SDK 發行版 2.18.2-jhj.4 起為 0.3.0（在此之前的 0.3.0 發布版顯示為 0.2.0） |
+| 外掛版本 | v0.3.0（SimpleST 2.18.2）。前一版本：v0.2.0（SimpleST 2.12.0）。FMOD 看到的 DSP 描述版本從 SDK 發行版 2.18.2-jhj.7 起為 0.3.0（在此之前的 0.3.0 發布版顯示為 0.2.0） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 建置 = 2.00 ~ 2.04，204 建置 = 2.04+） |
 | 平台 | Windows x64 · macOS · Linux · Android · iOS（靜態）· Web（靜態，FMOD HTML5 pthreads） |
 | 發布 | `SimpleST-fmod-release.zip`（各平台 `plugins/` + `install.py`，含 UE 與 Unity 整合程式碼） |
@@ -164,7 +164,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 - FMOD 與 SimpleST 的座標系相同（左手系，+Y 向上，+Z 向前）。FMOD UE 整合的 `(UE.Y, UE.Z, UE.X)/100`
   轉換與 SoundTracing UE 外掛的轉換相同。
 - 外掛上下文已先註冊了預設材質庫。請以 `defaultMaterialId` 加上 preset index 使用。
-- **音源上限**（SDK 發行版 2.18.2-jhj.4）：`SimpleSTFmod_Config.maxSources` 是引擎音源數上限（0 = 平台
+- **音源上限**（SDK 發行版 2.18.2-jhj.7）：`SimpleSTFmod_Config.maxSources` 是引擎音源數上限（0 = 平台
   預設）。超過時引擎會拒絕建立音源，該 voice 以 dry 播放。這是附加在結構末端的欄位，因此傳入舊版較短
   結構的主機也能運作 — [音源記憶體預算](../core/simplest.md#音源記憶體預算)。
 
@@ -174,7 +174,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // 關閉。1 = 開啟（預設）
 ```
 
-SDK 發行版 2.18.2-jhj.4 新增的遊戲端 A/B 開關。套用於一個執行階段（`systemIndex < 0` = 最近的一個），
+SDK 發行版 2.18.2-jhj.7 新增的遊戲端 A/B 開關。套用於一個執行階段（`systemIndex < 0` = 最近的一個），
 並在控制執行緒上以非同步方式反映。
 
 - **關閉時** 會啟用 SimpleST 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空預熱音源池後不再

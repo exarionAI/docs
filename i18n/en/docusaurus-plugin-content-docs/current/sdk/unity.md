@@ -8,7 +8,7 @@ description: SoundTrace Unity SDK 0.4.0 (SimpleST 2.18.2 / ABI 6) installation, 
 The SoundTrace Unity SDK is a real-time spatial audio plug-in that connects Unity meshes, Renderer
 material slots, sources, and the listener to [SimpleST](../core/simplest.md). From 0.3.0 the engine
 has changed from STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.18.2 / ABI 6** (previous release:
-0.3.0 = SimpleST 2.12.0). The renderer starts in **Hybrid** mode. In SDK release 2.18.2-jhj.4 the
+0.3.0 = SimpleST 2.12.0). The renderer starts in **Hybrid** mode. In SDK release 2.18.2-jhj.7 the
 package version is unchanged; it adds a [source count limit](#source-count-limit) and a minimum
 Android API of 28. The `SoundTraceManager`,
 `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`, and `SoundTracePathVisualizer`
@@ -162,7 +162,7 @@ Usually added to the Main Camera.
 | `Max Delay Seconds` | `0` | `0..5 s`; ceiling of the per-source delay ring. `0` = engine platform ceiling (desktop 2 s · Android/iOS 1 s · WebGL 0.5 s). A nonzero value overrides the ceiling (values below 0.012 s become 0.012 s) |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`; path appear/disappear crossfade |
 
-The `Max Delay Seconds` default changed from `2` → `0` (engine policy) in SDK release 2.18.2-jhj.4.
+The `Max Delay Seconds` default changed from `2` → `0` (engine policy) in SDK release 2.18.2-jhj.7.
 The engine allocates a delay ring per source only as large as its paths need and uses this value
 only as a ceiling. Existing scenes saved with `2` behave as before.
 Listeners that never saved the field (including the bundled samples 01–03) use `0`. On desktop the ceiling is

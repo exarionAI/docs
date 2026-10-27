@@ -150,7 +150,7 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal の軸**: Wwise for Unreal 2024.1+ は Unreal のベクトルをそのまま渡すため（+Z 上）、`SetWorldAxes(UNREAL)` を
   呼ばないとレンダラーが (Y, Z, X) に変換せず、ゲームが登録したジオメトリと合いません。呼ばないとリスナー・音源が
   見当違いの壁に遮蔽されます（2026-10-15 修正）。
-- **音源の上限**（SDK リリース 2.18.2-jhj.4）: `SimpleSTWwise_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
+- **音源の上限**（SDK リリース 2.18.2-jhj.7）: `SimpleSTWwise_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
   既定）。超えるとエンジンが音源の生成を拒否し、そのボイスは dry で再生されます。構造体の末尾に追加したフィールドなので、以前の短い
   構造体を渡すホストも動作します — [音源メモリ予算](../core/simplest.md#音源メモリ予算)。
 
@@ -160,7 +160,7 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // オフ。1 = オン(既定)
 ```
 
-SDK リリース 2.18.2-jhj.4 で追加されたゲーム側の A/B スイッチです。実行中のランタイムに適用され、コントロールスレッドで
+SDK リリース 2.18.2-jhj.7 で追加されたゲーム側の A/B スイッチです。実行中のランタイムに適用され、コントロールスレッドで
 非同期に反映されます。動作は [FMOD 版](./fmod.md#サウンドトレーシングのオンオフ)と同じです。
 
 - **オフにすると** SimpleST レンダラーのバイパス（`st_rt_render_set_sound_tracing_enabled`）がかかり、ウォーム音源プールを空にした後は再び

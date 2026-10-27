@@ -39,7 +39,7 @@ await sound.update(0);
 | `propagationThreadCount` | 同期 1 / パイプライン 3 | 計算予算 1 ~ 5（負数 = 5）。パイプラインは最小 3 |
 | `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT ワーカー予算の省略表記 |
 | `sceneRatio` | `1.0` | シーン長さ単位あたりのメートル（cm = 0.01）。ジオメトリの事前スケールとの**併用禁止** |
-| `maxSources` | `0` | 同時に生存するエンジン音源数の上限（0 ~ 512 の整数）。`0` = wasm プラットフォーム既定（32 音源 · 音源メモリ 64 MiB · 遅延リングの天井 0.5 s — ヒープが 256 MiB 固定のため保守的）。超える音源の生成はエンジンが status 11（`BUDGET_EXCEEDED`）で拒否し、既存の音源はレンダーを継続します。SDK リリース 2.18.2-jhj.4 から |
+| `maxSources` | `0` | 同時に生存するエンジン音源数の上限（0 ~ 512 の整数）。`0` = wasm プラットフォーム既定（32 音源 · 音源メモリ 64 MiB · 遅延リングの天井 0.5 s — ヒープが 256 MiB 固定のため保守的）。超える音源の生成はエンジンが status 11（`BUDGET_EXCEEDED`）で拒否し、既存の音源はレンダーを継続します。SDK リリース 2.18.2-jhj.7 から |
 | `autoLoadMaterials` | `true` | 既定材質テーブルをロードして名前マッピングを有効化 |
 | `transmissionModel` | `'surface'` | SimpleST は表面 R/A/T のみ対応。`'solid'` は**拒否** |
 | `defaultMeshBuild` | — | STCoreV2 の BVH オプション。指定するとロードを**拒否** |

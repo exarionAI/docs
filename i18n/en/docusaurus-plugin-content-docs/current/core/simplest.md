@@ -19,7 +19,7 @@ top of its public C ABI.
 
 | Item | Value |
 |---|---|
-| Engine version | **2.18.2** (`ST_VERSION_STRING`), SDK release 2.18.2-jhj.4. Previous release: 2.12.0 |
+| Engine version | **2.18.2** (`ST_VERSION_STRING`), SDK release 2.18.2-jhj.7. Previous release: 2.12.0 |
 | Public ABI | **ABI 6** (`ST_ABI_VERSION`, 3.0 clean break). All changes since 2.12.0 are additive |
 | Primary language | C++20 (C ABI exposed, C11-header compatible) |
 | Build system | CMake 3.21+ · platform entry point `mainBuild.sh` |
@@ -325,7 +325,7 @@ resampling is needed. There are **64** concurrent host stream slots.
 
 ### Source memory budget
 
-Starting with SDK release 2.18.2-jhj.4, the real-time context caps the number of simultaneously
+Starting with SDK release 2.18.2-jhj.7, the real-time context caps the number of simultaneously
 live sources and the source memory. This is an ABI 6 additive change, detected with
 `ST_CAP1_MEMORY_BUDGET` from `st_rt_get_capability_word(1)`. The memory of one source consists of a
 fixed cost (propagation · IR copies · transport · stream ring), the delay ring, and the path lanes.
@@ -354,6 +354,12 @@ fixed cost (propagation · IR copies · transport · stream ring), the delay rin
   keep their default. Lowering the cap leaves existing sources in place and applies from the next
   creation on. `st_rt_get_memory_stats` returns the source count, tracked and estimated bytes, and
   the reject and evict counts.
+- **Delay ring pool** — the pool that keeps reclaimed delay rings for reuse has a per-platform total cap
+  (desktop 16 · mobile 8 · web 4 MiB; on overflow the largest rings are freed first), and rings unused
+  for 10 s are freed. From SDK release 2.18.2-jhj.7, `STMemoryStats.trackedBytes` (and therefore
+  `estimatedBytes`) includes rings held in the pool. When the budget check overflows, it empties the pool
+  first and measures again, so the pool never causes a new source to be rejected or evicted (the struct
+  layout is unchanged).
 
 ```c
 typedef struct STMemoryBudget {

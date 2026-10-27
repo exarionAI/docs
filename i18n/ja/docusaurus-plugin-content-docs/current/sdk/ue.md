@@ -8,7 +8,7 @@ description: SoundTracing UE5 プラグイン 0.4.0（SimpleST 2.18.2 / ABI 6）
 SoundTracing UE5 プラグインは、Unreal Audio Mixer の Spatialization プラグイン + サブミックス、そして
 Actor Component を通して [SimpleST](../core/simplest.md) を接続します。0.3.0 からエンジンが STCoreV2 から
 SimpleST に変わり、0.4.0 は **SimpleST 2.18.2 / ABI 6** を使います（以前のリリース: 0.3.0 = SimpleST 2.12.0）。
-SDK リリース 2.18.2-jhj.4 ではプラグインバージョンはそのままで、`Max Sources` 設定、FMOD/Wwise モードへのサウンドトレーシング
+SDK リリース 2.18.2-jhj.7 ではプラグインバージョンはそのままで、`Max Sources` 設定、FMOD/Wwise モードへのサウンドトレーシング
 スイッチの受け渡し、レイサンプラーの整理が入りました。
 プロジェクトに FMOD または Wwise プラグインがあると、同じソースがそのミドルウェアの SimpleST プラグインへ接続する
 **統合モード**でビルドされます。
@@ -249,7 +249,7 @@ Blueprint から読める World Subsystem です — 統合モード、シーン
 
 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` でサウンドトレーシング全体をオン・オフします。オフの
 間は、リスナー・音源が動いても伝搬レーンを起こさず、可視化経路も集めないため、最後の経路が残りません。
-FMOD・Wwise モードでは、SDK リリース 2.18.2-jhj.4 からこのスイッチをミドルウェアプラグインに渡します
+FMOD・Wwise モードでは、SDK リリース 2.18.2-jhj.7 からこのスイッチをミドルウェアプラグインに渡します
 （`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`）。それ以前はプラグインが所有する
 コンテキストのため、オフにしても効果がありませんでした。新しいランタイムに接続した後もオフの状態を再送し、この export がない旧版
 プラグインなら警告を残します。SimpleST には伝搬の一時停止がないため、音源が残っている間、レーンは独自の周期で

@@ -18,7 +18,7 @@ description: Sound Tracing의 현행 네이티브 엔진 SimpleST — C++20 기�
 
 | 항목 | 값 |
 |---|---|
-| 엔진 버전 | **2.18.2** (`ST_VERSION_STRING`), SDK 릴리스 2.18.2-jhj.4. 이전 릴리스: 2.12.0 |
+| 엔진 버전 | **2.18.2** (`ST_VERSION_STRING`), SDK 릴리스 2.18.2-jhj.7. 이전 릴리스: 2.12.0 |
 | 공개 ABI | **ABI 6** (`ST_ABI_VERSION`, 3.0 클린 브레이크). 2.12.0 이후 변경은 전부 additive |
 | 주 언어 | C++20 (C ABI 노출, C11 헤더 호환) |
 | 빌드 시스템 | CMake 3.21+ · 플랫폼 진입점 `mainBuild.sh` |
@@ -316,7 +316,7 @@ UE·FMOD·Wwise·Unity 통합은 기본 `BUFFERED`입니다. `hostSampleRate`를
 
 ### 음원 메모리 예산
 
-SDK 릴리스 2.18.2-jhj.4부터 실시간 컨텍스트는 동시에 살아 있는 음원 수와 음원 메모리에 상한을 둡니다.
+SDK 릴리스 2.18.2-jhj.7부터 실시간 컨텍스트는 동시에 살아 있는 음원 수와 음원 메모리에 상한을 둡니다.
 ABI 6 additive이고 `st_rt_get_capability_word(1)`의 `ST_CAP1_MEMORY_BUDGET`으로 확인합니다. 음원 하나의
 메모리는 고정 비용(전파·IR 사본·수송·스트림 링)과 지연 링, 경로 레인으로 이루어집니다.
 
@@ -340,6 +340,10 @@ ABI 6 additive이고 `st_rt_get_capability_word(1)`의 `ST_CAP1_MEMORY_BUDGET`�
   `st_rt_set_memory_budget`으로 바꿉니다. `STMemoryBudget`에서 0인 필드는 기본값을 유지합니다. 상한을 줄여도
   이미 있는 음원은 남고 새 생성부터 적용됩니다. `st_rt_get_memory_stats`는 음원 수, 추적·추정 바이트,
   거절·퇴거 횟수를 돌려줍니다.
+- **지연 링 풀** — 회수된 지연 링을 재사용하려고 보관하는 풀은 플랫폼별 총량 상한(데스크톱 16 · 모바일 8 · 웹 4 MiB,
+  넘치면 큰 링부터 해제)을 두고, 10 s 동안 쓰이지 않은 링은 해제합니다. SDK 릴리스 2.18.2-jhj.7부터
+  `STMemoryStats.trackedBytes`(따라서 `estimatedBytes`)에 풀이 보관한 링이 포함되며, 예산 판정은 넘치면 풀을 먼저
+  비운 뒤 다시 재므로 풀 때문에 새 음원이 거절·퇴거되지는 않습니다(구조체 레이아웃은 그대로).
 
 ```c
 typedef struct STMemoryBudget {

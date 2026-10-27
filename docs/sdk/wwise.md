@@ -150,7 +150,7 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal 축**: Wwise for Unreal 2024.1+는 언리얼 벡터를 그대로 넘기므로(+Z 위) `SetWorldAxes(UNREAL)`을
   불러야 렌더러가 (Y, Z, X)로 바꿔 게임이 올린 지오메트리와 맞습니다. 안 부르면 리스너·음원이
   엉뚱한 벽에 차폐됩니다(2026-10-15 수정).
-- **음원 상한**(SDK 릴리스 2.18.2-jhj.4): `SimpleSTWwise_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
+- **음원 상한**(SDK 릴리스 2.18.2-jhj.7): `SimpleSTWwise_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
   기본). 넘으면 엔진이 음원 생성을 거절하고 그 보이스는 dry로 재생됩니다. 구조체 끝에 덧붙인 필드라 이전의 짧은
   구조체를 넘기는 호스트도 동작합니다 — [음원 메모리 예산](../core/simplest.md#음원-메모리-예산).
 
@@ -160,7 +160,7 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // 끄기. 1 = 켜기(기본)
 ```
 
-SDK 릴리스 2.18.2-jhj.4에서 추가된 게임 쪽 A/B 스위치입니다. 실행 중인 런타임에 적용되며 컨트롤 스레드에서
+SDK 릴리스 2.18.2-jhj.7에서 추가된 게임 쪽 A/B 스위치입니다. 실행 중인 런타임에 적용되며 컨트롤 스레드에서
 비동기로 반영됩니다. 동작은 [FMOD판](./fmod.md#사운드-트레이싱-켜고-끄기)과 같습니다.
 
 - **끄면** SimpleST 렌더러 바이패스(`st_rt_render_set_sound_tracing_enabled`)가 걸리고, 웜 음원 풀을 비운 뒤 다시

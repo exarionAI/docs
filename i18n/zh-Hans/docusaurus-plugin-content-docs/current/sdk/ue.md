@@ -8,7 +8,7 @@ description: SoundTracing UE5 插件 0.4.0（SimpleST 2.18.2 / ABI 6）的安装
 SoundTracing UE5 插件通过 Unreal Audio Mixer 的 Spatialization 插件 + 子混音（submix）以及
 Actor Component 连接 [SimpleST](../core/simplest.md)。从 0.3.0 起，引擎由 STCoreV2 换成了
 SimpleST，0.4.0 使用 **SimpleST 2.18.2 / ABI 6**（上一版本：0.3.0 = SimpleST 2.12.0）。
-SDK 发行版 2.18.2-jhj.4 中插件版本保持不变，新增了 `Max Sources` 设置、FMOD/Wwise 模式下 Sound Tracing
+SDK 发行版 2.18.2-jhj.7 中插件版本保持不变，新增了 `Max Sources` 设置、FMOD/Wwise 模式下 Sound Tracing
 开关的传递，以及射线采样器的整理。
 如果项目中存在 FMOD 或 Wwise 插件，同一份源码会以挂接到该中间件 SimpleST 插件的**集成模式**构建。
 
@@ -245,7 +245,7 @@ asset 的情况。每个频段必须满足 `R + A + T = 1`（±0.001）。
 
 用 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` 整体开启和关闭 Sound Tracing。关闭期间，
 即使听者和声源移动也不会唤醒传播 lane，也不收集可视化路径，因此不会残留最后的路径。
-在 FMOD 和 Wwise 模式下，从 SDK 发行版 2.18.2-jhj.4 起会把此开关传给中间件插件
+在 FMOD 和 Wwise 模式下，从 SDK 发行版 2.18.2-jhj.7 起会把此开关传给中间件插件
 （`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`）。此前上下文由插件拥有，
 因此关闭不起作用。挂接到新运行时后也会重新发送关闭状态；如果是没有此 export 的旧版插件，则输出警告。
 SimpleST 没有传播暂停，因此只要还有声源存在，lane 就会按自身周期继续运行。

@@ -18,7 +18,7 @@ description: Sound Tracing の現行ネイティブエンジン SimpleST — C++
 
 | 項目 | 値 |
 |---|---|
-| エンジンバージョン | **2.18.2**（`ST_VERSION_STRING`）、SDK リリース 2.18.2-jhj.4。以前のリリース: 2.12.0 |
+| エンジンバージョン | **2.18.2**（`ST_VERSION_STRING`）、SDK リリース 2.18.2-jhj.7。以前のリリース: 2.12.0 |
 | 公開 ABI | **ABI 6**（`ST_ABI_VERSION`、3.0 クリーンブレーク）。2.12.0 以降の変更はすべて additive |
 | 主言語 | C++20（C ABI を公開、C11 ヘッダー互換） |
 | ビルドシステム | CMake 3.21+ · プラットフォーム別エントリポイント `mainBuild.sh` |
@@ -316,7 +316,7 @@ UE・FMOD・Wwise・Unity の統合は既定で `BUFFERED` です。`hostSampleR
 
 ### 音源メモリ予算
 
-SDK リリース 2.18.2-jhj.4 から、リアルタイムコンテキストは同時に生存する音源数と音源メモリに上限を設けます。
+SDK リリース 2.18.2-jhj.7 から、リアルタイムコンテキストは同時に生存する音源数と音源メモリに上限を設けます。
 ABI 6 の additive 変更で、`st_rt_get_capability_word(1)` の `ST_CAP1_MEMORY_BUDGET` で確認します。音源 1 つの
 メモリは固定コスト（伝搬・IR コピー・transport・ストリームリング）と遅延リング、経路レーンで構成されます。
 
@@ -340,6 +340,11 @@ ABI 6 の additive 変更で、`st_rt_get_capability_word(1)` の `ST_CAP1_MEMOR
   `st_rt_set_memory_budget` で変更します。`STMemoryBudget` で 0 のフィールドは既定値を維持します。上限を下げても
   既存の音源は残り、新規生成から適用されます。`st_rt_get_memory_stats` は音源数、追跡・推定バイト数、
   拒否・追い出し回数を返します。
+- **遅延リングプール** — 回収した遅延リングを再利用のために保持するプールには、プラットフォーム別の総量上限
+  （デスクトップ 16 · モバイル 8 · Web 4 MiB、超えると大きいリングから解放）があり、10 s 使われなかったリングは解放されます。
+  SDK リリース 2.18.2-jhj.7 から `STMemoryStats.trackedBytes`（したがって `estimatedBytes`）にプールが保持するリングが含まれます。
+  予算判定は超過するとまずプールを空にしてから測り直すため、プールが原因で新しい音源が拒否・追い出しされることはありません
+  （構造体レイアウトは変わりません）。
 
 ```c
 typedef struct STMemoryBudget {

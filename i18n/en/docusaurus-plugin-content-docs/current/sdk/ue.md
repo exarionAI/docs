@@ -8,7 +8,7 @@ description: SoundTracing UE5 plugin 0.4.0 (SimpleST 2.18.2 / ABI 6) installatio
 The SoundTracing UE5 plugin connects [SimpleST](../core/simplest.md) through the Unreal Audio Mixer
 Spatialization plugin + submix and through Actor Components. From 0.3.0 the engine has changed from
 STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.18.2 / ABI 6** (previous release: 0.3.0 =
-SimpleST 2.12.0). In SDK release 2.18.2-jhj.4 the plugin version is unchanged; it adds the
+SimpleST 2.12.0). In SDK release 2.18.2-jhj.7 the plugin version is unchanged; it adds the
 `Max Sources` setting, forwarding of the sound tracing switch in FMOD/Wwise mode, and a ray sampler
 cleanup. When the project has an FMOD or Wwise plugin the same source builds in an
 **integration mode** that attaches to that middleware's SimpleST plug-in.
@@ -261,7 +261,7 @@ counts, valid path count, per-lane propagation/IR/render time (ms), and render b
 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` turn sound tracing on and off as a whole.
 While it is off, moving the listener or sources does not wake the propagation lanes, and
 visualization paths are not collected either, so no stale paths remain. In FMOD and Wwise modes,
-starting with SDK release 2.18.2-jhj.4, this switch is passed on to the middleware plug-in
+starting with SDK release 2.18.2-jhj.7, this switch is passed on to the middleware plug-in
 (`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`). Before that, the
 context was owned by the plug-in, so turning it off had no effect. The off state is sent again after
 attaching to a new runtime, and a warning is logged if the plug-in is an older one without this

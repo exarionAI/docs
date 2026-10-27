@@ -12,7 +12,7 @@ uploads geometry.
 
 | Item | Value |
 |---|---|
-| Plug-in version | v0.3.0 (SimpleST 2.18.2). Previous release: v0.2.0 (SimpleST 2.12.0). The DSP description version FMOD sees is 0.3.0 starting with SDK release 2.18.2-jhj.4 (earlier 0.3.0 builds showed 0.2.0) |
+| Plug-in version | v0.3.0 (SimpleST 2.18.2). Previous release: v0.2.0 (SimpleST 2.12.0). The DSP description version FMOD sees is 0.3.0 starting with SDK release 2.18.2-jhj.7 (earlier 0.3.0 builds showed 0.2.0) |
 | FMOD | Studio / Engine 2.03 ~ 2.04 (plug-in SDK 110 build = 2.00 ~ 2.04, 204 build = 2.04+) |
 | Platforms | Windows x64 · macOS · Linux · Android · iOS (static) · Web (static, FMOD HTML5 pthreads) |
 | Distribution | `SimpleST-fmod-release.zip` (per-platform `plugins/` + `install.py`, includes UE and Unity glue) |
@@ -178,7 +178,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
   SoundTracing UE plugin.
 - The default material library is registered in the plug-in context first. Add the preset index to
   `defaultMaterialId`.
-- **Source cap** (SDK release 2.18.2-jhj.4): `SimpleSTFmod_Config.maxSources` is the engine source
+- **Source cap** (SDK release 2.18.2-jhj.7): `SimpleSTFmod_Config.maxSources` is the engine source
   count cap (0 = platform default). Beyond it the engine rejects source creation and that voice plays
   dry. The field is appended to the end of the struct, so hosts that pass the older, shorter struct
   still work — see [Source memory budget](../core/simplest.md#source-memory-budget).
@@ -189,7 +189,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // off. 1 = on (default)
 ```
 
-A game-side A/B switch added in SDK release 2.18.2-jhj.4. It applies to one runtime
+A game-side A/B switch added in SDK release 2.18.2-jhj.7. It applies to one runtime
 (`systemIndex < 0` = the most recent) and takes effect asynchronously on the control thread.
 
 - **Turning it off** engages the SimpleST renderer bypass (`st_rt_render_set_sound_tracing_enabled`),

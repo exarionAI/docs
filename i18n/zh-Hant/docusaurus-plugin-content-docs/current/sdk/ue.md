@@ -8,7 +8,7 @@ description: SoundTracing UE5 外掛 0.4.0（SimpleST 2.18.2 / ABI 6）的安裝
 SoundTracing UE5 外掛透過 Unreal Audio Mixer 的 Spatialization 外掛 + Submix，以及 Actor Component
 連接 [SimpleST](../core/simplest.md)。自 0.3.0 起，引擎從 STCoreV2 換成 SimpleST，0.4.0 使用
 **SimpleST 2.18.2 / ABI 6**（前一版本：0.3.0 = SimpleST 2.12.0）。
-SDK 發行版 2.18.2-jhj.4 中外掛版本維持不變，加入了 `Max Sources` 設定、FMOD/Wwise 模式的 Sound Tracing
+SDK 發行版 2.18.2-jhj.7 中外掛版本維持不變，加入了 `Max Sources` 設定、FMOD/Wwise 模式的 Sound Tracing
 開關傳遞，以及射線取樣器的整理。
 若專案中有 FMOD 或 Wwise 外掛，同一份原始碼會以掛接到該中介軟體 SimpleST 外掛的 **整合模式** 建置。
 
@@ -245,7 +245,7 @@ reflection、absorption、transmission、scattering 的工作，請限制在另�
 
 以 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` 整體開啟或關閉 Sound Tracing。關閉期間，
 即使聆聽者或音源移動也不會喚醒傳播 lane，也不會收集視覺化路徑，因此不會殘留最後的路徑。
-在 FMOD 與 Wwise 模式中，從 SDK 發行版 2.18.2-jhj.4 起會將此開關傳給中介軟體外掛
+在 FMOD 與 Wwise 模式中，從 SDK 發行版 2.18.2-jhj.7 起會將此開關傳給中介軟體外掛
 （`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`）。在此之前，因為是外掛擁有的
 上下文，關閉沒有效果。掛接到新的執行階段後也會再次送出關閉狀態，若是沒有此 export 的舊版
 外掛則會留下警告。SimpleST 沒有傳播暫停功能，因此只要還有音源，lane 就會依自身週期

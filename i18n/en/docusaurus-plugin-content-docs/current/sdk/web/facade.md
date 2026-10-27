@@ -39,7 +39,7 @@ await sound.update(0);
 | `propagationThreadCount` | Synchronous 1 / pipelined 3 | Compute budget 1 ~ 5 (negative = 5). Pipelined needs at least 3 |
 | `throughput` | unset | `'low'` / `'medium'` / `'max'` — shorthand for the MT worker budget |
 | `sceneRatio` | `1.0` | Meters per scene length unit (cm = 0.01). **Never combine** with pre-scaled geometry |
-| `maxSources` | `0` | Cap on the number of simultaneously live engine sources (integer 0 ~ 512). `0` = wasm platform default (32 sources · source memory 64 MiB · delay ring ceiling 0.5 s — conservative because the heap is fixed at 256 MiB). The engine rejects creating sources beyond it with status 11 (`BUDGET_EXCEEDED`), and existing sources keep rendering. Since SDK release 2.18.2-jhj.4 |
+| `maxSources` | `0` | Cap on the number of simultaneously live engine sources (integer 0 ~ 512). `0` = wasm platform default (32 sources · source memory 64 MiB · delay ring ceiling 0.5 s — conservative because the heap is fixed at 256 MiB). The engine rejects creating sources beyond it with status 11 (`BUDGET_EXCEEDED`), and existing sources keep rendering. Since SDK release 2.18.2-jhj.7 |
 | `autoLoadMaterials` | `true` | Loads the default material table and enables name mapping |
 | `transmissionModel` | `'surface'` | SimpleST supports surface R/A/T only. `'solid'` is **rejected** |
 | `defaultMeshBuild` | — | STCoreV2 BVH option. Load is **rejected** if specified |

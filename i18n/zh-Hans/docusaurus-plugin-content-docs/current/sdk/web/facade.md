@@ -38,7 +38,7 @@ await sound.update(0);
 | `propagationThreadCount` | 同步 1 / 管线 3 | 计算预算 1 ~ 5（负数 = 5）。管线模式至少 3 |
 | `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT 工作线程预算的简写 |
 | `sceneRatio` | `1.0` | 每个场景长度单位对应的米数（cm = 0.01）。**不要**与预缩放几何体混用 |
-| `maxSources` | `0` | 同时存活的引擎声源数上限（0 ~ 512 的整数）。`0` = wasm 平台默认（32 个声源 · 声源内存 64 MiB · 延迟环上限 0.5 s — 堆固定为 256 MiB，因此较为保守）。超出的声源创建会被引擎以 status 11（`BUDGET_EXCEEDED`）拒绝，已有声源继续渲染。自 SDK 发行版 2.18.2-jhj.4 起 |
+| `maxSources` | `0` | 同时存活的引擎声源数上限（0 ~ 512 的整数）。`0` = wasm 平台默认（32 个声源 · 声源内存 64 MiB · 延迟环上限 0.5 s — 堆固定为 256 MiB，因此较为保守）。超出的声源创建会被引擎以 status 11（`BUDGET_EXCEEDED`）拒绝，已有声源继续渲染。自 SDK 发行版 2.18.2-jhj.7 起 |
 | `autoLoadMaterials` | `true` | 加载默认材质表并启用按名称映射 |
 | `transmissionModel` | `'surface'` | SimpleST 只支持表面 R/A/T。`'solid'` 会被**拒绝** |
 | `defaultMeshBuild` | — | STCoreV2 BVH 选项。指定后加载会被**拒绝** |

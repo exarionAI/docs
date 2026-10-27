@@ -17,7 +17,7 @@ description: Sound Tracing 的現行原生引擎 SimpleST — C++20 幾何聲學
 
 | 項目 | 值 |
 |---|---|
-| 引擎版本 | **2.18.2**（`ST_VERSION_STRING`），SDK 發行版 2.18.2-jhj.4。前一版本：2.12.0 |
+| 引擎版本 | **2.18.2**（`ST_VERSION_STRING`），SDK 發行版 2.18.2-jhj.7。前一版本：2.12.0 |
 | 公開 ABI | **ABI 6**（`ST_ABI_VERSION`，3.0 乾淨斷裂）。2.12.0 之後的變更全部為 additive |
 | 主要語言 | C++20（暴露 C ABI，相容 C11 標頭） |
 | 建置系統 | CMake 3.21+ · 平台進入點 `mainBuild.sh` |
@@ -311,7 +311,7 @@ UE、FMOD、Wwise、Unity 整合預設為 `BUFFERED`。指定 `hostSampleRate` �
 
 ### 音源記憶體預算
 
-從 SDK 發行版 2.18.2-jhj.4 起，即時上下文會對同時存活的音源數與音源記憶體設定上限。
+從 SDK 發行版 2.18.2-jhj.7 起，即時上下文會對同時存活的音源數與音源記憶體設定上限。
 這是 ABI 6 additive 變更，以 `st_rt_get_capability_word(1)` 的 `ST_CAP1_MEMORY_BUDGET` 確認。一個音源的
 記憶體由固定成本（傳播、IR 副本、transport、串流環）加上延遲環與路徑 lane 組成。
 
@@ -335,6 +335,9 @@ UE、FMOD、Wwise、Unity 整合預設為 `BUFFERED`。指定 `hostSampleRate` �
   `st_rt_set_memory_budget` 變更。`STMemoryBudget` 中為 0 的欄位維持預設值。即使調低上限，
   已存在的音源仍會保留，從新的建立開始套用。`st_rt_get_memory_stats` 會回傳音源數、追蹤與估計位元組數，
   以及拒絕與移出次數。
+- **延遲環池** — 為重複使用而保留已回收延遲環的池設有依平台的總量上限（桌面 16 · 行動 8 · Web 4 MiB，超過時先釋放大的環），
+  10 s 未使用的環會被釋放。自 SDK 發行版 2.18.2-jhj.7 起，`STMemoryStats.trackedBytes`（因此 `estimatedBytes`）包含池中保留的環。
+  預算判定超過時會先清空池再重新計算，因此不會因為池而拒絕或移出新音源（結構體配置不變）。
 
 ```c
 typedef struct STMemoryBudget {
