@@ -72,22 +72,28 @@ FMOD・Wwise モードでは `ListenerComponent` の出力設定（HRTF・出力
 
 ### FMOD モードのインストール
 
-```bash
-python3 install.py /path/to/Game.uproject --fmod <fmod/plugins フォルダー>
-```
+FMOD 配布物（`SimpleST-fmod-release.zip`）の `Unreal/SoundTracing` は **FMOD エディション**です。
+`ThirdParty/SimpleSTFmod/<Plat>/` に `SimpleSTFmod`・`SimpleSTRealtime`・HRTF が入っています。
 
-`--fmod` は `SimpleSTFmod`・`SimpleSTRealtime`・HRTF を `Plugins/FMODStudio/Binaries/<Plat>/` にコピーし、
-`Config/DefaultEngine.ini` に `+PluginFiles=SimpleSTFmod` を追加します（= Project Settings › FMOD Studio ›
-Plugin Files）。その後、FMOD Studio でマスターバスに SimpleST Listener を、3D イベントのマスタートラックに
-SimpleST Source を入れます — [FMOD プラグイン](./fmod.md)。
+1. FMOD for Unreal をプロジェクトの `Plugins/FMODStudio` に入れます。
+2. `Unreal/SoundTracing` をプロジェクトの `Plugins/` に入れてビルドします。ビルド時に SoundTracing が上記のファイルを
+   `Plugins/FMODStudio/Binaries/<Plat>/` にコピーし、`Config/DefaultEngine.ini` に `+PluginFiles=SimpleSTFmod` を
+   追加します（= Project Settings › FMOD Studio › Plugin Files）。同じファイルがすでにある場合はスキップします。Win64・Mac。
+3. その後、FMOD Studio でマスターバスに SimpleST Listener を、3D イベントのマスタートラックに
+   SimpleST Source を入れます — [FMOD プラグイン](./fmod.md)。
 
 ![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
 
 ### Wwise モードのインストール
 
-```bash
-python3 install.py /path/to/Game.uproject --wwise <wwise/SDK フォルダー>
-```
+Wwise プラグインは、他の Wwise プラグインと同様に Audiokinetic Launcher がインストールします。
+
+1. Launcher › **Plug-ins › Add from directory** で Wwise 配布物の `launcher` フォルダーを選び、**Sound-tracing** をインストールします。
+2. Launcher › **Unreal Engine › Modify Wwise in Project**（初回は Integrate）を実行します。ランチャーが Wwise SDK の
+   プラグイン（Sound-tracing を含む）を `WwiseSoundEngine/ThirdParty` にコピーします。
+3. `SoundTracing` をプロジェクトの `Plugins/` に入れてビルドします。
+
+![ランチャーの Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
 
 SoundTracing はモジュール起動時にプラグインを掴んで `sceneRatio = 0.01`（Wwise Unreal の単位 = cm）に設定し、
 `SimpleSTWwise_SetWorldAxes(UNREAL)` で Unreal の軸（+Z 上）を通知します。Wwise for Unreal 2024.1+ は

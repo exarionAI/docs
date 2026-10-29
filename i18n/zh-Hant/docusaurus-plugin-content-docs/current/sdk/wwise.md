@@ -16,7 +16,7 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Objec
 | Audiokinetic | CompanyID **325**，PluginID 1001（Renderer）· 1002（Source Settings）。Launcher 套件組 `Sound-tracing` |
 | Wwise | 2025.1（外掛二進位檔綁定於 SDK 版本） |
 | 平台 | Windows（vc170）· macOS · Linux · Android · iOS（靜態）· Web（靜態） |
-| 發布 | `SimpleST-wwise-release.zip`（各平台 SDK + Authoring + Launcher 套件 + `install.py`，含 UE 與 Unity 整合程式碼） |
+| 發布 | `SimpleST-wwise-release.zip`（各平台 SDK + Authoring + Launcher 套件組 `launcher/` + `install.py`，含 UE 與 Unity 整合程式碼） |
 | 合作夥伴核准 | Community Partner Program 第一階段核准（2026-10-08）。最終核准進行中 |
 
 ## 結構
@@ -59,13 +59,14 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Objec
 
 ![Launcher 套件組安裝](/img/wwise/launcher-bundle.png)
 
-- **Windows**：將發布 `packages/` 中的 Launcher 套件組（`bundle.json` + `*.tar.xz`）以 Audiokinetic Launcher 的
-  **Add from directory** 安裝，或將發布資料夾原樣覆寫到 Wwise 安裝資料夾（`SDK/…`、`Authoring/…`）。
-  Authoring 外掛為 `Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + 引擎 + HRTF。
-- **macOS**：Wwise Authoring 在 Mac 上也使用 **Windows DLL**。安裝位置為
-  `/Library/Application Support/Audiokinetic/Wwise <version>/Authoring/x64/Release/bin/Plugins`，
-  以 `python3 install.py wwise --payload win --wwise-root "/Applications/Audiokinetic/Wwise_2025.1.11.9262"`
-  安裝。既有檔案會保存在 `bin/.simplest-backups`。
+在 Audiokinetic Launcher › **Plug-ins › Add from directory** 中選擇發布檔的 `launcher` 資料夾（`bundle.json` + `*.tar.xz`），
+即可安裝 **Sound-tracing**（Windows、macOS 通用）。套件組含 Authoring 外掛以及 Windows（vc170）、macOS
+（Xcode 16/26）音效引擎外掛。Authoring 外掛在 Mac 上也是 **Windows DLL**
+（`Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + 引擎 + HRTF）。
+
+不使用 Launcher 安裝時，可將發布資料夾覆寫到 Wwise 安裝資料夾（`SDK/…`、`Authoring/…`），或使用
+`python3 install.py wwise --payload win --wwise-root "/Applications/Audiokinetic/Wwise_2025.1.11.9262"`
+（既有檔案會保存在 `bin/.simplest-backups`）。
 
 ### 遊戲執行階段（SoundEngine）
 
@@ -199,13 +200,15 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 Wwise 模式中會呼叫此函�
 
 ## UE · Unity 整合
 
-- **Unreal Engine**：`install.py /path/to/Game.uproject --wwise <wwise/SDK>` 會將 `SimpleSTWwise`、`SimpleSTRealtime`、HRTF
-  放進 `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`。SoundTracing 外掛以 Wwise 模式建置，
+- **Unreal Engine**：在 Launcher 安裝 Sound-tracing 後執行 Launcher › Unreal Engine › **Modify Wwise in Project**，
+  Launcher 會將 `SimpleSTWwise`、`SimpleSTRealtime`、HRTF 複製到 `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`。SoundTracing 外掛以 Wwise 模式建置，
   設定 `sceneRatio = 0.01` 與 Unreal 軸，只上傳幾何體 — [Unreal Engine SDK](./ue.md)。
   E2E PASS（2026-10-07：物件 6 / 三角形 288 / 路徑 1 → 346 → 1）。
-- **Unity**：**SoundTrace › Wwise › Install SimpleST Wwise Plug-in...** 選單會將外掛複製到 Wwise Unity 整合的
-  DSP 資料夾。引擎共用 SoundTrace 的 `SimpleSTRealtime`，單位為公尺 —
+- **Unity**：在 Launcher 安裝 Sound-tracing 後執行 Launcher › Unity › **Integrate/Modify Wwise in Project**，
+  Launcher 會將外掛放入 Wwise Unity 整合的 DSP 資料夾。引擎共用 SoundTrace 的 `SimpleSTRealtime`，單位為公尺 —
   [Unity SDK](./unity.md#與-wwise-搭配使用)。
+
+![Launcher 的 Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
 
 ![UE Wwise 安裝結果](/img/wwise/ue-install.png)
 
@@ -235,7 +238,7 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 Wwise 模式中會呼叫此函�
 - 引擎音源數不會超過平台上限（`maxSources`）。超出的 voice 為 dry。
 - 第一次看到新的音訊物件時，會在音訊執行緒上配置一個小插槽。引擎音源本身由控制執行緒從預熱池
   重複使用或新建。
-- Launcher 套件組目前只包含 Authoring + Windows_vc170。Mac、Linux、Android、iOS 套件組與 EULA、標誌準備中。
+- Launcher 套件組目前包含 Authoring + Windows_vc170 + macOS（Xcode 16/26）。Linux、Android 套件組與 EULA、標誌準備中；iOS 為靜態連結，不經由套件組部署。
 - Wwise 創作工具 GUI 的手動試聽尚未記錄。
 
 ## 記錄 / 環境變數

@@ -19,7 +19,7 @@ SimpleST 2.18.2；0.3.0 = SimpleST 2.12.0）。渲染器以 **Hybrid** 模式启
 | 项目 | 当前包状态 |
 |---|---|
 | Unity | 2022.3 LTS 或更高（已验证 2022.3.62f2 · 6000.3） |
-| 包 | `SoundTrace-SimpleST-release.unitypackage` → `Assets/SoundTrace` |
+| 包 | `SoundTrace-SimpleST-release.unitypackage`（基础版，用于 Wwise）/ `SoundTrace-SimpleST-FMOD-release.unitypackage`（FMOD 版）→ `Assets/SoundTrace` |
 | 随包原生插件 | Windows x64 · macOS Universal · Linux x86_64 · Android（ARMv7/ARM64/x86_64，API 28+ — 引擎 `.so` 直接链接 `libaaudio`，因此在构建阶段检查）· iOS 15+（device/simulator XCFramework）· WebGL |
 | WebGL | 支持 — 独立 pthread WASM + AudioWorklet 路径（不使用 `OnAudioFilterRead`） |
 | GPU | 无。`SoundTraceManager.IsGpuPropagate` 始终为 `false` |
@@ -35,8 +35,10 @@ SimpleST 2.18.2；0.3.0 = SimpleST 2.12.0）。渲染器以 **Hybrid** 模式启
 
 ```bash
 python3 install.py /path/to/UnityProject
-# 同时安装 FMOD / Wwise 插件：--fmod <plugins 文件夹> 或 --wwise <plugins 文件夹>
 ```
+
+与 FMOD、Wwise 配合使用时，请按照下文的 [与 FMOD 配合使用](#与-fmod-配合使用)、[与 Wwise 配合使用](#与-wwise-配合使用) 操作。
+FMOD 只需导入 FMOD 版包即可，Wwise 插件则由 Audiokinetic Launcher 安装。
 
 示例通过在 Package Manager 中选择 SoundTrace SDK，然后 `Samples > Demo Assets > Import` 导入。
 示例 UI 只有在存在 `com.unity.ugui` 时才会编译。
@@ -340,12 +342,13 @@ Direct、Reflection、Diffraction、Reverb 和 Transmission 按 path 类型用�
 `SoundTraceManager` + `SoundTraceObject` 把几何体和材质上传到插件上下文。
 `SoundTraceListener` / `SoundTraceSource` 会记录警告并关闭。
 
-![Unity FMOD 安装菜单](/img/fmod/unity-install-menu.png)
+![导入 FMOD 版包](/img/fmod/unity-fmod-edition-import.png)
 
-1. 安装 FMOD for Unity 2.04（tgz 安装版以 embed 方式放入 `Packages/`）。
-2. 在 **SoundTrace › FMOD › Install SimpleST FMOD Plug-in...** 菜单中选择包含 `SimpleSTFmod` 的文件夹
-   （例如 `fmod/plugins`，Mac 为 `mac/plugins`）。DLL/bundle 会被复制到 FMOD 插件文件夹，
-   并注册到 FMOD Settings › Dynamic Plugins。
+1. 把 FMOD for Unity 2.04 放入项目（`Assets/Plugins/FMOD`；如果用 tgz 安装，则以 embed 方式放入 `Packages/`）。
+2. 把 **FMOD 版**包 `SoundTrace-SimpleST-FMOD-release.unitypackage` 拖放到 Project 窗口。
+   没有单独的菜单。包的 `Runtime/Plugins/FMOD` 中含有 `SimpleSTFmod`（Windows x64、macOS），
+   编辑器加载时 SoundTrace 会把它复制到 FMOD 插件文件夹，并注册到 FMOD Settings › Dynamic Plugins。
+   即使之后才放入 FMOD，下次加载时也会执行同样的操作。
 3. 在 FMOD Studio 中，在主总线上放置 **SimpleST Listener**，在 3D 事件的主轨道上用
    **SimpleST Source** 替代 FMOD Spatializer — 参见 [FMOD 插件](./fmod.md)。
 4. 场景中放置 `SoundTraceManager`、用于几何体的 `SoundTraceObject` 和 FMOD `StudioListener`。
@@ -359,14 +362,19 @@ Direct、Reflection、Diffraction、Reverb 和 Transmission 按 path 类型用�
 如果 Wwise Unity 集成的 DSP 文件夹中存在 `SimpleSTWwise`，则以 **Wwise 集成**方式工作
 （如果同时存在 FMOD，则 FMOD 优先）。
 
-![Unity Wwise 安装菜单](/img/wwise/unity-install-menu.png)
+SoundTrace 使用基础包，Wwise 插件则与其他 Wwise 插件一样由 Audiokinetic Launcher 安装。
 
-1. 通过 Audiokinetic Launcher 安装 Wwise Unity 集成。
-2. 在 **SoundTrace › Wwise › Install SimpleST Wwise Plug-in...** 菜单中选择包含 `SimpleSTWwise` 的文件夹。
-   它会被复制到 DSP 文件夹，并由 Wwise 声音引擎加载。
-3. 在 Wwise 项目中，在 Audio Objects 总线上放置 **Sound-tracing Renderer**，并把 3D 声音发送到该总线
+![Launcher 中已安装的 Sound-tracing](/img/wwise/launcher-bundle.png)
+
+1. 把基础包 `SoundTrace-SimpleST-release.unitypackage` 拖放到 Project 窗口。
+2. 在 Audiokinetic Launcher › **Plug-ins › Add from directory** 中选择 Wwise 发行包的 `launcher` 文件夹，
+   安装 **Sound-tracing**。
+3. 运行 Launcher › **Unity › Integrate（或 Modify）Wwise in Project**。Launcher 会把 Wwise SDK 中已安装的
+   插件（包括 Sound-tracing）放入 Wwise Unity 集成的 DSP 文件夹，并由 Wwise 声音引擎加载。
+   请在关闭 Unity 编辑器的状态下运行。
+4. 在 Wwise 项目中，在 Audio Objects 总线上放置 **Sound-tracing Renderer**，并把 3D 声音发送到该总线
    （Attenuation 关闭或设为平坦）— 参见 [Wwise 插件](./wwise.md)。
-4. 场景中放置 `AkInitializer`、`AkAudioListener`、发射器上的 `AkGameObj`，以及 `SoundTraceManager`、
+5. 场景中放置 `AkInitializer`、`AkAudioListener`、发射器上的 `AkGameObj`，以及 `SoundTraceManager`、
    `SoundTraceObject`。Wwise Unity 的单位是米，因此 `sceneRatio = 1`。
 
 ## WebGL

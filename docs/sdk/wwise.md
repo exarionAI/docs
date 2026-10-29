@@ -16,7 +16,7 @@ description: Sound-tracing(SimpleSTWwise) — Wwise 2025.1용 SimpleST Object Pr
 | Audiokinetic | CompanyID **325**, PluginID 1001(Renderer) · 1002(Source Settings). 런처 번들 `Sound-tracing` |
 | Wwise | 2025.1 (플러그인 바이너리는 SDK 버전에 묶입니다) |
 | 플랫폼 | Windows(vc170) · macOS · Linux · Android · iOS(정적) · Web(정적) |
-| 배포 | `SimpleST-wwise-release.zip` (플랫폼별 SDK + Authoring + 런처 패키지 + `install.py`, UE·Unity 글루 포함) |
+| 배포 | `SimpleST-wwise-release.zip` (플랫폼별 SDK + Authoring + 런처 번들 `launcher/` + `install.py`, UE·Unity 글루 포함) |
 | 파트너 승인 | Community Partner Program 1차 승인(2026-10-08). 최종 승인 진행 중 |
 
 ## 구조
@@ -60,13 +60,14 @@ description: Sound-tracing(SimpleSTWwise) — Wwise 2025.1용 SimpleST Object Pr
 
 ![런처 번들 설치](/img/wwise/launcher-bundle.png)
 
-- **Windows**: 배포 `packages/`의 런처 번들(`bundle.json` + `*.tar.xz`)을 Audiokinetic Launcher의
-  **Add from directory**로 설치하거나, 배포 폴더를 Wwise 설치 폴더(`SDK/…`, `Authoring/…`)에 그대로
-  덮어씁니다. Authoring 플러그인은 `Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + 엔진 + HRTF입니다.
-- **macOS**: Wwise Authoring은 Mac에서도 **Windows DLL**을 사용합니다. 설치 위치는
-  `/Library/Application Support/Audiokinetic/Wwise <version>/Authoring/x64/Release/bin/Plugins`이며,
-  `python3 install.py wwise --payload win --wwise-root "/Applications/Audiokinetic/Wwise_2025.1.11.9262"`로
-  설치합니다. 기존 파일은 `bin/.simplest-backups`에 보관됩니다.
+Audiokinetic Launcher › **Plug-ins › Add from directory**에서 배포물의 `launcher` 폴더(`bundle.json` + `*.tar.xz`)를
+고르면 **Sound-tracing**이 설치됩니다(Windows·macOS 공통). 번들에는 Authoring 플러그인과 Windows(vc170)·macOS
+(Xcode 16/26) 사운드엔진 플러그인이 들어 있습니다. Authoring 플러그인은 Mac에서도 **Windows DLL**
+(`Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + 엔진 + HRTF)입니다.
+
+런처 없이 넣을 때는 배포 폴더를 Wwise 설치 폴더(`SDK/…`, `Authoring/…`)에 덮어쓰거나,
+`python3 install.py wwise --payload win --wwise-root "/Applications/Audiokinetic/Wwise_2025.1.11.9262"`를 씁니다
+(기존 파일은 `bin/.simplest-backups`에 보관).
 
 ### 게임 런타임 (SoundEngine)
 
@@ -201,13 +202,15 @@ UE SoundTracing의 `SetSoundTracingEnabled`가 Wwise 모드에서 이 함수를 
 
 ## UE · Unity 통합
 
-- **Unreal Engine**: `install.py /path/to/Game.uproject --wwise <wwise/SDK>`가 `SimpleSTWwise`·`SimpleSTRealtime`·HRTF를
-  `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`에 넣습니다. SoundTracing 플러그인은 Wwise 모드로 빌드되어
+- **Unreal Engine**: 런처에 Sound-tracing을 설치한 뒤 Launcher › Unreal Engine › **Modify Wwise in Project**를 실행하면
+  런처가 `SimpleSTWwise`·`SimpleSTRealtime`·HRTF를 `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`에 복사합니다. SoundTracing 플러그인은 Wwise 모드로 빌드되어
   `sceneRatio = 0.01`과 Unreal 축을 설정하고 지오메트리만 올립니다 — [Unreal Engine SDK](./ue.md).
   E2E PASS(2026-10-07: 객체 6 / 삼각형 288 / 경로 1 → 346 → 1).
-- **Unity**: **SoundTrace › Wwise › Install SimpleST Wwise Plug-in...** 메뉴가 Wwise Unity 통합의 DSP 폴더에
-  플러그인을 복사합니다. 엔진은 SoundTrace의 `SimpleSTRealtime`을 공유하고 단위는 미터입니다 —
+- **Unity**: 런처에 Sound-tracing을 설치한 뒤 Launcher › Unity › **Integrate/Modify Wwise in Project**를 실행하면
+  런처가 플러그인을 Wwise Unity 통합의 DSP 폴더에 넣습니다. 엔진은 SoundTrace의 `SimpleSTRealtime`을 공유하고 단위는 미터입니다 —
   [Unity SDK](./unity.md#wwise와-함께-쓰기).
+
+![런처의 Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
 
 ![UE Wwise 설치 결과](/img/wwise/ue-install.png)
 
@@ -237,7 +240,7 @@ WwiseConsole로 프로젝트 생성 → WAAPI로 버스·이펙트·메타데이
 - 엔진 음원 수는 플랫폼 상한(`maxSources`)을 넘지 않습니다. 초과 보이스는 dry입니다.
 - 새 오디오 오브젝트를 처음 볼 때 오디오 스레드에서 작은 슬롯 하나를 할당합니다. 엔진 음원 자체는
   컨트롤 스레드에서 웜 풀의 음원을 재사용하거나 새로 만듭니다.
-- 런처 번들은 현재 Authoring + Windows_vc170만 포함합니다. Mac·Linux·Android·iOS 번들과 EULA·로고는 준비 중입니다.
+- 런처 번들은 현재 Authoring + Windows_vc170 + macOS(Xcode 16/26)를 포함합니다. Linux·Android 번들과 EULA·로고는 준비 중이고, iOS는 정적 링크라 번들 대상이 아닙니다.
 - Wwise 저작툴 GUI 수동 오디션은 아직 기록되지 않았습니다.
 
 ## 로그 / 환경변수

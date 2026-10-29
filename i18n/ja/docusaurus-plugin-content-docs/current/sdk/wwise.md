@@ -16,7 +16,7 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 向け SimpleST Ob
 | Audiokinetic | CompanyID **325**、PluginID 1001（Renderer）· 1002（Source Settings）。ランチャーバンドル `Sound-tracing` |
 | Wwise | 2025.1（プラグインバイナリは SDK バージョンに紐づきます） |
 | プラットフォーム | Windows（vc170）· macOS · Linux · Android · iOS（静的）· Web（静的） |
-| 配布 | `SimpleST-wwise-release.zip`（プラットフォーム別 SDK + Authoring + ランチャーパッケージ + `install.py`、UE・Unity グルーを含む） |
+| 配布 | `SimpleST-wwise-release.zip`（プラットフォーム別 SDK + Authoring + ランチャーバンドル `launcher/` + `install.py`、UE・Unity グルーを含む） |
 | パートナー承認 | Community Partner Program 一次承認（2026-10-08）。最終承認は進行中 |
 
 ## 構造
@@ -60,13 +60,14 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 向け SimpleST Ob
 
 ![ランチャーバンドルのインストール](/img/wwise/launcher-bundle.png)
 
-- **Windows**: 配布 `packages/` のランチャーバンドル（`bundle.json` + `*.tar.xz`）を Audiokinetic Launcher の
-  **Add from directory** でインストールするか、配布フォルダーを Wwise インストールフォルダー（`SDK/…`、`Authoring/…`）にそのまま
-  上書きします。Authoring プラグインは `Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + エンジン + HRTF です。
-- **macOS**: Wwise Authoring は Mac でも **Windows DLL** を使います。インストール先は
-  `/Library/Application Support/Audiokinetic/Wwise <version>/Authoring/x64/Release/bin/Plugins` で、
-  `python3 install.py wwise --payload win --wwise-root "/Applications/Audiokinetic/Wwise_2025.1.11.9262"` で
-  インストールします。既存ファイルは `bin/.simplest-backups` に保管されます。
+Audiokinetic Launcher › **Plug-ins › Add from directory** で配布物の `launcher` フォルダー（`bundle.json` + `*.tar.xz`）を
+選ぶと **Sound-tracing** がインストールされます（Windows・macOS 共通）。バンドルには Authoring プラグインと Windows（vc170）・macOS
+（Xcode 16/26）のサウンドエンジンプラグインが入っています。Authoring プラグインは Mac でも **Windows DLL**
+（`Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + エンジン + HRTF）です。
+
+ランチャーを使わずに入れる場合は、配布フォルダーを Wwise インストールフォルダー（`SDK/…`、`Authoring/…`）に上書きするか、
+`python3 install.py wwise --payload win --wwise-root "/Applications/Audiokinetic/Wwise_2025.1.11.9262"` を使います
+（既存ファイルは `bin/.simplest-backups` に保管）。
 
 ### ゲームランタイム（SoundEngine）
 
@@ -201,13 +202,15 @@ UE SoundTracing の `SetSoundTracingEnabled` が Wwise モードでこの関数�
 
 ## UE · Unity 統合
 
-- **Unreal Engine**: `install.py /path/to/Game.uproject --wwise <wwise/SDK>` が `SimpleSTWwise`・`SimpleSTRealtime`・HRTF を
-  `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` に入れます。SoundTracing プラグインは Wwise モードでビルドされ、
+- **Unreal Engine**: ランチャーに Sound-tracing をインストールしてから Launcher › Unreal Engine › **Modify Wwise in Project** を実行すると、
+  ランチャーが `SimpleSTWwise`・`SimpleSTRealtime`・HRTF を `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` にコピーします。SoundTracing プラグインは Wwise モードでビルドされ、
   `sceneRatio = 0.01` と Unreal の軸を設定してジオメトリのみを登録します — [Unreal Engine SDK](./ue.md)。
   E2E PASS（2026-10-07: オブジェクト 6 / 三角形 288 / 経路 1 → 346 → 1）。
-- **Unity**: **SoundTrace › Wwise › Install SimpleST Wwise Plug-in...** メニューが Wwise Unity 統合の DSP フォルダーに
-  プラグインをコピーします。エンジンは SoundTrace の `SimpleSTRealtime` を共有し、単位はメートルです —
+- **Unity**: ランチャーに Sound-tracing をインストールしてから Launcher › Unity › **Integrate/Modify Wwise in Project** を実行すると、
+  ランチャーがプラグインを Wwise Unity 統合の DSP フォルダーに入れます。エンジンは SoundTrace の `SimpleSTRealtime` を共有し、単位はメートルです —
   [Unity SDK](./unity.md#wwiseと併用する)。
+
+![ランチャーの Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
 
 ![UE Wwise インストール結果](/img/wwise/ue-install.png)
 
@@ -237,7 +240,7 @@ WwiseConsole でプロジェクト生成 → WAAPI でバス・エフェクト�
 - エンジン音源数はプラットフォームの上限（`maxSources`）を超えません。超過したボイスは dry です。
 - 新しいオーディオオブジェクトを初めて見たとき、オーディオスレッドで小さなスロットを 1 つ割り当てます。エンジン音源そのものは
   コントロールスレッドでウォームプールの音源を再利用するか、新しく作ります。
-- ランチャーバンドルは現在 Authoring + Windows_vc170 のみを含みます。Mac・Linux・Android・iOS バンドルと EULA・ロゴは準備中です。
+- ランチャーバンドルは現在 Authoring + Windows_vc170 + macOS（Xcode 16/26）を含みます。Linux・Android バンドルと EULA・ロゴは準備中で、iOS は静的リンクのためバンドル対象外です。
 - Wwise オーサリングツール GUI での手動オーディションはまだ記録されていません。
 
 ## ログ / 環境変数

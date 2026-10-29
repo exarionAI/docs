@@ -17,7 +17,7 @@ uploads geometry.
 | Audiokinetic | CompanyID **325**, PluginID 1001 (Renderer) · 1002 (Source Settings). Launcher bundle `Sound-tracing` |
 | Wwise | 2025.1 (plug-in binaries are tied to the SDK version) |
 | Platforms | Windows (vc170) · macOS · Linux · Android · iOS (static) · Web (static) |
-| Distribution | `SimpleST-wwise-release.zip` (per-platform SDK + Authoring + launcher package + `install.py`, includes UE and Unity glue) |
+| Distribution | `SimpleST-wwise-release.zip` (per-platform SDK + Authoring + launcher bundle `launcher/` + `install.py`, includes UE and Unity glue) |
 | Partner approval | Community Partner Program first-stage approval (2026-10-08). Final approval in progress |
 
 ## Structure
@@ -66,15 +66,15 @@ uploads geometry.
 
 ![Launcher bundle installation](/img/wwise/launcher-bundle.png)
 
-- **Windows**: install the launcher bundle (`bundle.json` + `*.tar.xz`) from the distribution
-  `packages/` with **Add from directory** in the Audiokinetic Launcher, or overwrite the Wwise
-  installation folder (`SDK/…`, `Authoring/…`) with the distribution folder as is. The Authoring
-  plug-in is `Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + the engine + the HRTF.
-- **macOS**: Wwise Authoring uses the **Windows DLL** on Mac as well. The install location is
-  `/Library/Application Support/Audiokinetic/Wwise <version>/Authoring/x64/Release/bin/Plugins`;
-  install with
-  `python3 install.py wwise --payload win --wwise-root "/Applications/Audiokinetic/Wwise_2025.1.11.9262"`.
-  Existing files are kept in `bin/.simplest-backups`.
+In Audiokinetic Launcher › **Plug-ins › Add from directory**, choose the distribution's `launcher` folder
+(`bundle.json` + `*.tar.xz`) to install **Sound-tracing** (same on Windows and macOS). The bundle contains the
+Authoring plug-in and the Windows (vc170) and macOS (Xcode 16/26) sound engine plug-ins. The Authoring plug-in
+is the **Windows DLL** on Mac as well (`Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + the engine + the HRTF).
+
+To install without the Launcher, overwrite the Wwise installation folder (`SDK/…`, `Authoring/…`) with the
+distribution folder, or use
+`python3 install.py wwise --payload win --wwise-root "/Applications/Audiokinetic/Wwise_2025.1.11.9262"`
+(existing files are kept in `bin/.simplest-backups`).
 
 ### Game runtime (SoundEngine)
 
@@ -226,14 +226,17 @@ UE SoundTracing's `SetSoundTracingEnabled` calls this function in Wwise mode —
 
 ## UE and Unity integration
 
-- **Unreal Engine**: `install.py /path/to/Game.uproject --wwise <wwise/SDK>` puts `SimpleSTWwise`,
-  `SimpleSTRealtime`, and the HRTF into `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`. The
+- **Unreal Engine**: after installing Sound-tracing in the Launcher, run Launcher › Unreal Engine ›
+  **Modify Wwise in Project**; the Launcher copies `SimpleSTWwise`, `SimpleSTRealtime`, and the HRTF into
+  `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`. The
   SoundTracing plugin builds in Wwise mode, sets `sceneRatio = 0.01` and the Unreal axes, and only
   uploads geometry — see [Unreal Engine SDK](./ue.md). E2E PASS (2026-10-07: 6 objects / 288
   triangles / paths 1 → 346 → 1).
-- **Unity**: the **SoundTrace › Wwise › Install SimpleST Wwise Plug-in...** menu copies the plug-in
-  into the DSP folder of the Wwise Unity integration. The engine shares SoundTrace's
+- **Unity**: after installing Sound-tracing in the Launcher, run Launcher › Unity › **Integrate/Modify Wwise
+  in Project**; the Launcher puts the plug-in into the DSP folder of the Wwise Unity integration. The engine shares SoundTrace's
   `SimpleSTRealtime` and units are meters — see [Unity SDK](./unity.md#using-with-wwise).
+
+![Modify Wwise in Project in the Launcher](/img/wwise/launcher-modify-project.png)
 
 ![UE Wwise install result](/img/wwise/ue-install.png)
 
@@ -265,8 +268,8 @@ linking (2026-10-06).
 - The engine source count does not exceed the platform cap (`maxSources`). Excess voices are dry.
 - When a new audio object is first seen, one small slot is allocated on the audio thread. The engine
   source itself is reused from the warm pool or newly created on the control thread.
-- The launcher bundle currently contains only Authoring + Windows_vc170. The Mac, Linux, Android, and
-  iOS bundles plus the EULA and logo are in preparation.
+- The launcher bundle currently contains Authoring + Windows_vc170 + macOS (Xcode 16/26). Linux and Android bundles, the
+  EULA and the logo are still in progress; iOS links statically and is not deployed through the bundle.
 - Manual audition in the Wwise authoring GUI has not been recorded yet.
 
 ## Logging / environment variables

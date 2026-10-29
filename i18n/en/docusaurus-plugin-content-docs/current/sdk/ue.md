@@ -75,22 +75,29 @@ Source Settings assets are not used — the middleware plug-in's parameters take
 
 ### FMOD mode installation
 
-```bash
-python3 install.py /path/to/Game.uproject --fmod <fmod/plugins folder>
-```
+`Unreal/SoundTracing` in the FMOD distribution (`SimpleST-fmod-release.zip`) is the **FMOD edition**.
+`ThirdParty/SimpleSTFmod/<Plat>/` contains `SimpleSTFmod`, `SimpleSTRealtime`, and the HRTF.
 
-`--fmod` copies `SimpleSTFmod`, `SimpleSTRealtime`, and the HRTF into `Plugins/FMODStudio/Binaries/<Plat>/`
-and adds `+PluginFiles=SimpleSTFmod` to `Config/DefaultEngine.ini` (= Project Settings › FMOD Studio ›
-Plugin Files). Then, in FMOD Studio, put SimpleST Listener on the master bus and SimpleST Source on
-the master track of 3D events — see [FMOD plug-in](./fmod.md).
+1. Put FMOD for Unreal into the project's `Plugins/FMODStudio`.
+2. Put `Unreal/SoundTracing` into the project's `Plugins/` and build. During the build, SoundTracing copies
+   the files above into `Plugins/FMODStudio/Binaries/<Plat>/` and adds `+PluginFiles=SimpleSTFmod` to
+   `Config/DefaultEngine.ini` (= Project Settings › FMOD Studio › Plugin Files). Files that are already
+   there are skipped. Win64 · Mac.
+3. Then, in FMOD Studio, put SimpleST Listener on the master bus and SimpleST Source on
+   the master track of 3D events — see [FMOD plug-in](./fmod.md).
 
 ![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
 
 ### Wwise mode installation
 
-```bash
-python3 install.py /path/to/Game.uproject --wwise <wwise/SDK folder>
-```
+The Wwise plug-in is installed by the Audiokinetic Launcher, like any other Wwise plug-in.
+
+1. In Launcher › **Plug-ins › Add from directory**, choose the `launcher` folder of the Wwise distribution and install **Sound-tracing**.
+2. Run Launcher › **Unreal Engine › Modify Wwise in Project** (Integrate the first time). The Launcher copies the
+   Wwise SDK plug-ins (including Sound-tracing) into `WwiseSoundEngine/ThirdParty`.
+3. Put `SoundTracing` into the project's `Plugins/` and build.
+
+![Modify Wwise in Project in the Launcher](/img/wwise/launcher-modify-project.png)
 
 At module startup SoundTracing grabs the plug-in, sets `sceneRatio = 0.01` (Wwise Unreal units = cm),
 and notifies it of the Unreal axes (+Z up) with `SimpleSTWwise_SetWorldAxes(UNREAL)`, because Wwise

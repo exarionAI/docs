@@ -70,22 +70,28 @@ YourProject/
 
 ### FMOD 模式安装
 
-```bash
-python3 install.py /path/to/Game.uproject --fmod <fmod/plugins 文件夹>
-```
+FMOD 发行包（`SimpleST-fmod-release.zip`）中的 `Unreal/SoundTracing` 是 **FMOD 版**。
+`ThirdParty/SimpleSTFmod/<Plat>/` 中包含 `SimpleSTFmod`、`SimpleSTRealtime`、HRTF。
 
-`--fmod` 把 `SimpleSTFmod`、`SimpleSTRealtime`、HRTF 复制到 `Plugins/FMODStudio/Binaries/<Plat>/`，
-并在 `Config/DefaultEngine.ini` 中加入 `+PluginFiles=SimpleSTFmod`（= Project Settings › FMOD Studio ›
-Plugin Files）。之后在 FMOD Studio 中，在主总线上放置 SimpleST Listener，在 3D 事件的主轨道上放置
-SimpleST Source — 参见 [FMOD 插件](./fmod.md)。
+1. 把 FMOD for Unreal 放入项目的 `Plugins/FMODStudio`。
+2. 把 `Unreal/SoundTracing` 放入项目的 `Plugins/` 并构建。构建时 SoundTracing 会把上述文件复制到
+   `Plugins/FMODStudio/Binaries/<Plat>/`，并在 `Config/DefaultEngine.ini` 中加入 `+PluginFiles=SimpleSTFmod`
+   （= Project Settings › FMOD Studio › Plugin Files）。已有相同文件时跳过。Win64、Mac。
+3. 之后在 FMOD Studio 中，在主总线上放置 SimpleST Listener，在 3D 事件的主轨道上放置
+   SimpleST Source — 参见 [FMOD 插件](./fmod.md)。
 
 ![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
 
 ### Wwise 模式安装
 
-```bash
-python3 install.py /path/to/Game.uproject --wwise <wwise/SDK 文件夹>
-```
+Wwise 插件与其他 Wwise 插件一样由 Audiokinetic Launcher 安装。
+
+1. 在 Launcher › **Plug-ins › Add from directory** 中选择 Wwise 发行包的 `launcher` 文件夹，安装 **Sound-tracing**。
+2. 运行 Launcher › **Unreal Engine › Modify Wwise in Project**（首次为 Integrate）。Launcher 会把 Wwise SDK 的
+   插件（包括 Sound-tracing）复制到 `WwiseSoundEngine/ThirdParty`。
+3. 把 `SoundTracing` 放入项目的 `Plugins/` 并构建。
+
+![Launcher 的 Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
 
 SoundTracing 在模块启动时获取插件，设置 `sceneRatio = 0.01`（Wwise Unreal 单位 = cm），
 并通过 `SimpleSTWwise_SetWorldAxes(UNREAL)` 通知 Unreal 坐标轴（+Z 向上）。这是因为

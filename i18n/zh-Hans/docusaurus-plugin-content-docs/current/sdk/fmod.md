@@ -14,7 +14,7 @@ description: SimpleSTFmod — 面向 FMOD Studio / FMOD Engine 的 SimpleST DSP 
 | 插件版本 | v0.3.0（SimpleST 2.22.0，SDK 发行版 2.22.0-jhj.5 — 4 频段 [EQ](#eq)、听者 roll）。上一版本：v0.3.0（SimpleST 2.18.2）、v0.2.0（SimpleST 2.12.0）。FMOD 看到的 DSP 描述版本为 0.3.0（SDK 2.18.2 早期发行包显示为 0.2.0） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 构建 = 2.00 ~ 2.04，204 构建 = 2.04+） |
 | 平台 | Windows x64 · macOS · Linux · Android · iOS（静态）· Web（静态，FMOD HTML5 pthreads） |
-| 分发 | `SimpleST-fmod-release.zip`（各平台 `plugins/` + `install.py`，含 UE/Unity 胶水代码） |
+| 分发 | `SimpleST-fmod-release.zip`（各平台 `plugins/` + `install.py`，含 FMOD 版 UE 插件和 Unity 包） |
 | 商用分发条件 | 需与 FMOD（sales@fmod.com）确认 |
 
 ## 结构
@@ -215,15 +215,16 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 FMOD 模式下会调用此函�
 
 ![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
 
-- **Unreal Engine**：`install.py /path/to/Game.uproject --fmod <plugins>` 把插件、引擎、HRTF 放入
-  `Plugins/FMODStudio/Binaries/<Plat>/`，并在 `DefaultEngine.ini` 中加入 `+PluginFiles=SimpleSTFmod`。
+- **Unreal Engine**：把发行包中的 `Unreal/SoundTracing`（FMOD 版）放入项目的 `Plugins/` 并构建，
+  构建会把插件、引擎、HRTF 放入 `Plugins/FMODStudio/Binaries/<Plat>/`，并在 `DefaultEngine.ini` 中加入
+  `+PluginFiles=SimpleSTFmod`。
   SoundTracing 插件以 FMOD 模式构建，只上传几何体 — 参见 [Unreal Engine SDK](./ue.md)。
   UE 5.7 + FMOD for Unreal 2.04 试听验证（2026-10-15）。
-- **Unity**：**SoundTrace › FMOD › Install SimpleST FMOD Plug-in...** 菜单执行 DLL/bundle 复制和
-  Dynamic Plugins 注册 — 参见 [Unity SDK](./unity.md#与-fmod-配合使用)。Unity 6000.3 + FMOD for Unity 2.04
-  E2E 通过。
+- **Unity**：拖放 FMOD 版包（`SoundTrace-SimpleST-FMOD-release.unitypackage`）后，编辑器加载时
+  SoundTrace 会把 DLL/bundle 复制到 FMOD 插件文件夹并注册到 Dynamic Plugins — 参见
+  [Unity SDK](./unity.md#与-fmod-配合使用)。Unity 6000.3 + FMOD for Unity 2.04 E2E 通过。
 
-![Unity FMOD 安装菜单](/img/fmod/unity-install-menu.png)
+![导入 FMOD 版包](/img/fmod/unity-fmod-edition-import.png)
 
 ## 验证结果（2026-10-01 · FMOD 2.04.00）
 

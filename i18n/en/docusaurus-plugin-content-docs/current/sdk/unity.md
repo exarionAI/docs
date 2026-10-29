@@ -21,7 +21,7 @@ component names, script GUIDs, and sample scenes are unchanged.
 | Item | Current package |
 |---|---|
 | Unity | 2022.3 LTS or later (verified on 2022.3.62f2 · 6000.3) |
-| Package | `SoundTrace-SimpleST-release.unitypackage` → `Assets/SoundTrace` |
+| Package | `SoundTrace-SimpleST-release.unitypackage` (default, for Wwise) / `SoundTrace-SimpleST-FMOD-release.unitypackage` (FMOD edition) → `Assets/SoundTrace` |
 | Bundled native plug-ins | Windows x64 · macOS Universal · Linux x86_64 · Android (ARMv7/ARM64/x86_64, API 28+ — the engine `.so` links `libaaudio` directly, so this is checked at build time) · iOS 15+ (device/simulator XCFramework) · WebGL |
 | WebGL | Supported — standalone pthread WASM + AudioWorklet path (`OnAudioFilterRead` not used) |
 | GPU | None. `SoundTraceManager.IsGpuPropagate` is always `false` |
@@ -38,8 +38,10 @@ component names, script GUIDs, and sample scenes are unchanged.
 
 ```bash
 python3 install.py /path/to/UnityProject
-# with the FMOD / Wwise plug-in as well: --fmod <plugins folder> or --wwise <plugins folder>
 ```
+
+To use it with FMOD or Wwise, follow [Using with FMOD](#using-with-fmod) and [Using with Wwise](#using-with-wwise) below.
+For FMOD, importing the FMOD edition package is all you need; the Wwise plug-in is installed by the Audiokinetic Launcher.
 
 Import the samples by selecting the SoundTrace SDK in the Package Manager and choosing
 `Samples > Demo Assets > Import`. The sample UI compiles only when `com.unity.ugui` is present.
@@ -358,12 +360,13 @@ DSPs in FMOD Studio, and SoundTrace only uploads geometry and materials to the p
 `SoundTraceManager` + `SoundTraceObject`. `SoundTraceListener` / `SoundTraceSource` log a warning
 and disable themselves.
 
-![Unity FMOD install menu](/img/fmod/unity-install-menu.png)
+![Importing the FMOD edition package](/img/fmod/unity-fmod-edition-import.png)
 
-1. Install FMOD for Unity 2.04 (embed a tgz install under `Packages/`).
-2. In the **SoundTrace › FMOD › Install SimpleST FMOD Plug-in...** menu, choose the folder containing
-   `SimpleSTFmod` (for example `fmod/plugins`, or `mac/plugins` on Mac). The DLL/bundle is copied into
-   the FMOD plug-in folder and registered under FMOD Settings › Dynamic Plugins.
+1. Add FMOD for Unity 2.04 to the project (`Assets/Plugins/FMOD`; if you installed it from a tgz, embed it under `Packages/`).
+2. Drag and drop the **FMOD edition** package `SoundTrace-SimpleST-FMOD-release.unitypackage` into the Project window.
+   There is no separate menu. The package's `Runtime/Plugins/FMOD` contains `SimpleSTFmod` (Windows x64 · macOS),
+   and when the editor loads, SoundTrace copies it into the FMOD plug-in folder and registers it under
+   FMOD Settings › Dynamic Plugins. If you add FMOD later, it does the same on the next load.
 3. In FMOD Studio, put **SimpleST Listener** on the master bus and **SimpleST Source** on the master
    track of 3D events in place of the FMOD Spatializer — see [FMOD plug-in](./fmod.md).
 4. In the scene, place `SoundTraceManager`, `SoundTraceObject` for the geometry, and the FMOD
@@ -378,14 +381,19 @@ with Unity 6000.3 + FMOD for Unity 2.04 (objects 0→6→0, paths 1→266→1).
 When `SimpleSTWwise` is present in the DSP folder of the Wwise Unity integration, SoundTrace runs in
 **Wwise integration** mode (FMOD takes precedence if both are present).
 
-![Unity Wwise install menu](/img/wwise/unity-install-menu.png)
+SoundTrace uses the default package, and the Wwise plug-in is installed by the Audiokinetic Launcher like any other Wwise plug-in.
 
-1. Install the Wwise Unity integration with the Audiokinetic Launcher.
-2. In the **SoundTrace › Wwise › Install SimpleST Wwise Plug-in...** menu, choose the folder containing
-   `SimpleSTWwise`. It is copied into the DSP folder and loaded by the Wwise sound engine.
-3. In the Wwise project, put **Sound-tracing Renderer** on an Audio Objects bus and route 3D sounds to
+![Sound-tracing installed in the Launcher](/img/wwise/launcher-bundle.png)
+
+1. Drag and drop the default package `SoundTrace-SimpleST-release.unitypackage` into the Project window.
+2. In Audiokinetic Launcher › **Plug-ins › Add from directory**, choose the `launcher` folder of the Wwise
+   distribution and install **Sound-tracing**.
+3. Run Launcher › **Unity › Integrate (or Modify) Wwise in Project**. The Launcher puts the plug-ins installed
+   in the Wwise SDK (including Sound-tracing) into the DSP folder of the Wwise Unity integration, and the Wwise
+   sound engine loads them. Run it with the Unity editor closed.
+4. In the Wwise project, put **Sound-tracing Renderer** on an Audio Objects bus and route 3D sounds to
    that bus (disable or flatten Attenuation) — see [Wwise plug-in](./wwise.md).
-4. In the scene, place `AkInitializer`, `AkAudioListener`, `AkGameObj` on the emitters, plus
+5. In the scene, place `AkInitializer`, `AkAudioListener`, `AkGameObj` on the emitters, plus
    `SoundTraceManager` and `SoundTraceObject`. Wwise Unity units are meters, so `sceneRatio = 1`.
 
 ## WebGL

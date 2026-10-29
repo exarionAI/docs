@@ -54,9 +54,7 @@ SimpleST 저장소의 `engine/ABI/*.h`, `plugins/*/README.md`다.
 | `ue/integration-mode.png` | Build.cs가 Wwise → FMODStudio → Native 순으로 통합을 고르는 도판 | sdk/ue |
 | `fmod/structure.png` | SimpleSTFmod 구조도(Source DSP → SystemRuntime → Listener DSP) | sdk/fmod |
 | `fmod/ue-plugin-files.png` | UE Project Settings › FMOD Studio › Plugin Files의 SimpleSTFmod | sdk/fmod, sdk/ue |
-| `fmod/unity-install-menu.png` | Unity SoundTrace › FMOD › Install 메뉴와 Dynamic Plugins 등록 결과 | sdk/fmod, sdk/unity |
 | `wwise/structure.png` | SimpleSTWwise 구조도(Audio Objects 버스 → Sound-tracing Renderer) | sdk/wwise |
-| `wwise/unity-install-menu.png` | Unity SoundTrace › Wwise › Install 메뉴 | sdk/wwise, sdk/unity |
 
 실제 이미지가 이미 있는 것: `web/demo-*.png`, `intro/path-visualization.png`(공개 Sound-tracing 데모
 스크린샷 복사), `unity/*.png`(Manager/Listener/Source/Object/PathVisualizer 인스펙터는 2026-10-29 SDK 2.22로 재촬영,
@@ -65,6 +63,10 @@ SimpleST 저장소의 `engine/ABI/*.h`, `plugins/*/README.md`다.
 2026-10-29 실제 화면으로 교체(macOS, SDK 2.22.0-jhj.5): UE 5.7(Lyra) Project Settings·Listener·Source Settings 에셋·Object 컴포넌트·
 Mac 오디오 플러그인 설정, Wwise 2025.1.11 버스·Renderer·Source Settings 메타데이터·Positioning·Launcher·UE 설치 결과,
 FMOD Studio 2.04 마스터 버스 Listener·이벤트 Source·Source 덱·플러그인 폴더. 위 표에 남은 것이 아직 플레이스홀더다.
+
+2026-10-29 설치 흐름 변경(SDK 2.22.0-jhj.6, Unity·UE 설치 메뉴 제거)으로 `fmod/unity-install-menu.png`·`wwise/unity-install-menu.png`를
+지우고 `fmod/unity-fmod-edition-import.png`(FMOD 에디션 패키지 가져오기)·`wwise/launcher-modify-project.png`(런처 Modify Wwise in Project)를
+새로 찍었다. `wwise/launcher-bundle.png`는 Sound-tracing이 설치된 목록으로 다시 찍었다.
 
 플레이스홀더를 다시 만들려면 `scripts/`가 아니라 세션 스크래치의 `placeholder.swift`를 썼다
 (AppKit으로 텍스트를 그린 PNG). 같은 형식이 필요하면 아무 PNG나 1280×720으로 덮어쓰면 된다.

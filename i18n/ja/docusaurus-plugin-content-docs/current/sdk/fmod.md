@@ -14,7 +14,7 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine 向け SimpleST DSP プ�
 | プラグインバージョン | v0.3.0（SimpleST 2.22.0、SDK リリース 2.22.0-jhj.5 — 4 バンド [EQ](#eq)、リスナー roll）。以前のリリース: v0.3.0（SimpleST 2.18.2）、v0.2.0（SimpleST 2.12.0）。FMOD が参照する DSP ディスクリプションのバージョンは 0.3.0 です（SDK 2.18.2 の初期配布物は 0.2.0 と表示） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 ビルド = 2.00 ~ 2.04、204 ビルド = 2.04+） |
 | プラットフォーム | Windows x64 · macOS · Linux · Android · iOS（静的）· Web（静的、FMOD HTML5 pthreads） |
-| 配布 | `SimpleST-fmod-release.zip`（プラットフォーム別 `plugins/` + `install.py`、UE・Unity グルーを含む） |
+| 配布 | `SimpleST-fmod-release.zip`（プラットフォーム別 `plugins/` + `install.py`、FMOD エディションの UE プラグイン・Unity パッケージを含む） |
 | 商用配布条件 | FMOD（sales@fmod.com）への確認が必要 |
 
 ## 構造
@@ -218,14 +218,16 @@ UE SoundTracing の `SetSoundTracingEnabled` が FMOD モードでこの関数�
 
 ![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
 
-- **Unreal Engine**: `install.py /path/to/Game.uproject --fmod <plugins>` が `Plugins/FMODStudio/Binaries/<Plat>/` に
-  プラグイン・エンジン・HRTF を入れ、`DefaultEngine.ini` に `+PluginFiles=SimpleSTFmod` を追加します。SoundTracing
+- **Unreal Engine**: 配布物の `Unreal/SoundTracing`（FMOD エディション）をプロジェクトの `Plugins/` に入れてビルドすると、
+  ビルドがプラグイン・エンジン・HRTF を `Plugins/FMODStudio/Binaries/<Plat>/` に入れ、`DefaultEngine.ini` に
+  `+PluginFiles=SimpleSTFmod` を追加します。SoundTracing
   プラグインは FMOD モードでビルドされ、ジオメトリのみを登録します — [Unreal Engine SDK](./ue.md)。UE 5.7 + FMOD for
   Unreal 2.04 で聴取検証（2026-10-15）。
-- **Unity**: **SoundTrace › FMOD › Install SimpleST FMOD Plug-in...** メニューが DLL/bundle のコピーと Dynamic Plugins
-  登録を行います — [Unity SDK](./unity.md#fmodと併用する)。Unity 6000.3 + FMOD for Unity 2.04 で E2E 通過。
+- **Unity**: FMOD エディションパッケージ（`SoundTrace-SimpleST-FMOD-release.unitypackage`）をドラッグ＆ドロップすると、
+  エディターのロード時に SoundTrace が DLL/bundle を FMOD プラグインフォルダーにコピーし、Dynamic Plugins に登録します —
+  [Unity SDK](./unity.md#fmodと併用する)。Unity 6000.3 + FMOD for Unity 2.04 で E2E 通過。
 
-![Unity FMOD インストールメニュー](/img/fmod/unity-install-menu.png)
+![FMOD エディションパッケージのインポート](/img/fmod/unity-fmod-edition-import.png)
 
 ## 検証結果（2026-10-01 · FMOD 2.04.00）
 

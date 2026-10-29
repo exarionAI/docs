@@ -72,22 +72,28 @@ FMOD·Wwise 모드에서는 `ListenerComponent`의 출력 설정(HRTF·출력 �
 
 ### FMOD 모드 설치
 
-```bash
-python3 install.py /path/to/Game.uproject --fmod <fmod/plugins 폴더>
-```
+FMOD 배포물(`SimpleST-fmod-release.zip`)의 `Unreal/SoundTracing`은 **FMOD 에디션**입니다.
+`ThirdParty/SimpleSTFmod/<Plat>/`에 `SimpleSTFmod`·`SimpleSTRealtime`·HRTF가 들어 있습니다.
 
-`--fmod`는 `SimpleSTFmod`·`SimpleSTRealtime`·HRTF를 `Plugins/FMODStudio/Binaries/<Plat>/`에 복사하고
-`Config/DefaultEngine.ini`에 `+PluginFiles=SimpleSTFmod`를 넣습니다(= Project Settings › FMOD Studio ›
-Plugin Files). 이후 FMOD Studio에서 마스터 버스에 SimpleST Listener, 3D 이벤트 마스터 트랙에
+1. FMOD for Unreal을 프로젝트 `Plugins/FMODStudio`에 넣습니다.
+2. `Unreal/SoundTracing`을 프로젝트 `Plugins/`에 넣고 빌드합니다. 빌드할 때 SoundTracing이 위 파일을
+   `Plugins/FMODStudio/Binaries/<Plat>/`에 복사하고 `Config/DefaultEngine.ini`에 `+PluginFiles=SimpleSTFmod`를
+   넣습니다(= Project Settings › FMOD Studio › Plugin Files). 이미 같은 파일이 있으면 건너뜁니다. Win64·Mac.
+3. 이후 FMOD Studio에서 마스터 버스에 SimpleST Listener, 3D 이벤트 마스터 트랙에
 SimpleST Source를 넣습니다 — [FMOD 플러그인](./fmod.md).
 
 ![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
 
 ### Wwise 모드 설치
 
-```bash
-python3 install.py /path/to/Game.uproject --wwise <wwise/SDK 폴더>
-```
+Wwise 플러그인은 다른 Wwise 플러그인처럼 Audiokinetic Launcher가 넣습니다.
+
+1. Launcher › **Plug-ins › Add from directory**에서 Wwise 배포물의 `launcher` 폴더를 골라 **Sound-tracing**을 설치합니다.
+2. Launcher › **Unreal Engine › Modify Wwise in Project**(처음이면 Integrate)를 실행합니다. 런처가 Wwise SDK의
+   플러그인(Sound-tracing 포함)을 `WwiseSoundEngine/ThirdParty`로 복사합니다.
+3. `SoundTracing`을 프로젝트 `Plugins/`에 넣고 빌드합니다.
+
+![런처의 Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
 
 SoundTracing은 모듈 시작 때 플러그인을 잡아 `sceneRatio = 0.01`(Wwise Unreal 단위 = cm)로 설정하고
 `SimpleSTWwise_SetWorldAxes(UNREAL)`로 언리얼 축(+Z 위)을 알립니다. Wwise for Unreal 2024.1+는

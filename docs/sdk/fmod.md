@@ -14,7 +14,7 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine용 SimpleST DSP 플러�
 | 플러그인 버전 | v0.3.0 (SimpleST 2.22.0, SDK 릴리스 2.22.0-jhj.5 — 4밴드 [EQ](#eq), 리스너 roll). 이전 릴리스: v0.3.0 (SimpleST 2.18.2), v0.2.0 (SimpleST 2.12.0). FMOD가 보는 DSP 디스크립션 버전은 0.3.0입니다(SDK 2.18.2 초기 배포본은 0.2.0으로 표시) |
 | FMOD | Studio / Engine 2.03 ~ 2.04 (plug-in SDK 110 빌드 = 2.00 ~ 2.04, 204 빌드 = 2.04+) |
 | 플랫폼 | Windows x64 · macOS · Linux · Android · iOS(정적) · Web(정적, FMOD HTML5 pthreads) |
-| 배포 | `SimpleST-fmod-release.zip` (플랫폼별 `plugins/` + `install.py`, UE·Unity 글루 포함) |
+| 배포 | `SimpleST-fmod-release.zip` (플랫폼별 `plugins/` + `install.py`, FMOD 에디션 UE 플러그인·Unity 패키지 포함) |
 | 상용 배포 조건 | FMOD(sales@fmod.com) 확인 필요 |
 
 ## 구조
@@ -217,14 +217,15 @@ UE SoundTracing의 `SetSoundTracingEnabled`가 FMOD 모드에서 이 함수를 �
 
 ![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
 
-- **Unreal Engine**: `install.py /path/to/Game.uproject --fmod <plugins>`가 `Plugins/FMODStudio/Binaries/<Plat>/`에
-  플러그인·엔진·HRTF를 넣고 `DefaultEngine.ini`에 `+PluginFiles=SimpleSTFmod`를 추가합니다. SoundTracing
-  플러그인은 FMOD 모드로 빌드되어 지오메트리만 올립니다 — [Unreal Engine SDK](./ue.md). UE 5.7 + FMOD for
+- **Unreal Engine**: 배포물의 `Unreal/SoundTracing`(FMOD 에디션)을 프로젝트 `Plugins/`에 넣고 빌드하면
+  빌드가 플러그인·엔진·HRTF를 `Plugins/FMODStudio/Binaries/<Plat>/`에 넣고 `DefaultEngine.ini`에
+  `+PluginFiles=SimpleSTFmod`를 추가합니다. SoundTracing 플러그인은 FMOD 모드로 빌드되어 지오메트리만 올립니다 — [Unreal Engine SDK](./ue.md). UE 5.7 + FMOD for
   Unreal 2.04 청취 검증(2026-10-15).
-- **Unity**: **SoundTrace › FMOD › Install SimpleST FMOD Plug-in...** 메뉴가 DLL/bundle 복사와 Dynamic Plugins
-  등록을 수행합니다 — [Unity SDK](./unity.md#fmod와-함께-쓰기). Unity 6000.3 + FMOD for Unity 2.04 E2E 통과.
+- **Unity**: FMOD 에디션 패키지(`SoundTrace-SimpleST-FMOD-release.unitypackage`)를 드래그 앤 드롭하면, 에디터가
+  로드될 때 SoundTrace가 DLL/bundle을 FMOD 플러그인 폴더에 복사하고 Dynamic Plugins에 등록합니다 —
+  [Unity SDK](./unity.md#fmod와-함께-쓰기). Unity 6000.3 + FMOD for Unity 2.04 E2E 통과.
 
-![Unity FMOD 설치 메뉴](/img/fmod/unity-install-menu.png)
+![FMOD 에디션 패키지 가져오기](/img/fmod/unity-fmod-edition-import.png)
 
 ## 검증 결과 (2026-10-01 · FMOD 2.04.00)
 

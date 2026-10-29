@@ -15,7 +15,7 @@ uploads geometry.
 | Plug-in version | v0.3.0 (SimpleST 2.22.0, SDK release 2.22.0-jhj.5 — 4-band [EQ](#eq), listener roll). Previous releases: v0.3.0 (SimpleST 2.18.2), v0.2.0 (SimpleST 2.12.0). The DSP description version FMOD sees is 0.3.0 (early SDK 2.18.2 builds showed 0.2.0) |
 | FMOD | Studio / Engine 2.03 ~ 2.04 (plug-in SDK 110 build = 2.00 ~ 2.04, 204 build = 2.04+) |
 | Platforms | Windows x64 · macOS · Linux · Android · iOS (static) · Web (static, FMOD HTML5 pthreads) |
-| Distribution | `SimpleST-fmod-release.zip` (per-platform `plugins/` + `install.py`, includes UE and Unity glue) |
+| Distribution | `SimpleST-fmod-release.zip` (per-platform `plugins/` + `install.py`, includes the FMOD edition UE plugin and Unity package) |
 | Commercial distribution | Requires confirmation from FMOD (sales@fmod.com) |
 
 ## Structure
@@ -237,15 +237,15 @@ UE SoundTracing's `SetSoundTracingEnabled` calls this function in FMOD mode — 
 
 ![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
 
-- **Unreal Engine**: `install.py /path/to/Game.uproject --fmod <plugins>` puts the plug-in, engine,
-  and HRTF into `Plugins/FMODStudio/Binaries/<Plat>/` and adds `+PluginFiles=SimpleSTFmod` to
-  `DefaultEngine.ini`. The SoundTracing plugin builds in FMOD mode and only uploads geometry — see
+- **Unreal Engine**: put the distribution's `Unreal/SoundTracing` (FMOD edition) into the project's
+  `Plugins/` and build; the build puts the plug-in, engine, and HRTF into `Plugins/FMODStudio/Binaries/<Plat>/`
+  and adds `+PluginFiles=SimpleSTFmod` to `DefaultEngine.ini`. The SoundTracing plugin builds in FMOD mode and only uploads geometry — see
   [Unreal Engine SDK](./ue.md). Listening verified on UE 5.7 + FMOD for Unreal 2.04 (2026-10-15).
-- **Unity**: the **SoundTrace › FMOD › Install SimpleST FMOD Plug-in...** menu copies the DLL/bundle
-  and registers it under Dynamic Plugins — see [Unity SDK](./unity.md#using-with-fmod). E2E passed on
-  Unity 6000.3 + FMOD for Unity 2.04.
+- **Unity**: drag and drop the FMOD edition package (`SoundTrace-SimpleST-FMOD-release.unitypackage`); when
+  the editor loads, SoundTrace copies the DLL/bundle into the FMOD plug-in folder and registers it under
+  Dynamic Plugins — see [Unity SDK](./unity.md#using-with-fmod). E2E passed on Unity 6000.3 + FMOD for Unity 2.04.
 
-![Unity FMOD install menu](/img/fmod/unity-install-menu.png)
+![Importing the FMOD edition package](/img/fmod/unity-fmod-edition-import.png)
 
 ## Verification results (2026-10-01 · FMOD 2.04.00)
 
