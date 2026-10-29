@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 title: SimpleST
-description: Sound Tracing の現行ネイティブエンジン SimpleST — C++20 幾何音響コア、2-DLL 公開 C ABI（ABI 6）、9バンド材質、Hybrid 初期反射、ホスト pull レンダー。
+description: Sound Tracing の現行ネイティブエンジン SimpleST — C++20 幾何音響コア、2-DLL 公開 C ABI（ABI 6）、9バンド材質、Hybrid 初期反射、パラメトリック EQ、ホスト pull レンダー。
 ---
 
 # SimpleST
@@ -18,7 +18,7 @@ description: Sound Tracing の現行ネイティブエンジン SimpleST — C++
 
 | 項目 | 値 |
 |---|---|
-| エンジンバージョン | **2.18.2**（`ST_VERSION_STRING`）、SDK リリース 2.18.2-jhj.7。以前のリリース: 2.12.0 |
+| エンジンバージョン | **2.22.0**（`ST_VERSION_STRING`）、SDK リリース 2.22.0-jhj.5。以前の SDK リリース: 2.18.2-jhj.7（エンジン 2.18.2）、2.12.0 |
 | 公開 ABI | **ABI 6**（`ST_ABI_VERSION`、3.0 クリーンブレーク）。2.12.0 以降の変更はすべて additive |
 | 主言語 | C++20（C ABI を公開、C11 ヘッダー互換） |
 | ビルドシステム | CMake 3.21+ · プラットフォーム別エントリポイント `mainBuild.sh` |
@@ -27,7 +27,7 @@ description: Sound Tracing の現行ネイティブエンジン SimpleST — C++
 | サンプルレート | エンジン内部は 44.1 kHz 固定、ホストレートは内蔵リサンプラーで変換 |
 | バンド | 9 オクターブバンド `63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz` |
 | 加速構造 | TinyBVH（既定）· BinnedSAH · HybridKD · LBVH · LBVH_SIMD |
-| テスト | 回帰ハーネス `SimpleST_demo` + CTest 90 余り |
+| テスト | 回帰ハーネス `SimpleST_demo` + CTest 110 余り |
 
 ## アーキテクチャ
 
@@ -63,8 +63,8 @@ SceneManager → STPropagator → STIRConverter ─┬→ STOnlineAuralizator  (
 
 | ヘッダー | コンテキスト | 関数プレフィックス | 役割 |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | リアルタイム伝搬 + オーディオレンダー（146 export） |
-| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | オフライン IR 計算・レンダー（116 export） |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | リアルタイム伝搬 + オーディオレンダー（181 export） |
+| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | オフライン IR 計算・レンダー（121 export） |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | 共通 POD・enum・capability ビット |
 
 命名規則は `st_<dll>_<family>_<verb>[_<what>]` で、family は
@@ -94,14 +94,15 @@ typedef struct STMaterialId { int32_t v; } STMaterialId;
 | material | `st_rt_material_create`、`st_rt_material_load_defaults` |
 | mesh / object | `st_rt_mesh_create`（材質 1 つ、または三角形ごとの材質インデックス）、`st_rt_mesh_set_material`、`st_rt_object_create[_q]`、`st_rt_object_set_transform[_q]`、`*_destroy` |
 | scene | `st_rt_scene_set_accel`、`st_rt_scene_set_triangle_intersection`、`st_rt_scene_get_stats`、`st_rt_scene_raycast` |
-| source | `st_rt_source_create`、`set_position/direction/velocity`、`set_orientation_q`、`set_directivity`、`set_axis_attenuation`、`set_energy`、`set_path_enabled`、`set_path_volume`、`set_ray_count`、`set_depth`、`set_transport_refresh_steps` |
+| source | `st_rt_source_create`、`set_position/direction/velocity`、`set_orientation_q`、`set_directivity`、`set_axis_attenuation`、`set_energy`、`set_path_enabled`、`set_path_volume`、`set_ray_count`、`set_depth`、`set_transport_refresh_steps`、`set_parametric_eq` / `set_eq`（ソース EQ） |
 | source オーディオ入力 | `st_rt_source_set_audio_file`（WAV/FLAC/MP3/Ogg）、`st_rt_source_attach_stream` + `write_stream` + `get_stream_status`（ホスト PCM）、`st_rt_source_set_audio_clip` / `set_audio_clip_asset`（キャッシュクリップ）、`clear_audio` |
 | source 再生制御 | `st_rt_source_play/pause/stop/seek`、`set_volume`（線形 0 ~ 16）、`set_pitch`（0.25 ~ 4）、`set_loop_count`、`st_rt_source_trigger`、`set_retrigger_interval` |
-| listener | `st_rt_listener_set_position/velocity/rotation`、`set_ray_count`、`set_ray_sampling_method` |
+| listener | `st_rt_listener_set_position/velocity/rotation`、`set_rotation_ypr`、`set_orientation_q`（2.22、頭部 roll を含む）、`set_ray_count`、`set_ray_sampling_method` |
 | 伝搬 | `st_rt_build`、`st_rt_build_dynamic`、`st_rt_propagate`、`st_rt_set_max_depth`、`st_rt_set_transmission_max_depth`、`st_rt_set_path_type_enabled`、`st_rt_set_lane_update_interval` |
 | 音響ポリシー | `st_rt_set_atmosphere`、`st_rt_set_physical_distance_attenuation`、`st_rt_set_acoustic_feature_enabled`、`st_rt_set_doppler_gain_mode`、`st_rt_set_late_coupling[_preset]`、`st_rt_set_early_late_band_energy_targets` |
-| render | `st_rt_render_start/stop`、`st_rt_render_process`（ホスト pull）、`set_options/get_options`、`set_spatializer`、`set_speaker_layout[_custom]`、`set_eq`、`set_master_gain_db`、`set_limiter_type`、`get_limiter_latency_samples`、`set_path_fade_time`、`set_max_delay_seconds`、`get_latency_frames`、`get_process_stats` |
+| render | `st_rt_render_start/stop`、`st_rt_render_process`（ホスト pull）、`set_options/get_options`、`set_spatializer`、`set_speaker_layout[_custom]`、`set_parametric_eq`、`set_eq`、`set_loudness_compensation`、`set_virtual_bass`、`set_master_gain_db`、`set_limiter_type`、`get_limiter_latency_samples`、`set_path_fade_time`、`set_max_delay_seconds`、`get_latency_frames`、`get_process_stats` |
 | スレッド | `st_rt_set_thread_attributes`、`st_rt_get_thread_inventory`、`STRT_CreateOptions.maxComputeThreads` |
+| 休止・実行 | `st_rt_idle`、`st_rt_run`、`st_rt_get_idle_state`、`STRT_CreateOptions.startIdle`（2.20、1 なら IDLE で開始し `st_rt_run` まで計算・レンダーが休止）、音源ごとの `st_rt_source_idle/run` |
 | メモリ予算 | `st_rt_set_memory_budget`、`st_rt_get_memory_budget`、`st_rt_get_memory_stats`、`STRT_CreateOptions.maxSources` — [音源メモリ予算](#音源メモリ予算) |
 | 診断 | `st_rt_get_timing`、`st_rt_ir_get_stats`、`st_rt_debug_acquire_snapshot`、`st_rt_debug_copy_visual_paths`、`st_rt_debug_copy_mesh/scene_accel_nodes` |
 
@@ -148,6 +149,12 @@ opt.hostSampleRate   = 48000;                 // ホストレート。0 = 44100 
 STRT_Context* ctx = NULL;
 if (st_rt_create(&opt, &ctx) != ST_STATUS_OK) { /* st_rt_get_last_error */ }
 
+// 2.21.0 から st_rt_create が等ラウドネス補正を有効にする。ホストのミックスが音色を担うなら生成直後に無効化
+STLoudnessCompensationDesc lc = { sizeof lc, ST_ABI_VERSION };
+st_rt_render_get_loudness_compensation(ctx, &lc);
+lc.enabled = 0;
+st_rt_render_set_loudness_compensation(ctx, &lc);
+
 // 1. 材質 — 既定ライブラリ(BRAS 24種)をまとめて登録。最初の材質のハンドルが返る。
 STMaterialId firstMat = st_rt_material_load_defaults(ctx);
 
@@ -163,7 +170,7 @@ desc.positionX = 2.f; desc.positionY = 1.5f; desc.positionZ = -1.f;
 desc.directionZ = 1.f; desc.intensity = 1.f; desc.isDynamic = 1;
 STSourceId srcId = st_rt_source_create(ctx, &desc);
 st_rt_listener_set_position(ctx, 0.f, 1.7f, 0.f);
-st_rt_listener_set_rotation(ctx, /*yaw*/0.f, /*pitch*/0.f);        // ラジアン
+st_rt_listener_set_rotation(ctx, /*yaw*/0.f, /*pitch*/0.f);        // ラジアン。roll まで: set_orientation_q(XYZW)
 
 // 4. ホスト PCM ストリーム入力
 STStreamDesc sd = { sizeof sd, ST_ABI_VERSION, 48000, 1, 0 };     // モノ, capacity 0 = 8192 フレーム
@@ -195,6 +202,9 @@ st_rt_destroy(ctx);
 **Hybrid（`reserved0 = 1`）+ true-peak 出力リミッター（−1 dBTP、137 サンプル遅延）有効**で、マスターゲインは 0 dB です
 （2.12.0 までは Objects + リミッター無効）。既定値に頼らず、Hybrid・リミッターは **`render_start` とレイアウト変更の
 後に**明示してください。すべての公式プラグインがこの順序で自身の既定値を再適用します。
+
+2.21.0 から `st_rt_create` は[等ラウドネス補正](#等ラウドネス補正)も有効にします。この設定はコンテキスト単位で
+`render_start` が元に戻さないため、生成直後に一度決めれば十分です。公式ラッパーはすべて生成直後に無効にします。
 :::
 
 ## 主要概念
@@ -208,7 +218,9 @@ st_rt_destroy(ctx);
   （cm = `0.01`、ft = `0.3048`）を生成時に 1 回指定します。座標はシーン単位のまま渡し、
   エンジンがメートルを必要とする箇所でのみ乗算します。ジオメトリを事前にスケールしながら `sceneRatio` も
   渡す**二重スケールは禁止**です。
-- 角度: リスナーの rotation は**ラジアン**、スピーカーレイアウトのみ度（degree）です。
+- 角度: リスナーの rotation は**ラジアン**、スピーカーレイアウトのみ度（degree）です。2.22.0 から
+  `st_rt_listener_set_orientation_q`（ローカル→ワールドの単位クォータニオン、XYZW）と `st_rt_listener_set_rotation_ypr`
+  （yaw・pitch・roll）で頭部の傾き（roll）まで渡せます。リスナー方向の 3 つの setter は最後に呼んだものが優先されます。
 - メッシュのワインディング: 交差カーネルは両面なので反射・透過はワインディングに依存しませんが、回折エッジ判定の 2 箇所が
   法線の符号を見ます。1 つのメッシュ内ではワインディングを一貫させてください。
 
@@ -276,11 +288,14 @@ typedef struct STMaterial {
 | `2` SADIE_D2_KEMAR | 同梱配布される SADIE II D2 KEMAR HRIR（8,802 方向 · 256 タップ） |
 
 スピーカー出力は `st_rt_render_set_speaker_layout`（2.0 / 2.1 / 4.1 / 5.1 / 7.1 / ラップトップ近接 2.0）
-またはカスタムレイアウトで有効にし、内部の HOA3 デコードで N チャンネルを出力します。出力段は 9バンド EQ → マスターゲイン →
-リミッターの順です。
+またはカスタムレイアウトで有効にし、内部の HOA3 デコードで N チャンネルを出力します。出力段は出力 EQ → （スピーカー）チャンネル EQ →
+等ラウドネス補正 → バーチャルベース → マスターゲイン → リミッターの順です。
 
-| 出力段 | 関数 | 2.18.0 の既定 |
+| 出力段 | 関数 | リアルタイムの既定（2.22.0） |
 |---|---|---|
+| 出力 EQ | `st_rt_render_set_parametric_eq` — [パラメトリック EQ](#パラメトリック-eq)。従来の 9 バンド `st_rt_render_set_eq` は同じ EQ のグラフィックビュー | 無効 |
+| 等ラウドネス補正 | `st_rt_render_set_loudness_compensation`（2.21.0） | **有効**（`st_rt_create` が有効化） |
+| バーチャルベース | `st_rt_render_set_virtual_bass`（2.21.0） | 無効 |
 | マスターゲイン | `st_rt_render_set_master_gain_db`（−96 ~ +24 dB、20 ms ランプ） | 0 dB |
 | リミッターの種類 | `st_rt_render_set_limiter_type` — Envelope(0) / Lookahead peak(1) / True peak(2) | True peak、シーリング −1 dBTP |
 | リミッターの有効化 | `STRenderOptions.useLimiter` | 有効（1）。遅延は `st_rt_render_get_limiter_latency_samples` = 137 サンプル |
@@ -289,6 +304,32 @@ typedef struct STMaterial {
 ゲームエンジンのようにホストのマスターチェーンがリミッティングを担う統合では `useLimiter = 0` で無効にします。新機能は
 `st_rt_get_capability_word(1)` の `ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER` · `ST_CAP1_MASTER_GAIN` で確認します
 （ワード 0 = `st_rt_get_capabilities()` のビットと混ぜて AND しないでください）。
+
+### パラメトリック EQ
+
+2.21.0 から EQ は RBJ 2 次フィルターのバンドを直列にかけるパラメトリック EQ 1 つです。同じバンド構造体
+（`STParametricEqBand`）を 2 か所で使います。
+
+| 位置 | 関数 | かける場所 |
+|---|---|---|
+| ソース EQ | `st_rt_source_set_parametric_eq`（`ST_CAP1_SOURCE_PARAMETRIC_EQ`） | 音源の原音 PCM、9 バンドクロスオーバーの**前**。その音源の直接音・反射・回折・残響センドがすべて同じ音色になります。解除は `st_rt_source_set_eq(ctx, id, NULL)` |
+| 出力 EQ | `st_rt_render_set_parametric_eq`（`ST_CAP1_OUTPUT_PARAMETRIC_EQ`） | レンダー末尾、マスターゲイン前のグローバル 1 つ。無効化は `enabled = 0` |
+
+- フィルターの種類は `ST_PARAMETRIC_EQ_PEAKING` · `LOW_SHELF` · `HIGH_SHELF` · `LOW_PASS` · `HIGH_PASS` · `NOTCH` の 6 種です。
+  低域・高域カット（HIGH_PASS / LOW_PASS）は 12 dB/oct 固定です。
+- 範囲: 周波数 20 ~ 20,000 Hz、ゲイン ±24 dB（PEAKING・シェルフのみ）、Q 0.1 ~ 30（シェルフは 3 まで）、プリアンプ −48 ~ +12 dB、
+  バンド最大 16 個。
+- 値が変わるとエンジンが 20 ms のクロスフェードで切り替えます。無効の状態ではサンプルに手を加えません。
+- ソース EQ はオフライン DLL にもあります（`st_off_source_set_parametric_eq`）。出力 EQ はリアルタイム専用です。
+
+### 等ラウドネス補正
+
+2.21.0 から、リアルタイムの `st_rt_create` が等ラウドネス補正（ISO 226:2003、基準 83 → 再生 70 phon）を有効にします。マスターゲイン
+0 dB で低域シェルフ約 +7.2 dB（120 Hz）、高域シェルフ約 +1.8 dB で、既定ではマスターゲインに追従して補正量が変わります。
+無効にすると出力は 2.20 とビット一致します。オフライン DLL にはありません。
+
+この段は再生デバイス側の機能なので、リミッターと同様、ホストのミックスが音色・レベルを所有する統合では無効にすることを推奨します。
+UE・Unity・FMOD・Wwise・soundtrace.js ラッパーはすべてコンテキスト生成直後に無効にします（SDK リリース 2.22.0-jhj.5）。
 
 ### ホスト pull レンダー
 
@@ -316,7 +357,7 @@ UE・FMOD・Wwise・Unity の統合は既定で `BUFFERED` です。`hostSampleR
 
 ### 音源メモリ予算
 
-SDK リリース 2.18.2-jhj.7 から、リアルタイムコンテキストは同時に生存する音源数と音源メモリに上限を設けます。
+SDK リリース 2.18.2 から、リアルタイムコンテキストは同時に生存する音源数と音源メモリに上限を設けます。
 ABI 6 の additive 変更で、`st_rt_get_capability_word(1)` の `ST_CAP1_MEMORY_BUDGET` で確認します。音源 1 つの
 メモリは固定コスト（伝搬・IR コピー・transport・ストリームリング）と遅延リング、経路レーンで構成されます。
 
@@ -367,6 +408,14 @@ typedef struct STMemoryBudget {
   値が必要な場合は `st_rt_render_set_max_delay_seconds` で指定します。
 - オフライン DLL（`st_off_*`）は予算の対象外です（無制限）。
 - モバイル・Web は Hybrid 初期反射が前提です。Objects モードは音源あたり 30 MB を超えます。
+:::
+
+:::caution SDK 2.18.2-jhj のヘッダーから移行する場合
+- `STRT_CreateOptions.maxSources` は SDK リリース 2.22.0-jhj から**オフセット 44**です。エンジン 2.20 がオフセット 40 を
+  `startIdle` に使うためです（構造体サイズ 48 は変わりません）。2.18.2-jhj のヘッダーでビルドしたホストは再ビルドしてください —
+  古い位置に音源数を書くと `startIdle` が 0/1 でなくなり、`st_rt_create` が `ST_STATUS_INVALID_ARGUMENT` で失敗します。
+- `ST_CAP1_MEMORY_BUDGET` は現在ビット 63 です（2.18.2-jhj はビット 6。エンジン 2.19 がそのビットを `ST_CAP1_SPEAKER_SET` に使用）。
+  ビット番号を直接書かず、ヘッダーの定数で確認してください。
 :::
 
 ラッパーごとの設定は [SDK 概要](../sdk/overview.md#音源数の上限)にまとめています。

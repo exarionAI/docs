@@ -1,6 +1,6 @@
 ---
 title: Wwise
-description: Sound-tracing(SimpleSTWwise) — Wwise 2025.1용 SimpleST Object Processor + Metadata 플러그인의 구조, 설치, 저작, 원샷과 웜 음원 풀, 게임 쪽 C API, UE·Unity 통합.
+description: Sound-tracing(SimpleSTWwise) — Wwise 2025.1용 SimpleST Object Processor + Metadata 플러그인의 구조, 설치, 저작, EQ, 원샷과 웜 음원 풀, 게임 쪽 C API, UE·Unity 통합.
 ---
 
 # Sound-tracing Wwise 플러그인
@@ -12,7 +12,7 @@ description: Sound-tracing(SimpleSTWwise) — Wwise 2025.1용 SimpleST Object Pr
 
 | 항목 | 값 |
 |---|---|
-| 플러그인 버전 | v0.2.0 (SimpleST 2.18.2). 이전 릴리스: v0.1.0 (SimpleST 2.12.0, Wwise 2025.1.11 사운드엔진 E2E 검증) |
+| 플러그인 버전 | v0.2.0 (SimpleST 2.22.0, SDK 릴리스 2.22.0-jhj.5 — 4밴드 [EQ](#eq), 리스너 roll). 이전 릴리스: v0.2.0 (SimpleST 2.18.2), v0.1.0 (SimpleST 2.12.0, Wwise 2025.1.11 사운드엔진 E2E 검증) |
 | Audiokinetic | CompanyID **325**, PluginID 1001(Renderer) · 1002(Source Settings). 런처 번들 `Sound-tracing` |
 | Wwise | 2025.1 (플러그인 바이너리는 SDK 버전에 묶입니다) |
 | 플랫폼 | Windows(vc170) · macOS · Linux · Android · iOS(정적) · Web(정적) |
@@ -47,6 +47,10 @@ description: Sound-tracing(SimpleSTWwise) — Wwise 2025.1용 SimpleST Object Pr
   동적 바인딩하고 게임 쪽은 `SimpleSTWwise_GetRealtimeProc`으로 같은 모듈의 `st_rt_*`를 받습니다.
 - **출력 리미터는 끕니다**: SimpleST 2.18은 생성 직후 true-peak 리미터를 켜지만, Wwise 안에서는 마스터
   버스가 리미팅을 맡습니다.
+- **등라우드니스 보정도 끕니다**: SimpleST 2.21은 생성 직후 출력단 등라우드니스 보정(저역 셸프 약 +7.2 dB @ 120 Hz)을
+  켜지만, 음색과 레벨은 Wwise 믹스가 맡습니다. FMOD판과 같은 공용 코어가 리미터와 함께 끕니다.
+- **리스너 방향**: 버스 리스너의 front·top 방향을 SimpleST 쿼터니언으로 넘겨 머리 기울임(roll)까지 반영합니다(SDK 릴리스
+  2.22.0-jhj부터).
 - **수명주기**: 런타임은 사운드엔진 Init 훅(정적 등록) 또는 첫 렌더러 인스턴스 생성 시 시작하고,
   `AK::SoundEngine::Term`의 글로벌 콜백에서 종료합니다.
 
@@ -104,11 +108,32 @@ Debug 플러그인은 Debug, Release 플러그인은 Profile/Release 구성에 �
 | | Directivity (0 omni ~ 1 cardioid, RTPC) | 오브젝트 front 기준 지향성 |
 | | Stationary (never moves) | 움직이지 않는 이미터 힌트(생성 시 적용) |
 | | Bypass SimpleST (RTPC) | SimpleST를 거치지 않고 렌더러가 Wwise 패닝으로 믹스 |
+| 둘 다 (EQ 그룹) | EQ / EQ Preamp (dB, RTPC) | 4밴드 EQ 켬·프리앰프 — [EQ](#eq) |
+| | Band n Type / Band n Frequency (Hz, RTPC) / Band n Gain (dB, RTPC) / Band n Q (RTPC) (n = 1 ~ 4) | 밴드별 필터 종류·주파수·게인·Q |
 
 ![Source Settings 메타데이터](/img/wwise/source-settings-metadata.png)
 
 CompanyID/PluginID, 프로퍼티 이름, AudioEnginePropertyID는 프로젝트와 뱅크가 저장하므로 배포 후
 바꾸지 않습니다.
+
+### EQ
+
+SDK 릴리스 2.22.0-jhj부터 두 플러그인에 같은 4밴드 EQ 프로퍼티 그룹이 있습니다. FMOD판과 같은 공용 코어로 SimpleST
+파라메트릭 EQ를 겁니다.
+
+| 플러그인 | 프로퍼티 그룹 | 거는 곳 |
+|---|---|---|
+| Sound-tracing Source Settings | `Source EQ`, `Source EQ Band 1 ~ 4` | **소스 EQ** — 오브젝트 오디오가 SimpleST에 들어가기 전, 엔진 밴드 분리 앞. 직접음·반사·회절·잔향이 모두 같은 톤 |
+| Sound-tracing Renderer | `Output EQ`, `Output EQ Band 1 ~ 4` | **출력 EQ** — SimpleST 믹스 |
+
+- `EQ`는 켬/끔, `EQ Preamp`는 밴드 앞 게인(−48 ~ +12 dB)입니다.
+- `Band n Type`은 Off · Peaking · Low Shelf · High Shelf · High Cut(12 dB/oct) · Low Cut(12 dB/oct) · Notch입니다. 열거
+  프로퍼티라 RTPC로 바꿀 수 없습니다.
+- `Band n Frequency`는 20 ~ 20,000 Hz, `Band n Gain`은 ±24 dB(Peaking·셸프만), `Band n Q`는 0.1 ~ 30(셸프는 3까지)이고,
+  Preamp·Frequency·Gain·Q는 RTPC를 지원합니다.
+- 기본은 꺼짐이고 꺼져 있으면 엔진을 호출하지 않습니다. 바뀐 값만 보내고 엔진이 20 ms 크로스페이드로 넘어갑니다.
+- EQ 프로퍼티의 AudioEnginePropertyID는 Source Settings 8 ~ 25, Renderer 3 ~ 20이고 뱅크에는 기존 필드 뒤에 같은 순서로
+  붙습니다. 웜 풀에서 재사용하는 엔진 음원은 앞 보이스의 EQ를 지우거나 새 EQ로 바꾼 뒤 시작합니다.
 
 ## 원샷과 웜 음원 풀
 
@@ -150,7 +175,7 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal 축**: Wwise for Unreal 2024.1+는 언리얼 벡터를 그대로 넘기므로(+Z 위) `SetWorldAxes(UNREAL)`을
   불러야 렌더러가 (Y, Z, X)로 바꿔 게임이 올린 지오메트리와 맞습니다. 안 부르면 리스너·음원이
   엉뚱한 벽에 차폐됩니다(2026-10-15 수정).
-- **음원 상한**(SDK 릴리스 2.18.2-jhj.7): `SimpleSTWwise_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
+- **음원 상한**(SDK 릴리스 2.18.2부터): `SimpleSTWwise_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
   기본). 넘으면 엔진이 음원 생성을 거절하고 그 보이스는 dry로 재생됩니다. 구조체 끝에 덧붙인 필드라 이전의 짧은
   구조체를 넘기는 호스트도 동작합니다 — [음원 메모리 예산](../core/simplest.md#음원-메모리-예산).
 
@@ -160,7 +185,7 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // 끄기. 1 = 켜기(기본)
 ```
 
-SDK 릴리스 2.18.2-jhj.7에서 추가된 게임 쪽 A/B 스위치입니다. 실행 중인 런타임에 적용되며 컨트롤 스레드에서
+SDK 릴리스 2.18.2에서 추가된 게임 쪽 A/B 스위치입니다. 실행 중인 런타임에 적용되며 컨트롤 스레드에서
 비동기로 반영됩니다. 동작은 [FMOD판](./fmod.md#사운드-트레이싱-켜고-끄기)과 같습니다.
 
 - **끄면** SimpleST 렌더러 바이패스(`st_rt_render_set_sound_tracing_enabled`)가 걸리고, 웜 음원 풀을 비운 뒤 다시
@@ -208,6 +233,7 @@ WwiseConsole로 프로젝트 생성 → WAAPI로 버스·이펙트·메타데이
 - 리스너 1개(SimpleST 제약). 같은 버스가 두 번째 리스너용으로 또 인스턴스되면 그 인스턴스는 모든
   오브젝트를 Wwise 패닝으로 믹스합니다.
 - 오디오 오브젝트에는 속도가 없어 SimpleST Doppler가 없습니다.
+- EQ는 플러그인당 4밴드 고정입니다(UE·Unity·Web은 최대 16밴드).
 - 엔진 음원 수는 플랫폼 상한(`maxSources`)을 넘지 않습니다. 초과 보이스는 dry입니다.
 - 새 오디오 오브젝트를 처음 볼 때 오디오 스레드에서 작은 슬롯 하나를 할당합니다. 엔진 음원 자체는
   컨트롤 스레드에서 웜 풀의 음원을 재사용하거나 새로 만듭니다.

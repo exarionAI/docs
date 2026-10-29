@@ -1,14 +1,16 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 0.4.0（SimpleST 2.18.2 / ABI 6）的安装、组件 Inspector 约定、HRTF 与输出、材质、FMOD/Wwise 集成模式、WebGL。
+description: SoundTrace Unity SDK 0.4.0（SimpleST 2.22.0 / ABI 6）的安装、组件 Inspector 约定、HRTF 与输出、声源/输出 EQ、材质、FMOD/Wwise 集成模式、WebGL。
 ---
 
 # SoundTrace SDK for Unity
 
 SoundTrace Unity SDK 是一款实时空间声学插件，用于把 Unity 的网格、Renderer 材质槽、声源和听者
 连接到 [SimpleST](../core/simplest.md)。从 0.3.0 起，引擎由 STCoreV2 换成了 SimpleST，
-0.4.0 使用 **SimpleST 2.18.2 / ABI 6**（上一版本：0.3.0 = SimpleST 2.12.0）。渲染器以 **Hybrid** 模式启动。SDK 发行版 2.18.2-jhj.7 中包版本保持不变，
-新增了[声源数量上限](#声源数量上限)和 Android 最低 API 28。
+0.4.0 使用 **SimpleST 2.22.0 / ABI 6**（SDK 发行版 2.22.0-jhj.5。上一 SDK 发行版 2.18.2-jhj.7 中同一 0.4.0 使用
+SimpleST 2.18.2；0.3.0 = SimpleST 2.12.0）。渲染器以 **Hybrid** 模式启动。本次发行包版本保持不变，新增了
+[声源 EQ 与输出 EQ](#eq)，并以四元数传入听者方向，从而反映头部倾斜（roll）（以前仅 yaw/pitch）。2.18.2 SDK 新增了
+[声源数量上限](#声源数量上限)和 Android 最低 API 28。
 `SoundTraceManager`、`SoundTraceListener`、`SoundTraceSource`、`SoundTraceObject`、
 `SoundTracePathVisualizer` 组件名称、脚本 GUID 和示例场景保持不变。
 
@@ -91,6 +93,9 @@ python3 install.py /path/to/UnityProject
   并把主增益保持为 0 dB。限幅由 Unity 混音器负责 — SimpleST 2.18 在创建后会开启 true-peak 限制器
   （137 采样延迟），因此由封装将其关闭。渲染选项只在引擎创建时和扬声器布局变更时以预设重新铺设，
   `render_start` 会保持原样。
+- 创建引擎后立即**关闭等响度补偿**（`SoundTraceRuntime.DisableLoudnessCompensation`，包括 WebGL）。
+  这是 SimpleST 2.21 起在创建后开启的输出级低频·高频搁架，音色与电平由 Unity 混音器负责。关闭后的输出与引擎 2.20
+  逐位一致。
 
 ## SoundTraceManager
 
@@ -152,8 +157,9 @@ SoundTraceRuntime.MaxSources = 64;   // 第一个 Listener 启用之前
 | `HRTF` | `HRIR Interpolated` | 以下三种模式 |
 | `Max Delay Seconds` | `0` | `0..5 s`；每个声源延迟环的上限。`0` = 引擎平台上限（桌面 2 s · Android/iOS 1 s · WebGL 0.5 s）。非 0 时覆盖该上限（小于 0.012 s 时按 0.012 s） |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`；路径出现/消失的交叉淡化 |
+| `Output EQ` | 关闭 | 作用于整个 SimpleST 混音的参数 EQ — [EQ](#eq) |
 
-`Max Delay Seconds` 的默认值在 SDK 发行版 2.18.2-jhj.7 中由 `2` 改为 `0`（引擎策略）。引擎按每个声源的
+`Max Delay Seconds` 的默认值在 SDK 发行版 2.18.2 中由 `2` 改为 `0`（引擎策略）。引擎按每个声源的
 路径所需分配延迟环，此值仅用作上限。已保存为 `2` 的现有场景行为与以前相同。
 从未保存过此值的听者（包括随附示例 01–03）使用 `0`。桌面平台上限仍为 2 s，因此没有变化；但在 Android/iOS 上
 超过 1 s、在 WebGL 上超过 0.5 s 的路径将不再渲染。若要在这些平台上保持以前的范围，请将听者的
@@ -196,6 +202,7 @@ SoundTraceRuntime.MaxSources = 64;   // 第一个 Listener 启用之前
 | `Reverb Ray Depth` | `4` | transport ray 最大反射深度。范围 `1..16` |
 | `Enable Direct` / `Reflection` / `Diffraction` / `Reverb` / `Transmission` | `true` | 按 path 门控 |
 | `Bypass` | `false` | 跳过 SoundTrace 渲染，直接传递原始 `AudioSource` 输出 |
+| `Source EQ` | 关闭 | 作用于此声源信号的参数 EQ — [EQ](#eq) |
 
 STCoreV2 的逐 path `Distance Attenuation`（0.5 ~ 1.5）、`Max Delay Rate`、`Path Hold Time` 已不存在。
 SimpleST 应用物理 `1/r` 衰减和空气吸收，最大延迟与淡化是 Listener 的设置。Scene View 中的
@@ -209,6 +216,27 @@ SimpleST 应用物理 `1/r` 衰减和空气吸收，最大延迟与淡化是 Lis
 | `ResetMotionState()` | 将当前 Transform 重新设为 motion 基准点，防止 teleport 后出现 Doppler spike。 |
 
 要同步多个 `AudioSource` 的播放时机，请基于同一个 `AudioSettings.dspTime` 调用 `PlayScheduled()`。
+
+## EQ
+
+从 SDK 发行版 2.22.0-jhj 起，在两个位置使用 SimpleST 参数 EQ。
+
+| 位置 | Inspector | 脚本 | 作用点 |
+|---|---|---|---|
+| 声源 EQ | `SoundTraceSource`（及 `SoundTraceClipSource`）的 `Source EQ` | `SetSourceEq(SoundTraceEq)`、`SetSourceEqEnabled(bool)`、`GetSourceEq()` | 声源信号，SimpleST 频段拆分之前。该声源的所有路径得到相同音色 |
+| 输出 EQ | `SoundTraceListener` 的 `Output EQ` | `SetOutputEq(SoundTraceEq)`、`SetOutputEqEnabled(bool)`、`GetOutputEq()` | 整个 SimpleST 混音，渲染末端（主增益之前） |
+
+- `SoundTraceEq`：`enabled`、`preampDb`（−48 ~ +12）、`bands`（最多 16 个）。
+- `SoundTraceEqBand`：`enabled`、`type`、`frequencyHz`（20 ~ 20,000）、`gainDb`（±24，仅 Peaking·搁架）、`q`（0.1 ~ 30，搁架最多 3）。
+- `SoundTraceEqFilterType`：`Peaking (Bell)` · `Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` ·
+  `Notch`。切滤波固定为 12 dB/oct，对不使用 Gain 的类型，Inspector 会隐藏 Gain。
+- 默认关闭，关闭时不调用引擎。只发送变化的设置，引擎以 20 ms 交叉淡化过渡。
+  只修改输出 EQ 的 Inspector 编辑不会重启渲染。
+- 关闭声源 EQ 会在引擎中清除它；重新创建原生声源时会再次应用。
+- 是否支持可用 `SoundTraceRuntime.SupportsSourceParametricEq` / `SupportsOutputParametricEq` 确认。在不支持的
+  引擎上，开启的 EQ 会被忽略并输出一次警告。
+- 在 FMOD/Wwise 集成模式下 `SoundTraceListener`、`SoundTraceSource` 会关闭，因此请使用中间件插件的 EQ —
+  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq)。
 
 ## SoundTraceObject
 
@@ -398,6 +426,7 @@ Unity WebGL 不提供 `OnAudioFilterRead`，因此使用单独的路径。它传
 | FMOD/Wwise 模式下 Listener/Source 被关闭 | 正常 — 渲染由中间件插件负责 |
 | 部分声源未空间化，听起来是 dry | Console 中的 `ST_STATUS_BUDGET_EXCEEDED` 警告 — 减少声源或调高 `SoundTraceRuntime.MaxSources` |
 | Android 构建因 `SimpleST requires Android API 28 or newer` 失败 | 将 Player Settings › Minimum API Level 设为 28 或更高 |
+| 开启 EQ 后声音没有变化 | Console 中的 EQ 不支持警告，是否处于 FMOD/Wwise 集成模式（使用中间件 EQ） |
 | Teleport 后 pitch 跳变 | 更改 transform 后立即调用 `ResetMotionState()` |
 | 性能不足 | 按 `Quality → Middle → Fast`、缩小 Reverb Ray Resolution、禁用 path visualizer 的顺序检查 |
 | 多个声源听起来像 comb filtering | 使用相同的 `AudioSettings.dspTime` 调用 `PlayScheduled()` |

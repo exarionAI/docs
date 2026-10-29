@@ -39,7 +39,7 @@ await sound.update(0);
 | `propagationThreadCount` | 동기 1 / 파이프라인 3 | 계산 예산 1 ~ 5 (음수 = 5). 파이프라인은 최소 3 |
 | `throughput` | 미지정 | `'low'` / `'medium'` / `'max'` — MT 워커 예산 단축 표기 |
 | `sceneRatio` | `1.0` | 장면 길이 단위당 미터(cm = 0.01). 지오메트리 사전 스케일과 **혼용 금지** |
-| `maxSources` | `0` | 동시에 살아 있는 엔진 음원 수 상한(0 ~ 512 정수). `0` = wasm 플랫폼 기본(32음원 · 음원 메모리 64 MiB · 지연 링 천장 0.5 s — 힙이 256 MiB 고정이라 보수적). 넘는 음원 생성은 엔진이 status 11(`BUDGET_EXCEEDED`)로 거절하고 기존 음원은 계속 렌더됩니다. SDK 릴리스 2.18.2-jhj.7부터 |
+| `maxSources` | `0` | 동시에 살아 있는 엔진 음원 수 상한(0 ~ 512 정수). `0` = wasm 플랫폼 기본(32음원 · 음원 메모리 64 MiB · 지연 링 천장 0.5 s — 힙이 256 MiB 고정이라 보수적). 넘는 음원 생성은 엔진이 status 11(`BUDGET_EXCEEDED`)로 거절하고 기존 음원은 계속 렌더됩니다. SDK 릴리스 2.18.2부터 |
 | `autoLoadMaterials` | `true` | 기본 재질 테이블을 로드해 이름 매핑 활성화 |
 | `transmissionModel` | `'surface'` | SimpleST는 표면 R/A/T만 지원. `'solid'`는 **거부** |
 | `defaultMeshBuild` | — | STCoreV2 BVH 옵션. 지정하면 로드 **거부** |
@@ -67,10 +67,11 @@ const sound = await SoundTrace.create(audioContext, {
 | `addSource(options)` | 공간 음원 추가 |
 | `setQuality(tier)` | 품질 프리셋 변경(리스너·음원 레이와 깊이) |
 | `setAudioOption(options)` | 입력 블록 크기, 출력 채널 override |
+| `setOutputEq(eq \| null)` | 전역 출력 파라메트릭 EQ(최대 16밴드). `null`이면 끔. `reset()` 뒤에도 유지 — [EQ](../web.md#eq). SDK 릴리스 2.22.0-jhj부터 |
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'` (별칭 `'convolution'` / `'steamaudio'`) |
 | `loadMaterialAssets()` | 재질 테이블 수동 로드 (`autoLoadMaterials: false`일 때) |
 | `update(dt?)` | 장면을 갱신하고 전파 실행. 이번 프레임의 유효 경로 수로 resolve |
-| `debugSnapshot(options?)` | 비동기 진단 스냅샷. `.simplest`에 SimpleST scene/timing/render/IR 통계, 1.1.0부터 `features`·`output`(리미터·종류·지연·마스터 게인)·`inputs`(라이브/클립 음원 수) |
+| `debugSnapshot(options?)` | 비동기 진단 스냅샷. `.simplest`에 SimpleST scene/timing/render/IR 통계, 1.1.0부터 `features`·`output`(리미터·종류·지연·마스터 게인, 2.22.0-jhj부터 출력 EQ `eq`)·`inputs`(라이브/클립 음원 수) |
 | `getStatistics(options?)` | `debugSnapshot` 래퍼. `validPathCount`와 `.simplest` |
 | `getIRs()` | 별도 Offline Worker에서 9밴드 early path IR 재계산 |
 | `renderMonoImpulseResponse(source, sec)` | Offline Worker에서 44.1 kHz 모노 압력 IR (최대 30 s) |
@@ -88,7 +89,8 @@ sound.listener
 ```
 
 장면에는 listener가 하나이며 `SoundTrace`가 소유합니다. `orientation`은 카메라의 활성 회전
-쿼터니언(XYZW)을 그대로 넘깁니다.
+쿼터니언(XYZW)을 그대로 넘깁니다. SDK 릴리스 2.22.0-jhj부터 머리 기울임(roll)까지 엔진에 전달됩니다
+(실시간·오프라인 IR 분석 모두).
 
 `setRenderOptions`가 받는 키:
 
@@ -125,6 +127,7 @@ source.setDirection([0, 0, -1]);
 | `setPathEnabled(path, on)` / `setPathOptions(o)` / `isPathEnabled(path)` | `'direct'`(투과 포함) / `'reflection'` / `'diffraction'` / `'reverberation'` |
 | `setDirection(v)` | 음원 forward. roll 없는 최소 회전으로 orientation이 함께 갱신됨 |
 | `setDirectivityTable(anglesDeg, attenDbPerBand)` / `setDirectivityEnabled(on)` | 각도별 9밴드 감쇠 테이블을 SimpleST 지향성 테이블로 변환해 적용 |
+| `setEq(eq \| null)` | 이 음원의 소스 파라메트릭 EQ(최대 16밴드, 엔진 밴드 분리 앞). `null`이면 제거 — [EQ](../web.md#eq). SDK 릴리스 2.22.0-jhj부터 |
 | `dispose()` | 음원과 스트림 해제 |
 
 #### 거리 감쇠

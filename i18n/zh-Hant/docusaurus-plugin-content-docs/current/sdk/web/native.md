@@ -50,7 +50,7 @@ facade 的 control Worker 所使用的配接器。直接使用時，請在 Worke
 
 ```ts
 const M = await loadRealtimeModule(coreBaseUrl);
-const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create、註冊材質表、套用 Hybrid
+const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create、關閉等響度補償、註冊材質表、套用 Hybrid
 
 rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
 rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + 套用品質預設
@@ -73,6 +73,10 @@ rt.reset(); rt.dispose();
   但永遠維持 `reserved0 = 1`（Hybrid）。若 Hybrid 被解除，`diagnostics()` 會擲出例外。
 - 每次渲染啟動時都會明確指定輸出端：限幅器關閉（`useLimiter: true` 時為 true-peak）、主增益 0 dB。
   不依賴 SimpleST 2.18 建立後的預設值（true-peak 限幅器開啟）。
+- 建立上下文後立即關閉 SimpleST 2.21 啟用的等響度補償（`features.loudnessCompensation` 時）。
+- 聆聽者方向以由 forward/up 建立的四元數傳給 `st_rt_listener_set_orientation_q`，保留 roll。
+- 音源 EQ 以 `st_rt_source_set_parametric_eq`（清除為 `st_rt_source_set_eq(NULL)`），輸出 EQ 以
+  `st_rt_render_set_parametric_eq` 套用。沒有 `features.sourceParametricEq`、`outputParametricEq` 時會拒絕。
 
 ## 診斷快照
 
@@ -86,7 +90,7 @@ interface SimpleSTDiagnostics {
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
   features?: SimpleSTFeatures;                                                   // 1.1.0
-  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain };  // 1.1.0，已套用的輸出端
+  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // 1.1.0，已套用的輸出端（eq = 輸出 EQ）
   inputs?: { live; clip };                                                       // 1.1.0，即時／片段音源數
 }
 ```

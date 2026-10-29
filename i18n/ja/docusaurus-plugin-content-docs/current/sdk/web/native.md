@@ -52,7 +52,7 @@ facade の control Worker が使うアダプターです。直接使う場合は
 
 ```ts
 const M = await loadRealtimeModule(coreBaseUrl);
-const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, 材質テーブル登録, Hybrid 適用
+const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, 等ラウドネス補正を無効化, 材質テーブル登録, Hybrid 適用
 
 rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
 rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + 品質プリセット適用
@@ -75,6 +75,10 @@ rt.reset(); rt.dispose();
   上書きしますが、`reserved0 = 1`（Hybrid）は常に維持します。Hybrid が外れると `diagnostics()` が例外を投げます。
 - レンダー開始のたびに出力段を明示します: リミッター無効（`useLimiter: true` なら true-peak）、マスターゲイン 0 dB。
   SimpleST 2.18 の生成直後の既定値（true-peak リミッター有効）には頼りません。
+- コンテキスト作成直後に SimpleST 2.21 が有効にする等ラウドネス補正を無効にします（`features.loudnessCompensation` のとき）。
+- リスナーの向きは forward/up から作ったクォータニオンで `st_rt_listener_set_orientation_q` に渡し、roll を保ちます。
+- ソース EQ は `st_rt_source_set_parametric_eq`（解除は `st_rt_source_set_eq(NULL)`）、出力 EQ は
+  `st_rt_render_set_parametric_eq` でかけます。`features.sourceParametricEq`・`outputParametricEq` がなければ拒否します。
 
 ## 診断スナップショット
 
@@ -88,7 +92,7 @@ interface SimpleSTDiagnostics {
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
   features?: SimpleSTFeatures;                                                   // 1.1.0
-  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain };  // 1.1.0、適用された出力段
+  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // 1.1.0、適用された出力段（eq = 出力 EQ）
   inputs?: { live; clip };                                                       // 1.1.0、ライブ/クリップ音源数
 }
 ```

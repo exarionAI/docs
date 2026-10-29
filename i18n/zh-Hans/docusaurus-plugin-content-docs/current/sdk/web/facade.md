@@ -38,7 +38,7 @@ await sound.update(0);
 | `propagationThreadCount` | 同步 1 / 管线 3 | 计算预算 1 ~ 5（负数 = 5）。管线模式至少 3 |
 | `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT 工作线程预算的简写 |
 | `sceneRatio` | `1.0` | 每个场景长度单位对应的米数（cm = 0.01）。**不要**与预缩放几何体混用 |
-| `maxSources` | `0` | 同时存活的引擎声源数上限（0 ~ 512 的整数）。`0` = wasm 平台默认（32 个声源 · 声源内存 64 MiB · 延迟环上限 0.5 s — 堆固定为 256 MiB，因此较为保守）。超出的声源创建会被引擎以 status 11（`BUDGET_EXCEEDED`）拒绝，已有声源继续渲染。自 SDK 发行版 2.18.2-jhj.7 起 |
+| `maxSources` | `0` | 同时存活的引擎声源数上限（0 ~ 512 的整数）。`0` = wasm 平台默认（32 个声源 · 声源内存 64 MiB · 延迟环上限 0.5 s — 堆固定为 256 MiB，因此较为保守）。超出的声源创建会被引擎以 status 11（`BUDGET_EXCEEDED`）拒绝，已有声源继续渲染。自 SDK 发行版 2.18.2 起 |
 | `autoLoadMaterials` | `true` | 加载默认材质表并启用按名称映射 |
 | `transmissionModel` | `'surface'` | SimpleST 只支持表面 R/A/T。`'solid'` 会被**拒绝** |
 | `defaultMeshBuild` | — | STCoreV2 BVH 选项。指定后加载会被**拒绝** |
@@ -66,10 +66,11 @@ const sound = await SoundTrace.create(audioContext, {
 | `addSource(options)` | 添加空间声源 |
 | `setQuality(tier)` | 更改质量预设（听者与声源射线和深度） |
 | `setAudioOption(options)` | 覆盖输入块大小、输出通道 |
+| `setOutputEq(eq \| null)` | 全局输出参数 EQ（最多 16 频段）。`null` 表示关闭。`reset()` 后仍保留 — [EQ](../web.md#eq)。自 SDK 发行版 2.22.0-jhj 起 |
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'`（别名 `'convolution'` / `'steamaudio'`） |
 | `loadMaterialAssets()` | 手动加载材质表（`autoLoadMaterials: false` 时） |
 | `update(dt?)` | 更新场景并执行传播。以本帧的有效路径数 resolve |
-| `debugSnapshot(options?)` | 异步诊断快照。`.simplest` 中包含 SimpleST scene/timing/render/IR 统计，从 1.1.0 起还包含 `features`、`output`（限制器、类型、延迟、主增益）、`inputs`（实时/剪辑声源数） |
+| `debugSnapshot(options?)` | 异步诊断快照。`.simplest` 中包含 SimpleST scene/timing/render/IR 统计，从 1.1.0 起还包含 `features`、`output`（限制器、类型、延迟、主增益，自 2.22.0-jhj 起含输出 EQ `eq`）、`inputs`（实时/剪辑声源数） |
 | `getStatistics(options?)` | `debugSnapshot` 的封装。`validPathCount` 与 `.simplest` |
 | `getIRs()` | 在独立 Offline Worker 中重新计算 9 频段 early path IR |
 | `renderMonoImpulseResponse(source, sec)` | 在 Offline Worker 中生成 44.1 kHz 单声道压力 IR（最长 30 s） |
@@ -87,6 +88,7 @@ sound.listener
 ```
 
 场景中只有一个 listener，由 `SoundTrace` 拥有。`orientation` 直接传入相机的当前旋转四元数（XYZW）。
+自 SDK 发行版 2.22.0-jhj 起，头部倾斜（roll）也会传到引擎（实时和离线 IR 分析均适用）。
 
 `setRenderOptions` 接受的键：
 
@@ -123,6 +125,7 @@ source.setDirection([0, 0, -1]);
 | `setPathEnabled(path, on)` / `setPathOptions(o)` / `isPathEnabled(path)` | `'direct'`（含透射）/ `'reflection'` / `'diffraction'` / `'reverberation'` |
 | `setDirection(v)` | 声源 forward。以无 roll 的最小旋转同时更新 orientation |
 | `setDirectivityTable(anglesDeg, attenDbPerBand)` / `setDirectivityEnabled(on)` | 把按角度的 9 频段衰减表转换为 SimpleST 指向性表并应用 |
+| `setEq(eq \| null)` | 此声源的声源参数 EQ（最多 16 频段，引擎频段拆分之前）。`null` 表示移除 — [EQ](../web.md#eq)。自 SDK 发行版 2.22.0-jhj 起 |
 | `dispose()` | 释放声源与流 |
 
 #### 距离衰减

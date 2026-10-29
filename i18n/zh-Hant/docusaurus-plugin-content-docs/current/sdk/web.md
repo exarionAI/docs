@@ -1,6 +1,6 @@
 ---
 title: Web
-description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、部署需求、HRTF、品質預設、材質與疑難排解。
+description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、部署需求、HRTF、品質預設、材質、EQ 與疑難排解。
 ---
 
 # Web SDK
@@ -9,10 +9,11 @@ description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、
 它將 Three.js 之類渲染場景中的網格、材質、音源與聆聽者連接到 Sound Tracing 場景，
 並向 Web Audio graph 提供空間化的立體聲輸出。
 
-自 1.0.0 起，引擎從 STCoreV2 換成 SimpleST，1.1.0 使用 **SimpleST 2.18.2 / ABI 6**
-（前一版本：1.0.0 = SimpleST 2.12.0）。SDK 發行版 2.18.2-jhj.7 中套件版本維持不變，加入了 `maxSources`
-選項（音源數上限）。既有的
-呼叫端不需變更。`SoundTrace`、`Source`、`Mesh`、`Listener` facade 維持不變，但相較於 STCoreV2，
+自 1.0.0 起，引擎從 STCoreV2 換成 SimpleST，1.1.0 使用 **SimpleST 2.22.0 / ABI 6**
+（SDK 發行版 2.22.0-jhj.5。前一 SDK 發行版 2.18.2-jhj.7 為同一個 1.1.0 使用 SimpleST 2.18.2，1.0.0 = SimpleST 2.12.0）。
+本次發行套件版本維持不變，加入了[音源 EQ 與輸出 EQ](#eq)（`source.setEq`、`sound.setOutputEq`），
+聆聽者 `orientation` 四元數的頭部傾斜（roll）也會傳遞到引擎（以前只有 yaw/pitch）。2.18.2 SDK 加入了 `maxSources`
+選項（音源數上限）。既有的呼叫端不需變更。`SoundTrace`、`Source`、`Mesh`、`Listener` facade 維持不變，但相較於 STCoreV2，
 後端、HRTF、材質與選項契約都已改變。
 完整選項與實體 API 請見 [Facade API](./web/facade.md)，低階 SimpleST 模組存取請見
 [Native API](./web/native.md)。
@@ -31,6 +32,7 @@ description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安裝、
 | 材質 | 9 頻段（63 Hz ~ 16 kHz）SoundTrace 遊戲材質 22 種，以名稱、別名或索引指定 |
 | 輸出 | 每個音源為單聲道輸入，聆聽者渲染器混出一路立體聲（`sound.output`） |
 | 音源上限 | 預設 32 個音源 · 音源記憶體 64 MiB · 延遲環上限 0.5 s。音源數以 `maxSources` 選項變更 — [音源記憶體預算](../core/simplest.md#音源記憶體預算) |
+| EQ | 逐音源的音源 EQ 與全域輸出 EQ，參數式最多 16 頻段 — [EQ](#eq) |
 | GPU | 無。`mode: 'gpu'`、`enableGpu()` 會出錯 |
 
 ## 需求
@@ -222,6 +224,38 @@ SDK 將輸出限幅器維持在 **關閉狀態**。SimpleST 2.18 在建立後會
 137 樣本延遲），但 `sound.output` 之後的 Web Audio 主匯流排由應用程式擁有。需要引擎限幅器時，以
 `sound.listener.setRenderOptions({ useLimiter: true })` 啟用 true-peak 限幅器。
 
+基於相同理由，自 SimpleST 2.21 起引擎在建立後立即啟用的等響度補償（低頻 shelf 約 +7.2 dB @ 120 Hz，高頻 +1.8 dB）
+也會在建立上下文後立即關閉（包含 `reset()`）。關閉後的輸出與引擎 2.20 位元相同，此設定不對外公開。
+
+## EQ
+
+自 SDK 發行版 2.22.0-jhj 起，可以在音源與輸出上套用 SimpleST 參數式 EQ。
+
+```ts
+source.setEq({ bands: [
+  { type: 'highpass', frequencyHz: 150 },
+  { type: 'peaking', frequencyHz: 3000, gainDb: 4, q: 1.2 },
+] });
+sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, gainDb: 3 }] });
+
+source.setEq(null);        // 移除音源 EQ
+sound.setOutputEq(null);   // 關閉輸出 EQ
+```
+
+| API | 作用處 |
+|---|---|
+| `Source.setEq(eq \| null)` | 音源訊號，引擎分頻之前。該音源的直達、反射、繞射、殘響全部帶有相同音色。即時與片段輸入皆可。也會進入 `renderMonoImpulseResponse` 的離線壓力 IR（不在 `getIRs()` 的頻段能量中） |
+| `SoundTrace.setOutputEq(eq \| null)` | 全域單一輸出 EQ，渲染末端（主增益之前）。`reset()` 後仍保留。不會進入離線分析 |
+
+- `eq = { enabled = true, preampDb = 0 (−48 ~ +12), bands = [] (最多 16) }`
+- `band = { type = 'peaking', enabled = true, frequencyHz = 1000 (20 ~ 20,000), gainDb = 0 (±24，僅 peaking 與 shelf), q = 0.7071 (0.1 ~ 30，shelf 由引擎限制為 3) }`
+- `type` 為 `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'`（Web Audio
+  `BiquadFilterType` 名稱，切除固定為 12 dB/oct）。
+- 超出範圍的值會以 `RangeError` 拒絕，不會送出指令。`{ enabled: false }` 會保留頻段並直通。
+- 未呼叫 EQ 時不會呼叫引擎 EQ，因此輸出與沒有 EQ 時位元相同。相同的值不會重複送出，
+  變更的值由引擎以 20 ms 交叉淡化切換。
+- 在不支援 EQ 的舊版核心上會指明引擎版本並失敗。已套用的輸出 EQ 位於 `debugSnapshot().simplest.output.eq`。
+
 ## 更新與清理
 
 ```ts
@@ -272,6 +306,7 @@ Multi-room occlusion、Runtime capability 範例。
 | 材質似乎沒有生效 | 名稱是否存在於材質表或別名中（不存在時會替換為混凝土） |
 | 核心／資源 404 | 打包工具的預先打包排除、`coreBaseUrl`、`assetBaseUrl`、`.wasm` MIME |
 | 效能不足 | 降低品質預設並使用 `thread: 'mt'`，關閉路徑視覺化 |
+| `setEq` / `setOutputEq` 擲出 `RangeError` | 頻率、增益、Q、前級增益範圍，頻段是否在 16 個以內 |
 
 ## 下一篇
 

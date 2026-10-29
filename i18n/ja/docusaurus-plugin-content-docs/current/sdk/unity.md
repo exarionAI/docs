@@ -1,15 +1,17 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 0.4.0（SimpleST 2.18.2 / ABI 6）のインストール、コンポーネントの Inspector 契約、HRTF・出力、材質、FMOD/Wwise 統合モード、WebGL。
+description: SoundTrace Unity SDK 0.4.0（SimpleST 2.22.0 / ABI 6）のインストール、コンポーネントの Inspector 契約、HRTF・出力、ソース・出力 EQ、材質、FMOD/Wwise 統合モード、WebGL。
 ---
 
 # SoundTrace SDK for Unity
 
 SoundTrace Unity SDK は、Unity のメッシュ、Renderer のマテリアルスロット、音源、リスナーを
 [SimpleST](../core/simplest.md) に接続するリアルタイム空間オーディオプラグインです。0.3.0 からエンジンが
-STCoreV2 から SimpleST に変わり、0.4.0 は **SimpleST 2.18.2 / ABI 6** を使います（以前のリリース: 0.3.0 =
-SimpleST 2.12.0）。レンダラーは **Hybrid** で起動します。SDK リリース 2.18.2-jhj.7 ではパッケージバージョンはそのままで、
-[音源数の上限](#音源数の上限)と Android 最小 API 28 が入りました。
+STCoreV2 から SimpleST に変わり、0.4.0 は **SimpleST 2.22.0 / ABI 6** を使います（SDK リリース 2.22.0-jhj.5。以前の SDK
+リリース 2.18.2-jhj.7 では同じ 0.4.0 が SimpleST 2.18.2 を使い、0.3.0 = SimpleST 2.12.0）。レンダラーは **Hybrid** で起動します。
+今回のリリースでパッケージバージョンはそのままで、[ソース EQ と出力 EQ](#eq) が入り、リスナーの向きをクォータニオンで渡すため
+頭部の傾き（roll）が反映されます（従来は yaw/pitch のみ）。2.18.2 SDK で[音源数の上限](#音源数の上限)と Android 最小 API 28 が
+入りました。
 `SoundTraceManager`、`SoundTraceListener`、`SoundTraceSource`、`SoundTraceObject`、
 `SoundTracePathVisualizer` のコンポーネント名とスクリプト GUID、サンプルシーンはそのままです。
 
@@ -95,6 +97,9 @@ python3 install.py /path/to/UnityProject
   マスターゲインは 0 dB にします。リミッティングは Unity ミキサーが担います — SimpleST 2.18 は生成直後に true-peak
   リミッター（137 サンプル遅延）を有効にするため、ラッパーが無効にします。レンダーオプションはエンジン生成時とスピーカーレイアウト
   変更時にのみプリセットで再適用され、`render_start` はそのまま維持します。
+- エンジンを作成した直後に**等ラウドネス補正を無効にします**（`SoundTraceRuntime.DisableLoudnessCompensation`、WebGL を含む）。
+  SimpleST 2.21 から生成直後に有効になる出力段の低域・高域シェルフで、音色とレベルは Unity ミキサーが担います。無効にした出力は
+  エンジン 2.20 とビット一致します。
 
 ## SoundTraceManager
 
@@ -156,8 +161,9 @@ SoundTraceRuntime.MaxSources = 64;   // 最初の Listener 有効化の前
 | `HRTF` | `HRIR Interpolated` | 下記 3 モード |
 | `Max Delay Seconds` | `0` | `0..5 s`。音源ごとの遅延リングの天井。`0` = エンジンのプラットフォーム天井（デスクトップ 2 s · Android/iOS 1 s · WebGL 0.5 s）。0 以外なら天井を上書きします（0.012 s 未満は 0.012 s） |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`。経路の出現/消滅クロスフェード |
+| `Output EQ` | 無効 | SimpleST のミックス全体にかけるパラメトリック EQ — [EQ](#eq) |
 
-`Max Delay Seconds` の既定値は SDK リリース 2.18.2-jhj.7 で `2` → `0`（エンジンポリシー）に変わりました。エンジンは音源ごとに
+`Max Delay Seconds` の既定値は SDK リリース 2.18.2 で `2` → `0`（エンジンポリシー）に変わりました。エンジンは音源ごとに
 経路が必要とする分だけ遅延リングを確保し、この値を天井としてのみ使います。`2` が保存された既存シーンは従来どおり動作します。
 この値を保存したことのないリスナー（同梱サンプル 01–03 を含む）は `0` を使います。デスクトップは天井が 2 s のままなので変わりませんが、
 Android/iOS では 1 s、WebGL では 0.5 s を超える経路がレンダリングされなくなります。これらのプラットフォームで従来の到達距離を保つには、リスナーの
@@ -201,6 +207,7 @@ Android/iOS では 1 s、WebGL では 0.5 s を超える経路がレンダリン
 | `Reverb Ray Depth` | `4` | transport ray の最大反射深度。範囲 `1..16` |
 | `Enable Direct` / `Reflection` / `Diffraction` / `Reverb` / `Transmission` | `true` | path ごとのゲート |
 | `Bypass` | `false` | SoundTrace レンダーをスキップし、元の `AudioSource` 出力をそのまま通す |
+| `Source EQ` | 無効 | この音源信号にかけるパラメトリック EQ — [EQ](#eq) |
 
 STCoreV2 の path ごとの `Distance Attenuation`（0.5 ~ 1.5）と `Max Delay Rate`、`Path Hold Time` は
 ありません。SimpleST は物理 `1/r` 減衰と空気吸収を適用し、最大遅延とフェードは Listener の
@@ -215,6 +222,27 @@ STCoreV2 の path ごとの `Distance Attenuation`（0.5 ~ 1.5）と `Max Delay 
 
 複数の `AudioSource` の再生タイミングを合わせるには、同一の `AudioSettings.dspTime` を基準に
 `PlayScheduled()` を呼んでください。
+
+## EQ
+
+SDK リリース 2.22.0-jhj から、SimpleST のパラメトリック EQ を 2 か所で使います。
+
+| 位置 | Inspector | スクリプト | かける場所 |
+|---|---|---|---|
+| ソース EQ | `SoundTraceSource`（と `SoundTraceClipSource`）の `Source EQ` | `SetSourceEq(SoundTraceEq)`、`SetSourceEqEnabled(bool)`、`GetSourceEq()` | 音源信号、SimpleST のバンド分割の前。その音源のすべての経路が同じ音色 |
+| 出力 EQ | `SoundTraceListener` の `Output EQ` | `SetOutputEq(SoundTraceEq)`、`SetOutputEqEnabled(bool)`、`GetOutputEq()` | SimpleST のミックス全体、レンダー末尾（マスターゲインの前） |
+
+- `SoundTraceEq`: `enabled`、`preampDb`（−48 ~ +12）、`bands`（最大 16 個）。
+- `SoundTraceEqBand`: `enabled`、`type`、`frequencyHz`（20 ~ 20,000）、`gainDb`（±24、Peaking・シェルフのみ）、`q`（0.1 ~ 30、シェルフは 3 まで）。
+- `SoundTraceEqFilterType`: `Peaking (Bell)` · `Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` ·
+  `Notch`。カットは 12 dB/oct 固定で、Inspector は Gain を使わない種類では Gain を隠します。
+- 既定は無効で、無効の間はエンジンを呼び出しません。変更された設定だけを送り、エンジンが 20 ms のクロスフェードで切り替えます。
+  出力 EQ だけを変えた Inspector 編集ではレンダーを再起動しません。
+- ソース EQ を無効にするとエンジンから解除し、ネイティブ音源を作り直すと再びかけます。
+- 対応状況は `SoundTraceRuntime.SupportsSourceParametricEq` / `SupportsOutputParametricEq` で確認します。対応していない
+  エンジンでは、有効にした EQ を一度の警告とともに無視します。
+- FMOD/Wwise 統合モードでは `SoundTraceListener`・`SoundTraceSource` が無効になるため、ミドルウェアプラグインの EQ を使います —
+  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq)。
 
 ## SoundTraceObject
 
@@ -407,6 +435,7 @@ source/listener の移動、material preset の変更、Unity 元のオーディ
 | FMOD/Wwise モードで Listener/Source が無効になる | 正常 — レンダーはミドルウェアプラグインが担当 |
 | 一部の音源が空間化されず dry で聞こえる | Console の `ST_STATUS_BUDGET_EXCEEDED` 警告 — 音源を減らすか `SoundTraceRuntime.MaxSources` を上げる |
 | Android ビルドが `SimpleST requires Android API 28 or newer` で失敗する | Player Settings › Minimum API Level を 28 以上に |
+| EQ を有効にしても音が変わらない | Console の EQ 非対応警告、FMOD/Wwise 統合モードか（ミドルウェアの EQ を使用） |
 | Teleport 後に pitch が跳ねる | transform 変更の直後に `ResetMotionState()` を呼ぶ |
 | 性能が足りない | `Quality → Middle → Fast`、Reverb Ray Resolution の縮小、path visualizer の無効化の順に確認 |
 | 複数の音源が comb filtering のように聞こえる | 同一の `AudioSettings.dspTime` で `PlayScheduled()` を実行 |

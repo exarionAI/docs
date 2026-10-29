@@ -1,15 +1,17 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 0.4.0(SimpleST 2.18.2 / ABI 6) 설치, 컴포넌트 Inspector 계약, HRTF·출력, 재질, FMOD/Wwise 통합 모드, WebGL.
+description: SoundTrace Unity SDK 0.4.0(SimpleST 2.22.0 / ABI 6) 설치, 컴포넌트 Inspector 계약, HRTF·출력, 소스·출력 EQ, 재질, FMOD/Wwise 통합 모드, WebGL.
 ---
 
 # SoundTrace SDK for Unity
 
 SoundTrace Unity SDK는 Unity의 메시, Renderer 재질 슬롯, 음원, 리스너를
 [SimpleST](../core/simplest.md)에 연결하는 실시간 공간 음향 플러그인입니다. 0.3.0부터 엔진이
-STCoreV2에서 SimpleST로 바뀌었고, 0.4.0은 **SimpleST 2.18.2 / ABI 6**을 씁니다(이전 릴리스: 0.3.0 =
-SimpleST 2.12.0). 렌더러는 **Hybrid**로 시작합니다. SDK 릴리스 2.18.2-jhj.7에서 패키지 버전은 그대로이고
-[음원 수 상한](#음원-수-상한)과 Android 최소 API 28이 들어갔습니다.
+STCoreV2에서 SimpleST로 바뀌었고, 0.4.0은 **SimpleST 2.22.0 / ABI 6**을 씁니다(SDK 릴리스 2.22.0-jhj.5. 이전 SDK
+릴리스 2.18.2-jhj.7은 같은 0.4.0이 SimpleST 2.18.2를 썼고, 0.3.0 = SimpleST 2.12.0). 렌더러는 **Hybrid**로 시작합니다.
+이번 릴리스에서 패키지 버전은 그대로이고 [소스 EQ와 출력 EQ](#eq)가 들어갔으며, 리스너 방향을 쿼터니언으로 넘겨
+머리 기울임(roll)이 반영됩니다(종전 yaw/pitch만). 2.18.2 SDK에서 [음원 수 상한](#음원-수-상한)과 Android 최소 API 28이
+들어갔습니다.
 `SoundTraceManager`, `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`,
 `SoundTracePathVisualizer` 컴포넌트 이름과 스크립트 GUID, 샘플 씬은 그대로입니다.
 
@@ -95,6 +97,9 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
   마스터 게인은 0 dB로 둡니다. 리미팅은 Unity 믹서가 맡습니다 — SimpleST 2.18은 생성 직후 true-peak
   리미터(137샘플 지연)를 켜므로 래퍼가 끕니다. 렌더 옵션은 엔진 생성 시와 스피커 레이아웃 변경 때만 프리셋으로
   다시 깔리고 `render_start`는 그대로 둡니다.
+- 엔진을 만든 직후 **등라우드니스 보정을 끕니다**(`SoundTraceRuntime.DisableLoudnessCompensation`, WebGL 포함).
+  SimpleST 2.21부터 생성 직후 켜지는 출력단 저역·고역 셸프로, 음색과 레벨은 Unity 믹서가 맡습니다. 끈 출력은 엔진 2.20과
+  비트 동일합니다.
 
 ## SoundTraceManager
 
@@ -156,8 +161,9 @@ SoundTraceRuntime.MaxSources = 64;   // 첫 Listener 활성화 전
 | `HRTF` | `HRIR Interpolated` | 아래 세 모드 |
 | `Max Delay Seconds` | `0` | `0..5 s`; 음원별 지연 링의 천장. `0` = 엔진 플랫폼 천장(데스크톱 2 s · Android/iOS 1 s · WebGL 0.5 s). 0이 아니면 천장을 덮어씁니다(0.012 s 미만은 0.012 s) |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`; 경로 등장/소멸 크로스페이드 |
+| `Output EQ` | 꺼짐 | SimpleST 믹스 전체에 거는 파라메트릭 EQ — [EQ](#eq) |
 
-`Max Delay Seconds` 기본값은 SDK 릴리스 2.18.2-jhj.7에서 `2` → `0`(엔진 정책)으로 바뀌었습니다. 엔진은 음원마다
+`Max Delay Seconds` 기본값은 SDK 릴리스 2.18.2에서 `2` → `0`(엔진 정책)으로 바뀌었습니다. 엔진은 음원마다
 경로가 필요한 만큼만 지연 링을 잡고 이 값을 천장으로만 씁니다. `2`가 저장된 기존 씬은 종전처럼 동작합니다.
 이 값을 저장한 적이 없는 리스너(번들 샘플 01–03 포함)는 `0`을 씁니다. 데스크톱은 천장이 그대로 2 s라 달라지지 않지만,
 Android/iOS는 1 s, WebGL은 0.5 s를 넘는 경로가 렌더되지 않습니다. 그 플랫폼에서 종전 거리를 유지하려면 리스너의
@@ -201,6 +207,7 @@ Android/iOS는 1 s, WebGL은 0.5 s를 넘는 경로가 렌더되지 않습니다
 | `Reverb Ray Depth` | `4` | transport ray 최대 반사 깊이. 범위 `1..16` |
 | `Enable Direct` / `Reflection` / `Diffraction` / `Reverb` / `Transmission` | `true` | path별 게이트 |
 | `Bypass` | `false` | SoundTrace 렌더를 건너뛰고 원본 `AudioSource` 출력을 그대로 전달 |
+| `Source EQ` | 꺼짐 | 이 음원 신호에 거는 파라메트릭 EQ — [EQ](#eq) |
 
 STCoreV2의 path별 `Distance Attenuation`(0.5 ~ 1.5)과 `Max Delay Rate`, `Path Hold Time`은
 없습니다. SimpleST는 물리 `1/r` 감쇠와 공기 흡수를 적용하며, 최대 지연과 페이드는 Listener
@@ -215,6 +222,27 @@ STCoreV2의 path별 `Distance Attenuation`(0.5 ~ 1.5)과 `Max Delay Rate`, `Path
 
 여러 `AudioSource`의 재생 시점을 맞출 때는 동일한 `AudioSettings.dspTime`을 기준으로
 `PlayScheduled()`를 호출하십시오.
+
+## EQ
+
+SDK 릴리스 2.22.0-jhj부터 SimpleST 파라메트릭 EQ를 두 자리에서 씁니다.
+
+| 자리 | Inspector | 스크립트 | 거는 곳 |
+|---|---|---|---|
+| 소스 EQ | `SoundTraceSource`(와 `SoundTraceClipSource`)의 `Source EQ` | `SetSourceEq(SoundTraceEq)`, `SetSourceEqEnabled(bool)`, `GetSourceEq()` | 음원 신호, SimpleST 밴드 분리 앞. 그 음원의 모든 경로가 같은 톤 |
+| 출력 EQ | `SoundTraceListener`의 `Output EQ` | `SetOutputEq(SoundTraceEq)`, `SetOutputEqEnabled(bool)`, `GetOutputEq()` | SimpleST 믹스 전체, 렌더 끝(마스터 게인 앞) |
+
+- `SoundTraceEq`: `enabled`, `preampDb`(−48 ~ +12), `bands`(최대 16개).
+- `SoundTraceEqBand`: `enabled`, `type`, `frequencyHz`(20 ~ 20,000), `gainDb`(±24, Peaking·셸프만), `q`(0.1 ~ 30, 셸프는 3까지).
+- `SoundTraceEqFilterType`: `Peaking (Bell)` · `Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` ·
+  `Notch`. 컷은 12 dB/oct 고정이고, Inspector는 Gain을 쓰지 않는 종류에서 Gain을 숨깁니다.
+- 기본은 꺼짐이고 꺼져 있으면 엔진을 호출하지 않습니다. 바뀐 설정만 보내며 엔진이 20 ms 크로스페이드로 넘어갑니다.
+  출력 EQ만 바꾼 Inspector 편집은 렌더를 다시 시작하지 않습니다.
+- 소스 EQ를 끄면 엔진에서 지우고, 네이티브 음원을 다시 만들면 다시 겁니다.
+- 지원 여부는 `SoundTraceRuntime.SupportsSourceParametricEq` / `SupportsOutputParametricEq`로 확인합니다. 지원하지 않는
+  엔진에서는 켠 EQ를 경고 한 번과 함께 무시합니다.
+- FMOD/Wwise 통합 모드에서는 `SoundTraceListener`·`SoundTraceSource`가 꺼지므로 미들웨어 플러그인의 EQ를 씁니다 —
+  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq).
 
 ## SoundTraceObject
 
@@ -407,6 +435,7 @@ source/listener 이동, material preset 변경, Unity 원본 audio와 SoundTrace
 | FMOD/Wwise 모드에서 Listener/Source가 꺼짐 | 정상 — 렌더는 미들웨어 플러그인이 담당 |
 | 일부 음원이 공간화되지 않고 dry로 들림 | Console의 `ST_STATUS_BUDGET_EXCEEDED` 경고 — 음원을 줄이거나 `SoundTraceRuntime.MaxSources`를 올림 |
 | Android 빌드가 `SimpleST requires Android API 28 or newer`로 실패 | Player Settings › Minimum API Level을 28 이상으로 |
+| EQ를 켜도 소리가 그대로임 | Console의 EQ 미지원 경고, FMOD/Wwise 통합 모드인지(미들웨어 EQ 사용) |
 | Teleport 뒤 pitch가 튐 | transform 변경 직후 `ResetMotionState()` 호출 |
 | 성능이 부족함 | `Quality → Middle → Fast`, Reverb Ray Resolution 축소, path visualizer 비활성화 순서로 확인 |
 | 여러 음원이 comb filtering처럼 들림 | 동일한 `AudioSettings.dspTime`으로 `PlayScheduled()` 실행 |

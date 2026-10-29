@@ -1,15 +1,17 @@
 ---
 title: Unreal Engine
-description: SoundTracing UE5 プラグイン 0.4.0（SimpleST 2.18.2 / ABI 6）のインストール、Project Settings、リスナー・音源・オブジェクトコンポーネント、ワンショットサウンド、Native/FMOD/Wwise 統合モード、プラットフォームリンク契約。
+description: SoundTracing UE5 プラグイン 0.4.0（SimpleST 2.22.0 / ABI 6）のインストール、Project Settings、リスナー・音源・オブジェクトコンポーネント、ソース・出力 EQ、ワンショットサウンド、Native/FMOD/Wwise 統合モード、プラットフォームリンク契約。
 ---
 
 # SoundTrace SDK for Unreal Engine
 
 SoundTracing UE5 プラグインは、Unreal Audio Mixer の Spatialization プラグイン + サブミックス、そして
 Actor Component を通して [SimpleST](../core/simplest.md) を接続します。0.3.0 からエンジンが STCoreV2 から
-SimpleST に変わり、0.4.0 は **SimpleST 2.18.2 / ABI 6** を使います（以前のリリース: 0.3.0 = SimpleST 2.12.0）。
-SDK リリース 2.18.2-jhj.7 ではプラグインバージョンはそのままで、`Max Sources` 設定、FMOD/Wwise モードへのサウンドトレーシング
-スイッチの受け渡し、レイサンプラーの整理が入りました。
+SimpleST に変わり、0.4.0 は **SimpleST 2.22.0 / ABI 6** を使います（SDK リリース 2.22.0-jhj.5。以前の SDK リリース
+2.18.2-jhj.7 では同じ 0.4.0 が SimpleST 2.18.2 を使い、0.3.0 = SimpleST 2.12.0）。今回のリリースでプラグインバージョンはそのままで、
+[ソース EQ と出力 EQ](#eq) が入り、リスナーの向きをクォータニオンで渡すため頭部の傾き（roll）が反映されます（従来は yaw/pitch のみ）。
+エンジン 2.21 が生成直後に有効にする等ラウドネス補正はプラグインが無効にします — 音色とレベルは Unreal のマスターチェーンが担います。
+2.18.2 SDK で `Max Sources` 設定、FMOD/Wwise モードへのサウンドトレーシングスイッチの受け渡し、レイサンプラーの整理が入りました。
 プロジェクトに FMOD または Wwise プラグインがあると、同じソースがそのミドルウェアの SimpleST プラグインへ接続する
 **統合モード**でビルドされます。
 
@@ -126,6 +128,7 @@ Audio Mixer Sample Rate はどの値でも構いません。SimpleST は 44.1 kH
 | Propagation | `Static Rebuild Delay Seconds` | `0.1` | 静的ジオメトリの変更を静的加速構造に畳み込む前の待機（レベルストリーミングのバッチ処理） |
 | Listener | `Default Listener Settings` | — | 下記のリスナー設定構造体 |
 | Sources | `Source Ray Resolution Cap` / `Source Ray Depth Cap` | `0` / `0` | すべての音源アセットの transport ray 格子・深度の上限。0 = アセット値のまま |
+| Listener | `Output EQ` | 無効 | SimpleST のミックス全体にかけるパラメトリック出力 EQ — [EQ](#eq)。有効な間はリスナーのグラフィック `Output EQ` の代わりになります。Native モード専用 |
 | Materials | `Material Preset Library` | 空 | 起動時に SimpleST へ登録するライブラリ。空ならプラグインのバンドルを使用 |
 
 ## リスナー設定（`FSoundTracingListenerSettings`）
@@ -147,7 +150,7 @@ Audio Mixer Sample Rate はどの値でも構いません。SimpleST は 44.1 kH
 | Render | `Late Reverb` / `Late Reverb Coupling` | `true` / `Default` | FDN16 / Off · Subtle 6 dB · Default 9 dB · Strong 12 dB |
 | Render | `Path Fade Time Seconds` | `0.05` | 経路の出現・消滅クロスフェード |
 | Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak / True Peak。`True Peak`（0.4.0）は SimpleST 2.18 の true-peak リミッター（−1 dBTP、137 サンプル遅延）。エンジン 2.18 は生成直後にリミッターを有効にしますが、プラグインの既定は `Off` で、Unreal のマスターチェーンがリミッティングを担います。0.4.0 でスピーカー出力（`Speakers`）でも `Off` が適用されるよう修正 |
-| Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 63 ~ 16k Hz 9バンド ±24 dB |
+| Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 63 ~ 16k Hz 9バンド ±24 dB のグラフィック EQ。Project Settings のパラメトリック `Output EQ` が有効ならそちらが優先され、無効にするとこの値に戻ります |
 | Paths | `Enable Direct/Transmission/Reflection/Diffraction/Reverb Path` | すべて `true` | グローバル経路ゲート |
 | Acoustics | `Propagation Delay` / `Direct Occlusion` | `true` / `true` | 無効にすると、それぞれ全経路が直接音の時刻に重なる / 直接音がジオメトリを通過する |
 | Acoustics | `Reference Distance Meters` / `Min Distance Meters` | `1.0` / `1.0` | 物理 `1/r` 減衰の開始距離 / 近接クランプ |
@@ -161,7 +164,7 @@ Audio Mixer Sample Rate はどの値でも構いません。SimpleST は 44.1 kH
 | 項目 | 説明 |
 |---|---|
 | `Override Project Listener Settings` / `Listener Settings` | 上記の構造体でプロジェクト既定値を上書き |
-| `Drive Listener Transform` | このコンポーネントの world transform・速度をオーディオデバイスリスナーの代わりに SimpleST へ渡す |
+| `Drive Listener Transform` | このコンポーネントの world transform・速度をオーディオデバイスリスナーの代わりに SimpleST へ渡す（回転は roll を含む） |
 | `ApplyListenerSettings()`、`SetQualityPreset()`、`SetHrtfDataset()`、`SetOutputMode()`、`SetSpeakerLayout()` | Blueprint からのランタイム変更 |
 | `ResetMotionState()` | テレポート・リスポーン後の Doppler スパイク防止 |
 
@@ -191,14 +194,38 @@ Attenuation の spatialization plugin settings に接続します。用途別の
 | Reverb Rays | `Stationary Emitter` | `false` | 動かないエミッターのヒント |
 | Per-Path Enable | `Direct/Transmission/Reflection/Diffraction/Reverb Path Enabled` | すべて `true` | 音源ごとの経路ゲート |
 | Bypass | `Bypass` | `false` | SimpleST を経由せずに通過 |
+| EQ | `Source EQ` | 無効 | このアセットを使う音源信号にかけるパラメトリック EQ — [EQ](#eq) |
+
+## EQ
+
+SDK リリース 2.22.0-jhj から、SimpleST のパラメトリック EQ を 2 か所で使います。どちらも同じ構造体
+`FSoundTracingEq`（`Enabled`、`Preamp (dB)` −48 ~ +12、`Bands` 最大 16 個）を使います。
+
+| 位置 | 設定 | ランタイム変更 | かける場所 |
+|---|---|---|---|
+| ソース EQ | Source Settings アセット `Source EQ` | `USoundTracingSourceSettings::SetSourceEq` / `GetSourceEq`（Blueprint） | 音源信号、SimpleST のバンド分割の前。直接音・反射・回折・残響センドがすべて同じ音色 |
+| 出力 EQ | Project Settings › SoundTracing › Listener › `Output EQ` | `USoundTracingSubsystem::SetOutputEq` / `ClearOutputEqOverride` / `GetOutputEq` | SimpleST のミックス全体、レンダー末尾（マスターゲインの前） |
+
+バンド（`FSoundTracingEqBand`）は `Enabled`、`Type`、`Frequency Hz`（20 ~ 20,000）、`Gain (dB)`（±24、Peaking・シェルフのみ）、
+`Q`（0.1 ~ 30、シェルフは 3 まで）です。`Type`（`ESoundTracingEqFilterType`）は `Peaking (Bell)` · `Low Shelf` · `High Shelf` ·
+`High Cut (Low-pass)` · `Low Cut (High-pass)` · `Notch` で、カットは 12 dB/oct 固定です。
+
+- 既定は無効で、無効の間は SimpleST を呼び出しません。値が変わると SimpleST が 20 ms のクロスフェードで切り替えます。
+- `SetSourceEq` はそのアセットで再生中のボイスにもすぐ反映され、エンジン音源プールで再利用する音源は生成時に EQ を
+  かけ直すか解除します。
+- `SetOutputEq` は `ClearOutputEqOverride` を呼ぶまで Project Settings の値を上書きし、ランタイムを再起動しても維持されます。
+  無効の EQ を渡すと出力 EQ が無効になります。
+- **Native モード専用**です。FMOD/Wwise モードではミドルウェアプラグインの EQ を使います —
+  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq)。
+- EQ の export がない以前の SimpleST ランタイムでは、EQ 設定を無視して警告を一度残します。
 
 ## ワンショットサウンド
 
-エンジンは**新しい音源**のすべての経路を 150 ms かけてフェードインし最初の IR を待つため、銃声・足音のたびにエンジン
-音源を新しく作ると、短いショットが小さく遅れて聞こえます。プラグインはモードごとにこれを処理します。
+エンジンは**新しい音源**のすべての経路を 150 ms かけてフェードインし最初の IR を待つため、短い音を再生するたびにエンジン
+音源を新しく作ると、音が小さく遅れて聞こえます。プラグインはモードごとにこれを処理します。
 
 - **Native モード**: コンテキスト開始時にエンジン音源プールをあらかじめ作っておき、ボイスが終わるとその音源をプールへ
-  戻して、最も近い次のボイスが引き継ぎます。ショットごとに Audio Component・サウンドを新しく再生しても、エンジン
+  戻して、最も近い次のボイスが引き継ぎます。再生のたびに Audio Component・サウンドを新しく再生しても、エンジン
   音源は新しく作られません。
 - **FMOD / Wwise モード**: レンダーはミドルウェアプラグインが行うため、そのウォーム音源プール（FMOD 0.3.0 · Wwise 0.2.0）に
   従います — [FMOD](./fmod.md#ワンショットとウォーム音源プール) · [Wwise](./wwise.md#ワンショットとウォーム音源プール)。
@@ -249,7 +276,7 @@ Blueprint から読める World Subsystem です — 統合モード、シーン
 
 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` でサウンドトレーシング全体をオン・オフします。オフの
 間は、リスナー・音源が動いても伝搬レーンを起こさず、可視化経路も集めないため、最後の経路が残りません。
-FMOD・Wwise モードでは、SDK リリース 2.18.2-jhj.7 からこのスイッチをミドルウェアプラグインに渡します
+FMOD・Wwise モードでは、SDK リリース 2.18.2 からこのスイッチをミドルウェアプラグインに渡します
 （`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`）。それ以前はプラグインが所有する
 コンテキストのため、オフにしても効果がありませんでした。新しいランタイムに接続した後もオフの状態を再送し、この export がない旧版
 プラグインなら警告を残します。SimpleST には伝搬の一時停止がないため、音源が残っている間、レーンは独自の周期で
@@ -306,8 +333,9 @@ scene です。
 | source が空間化されない（Native） | Audio Component に SoundTracing Source Settings asset が接続されているか |
 | geometry が反映されない | Object Component の immediate parent が対応 mesh component か、`Acoustic Mobility` |
 | レンダーブロック超過（オーディオの途切れ） | `Early Reflections = Hybrid`、`Reflection Update Interval` の引き上げ、Quality Preset の引き下げ |
-| 銃声・足音が小さい、または遅れて聞こえる（FMOD/Wwise モード） | FMOD プラグイン 0.3.0 / Wwise プラグイン 0.2.0 以上か、`SIMPLESTFMOD_WARM_SOURCES=0` が設定されていないか |
+| 短い音が小さい、または遅れて聞こえる（FMOD/Wwise モード） | FMOD プラグイン 0.3.0 / Wwise プラグイン 0.2.0 以上か、`SIMPLESTFMOD_WARM_SOURCES=0` が設定されていないか |
 | 一部の音源が dry で再生される（Native） | Output Log の `ST_STATUS_BUDGET_EXCEEDED` — 音源を減らすか `Max Sources` を上げる |
+| EQ を有効にしても音が変わらない | Native モードか（FMOD/Wwise モードはミドルウェアの EQ）、Output Log の EQ 非対応警告（以前の SimpleST ランタイム） |
 | FMOD/Wwise モードでサウンドトレーシングをオフにしても変わらない | プラグインが `*_SetSoundTracingEnabled` を export するバージョンか（ない場合は Output Log に警告） |
 | path が見えない | visualizer component、Niagara plugin、path enable の状態、サウンドトレーシングがオフになっていないか |
 

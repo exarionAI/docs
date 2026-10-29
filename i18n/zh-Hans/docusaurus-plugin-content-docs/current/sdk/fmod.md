@@ -1,6 +1,6 @@
 ---
 title: FMOD
-description: SimpleSTFmod — 面向 FMOD Studio / FMOD Engine 的 SimpleST DSP 插件的结构、安装、Studio 创作、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成。
+description: SimpleSTFmod — 面向 FMOD Studio / FMOD Engine 的 SimpleST DSP 插件的结构、安装、Studio 创作、EQ、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成。
 ---
 
 # SimpleST FMOD 插件
@@ -11,7 +11,7 @@ description: SimpleSTFmod — 面向 FMOD Studio / FMOD Engine 的 SimpleST DSP 
 
 | 项目 | 值 |
 |---|---|
-| 插件版本 | v0.3.0（SimpleST 2.18.2）。上一版本：v0.2.0（SimpleST 2.12.0）。从 SDK 发行版 2.18.2-jhj.7 起，FMOD 看到的 DSP 描述版本为 0.3.0（此前的 0.3.0 发行包显示为 0.2.0） |
+| 插件版本 | v0.3.0（SimpleST 2.22.0，SDK 发行版 2.22.0-jhj.5 — 4 频段 [EQ](#eq)、听者 roll）。上一版本：v0.3.0（SimpleST 2.18.2）、v0.2.0（SimpleST 2.12.0）。FMOD 看到的 DSP 描述版本为 0.3.0（SDK 2.18.2 早期发行包显示为 0.2.0） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 构建 = 2.00 ~ 2.04，204 构建 = 2.04+） |
 | 平台 | Windows x64 · macOS · Linux · Android · iOS（静态）· Web（静态，FMOD HTML5 pthreads） |
 | 分发 | `SimpleST-fmod-release.zip`（各平台 `plugins/` + `install.py`，含 UE/Unity 胶水代码） |
@@ -42,6 +42,10 @@ description: SimpleSTFmod — 面向 FMOD Studio / FMOD Engine 的 SimpleST DSP 
   预热池中供下一个 voice 复用 — [单次音效与预热声源池](#单次音效与预热声源池)。
 - **关闭输出限制器**：SimpleST 2.18 在创建后会开启 true-peak 限制器（−1 dBTP，137 采样延迟），
   但在 FMOD 中由主总线负责限幅。
+- **同样关闭等响度补偿**：SimpleST 2.21 在创建后会开启输出级等响度补偿（低频搁架约 +7.2 dB @ 120 Hz），
+  但音色与电平由 FMOD 混音负责。在创建上下文后以及重新开启 Sound Tracing 时，与限制器一起关闭。
+- **听者方向**：把 FMOD 听者的 forward·up 以 SimpleST 四元数传入，从而反映头部倾斜（roll）（自 SDK 发行版
+  2.22.0-jhj 起）。
 
 ## 安装
 
@@ -105,9 +109,29 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 | | 3D Attributes / Overall Gain / Atten Range | FMOD 特殊 data 参数（自动） |
 | SimpleST Listener | Wet Level / Dry Level (dB) | SimpleST 渲染 / 总线上其他音频的电平 |
 | | HRTF | 开启为双耳（耳机），关闭为立体声声像 |
+| 两者（EQ 块） | EQ / EQ Preamp (dB) | 4 频段 EQ 开关·前级增益 — [EQ](#eq) |
+| | EQn Type / EQn Freq (Hz) / EQn Gain (dB) / EQn Q（n = 1 ~ 4） | 各频段的滤波器类型·频率·增益·Q |
 
 将 Listener **bypass** 后，Source 回到 dry 直通（用于 A/B 对比）。DSP 名称和参数名称由 bank
 作为标识符保存，因此发布后不要更改。
+
+### EQ
+
+从 SDK 发行版 2.22.0-jhj 起，两个 DSP 都有相同的 4 频段 EQ 参数块，直接使用 SimpleST 参数 EQ。
+
+| DSP | 作用点 |
+|---|---|
+| SimpleST Source | **声源 EQ** — 作用于进入 SimpleST 的事件信号，位于引擎频段拆分之前。直达声·反射·绕射·混响都得到相同音色 |
+| SimpleST Listener | **输出 EQ** — 作用于 SimpleST 混音，位于 Wet Level 之前 |
+
+- `EQ` 为开关，`EQ Preamp` 为频段之前的增益（−48 ~ +12 dB，提升时用负值留出余量）。
+- `EQn Type` 为 Off · Peaking · Low Shelf · High Shelf · High Cut（12 dB/oct 低通）· Low Cut（12 dB/oct 高通）· Notch。
+- `EQn Freq` 为 20 ~ 20,000 Hz，`EQn Gain` 为 ±24 dB（仅 Peaking·搁架），`EQn Q` 为 0.1 ~ 30（搁架最多 3）。
+- 4 个频段足以同时设置低切·低频搁架·高频搁架·高切。`EQn Type` 是整数参数（7 个值名称，
+  0 = Off），其余为实数参数。
+- 默认关闭，关闭时不调用引擎。只发送变化的值，引擎以 20 ms 交叉淡化过渡。
+- 存在多个 Listener 时，使用被选为渲染器的实例的 EQ。从预热池复用的引擎声源会先清除上一个 voice 的 EQ
+  或换成新的 EQ，然后再开始。
 
 ## 单次音效与预热声源池
 
@@ -164,7 +188,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 - FMOD 与 SimpleST 的坐标系相同（左手系，+Y up，+Z forward）。FMOD UE 集成的 `(UE.Y, UE.Z, UE.X)/100`
   转换与 SoundTracing UE 插件的转换一致。
 - 插件上下文中已预先注册默认材质库。请从 `defaultMaterialId` 开始加上 preset index 使用。
-- **声源上限**（SDK 发行版 2.18.2-jhj.7）：`SimpleSTFmod_Config.maxSources` 是引擎声源数上限（0 = 平台
+- **声源上限**（自 SDK 发行版 2.18.2 起）：`SimpleSTFmod_Config.maxSources` 是引擎声源数上限（0 = 平台
   默认）。超出时引擎拒绝创建声源，该 voice 以 dry 播放。这是追加在结构体末尾的字段，因此传入旧版较短
   结构体的主机也能正常工作 — [声源内存预算](../core/simplest.md#声源内存预算)。
 
@@ -174,7 +198,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // 关闭。1 = 开启（默认）
 ```
 
-这是 SDK 发行版 2.18.2-jhj.7 中新增的游戏侧 A/B 开关。它作用于一个运行时（`systemIndex < 0` = 最新的运行时），
+这是 SDK 发行版 2.18.2 中新增的游戏侧 A/B 开关。它作用于一个运行时（`systemIndex < 0` = 最新的运行时），
 并在控制线程上异步生效。
 
 - **关闭时**，会启用 SimpleST 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空预热声源池后不再
@@ -215,7 +239,8 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 FMOD 模式下会调用此函�
 
 ## 已知限制
 
-- 1 个听者（无 roll），64 个并发流（超出部分 dry），仅立体声输出（未暴露扬声器布局）。
+- 1 个听者，64 个并发流（超出部分 dry），仅立体声输出（未暴露扬声器布局）。
+- EQ 每个 DSP 固定为 4 频段（UE、Unity、Web 最多 16 频段）。
 - 引擎声源数不会超过平台上限（`maxSources`）。超出的 voice 为 dry。
 - Source 之后的事件效果器/发送只收到静音（SimpleST 混音在 Listener 总线上输出）。
 - `Overall Gain`（用于虚拟化的可听度）是基于距离的估计值。

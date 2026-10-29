@@ -1,6 +1,6 @@
 ---
 title: Web
-description: soundtrace.js 1.1.0 — installation, deployment requirements, HRTF, quality presets, materials, and troubleshooting for the SimpleST ABI 6 WebAssembly SDK.
+description: soundtrace.js 1.1.0 — installation, deployment requirements, HRTF, quality presets, materials, EQ, and troubleshooting for the SimpleST ABI 6 WebAssembly SDK.
 ---
 
 # Web SDK
@@ -9,10 +9,12 @@ description: soundtrace.js 1.1.0 — installation, deployment requirements, HRTF
 browser. It connects the meshes, materials, sources, and listener of a rendering scene such as
 Three.js to a Sound Tracing scene, and provides spatialized stereo output to the Web Audio graph.
 
-From 1.0.0 the engine has changed from STCoreV2 to SimpleST, and 1.1.0 uses **SimpleST 2.18.2 /
-ABI 6** (previous release: 1.0.0 = SimpleST 2.12.0). In SDK release 2.18.2-jhj.7 the package version
-is unchanged; it adds the `maxSources` option (source count limit). Existing call sites do not
-change. The `SoundTrace`, `Source`,
+From 1.0.0 the engine has changed from STCoreV2 to SimpleST, and 1.1.0 uses **SimpleST 2.22.0 /
+ABI 6** (SDK release 2.22.0-jhj.5. In the previous SDK release 2.18.2-jhj.7 the same 1.1.0 used SimpleST
+2.18.2; 1.0.0 = SimpleST 2.12.0). In this release the package version is unchanged; it adds a
+[source EQ and an output EQ](#eq) (`source.setEq`, `sound.setOutputEq`), and head tilt (roll) in the listener
+`orientation` quaternion now reaches the engine (previously yaw/pitch only). The 2.18.2 SDK added the
+`maxSources` option (source count limit). Existing call sites do not change. The `SoundTrace`, `Source`,
 `Mesh`, and `Listener` facades are kept, but the backend, HRTF, material, and option contracts have
 changed relative to STCoreV2. See [Facade API](./web/facade.md) for the full options and entity API, and
 [Native API](./web/native.md) for low-level access to the SimpleST module.
@@ -31,6 +33,7 @@ changed relative to STCoreV2. See [Facade API](./web/facade.md) for the full opt
 | Materials | 9-band (63 Hz ~ 16 kHz), 22 SoundTrace game materials, selected by name, alias, or index |
 | Output | Mono input per source; the listener renderer mixes one stereo output (`sound.output`) |
 | Source cap | Default 32 sources · source memory 64 MiB · delay ring ceiling 0.5 s. The source count is changed with the `maxSources` option — see [Source memory budget](../core/simplest.md#source-memory-budget) |
+| EQ | Per-source source EQ and a global output EQ, parametric, up to 16 bands — see [EQ](#eq) |
 | GPU | None. `mode: 'gpu'` and `enableGpu()` are errors |
 
 ## Requirements
@@ -229,6 +232,41 @@ The SDK keeps the output limiter **off**. SimpleST 2.18 turns on a true-peak lim
 by the app. If you need the engine limiter, turn on the true-peak limiter with
 `sound.listener.setRenderOptions({ useLimiter: true })`.
 
+For the same reason, the equal-loudness compensation that the engine turns on right after creation since
+SimpleST 2.21 (low shelf about +7.2 dB @ 120 Hz, high +1.8 dB) is turned off right after the context is created
+(including `reset()`). The output with it off is bit-identical to engine 2.20, and this setting is not exposed.
+
+## EQ
+
+From SDK release 2.22.0-jhj you can apply the SimpleST parametric EQ to sources and to the output.
+
+```ts
+source.setEq({ bands: [
+  { type: 'highpass', frequencyHz: 150 },
+  { type: 'peaking', frequencyHz: 3000, gainDb: 4, q: 1.2 },
+] });
+sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, gainDb: 3 }] });
+
+source.setEq(null);        // remove the source EQ
+sound.setOutputEq(null);   // turn the output EQ off
+```
+
+| API | Where it applies |
+|---|---|
+| `Source.setEq(eq \| null)` | The source signal, before the engine's band split. Direct, reflection, diffraction, and reverb of that source all get the same tone. Both live and clip input. Also included in the offline pressure IR of `renderMonoImpulseResponse` (not in the band energies of `getIRs()`) |
+| `SoundTrace.setOutputEq(eq \| null)` | One global output EQ at the end of the render (before the master gain). Kept across `reset()`. Not included in offline analysis |
+
+- `eq = { enabled = true, preampDb = 0 (−48 ~ +12), bands = [] (up to 16) }`
+- `band = { type = 'peaking', enabled = true, frequencyHz = 1000 (20 ~ 20,000), gainDb = 0 (±24, peaking and shelves only), q = 0.7071 (0.1 ~ 30, the engine limits shelves to 3) }`
+- `type` is `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'` (Web Audio
+  `BiquadFilterType` names; cuts are fixed at 12 dB/oct).
+- Out-of-range values are rejected with a `RangeError` and no command is sent. `{ enabled: false }` keeps the bands
+  and passes the signal through.
+- If you never call the EQ, the engine EQ is not called, so the output is bit-identical to having no EQ. The same
+  value is not sent again, and changed values are crossfaded by the engine over 20 ms.
+- An older core without EQ support fails with a message naming the engine version. The applied output EQ is in
+  `debugSnapshot().simplest.output.eq`.
+
 ## Update and cleanup
 
 ```ts
@@ -279,6 +317,7 @@ the Shoebox room, Multi-room occlusion, and Runtime capability examples.
 | Materials do not seem to apply | The name exists in the material table/aliases (otherwise it falls back to concrete) |
 | Core/asset 404 | Bundler pre-bundling exclusion, `coreBaseUrl`/`assetBaseUrl`, `.wasm` MIME type |
 | Not enough performance | Lower the quality preset, use `thread: 'mt'`, disable path visualization |
+| `setEq` / `setOutputEq` throws `RangeError` | Frequency, gain, Q, and preamp ranges; 16 bands or fewer |
 
 ## Next
 

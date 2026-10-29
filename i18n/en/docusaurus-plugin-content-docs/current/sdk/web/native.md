@@ -53,7 +53,7 @@ a Worker.
 
 ```ts
 const M = await loadRealtimeModule(coreBaseUrl);
-const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, material table registration, Hybrid applied
+const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, loudness compensation off, material table registration, Hybrid applied
 
 rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
 rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + quality preset applied
@@ -78,6 +78,12 @@ rt.reset(); rt.dispose();
 - The output stage is set explicitly on every render start: limiter off (true-peak with
   `useLimiter: true`), master gain 0 dB. It does not rely on SimpleST 2.18's defaults right after
   creation (true-peak limiter on).
+- Right after creating the context, it turns off the equal-loudness compensation that SimpleST 2.21 turns on
+  (when `features.loudnessCompensation`).
+- The listener orientation is passed to `st_rt_listener_set_orientation_q` as a quaternion built from
+  forward/up, so roll is kept.
+- The source EQ goes through `st_rt_source_set_parametric_eq` (cleared with `st_rt_source_set_eq(NULL)`), the output
+  EQ through `st_rt_render_set_parametric_eq`. Without `features.sourceParametricEq` / `outputParametricEq` they are rejected.
 
 ## Diagnostic snapshot
 
@@ -91,7 +97,7 @@ interface SimpleSTDiagnostics {
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
   features?: SimpleSTFeatures;                                                   // 1.1.0
-  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain };  // 1.1.0, applied output stage
+  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // 1.1.0, applied output stage (eq = output EQ)
   inputs?: { live; clip };                                                       // 1.1.0, live/clip source counts
 }
 ```

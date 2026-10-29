@@ -1,16 +1,19 @@
 ---
 title: Unreal Engine
-description: SoundTracing UE5 plugin 0.4.0 (SimpleST 2.18.2 / ABI 6) installation, Project Settings, listener/source/object components, one-shot sounds, Native/FMOD/Wwise integration modes, platform link contract.
+description: SoundTracing UE5 plugin 0.4.0 (SimpleST 2.22.0 / ABI 6) installation, Project Settings, listener/source/object components, source and output EQ, one-shot sounds, Native/FMOD/Wwise integration modes, platform link contract.
 ---
 
 # SoundTrace SDK for Unreal Engine
 
 The SoundTracing UE5 plugin connects [SimpleST](../core/simplest.md) through the Unreal Audio Mixer
 Spatialization plugin + submix and through Actor Components. From 0.3.0 the engine has changed from
-STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.18.2 / ABI 6** (previous release: 0.3.0 =
-SimpleST 2.12.0). In SDK release 2.18.2-jhj.7 the plugin version is unchanged; it adds the
-`Max Sources` setting, forwarding of the sound tracing switch in FMOD/Wwise mode, and a ray sampler
-cleanup. When the project has an FMOD or Wwise plugin the same source builds in an
+STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.22.0 / ABI 6** (SDK release 2.22.0-jhj.5. In the previous
+SDK release 2.18.2-jhj.7 the same 0.4.0 used SimpleST 2.18.2; 0.3.0 = SimpleST 2.12.0). In this release the plugin
+version is unchanged; it adds a [source EQ and an output EQ](#eq), and the listener orientation is passed as a
+quaternion so head tilt (roll) is reflected (previously yaw/pitch only). The plugin turns off the equal-loudness
+compensation that engine 2.21 turns on right after creation — tone and level belong to the Unreal master chain.
+The 2.18.2 SDK added the `Max Sources` setting, forwarding of the sound tracing switch in FMOD/Wwise mode, and a
+ray sampler cleanup. When the project has an FMOD or Wwise plugin the same source builds in an
 **integration mode** that attaches to that middleware's SimpleST plug-in.
 
 ## Current status
@@ -128,6 +131,7 @@ conversion is skipped at 44.1 kHz).
 | Propagation | `Static Rebuild Delay Seconds` | `0.1` | Wait before folding static geometry changes into the static acceleration structure (level-streaming batching) |
 | Listener | `Default Listener Settings` | — | The listener settings struct below |
 | Sources | `Source Ray Resolution Cap` / `Source Ray Depth Cap` | `0` / `0` | Upper bound on the transport ray grid and depth of every source asset. 0 = asset values as they are |
+| Listener | `Output EQ` | Off | Parametric output EQ over the whole SimpleST mix — see [EQ](#eq). While on, it replaces the listener's graphic `Output EQ`. Native mode only |
 | Materials | `Material Preset Library` | Empty | Library registered with SimpleST at startup. Empty = the plugin's bundled library |
 
 ## Listener settings (`FSoundTracingListenerSettings`)
@@ -149,7 +153,7 @@ Project defaults live in Project Settings; per-level overrides go on `USoundTrac
 | Render | `Late Reverb` / `Late Reverb Coupling` | `true` / `Default` | FDN16 / Off · Subtle 6 dB · Default 9 dB · Strong 12 dB |
 | Render | `Path Fade Time Seconds` | `0.05` | Path appear/disappear crossfade |
 | Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak / True Peak. `True Peak` (0.4.0) is the SimpleST 2.18 true-peak limiter (−1 dBTP, 137-sample latency). Engine 2.18 turns the limiter on right after creation, but the plugin default is `Off` so that the Unreal master chain handles limiting. 0.4.0 fixes `Off` so it also applies to speaker output (`Speakers`) |
-| Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 9 bands from 63 to 16k Hz, ±24 dB |
+| Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | Graphic EQ, 9 bands from 63 to 16k Hz, ±24 dB. While the parametric `Output EQ` in Project Settings is on it wins; turning it off brings these values back |
 | Paths | `Enable Direct/Transmission/Reflection/Diffraction/Reverb Path` | All `true` | Global path gates |
 | Acoustics | `Propagation Delay` / `Direct Occlusion` | `true` / `true` | When disabled: every path collapses onto the direct-sound time / the direct sound passes through geometry |
 | Acoustics | `Reference Distance Meters` / `Min Distance Meters` | `1.0` / `1.0` | Start distance of physical `1/r` attenuation / near-field clamp |
@@ -164,7 +168,7 @@ to drive the transform directly.
 | Item | Description |
 |---|---|
 | `Override Project Listener Settings` / `Listener Settings` | Overrides the project defaults with the struct above |
-| `Drive Listener Transform` | Passes this component's world transform and velocity to SimpleST instead of the audio device listener |
+| `Drive Listener Transform` | Passes this component's world transform and velocity to SimpleST instead of the audio device listener (rotation includes roll) |
 | `ApplyListenerSettings()`, `SetQualityPreset()`, `SetHrtfDataset()`, `SetOutputMode()`, `SetSpeakerLayout()` | Runtime changes from Blueprint |
 | `ResetMotionState()` | Prevents a Doppler spike after a teleport or respawn |
 
@@ -195,16 +199,40 @@ purpose like presets.
 | Reverb Rays | `Stationary Emitter` | `false` | Hint that the emitter never moves |
 | Per-Path Enable | `Direct/Transmission/Reflection/Diffraction/Reverb Path Enabled` | All `true` | Per-source path gates |
 | Bypass | `Bypass` | `false` | Passes through without going through SimpleST |
+| EQ | `Source EQ` | Off | Parametric EQ applied to the signal of sources using this asset — see [EQ](#eq) |
+
+## EQ
+
+From SDK release 2.22.0-jhj, the SimpleST parametric EQ is available in two places. Both use the same struct
+`FSoundTracingEq` (`Enabled`, `Preamp (dB)` −48 ~ +12, `Bands` up to 16).
+
+| Place | Setting | Runtime change | Where it applies |
+|---|---|---|---|
+| Source EQ | Source Settings asset `Source EQ` | `USoundTracingSourceSettings::SetSourceEq` / `GetSourceEq` (Blueprint) | The source signal, before SimpleST's band split. Direct sound, reflections, diffraction, and reverb send all get the same tone |
+| Output EQ | Project Settings › SoundTracing › Listener › `Output EQ` | `USoundTracingSubsystem::SetOutputEq` / `ClearOutputEqOverride` / `GetOutputEq` | The whole SimpleST mix, at the end of the render (before the master gain) |
+
+A band (`FSoundTracingEqBand`) has `Enabled`, `Type`, `Frequency Hz` (20 ~ 20,000), `Gain (dB)` (±24, Peaking and
+shelves only), and `Q` (0.1 ~ 30, shelves up to 3). `Type` (`ESoundTracingEqFilterType`) is `Peaking (Bell)` ·
+`Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` · `Notch`; cuts are fixed at 12 dB/oct.
+
+- Off by default, and while off SimpleST is not called. When a value changes, SimpleST crossfades over 20 ms.
+- `SetSourceEq` also applies immediately to voices already playing with that asset, and sources reused from the
+  engine source pool get their EQ set or cleared when created.
+- `SetOutputEq` overrides the Project Settings value until `ClearOutputEqOverride` is called, and persists across
+  runtime restarts. Passing a disabled EQ turns the output EQ off.
+- **Native mode only.** In FMOD/Wwise mode use the middleware plug-in's EQ —
+  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq).
+- On an older SimpleST runtime without the EQ exports, EQ settings are ignored with a one-time warning.
 
 ## One-shot sounds
 
 The engine fades in every path of a **new source** over 150 ms and waits for its first IR, so
-creating a new engine source for every gunshot or footstep makes short shots sound quiet and late.
+creating a new engine source every time a short sound plays makes it sound quiet and late.
 The plugin handles this per mode.
 
 - **Native mode**: an engine source pool is created up front when the context starts, and when a
   voice ends its source returns to the pool so the nearest next voice picks it up. Playing a new
-  Audio Component or sound for every shot does not create a new engine source.
+  Audio Component or sound for every playback does not create a new engine source.
 - **FMOD / Wwise mode**: rendering is done by the middleware plug-in, so this follows its warm source
   pool (FMOD 0.3.0 · Wwise 0.2.0) — [FMOD](./fmod.md#one-shots-and-the-warm-source-pool) ·
   [Wwise](./wwise.md#one-shots-and-the-warm-source-pool). Cases that register a new game object per
@@ -261,7 +289,7 @@ counts, valid path count, per-lane propagation/IR/render time (ms), and render b
 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` turn sound tracing on and off as a whole.
 While it is off, moving the listener or sources does not wake the propagation lanes, and
 visualization paths are not collected either, so no stale paths remain. In FMOD and Wwise modes,
-starting with SDK release 2.18.2-jhj.7, this switch is passed on to the middleware plug-in
+starting with SDK release 2.18.2, this switch is passed on to the middleware plug-in
 (`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`). Before that, the
 context was owned by the plug-in, so turning it off had no effect. The off state is sent again after
 attaching to a new runtime, and a warning is logged if the plug-in is an older one without this
@@ -320,8 +348,9 @@ directionality, and late reverb coupling.
 | Source is not spatialized (Native) | A SoundTracing Source Settings asset is attached to the Audio Component |
 | Geometry is not reflected | The Object Component's immediate parent is a supported mesh component, `Acoustic Mobility` |
 | Render block overrun (audio dropouts) | `Early Reflections = Hybrid`, raise `Reflection Update Interval`, lower the Quality Preset |
-| Gunshots and footsteps sound quiet or late (FMOD/Wwise mode) | FMOD plug-in 0.3.0 / Wwise plug-in 0.2.0 or later, `SIMPLESTFMOD_WARM_SOURCES=0` is not set |
+| Short sounds play quiet or late (FMOD/Wwise mode) | FMOD plug-in 0.3.0 / Wwise plug-in 0.2.0 or later, `SIMPLESTFMOD_WARM_SOURCES=0` is not set |
 | Some sources play dry (Native) | `ST_STATUS_BUDGET_EXCEEDED` in the Output Log — reduce the sources or raise `Max Sources` |
+| Turning on the EQ changes nothing | Whether you are in Native mode (FMOD/Wwise mode uses the middleware EQ), the EQ-unsupported warning in the Output Log (older SimpleST runtime) |
 | Turning sound tracing off has no effect in FMOD/Wwise mode | Whether the plug-in version exports `*_SetSoundTracingEnabled` (if not, a warning appears in the Output Log) |
 | No paths visible | Visualizer component, Niagara plugin, path enable state, sound tracing is not turned off |
 

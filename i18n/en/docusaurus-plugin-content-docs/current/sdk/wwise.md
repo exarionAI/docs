@@ -1,6 +1,6 @@
 ---
 title: Wwise
-description: Sound-tracing (SimpleSTWwise) — structure, installation, authoring, one-shots and the warm source pool, game-side C API, and UE/Unity integration of the SimpleST Object Processor + Metadata plug-in for Wwise 2025.1.
+description: Sound-tracing (SimpleSTWwise) — structure, installation, authoring, EQ, one-shots and the warm source pool, game-side C API, and UE/Unity integration of the SimpleST Object Processor + Metadata plug-in for Wwise 2025.1.
 ---
 
 # Sound-tracing Wwise Plug-in
@@ -13,7 +13,7 @@ uploads geometry.
 
 | Item | Value |
 |---|---|
-| Plug-in version | v0.2.0 (SimpleST 2.18.2). Previous release: v0.1.0 (SimpleST 2.12.0, E2E verified on the Wwise 2025.1.11 sound engine) |
+| Plug-in version | v0.2.0 (SimpleST 2.22.0, SDK release 2.22.0-jhj.5 — 4-band [EQ](#eq), listener roll). Previous releases: v0.2.0 (SimpleST 2.18.2), v0.1.0 (SimpleST 2.12.0, E2E verified on the Wwise 2025.1.11 sound engine) |
 | Audiokinetic | CompanyID **325**, PluginID 1001 (Renderer) · 1002 (Source Settings). Launcher bundle `Sound-tracing` |
 | Wwise | 2025.1 (plug-in binaries are tied to the SDK version) |
 | Platforms | Windows (vc170) · macOS · Linux · Android · iOS (static) · Web (static) |
@@ -52,6 +52,11 @@ uploads geometry.
   same module through `SimpleSTWwise_GetRealtimeProc`.
 - **The output limiter is turned off**: SimpleST 2.18 turns on a true-peak limiter right after
   creation, but inside Wwise the master bus handles limiting.
+- **Equal-loudness compensation is turned off too**: SimpleST 2.21 turns on output-stage equal-loudness
+  compensation (low shelf about +7.2 dB @ 120 Hz) right after creation, but tone and level belong to the Wwise mix.
+  The core shared with the FMOD version turns it off together with the limiter.
+- **Listener orientation**: the bus listener's front and top directions are passed to SimpleST as a quaternion,
+  so head tilt (roll) is reflected (from SDK release 2.22.0-jhj).
 - **Lifecycle**: the runtime starts in the sound engine Init hook (static registration) or when the
   first renderer instance is created, and shuts down in the `AK::SoundEngine::Term` global callback.
 
@@ -116,11 +121,34 @@ plug-ins (if the bank `PluginInfo.json` assumes the metadata plug-in's lib name 
 | | Directivity (0 omni ~ 1 cardioid, RTPC) | Directivity relative to the object front |
 | | Stationary (never moves) | Hint that the emitter never moves (applied at creation) |
 | | Bypass SimpleST (RTPC) | Skips SimpleST; the renderer mixes the object with Wwise panning |
+| Both (EQ group) | EQ / EQ Preamp (dB, RTPC) | 4-band EQ on/off and preamp — see [EQ](#eq) |
+| | Band n Type / Band n Frequency (Hz, RTPC) / Band n Gain (dB, RTPC) / Band n Q (RTPC) (n = 1 ~ 4) | Per-band filter type, frequency, gain, Q |
 
 ![Source Settings metadata](/img/wwise/source-settings-metadata.png)
 
 CompanyID/PluginID, property names, and AudioEnginePropertyIDs are stored by projects and banks, so
 they are not changed after release.
+
+### EQ
+
+From SDK release 2.22.0-jhj both plug-ins have the same 4-band EQ property group. The same core as the FMOD
+version applies the SimpleST parametric EQ.
+
+| Plug-in | Property group | Where it applies |
+|---|---|---|
+| Sound-tracing Source Settings | `Source EQ`, `Source EQ Band 1 ~ 4` | **Source EQ** — before the object's audio enters SimpleST, ahead of the engine's band split. Direct sound, reflections, diffraction, and reverb all get the same tone |
+| Sound-tracing Renderer | `Output EQ`, `Output EQ Band 1 ~ 4` | **Output EQ** — the SimpleST mix |
+
+- `EQ` switches it on/off, and `EQ Preamp` is the gain ahead of the bands (−48 ~ +12 dB).
+- `Band n Type` is Off · Peaking · Low Shelf · High Shelf · High Cut (12 dB/oct) · Low Cut (12 dB/oct) · Notch. It is
+  an enumeration property, so it cannot be driven by an RTPC.
+- `Band n Frequency` is 20 ~ 20,000 Hz, `Band n Gain` ±24 dB (Peaking and shelves only), `Band n Q` 0.1 ~ 30
+  (shelves up to 3); Preamp, Frequency, Gain, and Q support RTPCs.
+- Off by default, and while off the engine is not called. Only changed values are sent, and the engine crossfades
+  over 20 ms.
+- The EQ properties' AudioEnginePropertyIDs are 8 ~ 25 on Source Settings and 3 ~ 20 on Renderer, and they are
+  appended to the bank after the existing fields in the same order. Engine sources reused from the warm pool clear
+  the previous voice's EQ, or replace it with the new one, before starting.
 
 ## One-shots and the warm source pool
 
@@ -168,7 +196,7 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal axes**: Wwise for Unreal 2024.1+ passes Unreal vectors unchanged (+Z up), so you must call
   `SetWorldAxes(UNREAL)` for the renderer to convert to (Y, Z, X) and match the geometry the game
   uploaded. Without it, the listener and sources are occluded by the wrong walls (fixed 2026-10-15).
-- **Source cap** (SDK release 2.18.2-jhj.7): `SimpleSTWwise_Config.maxSources` is the engine source
+- **Source cap** (since SDK release 2.18.2): `SimpleSTWwise_Config.maxSources` is the engine source
   count cap (0 = platform default). Beyond it the engine rejects source creation and that voice plays
   dry. The field is appended to the end of the struct, so hosts that pass the older, shorter struct
   still work — see [Source memory budget](../core/simplest.md#source-memory-budget).
@@ -179,7 +207,7 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // off. 1 = on (default)
 ```
 
-A game-side A/B switch added in SDK release 2.18.2-jhj.7. It applies to the running runtime and takes
+A game-side A/B switch added in SDK release 2.18.2. It applies to the running runtime and takes
 effect asynchronously on the control thread. It behaves the same as the
 [FMOD version](./fmod.md#turning-sound-tracing-on-and-off).
 
@@ -233,6 +261,7 @@ linking (2026-10-06).
 - One listener (a SimpleST constraint). If the same bus is instantiated again for a second listener,
   that instance mixes every object with Wwise panning.
 - Audio objects carry no velocity, so there is no SimpleST Doppler.
+- The EQ is fixed at 4 bands per plug-in (UE, Unity, and Web have up to 16 bands).
 - The engine source count does not exceed the platform cap (`maxSources`). Excess voices are dry.
 - When a new audio object is first seen, one small slot is allocated on the audio thread. The engine
   source itself is reused from the warm pool or newly created on the control thread.

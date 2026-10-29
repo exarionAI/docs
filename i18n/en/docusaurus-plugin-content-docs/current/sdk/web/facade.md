@@ -39,7 +39,7 @@ await sound.update(0);
 | `propagationThreadCount` | Synchronous 1 / pipelined 3 | Compute budget 1 ~ 5 (negative = 5). Pipelined needs at least 3 |
 | `throughput` | unset | `'low'` / `'medium'` / `'max'` — shorthand for the MT worker budget |
 | `sceneRatio` | `1.0` | Meters per scene length unit (cm = 0.01). **Never combine** with pre-scaled geometry |
-| `maxSources` | `0` | Cap on the number of simultaneously live engine sources (integer 0 ~ 512). `0` = wasm platform default (32 sources · source memory 64 MiB · delay ring ceiling 0.5 s — conservative because the heap is fixed at 256 MiB). The engine rejects creating sources beyond it with status 11 (`BUDGET_EXCEEDED`), and existing sources keep rendering. Since SDK release 2.18.2-jhj.7 |
+| `maxSources` | `0` | Cap on the number of simultaneously live engine sources (integer 0 ~ 512). `0` = wasm platform default (32 sources · source memory 64 MiB · delay ring ceiling 0.5 s — conservative because the heap is fixed at 256 MiB). The engine rejects creating sources beyond it with status 11 (`BUDGET_EXCEEDED`), and existing sources keep rendering. Since SDK release 2.18.2 |
 | `autoLoadMaterials` | `true` | Loads the default material table and enables name mapping |
 | `transmissionModel` | `'surface'` | SimpleST supports surface R/A/T only. `'solid'` is **rejected** |
 | `defaultMeshBuild` | — | STCoreV2 BVH option. Load is **rejected** if specified |
@@ -67,10 +67,11 @@ const sound = await SoundTrace.create(audioContext, {
 | `addSource(options)` | Add a spatial source |
 | `setQuality(tier)` | Change the quality preset (listener and source rays plus depth) |
 | `setAudioOption(options)` | Input block size, output channel override |
+| `setOutputEq(eq \| null)` | Global output parametric EQ (up to 16 bands). `null` turns it off. Kept across `reset()` — see [EQ](../web.md#eq). Since SDK release 2.22.0-jhj |
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'` (aliases `'convolution'` / `'steamaudio'`) |
 | `loadMaterialAssets()` | Load the material table manually (when `autoLoadMaterials: false`) |
 | `update(dt?)` | Updates the scene and runs propagation. Resolves with this frame's valid path count |
-| `debugSnapshot(options?)` | Asynchronous diagnostic snapshot. `.simplest` holds SimpleST scene/timing/render/IR statistics, plus, from 1.1.0, `features`, `output` (limiter, type, latency, master gain), and `inputs` (live/clip source counts) |
+| `debugSnapshot(options?)` | Asynchronous diagnostic snapshot. `.simplest` holds SimpleST scene/timing/render/IR statistics, plus, from 1.1.0, `features`, `output` (limiter, type, latency, master gain, and from 2.22.0-jhj the output EQ `eq`), and `inputs` (live/clip source counts) |
 | `getStatistics(options?)` | Wrapper around `debugSnapshot`. `validPathCount` and `.simplest` |
 | `getIRs()` | Recomputes the 9-band early path IR in a separate Offline Worker |
 | `renderMonoImpulseResponse(source, sec)` | 44.1 kHz mono pressure IR from the Offline Worker (max 30 s) |
@@ -88,7 +89,8 @@ sound.listener
 ```
 
 The scene has one listener, owned by `SoundTrace`. Pass the camera's active rotation quaternion
-(XYZW) as `orientation` unchanged.
+(XYZW) as `orientation` unchanged. From SDK release 2.22.0-jhj, head tilt (roll) also reaches the engine
+(both real-time and offline IR analysis).
 
 Keys accepted by `setRenderOptions`:
 
@@ -126,6 +128,7 @@ source.setDirection([0, 0, -1]);
 | `setPathEnabled(path, on)` / `setPathOptions(o)` / `isPathEnabled(path)` | `'direct'` (includes transmission) / `'reflection'` / `'diffraction'` / `'reverberation'` |
 | `setDirection(v)` | Source forward. The orientation is updated along with it using a minimal roll-free rotation |
 | `setDirectivityTable(anglesDeg, attenDbPerBand)` / `setDirectivityEnabled(on)` | Converts a per-angle 9-band attenuation table into a SimpleST directivity table and applies it |
+| `setEq(eq \| null)` | Source parametric EQ for this source (up to 16 bands, before the engine's band split). `null` removes it — see [EQ](../web.md#eq). Since SDK release 2.22.0-jhj |
 | `dispose()` | Releases the source and its stream |
 
 #### Distance attenuation

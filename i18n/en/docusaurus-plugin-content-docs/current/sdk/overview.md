@@ -8,12 +8,13 @@ description: Overview of the Web, Unity, Unreal Engine, FMOD, and Wwise integrat
 
 The SoundTrace SDKs wrap the [SimpleST](../core/simplest.md) engine for use on the web, in game
 engines, and in audio middleware. All wrappers consume the same engine SDK from the same
-repository (`out/dist/<platform>_release/SimpleST`) and are based on **SimpleST 2.18.2 / ABI 6**.
-The current SDK release is 2.18.2-jhj.7 (2026-10-27). It adds a [source memory budget](#source-count-limit)
-to the engine; the wrapper versions are unchanged. It also fixes an engine deadlock that could permanently
-stall the realtime pipeline while a source was destroyed or render options changed (no API change).
-Previous release: 2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0. It remains
-available as a legacy line.
+repository (`out/dist/<platform>_release/SimpleST`) and are based on **SimpleST 2.22.0 / ABI 6**.
+The current SDK release is 2.22.0-jhj.5 (2026-10-28). The wrapper versions are unchanged, and all five
+wrappers gain a [source EQ and an output EQ](#tone-control-eq). The listener orientation is passed as a
+quaternion so head tilt (roll) is kept, and the wrappers turn off the equal-loudness compensation that engine
+2.21 turns on (principle 8 below). The [source count limit](#source-count-limit) is the same as in the 2.18.2 SDK.
+Previous SDK release: 2.18.2-jhj.7 — SimpleST 2.18.2, same wrapper versions as now. Release before that:
+2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0. It remains available as a legacy line.
 
 ## Integration Lineup
 
@@ -62,10 +63,39 @@ visualization, and the middleware plug-in does the rendering.
    (−1 dBTP, 137-sample latency) right after context creation, but the UE, Unity, FMOD, Wwise, and
    Web wrappers keep the limiter **off**, as their documented default. See each SDK page for how to turn
    it on.
+8. **Equal-loudness compensation also belongs to the host mix.** Engine 2.21.0 turns on
+   [equal-loudness compensation](../core/simplest.md#equal-loudness-compensation) (low shelf about +7.2 dB @ 120 Hz,
+   high +1.8 dB) right after context creation, but every wrapper turns it off right after creation. The output
+   with it off is bit-identical to engine 2.20. Adjust the tone with the EQ below or with the host mixer.
+
+## Tone Control (EQ)
+
+From SDK release 2.22.0-jhj, every wrapper exposes the engine's [parametric EQ](../core/simplest.md#parametric-eq)
+in two places.
+
+- **Source EQ** — applied to the source signal itself, before the engine's band split. Direct sound, reflections,
+  diffraction, and reverb of that source all get the same tone.
+- **Output EQ** — applied to the whole SimpleST mix at the end of the render (before the master gain).
+
+| SDK | Source EQ | Output EQ | Bands |
+|---|---|---|---|
+| [Unreal Engine](./ue.md#eq) | Source Settings asset `Source EQ`, Blueprint `SetSourceEq` | Project Settings `Output EQ`, `USoundTracingSubsystem::SetOutputEq` | Up to 16 |
+| [Unity](./unity.md#eq) | `SoundTraceSource` Inspector `Source EQ`, `SetSourceEq` | `SoundTraceListener` Inspector `Output EQ`, `SetOutputEq` | Up to 16 |
+| [Web](./web.md#eq) | `source.setEq(eq \| null)` | `sound.setOutputEq(eq \| null)` | Up to 16 |
+| [FMOD](./fmod.md#eq) | EQ parameters of the SimpleST Source DSP | EQ parameters of the SimpleST Listener DSP | Fixed 4 |
+| [Wwise](./wwise.md#eq) | EQ properties of Sound-tracing Source Settings | EQ properties of Sound-tracing Renderer | Fixed 4 |
+
+- Six filter types: Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch (cuts fixed at 12 dB/oct).
+  Only Web uses the Web Audio `BiquadFilterType` names (`'peaking'`, `'lowshelf'`, `'highshelf'`, `'lowpass'`, `'highpass'`, `'notch'`).
+- Ranges: frequency 20 ~ 20,000 Hz, gain ±24 dB (Peaking and shelves only), Q 0.1 ~ 30 (shelves up to 3), preamp −48 ~ +12 dB.
+- **Off by default**, and while off the engine is not called, so the output is the same as without an EQ. Only
+  changed values are sent, and the engine crossfades over 20 ms.
+- When UE or Unity runs in FMOD/Wwise integration mode, the game-engine-side EQ is not sent. Use the middleware
+  plug-in's EQ.
 
 ## Source Count Limit
 
-Starting with SDK release 2.18.2-jhj.7, the engine caps the number of concurrent sources and the
+Starting with SDK release 2.18.2, the engine caps the number of concurrent sources and the
 source memory per platform — desktop 128 sources · unlimited memory · delay ring ceiling 2.0 s,
 Android/iOS 48 sources · 96 MiB · 1.0 s, web 32 sources · 64 MiB · 0.5 s. The engine rejects
 creating sources beyond the cap (`ST_STATUS_BUDGET_EXCEEDED`), and the game does not stop. The

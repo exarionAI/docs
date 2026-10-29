@@ -1,6 +1,6 @@
 ---
 title: FMOD
-description: SimpleSTFmod — FMOD Studio / FMOD Engine용 SimpleST DSP 플러그인의 구조, 설치, Studio 저작, 원샷과 웜 음원 풀, 게임 쪽 C API, UE·Unity 통합.
+description: SimpleSTFmod — FMOD Studio / FMOD Engine용 SimpleST DSP 플러그인의 구조, 설치, Studio 저작, EQ, 원샷과 웜 음원 풀, 게임 쪽 C API, UE·Unity 통합.
 ---
 
 # SimpleST FMOD 플러그인
@@ -11,7 +11,7 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine용 SimpleST DSP 플러�
 
 | 항목 | 값 |
 |---|---|
-| 플러그인 버전 | v0.3.0 (SimpleST 2.18.2). 이전 릴리스: v0.2.0 (SimpleST 2.12.0). FMOD가 보는 DSP 디스크립션 버전은 SDK 릴리스 2.18.2-jhj.7부터 0.3.0입니다(그 전 0.3.0 배포본은 0.2.0으로 표시) |
+| 플러그인 버전 | v0.3.0 (SimpleST 2.22.0, SDK 릴리스 2.22.0-jhj.5 — 4밴드 [EQ](#eq), 리스너 roll). 이전 릴리스: v0.3.0 (SimpleST 2.18.2), v0.2.0 (SimpleST 2.12.0). FMOD가 보는 DSP 디스크립션 버전은 0.3.0입니다(SDK 2.18.2 초기 배포본은 0.2.0으로 표시) |
 | FMOD | Studio / Engine 2.03 ~ 2.04 (plug-in SDK 110 빌드 = 2.00 ~ 2.04, 204 빌드 = 2.04+) |
 | 플랫폼 | Windows x64 · macOS · Linux · Android · iOS(정적) · Web(정적, FMOD HTML5 pthreads) |
 | 배포 | `SimpleST-fmod-release.zip` (플랫폼별 `plugins/` + `install.py`, UE·Unity 글루 포함) |
@@ -42,6 +42,10 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine용 SimpleST DSP 플러�
   음원은 웜 풀에 남겨 다음 보이스가 재사용합니다 — [원샷과 웜 음원 풀](#원샷과-웜-음원-풀).
 - **출력 리미터는 끕니다**: SimpleST 2.18은 생성 직후 true-peak 리미터(−1 dBTP, 137샘플 지연)를 켜지만,
   FMOD 안에서는 마스터 버스가 리미팅을 맡습니다.
+- **등라우드니스 보정도 끕니다**: SimpleST 2.21은 생성 직후 출력단 등라우드니스 보정(저역 셸프 약 +7.2 dB @ 120 Hz)을
+  켜지만, 음색과 레벨은 FMOD 믹스가 맡습니다. 리미터와 함께 컨텍스트 생성 직후와 사운드 트레이싱을 다시 켤 때 끕니다.
+- **리스너 방향**: FMOD 리스너의 forward·up을 SimpleST 쿼터니언으로 넘겨 머리 기울임(roll)까지 반영합니다(SDK 릴리스
+  2.22.0-jhj부터).
 
 ## 설치
 
@@ -106,9 +110,29 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 | | 3D Attributes / Overall Gain / Atten Range | FMOD 특수 data 파라미터(자동) |
 | SimpleST Listener | Wet Level / Dry Level (dB) | SimpleST 렌더 / 버스의 다른 오디오 레벨 |
 | | HRTF | 켜면 바이노럴(헤드폰), 끄면 스테레오 패닝 |
+| 둘 다 (EQ 블록) | EQ / EQ Preamp (dB) | 4밴드 EQ 켬·프리앰프 — [EQ](#eq) |
+| | EQn Type / EQn Freq (Hz) / EQn Gain (dB) / EQn Q (n = 1 ~ 4) | 밴드별 필터 종류·주파수·게인·Q |
 
 Listener를 **bypass**하면 Source들이 dry 통과로 돌아갑니다(A/B 비교용). DSP 이름과 파라미터
 이름은 뱅크가 식별자로 저장하므로 배포 후 바꾸지 않습니다.
+
+### EQ
+
+SDK 릴리스 2.22.0-jhj부터 두 DSP에 같은 4밴드 EQ 파라미터 블록이 있습니다. SimpleST 파라메트릭 EQ를 그대로 씁니다.
+
+| DSP | 거는 곳 |
+|---|---|
+| SimpleST Source | **소스 EQ** — SimpleST에 들어가는 이벤트 신호에, 엔진 밴드 분리 앞에서. 직접음·반사·회절·잔향이 모두 같은 톤 |
+| SimpleST Listener | **출력 EQ** — SimpleST 믹스에, Wet Level 앞에서 |
+
+- `EQ`는 켬/끔, `EQ Preamp`는 밴드 앞 게인(−48 ~ +12 dB, 부스트할 때 음수로 여유를 둡니다)입니다.
+- `EQn Type`은 Off · Peaking · Low Shelf · High Shelf · High Cut(12 dB/oct 저역 통과) · Low Cut(12 dB/oct 고역 통과) · Notch입니다.
+- `EQn Freq`는 20 ~ 20,000 Hz, `EQn Gain`은 ±24 dB(Peaking·셸프만), `EQn Q`는 0.1 ~ 30(셸프는 3까지)입니다.
+- 4밴드는 저역 컷·저역 셸프·고역 셸프·고역 컷을 한 번에 걸 수 있는 수입니다. `EQn Type`은 정수 파라미터(값 이름 7개,
+  0 = Off), 나머지는 실수 파라미터입니다.
+- 기본은 꺼짐이고 꺼져 있으면 엔진을 호출하지 않습니다. 바뀐 값만 보내고 엔진이 20 ms 크로스페이드로 넘어갑니다.
+- Listener가 여러 개면 렌더러로 선출된 인스턴스의 EQ가 쓰입니다. 웜 풀에서 재사용하는 엔진 음원은 앞 보이스의 EQ를
+  지우거나 새 EQ로 바꾼 뒤 시작합니다.
 
 ## 원샷과 웜 음원 풀
 
@@ -166,7 +190,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
   변환이 SoundTracing UE 플러그인의 변환과 동일합니다.
 - 플러그인 컨텍스트에는 기본 재질 라이브러리가 먼저 등록되어 있습니다. `defaultMaterialId`부터 preset
   index를 더해 쓰십시오.
-- **음원 상한**(SDK 릴리스 2.18.2-jhj.7): `SimpleSTFmod_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
+- **음원 상한**(SDK 릴리스 2.18.2부터): `SimpleSTFmod_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
   기본). 넘으면 엔진이 음원 생성을 거절하고 그 보이스는 dry로 재생됩니다. 구조체 끝에 덧붙인 필드라 이전의 짧은
   구조체를 넘기는 호스트도 동작합니다 — [음원 메모리 예산](../core/simplest.md#음원-메모리-예산).
 
@@ -176,7 +200,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // 끄기. 1 = 켜기(기본)
 ```
 
-SDK 릴리스 2.18.2-jhj.7에서 추가된 게임 쪽 A/B 스위치입니다. 런타임 하나(`systemIndex < 0` = 가장 최근)에 적용되며
+SDK 릴리스 2.18.2에서 추가된 게임 쪽 A/B 스위치입니다. 런타임 하나(`systemIndex < 0` = 가장 최근)에 적용되며
 컨트롤 스레드에서 비동기로 반영됩니다.
 
 - **끄면** SimpleST 렌더러 바이패스(`st_rt_render_set_sound_tracing_enabled`)가 걸리고, 웜 음원 풀을 비운 뒤 다시
@@ -216,7 +240,8 @@ UE SoundTracing의 `SetSoundTracingEnabled`가 FMOD 모드에서 이 함수를 �
 
 ## 알려진 한계
 
-- 리스너 1개(roll 없음), 동시 스트림 64개(초과분 dry), 출력 스테레오만(스피커 레이아웃 미노출).
+- 리스너 1개, 동시 스트림 64개(초과분 dry), 출력 스테레오만(스피커 레이아웃 미노출).
+- EQ는 DSP당 4밴드 고정입니다(UE·Unity·Web은 최대 16밴드).
 - 엔진 음원 수는 플랫폼 상한(`maxSources`)을 넘지 않습니다. 초과 보이스는 dry입니다.
 - Source 뒤의 이벤트 이펙트/센드는 무음을 받습니다(SimpleST 믹스는 Listener 버스에서 나옵니다).
 - `Overall Gain`(가상화용 가청도)은 거리 기반 추정치입니다.

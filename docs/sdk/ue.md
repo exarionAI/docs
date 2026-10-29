@@ -1,15 +1,17 @@
 ---
 title: Unreal Engine
-description: SoundTracing UE5 플러그인 0.4.0(SimpleST 2.18.2 / ABI 6) 설치, Project Settings, 리스너·음원·오브젝트 컴포넌트, 원샷 사운드, Native/FMOD/Wwise 통합 모드, 플랫폼 링크 계약.
+description: SoundTracing UE5 플러그인 0.4.0(SimpleST 2.22.0 / ABI 6) 설치, Project Settings, 리스너·음원·오브젝트 컴포넌트, 소스·출력 EQ, 원샷 사운드, Native/FMOD/Wwise 통합 모드, 플랫폼 링크 계약.
 ---
 
 # SoundTrace SDK for Unreal Engine
 
 SoundTracing UE5 플러그인은 Unreal Audio Mixer의 Spatialization 플러그인 + 서브믹스, 그리고
 Actor Component를 통해 [SimpleST](../core/simplest.md)를 연결합니다. 0.3.0부터 엔진이 STCoreV2에서
-SimpleST로 바뀌었고, 0.4.0은 **SimpleST 2.18.2 / ABI 6**을 씁니다(이전 릴리스: 0.3.0 = SimpleST 2.12.0).
-SDK 릴리스 2.18.2-jhj.7에서 플러그인 버전은 그대로이고 `Max Sources` 설정, FMOD/Wwise 모드의 사운드 트레이싱
-스위치 전달, 광선 샘플러 정리가 들어갔습니다.
+SimpleST로 바뀌었고, 0.4.0은 **SimpleST 2.22.0 / ABI 6**을 씁니다(SDK 릴리스 2.22.0-jhj.5. 이전 SDK 릴리스
+2.18.2-jhj.7은 같은 0.4.0이 SimpleST 2.18.2를 썼고, 0.3.0 = SimpleST 2.12.0). 이번 릴리스에서 플러그인 버전은 그대로이고
+[소스 EQ와 출력 EQ](#eq)가 들어갔으며, 리스너 방향을 쿼터니언으로 넘겨 머리 기울임(roll)이 반영됩니다(종전 yaw/pitch만).
+엔진 2.21이 생성 직후 켜는 등라우드니스 보정은 플러그인이 끕니다 — 음색과 레벨은 Unreal 마스터 체인이 맡습니다.
+2.18.2 SDK에서 `Max Sources` 설정, FMOD/Wwise 모드의 사운드 트레이싱 스위치 전달, 광선 샘플러 정리가 들어갔습니다.
 프로젝트에 FMOD 또는 Wwise 플러그인이 있으면 같은 소스가 그 미들웨어의 SimpleST 플러그인에 붙는
 **통합 모드**로 빌드됩니다.
 
@@ -126,6 +128,7 @@ Audio Mixer Sample Rate는 어떤 값이든 됩니다. SimpleST는 44.1 kHz로 �
 | Propagation | `Static Rebuild Delay Seconds` | `0.1` | 정적 지오메트리 변경을 정적 가속구조에 접기 전 대기(레벨 스트리밍 배칭) |
 | Listener | `Default Listener Settings` | — | 아래 리스너 설정 구조체 |
 | Sources | `Source Ray Resolution Cap` / `Source Ray Depth Cap` | `0` / `0` | 모든 음원 에셋의 transport ray 격자·깊이 상한. 0 = 에셋 값 그대로 |
+| Listener | `Output EQ` | 꺼짐 | SimpleST 믹스 전체에 거는 파라메트릭 출력 EQ — [EQ](#eq). 켜져 있는 동안 리스너의 그래픽 `Output EQ`를 대신합니다. Native 모드 전용 |
 | Materials | `Material Preset Library` | 비어 있음 | 시작 시 SimpleST에 등록할 라이브러리. 비면 플러그인 번들 사용 |
 
 ## 리스너 설정 (`FSoundTracingListenerSettings`)
@@ -147,7 +150,7 @@ Audio Mixer Sample Rate는 어떤 값이든 됩니다. SimpleST는 44.1 kHz로 �
 | Render | `Late Reverb` / `Late Reverb Coupling` | `true` / `Default` | FDN16 / Off · Subtle 6 dB · Default 9 dB · Strong 12 dB |
 | Render | `Path Fade Time Seconds` | `0.05` | 경로 등장·소멸 크로스페이드 |
 | Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak / True Peak. `True Peak`(0.4.0)는 SimpleST 2.18 true-peak 리미터(−1 dBTP, 137샘플 지연). 엔진 2.18은 생성 직후 리미터를 켜지만 플러그인 기본은 `Off`로, Unreal 마스터 체인이 리미팅을 맡습니다. 0.4.0에서 스피커 출력(`Speakers`)에서도 `Off`가 적용되도록 수정 |
-| Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 63 ~ 16k Hz 9밴드 ±24 dB |
+| Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 63 ~ 16k Hz 9밴드 ±24 dB 그래픽 EQ. Project Settings의 파라메트릭 `Output EQ`가 켜져 있으면 그쪽이 이기고, 끄면 이 값이 돌아옵니다 |
 | Paths | `Enable Direct/Transmission/Reflection/Diffraction/Reverb Path` | 전부 `true` | 전역 경로 게이트 |
 | Acoustics | `Propagation Delay` / `Direct Occlusion` | `true` / `true` | 끄면 각각 모든 경로가 직접음 시각에 겹침 / 직접음이 지오메트리를 통과 |
 | Acoustics | `Reference Distance Meters` / `Min Distance Meters` | `1.0` / `1.0` | 물리 `1/r` 감쇠 시작 거리 / 근접 클램프 |
@@ -161,7 +164,7 @@ Audio Mixer Sample Rate는 어떤 값이든 됩니다. SimpleST는 44.1 kHz로 �
 | 항목 | 설명 |
 |---|---|
 | `Override Project Listener Settings` / `Listener Settings` | 위 구조체로 프로젝트 기본값을 덮어씀 |
-| `Drive Listener Transform` | 이 컴포넌트의 world transform·속도를 오디오 장치 리스너 대신 SimpleST에 전달 |
+| `Drive Listener Transform` | 이 컴포넌트의 world transform·속도를 오디오 장치 리스너 대신 SimpleST에 전달(회전은 roll 포함) |
 | `ApplyListenerSettings()`, `SetQualityPreset()`, `SetHrtfDataset()`, `SetOutputMode()`, `SetSpeakerLayout()` | Blueprint에서 런타임 변경 |
 | `ResetMotionState()` | 텔레포트·리스폰 뒤 Doppler 스파이크 방지 |
 
@@ -191,14 +194,38 @@ Attenuation의 spatialization plugin settings에 연결합니다. 용도별 shar
 | Reverb Rays | `Stationary Emitter` | `false` | 움직이지 않는 이미터 힌트 |
 | Per-Path Enable | `Direct/Transmission/Reflection/Diffraction/Reverb Path Enabled` | 전부 `true` | 음원별 경로 게이트 |
 | Bypass | `Bypass` | `false` | SimpleST를 거치지 않고 통과 |
+| EQ | `Source EQ` | 꺼짐 | 이 에셋을 쓰는 음원 신호에 거는 파라메트릭 EQ — [EQ](#eq) |
+
+## EQ
+
+SDK 릴리스 2.22.0-jhj부터 SimpleST 파라메트릭 EQ를 두 자리에서 씁니다. 두 자리 모두 같은 구조체
+`FSoundTracingEq`(`Enabled`, `Preamp (dB)` −48 ~ +12, `Bands` 최대 16개)를 씁니다.
+
+| 자리 | 설정 | 런타임 변경 | 거는 곳 |
+|---|---|---|---|
+| 소스 EQ | Source Settings 에셋 `Source EQ` | `USoundTracingSourceSettings::SetSourceEq` / `GetSourceEq` (Blueprint) | 음원 신호, SimpleST 밴드 분리 앞. 직접음·반사·회절·잔향 송출이 모두 같은 톤 |
+| 출력 EQ | Project Settings › SoundTracing › Listener › `Output EQ` | `USoundTracingSubsystem::SetOutputEq` / `ClearOutputEqOverride` / `GetOutputEq` | SimpleST 믹스 전체, 렌더 끝(마스터 게인 앞) |
+
+밴드(`FSoundTracingEqBand`)는 `Enabled`, `Type`, `Frequency Hz`(20 ~ 20,000), `Gain (dB)`(±24, Peaking·셸프만),
+`Q`(0.1 ~ 30, 셸프는 3까지)입니다. `Type`(`ESoundTracingEqFilterType`)은 `Peaking (Bell)` · `Low Shelf` · `High Shelf` ·
+`High Cut (Low-pass)` · `Low Cut (High-pass)` · `Notch`이고 컷은 12 dB/oct 고정입니다.
+
+- 기본은 꺼짐이고 꺼져 있으면 SimpleST를 호출하지 않습니다. 값이 바뀌면 SimpleST가 20 ms 크로스페이드로 넘어갑니다.
+- `SetSourceEq`는 그 에셋으로 재생 중인 보이스에도 바로 반영되고, 엔진 음원 풀에서 재사용하는 음원은 생성 때 EQ를 다시
+  걸거나 지웁니다.
+- `SetOutputEq`는 `ClearOutputEqOverride`를 부를 때까지 Project Settings 값을 덮어쓰고, 런타임을 다시 시작해도 유지됩니다.
+  꺼진 EQ를 넘기면 출력 EQ가 꺼집니다.
+- **Native 모드 전용**입니다. FMOD/Wwise 모드에서는 미들웨어 플러그인의 EQ를 씁니다 —
+  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq).
+- EQ export가 없는 이전 SimpleST 런타임에서는 EQ 설정을 무시하고 경고를 한 번 남깁니다.
 
 ## 원샷 사운드
 
-엔진은 **새 음원**의 모든 경로를 150 ms에 걸쳐 페이드인하고 첫 IR을 기다리므로, 총성·발소리마다 엔진
-음원을 새로 만들면 짧은 샷이 작고 늦게 들립니다. 플러그인은 모드별로 이를 처리합니다.
+엔진은 **새 음원**의 모든 경로를 150 ms에 걸쳐 페이드인하고 첫 IR을 기다리므로, 짧은 소리를 재생할 때마다 엔진
+음원을 새로 만들면 소리가 작고 늦게 들립니다. 플러그인은 모드별로 이를 처리합니다.
 
 - **Native 모드**: 컨텍스트 시작 때 엔진 음원 풀을 미리 만들어 두고, 보이스가 끝나면 그 음원을 풀로
-  돌려 가장 가까운 다음 보이스가 이어 받습니다. 샷마다 Audio Component·사운드를 새로 재생해도 엔진
+  돌려 가장 가까운 다음 보이스가 이어 받습니다. 재생할 때마다 Audio Component·사운드를 새로 재생해도 엔진
   음원이 새로 만들어지지 않습니다.
 - **FMOD / Wwise 모드**: 렌더는 미들웨어 플러그인이 하므로 그 웜 음원 풀(FMOD 0.3.0 · Wwise 0.2.0)을
   따릅니다 — [FMOD](./fmod.md#원샷과-웜-음원-풀) · [Wwise](./wwise.md#원샷과-웜-음원-풀). **Wwise AudioLink**처럼
@@ -249,7 +276,7 @@ Blueprint에서 읽을 수 있는 World Subsystem입니다 — 통합 모드, �
 
 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()`로 사운드 트레이싱 전체를 켜고 끕니다. 꺼져 있는
 동안에는 리스너·음원이 움직여도 전파 레인을 깨우지 않고, 시각화 경로도 모으지 않아 마지막 경로가 남지 않습니다.
-FMOD·Wwise 모드에서는 SDK 릴리스 2.18.2-jhj.7부터 이 스위치를 미들웨어 플러그인에 넘깁니다
+FMOD·Wwise 모드에서는 SDK 릴리스 2.18.2부터 이 스위치를 미들웨어 플러그인에 넘깁니다
 (`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`). 그 전에는 플러그인이 소유한
 컨텍스트라 끄기가 효과가 없었습니다. 새 런타임에 붙은 뒤에도 꺼진 상태를 다시 보내고, 이 export가 없는 구형
 플러그인이면 경고를 남깁니다. SimpleST에는 전파 일시정지가 없으므로 음원이 남아 있는 동안 레인은 자체 주기로
@@ -306,8 +333,9 @@ scene입니다.
 | source가 공간화되지 않음 (Native) | Audio Component에 SoundTracing Source Settings asset 연결 여부 |
 | geometry가 반영되지 않음 | Object Component의 immediate parent가 지원 mesh component인지, `Acoustic Mobility` |
 | 렌더 블록 초과 (오디오 끊김) | `Early Reflections = Hybrid`, `Reflection Update Interval` 상향, Quality Preset 하향 |
-| 총성·발소리가 작거나 늦게 들림 (FMOD/Wwise 모드) | FMOD 플러그인 0.3.0 / Wwise 플러그인 0.2.0 이상인지, `SIMPLESTFMOD_WARM_SOURCES=0`이 설정되어 있지 않은지 |
+| 짧은 소리가 작거나 늦게 들림 (FMOD/Wwise 모드) | FMOD 플러그인 0.3.0 / Wwise 플러그인 0.2.0 이상인지, `SIMPLESTFMOD_WARM_SOURCES=0`이 설정되어 있지 않은지 |
 | 일부 음원이 dry로 재생됨 (Native) | Output Log의 `ST_STATUS_BUDGET_EXCEEDED` — 음원을 줄이거나 `Max Sources`를 올림 |
+| EQ를 켜도 소리가 그대로임 | Native 모드인지(FMOD/Wwise 모드는 미들웨어 EQ), Output Log의 EQ 미지원 경고(이전 SimpleST 런타임) |
 | FMOD/Wwise 모드에서 사운드 트레이싱을 꺼도 그대로임 | 플러그인이 `*_SetSoundTracingEnabled`를 export하는 버전인지(없으면 Output Log에 경고) |
 | path가 보이지 않음 | visualizer component, Niagara plugin, path enable 상태, 사운드 트레이싱이 꺼져 있지 않은지 |
 

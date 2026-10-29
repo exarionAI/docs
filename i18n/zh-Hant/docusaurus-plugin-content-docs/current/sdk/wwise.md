@@ -1,6 +1,6 @@
 ---
 title: Wwise
-description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Object Processor + Metadata 外掛的結構、安裝、創作、單次音效與預熱音源池、遊戲端 C API、UE 與 Unity 整合。
+description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Object Processor + Metadata 外掛的結構、安裝、創作、EQ、單次音效與預熱音源池、遊戲端 C API、UE 與 Unity 整合。
 ---
 
 # Sound-tracing Wwise 外掛
@@ -12,7 +12,7 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Objec
 
 | 項目 | 值 |
 |---|---|
-| 外掛版本 | v0.2.0（SimpleST 2.18.2）。前一版本：v0.1.0（SimpleST 2.12.0，已於 Wwise 2025.1.11 音效引擎 E2E 驗證） |
+| 外掛版本 | v0.2.0（SimpleST 2.22.0，SDK 發行版 2.22.0-jhj.5 — 4 頻段 [EQ](#eq)、聆聽者 roll）。前一版本：v0.2.0（SimpleST 2.18.2）、v0.1.0（SimpleST 2.12.0，已於 Wwise 2025.1.11 音效引擎 E2E 驗證） |
 | Audiokinetic | CompanyID **325**，PluginID 1001（Renderer）· 1002（Source Settings）。Launcher 套件組 `Sound-tracing` |
 | Wwise | 2025.1（外掛二進位檔綁定於 SDK 版本） |
 | 平台 | Windows（vc170）· macOS · Linux · Android · iOS（靜態）· Web（靜態） |
@@ -46,6 +46,10 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Objec
   遊戲端以 `SimpleSTWwise_GetRealtimeProc` 取得同一模組的 `st_rt_*`。
 - **輸出限幅器會關閉**：SimpleST 2.18 在建立後會立即啟用 true-peak 限幅器，但在 Wwise 中由主匯流排
   負責限幅。
+- **等響度補償也會關閉**：SimpleST 2.21 在建立後會立即啟用輸出端等響度補償（低頻 shelf 約 +7.2 dB @ 120 Hz），
+  但音色與音量由 Wwise 混音負責。與 FMOD 版相同的共用核心會與限幅器一起將其關閉。
+- **聆聽者方向**：將匯流排聆聽者的 front 與 top 方向以 SimpleST 四元數傳入，連頭部傾斜（roll）也會反映（自 SDK 發行版
+  2.22.0-jhj 起）。
 - **生命週期**：執行階段在音效引擎 Init 掛勾（靜態註冊）或建立第一個 Renderer 實例時啟動，
   並在 `AK::SoundEngine::Term` 的全域回呼中結束。
 
@@ -103,10 +107,31 @@ lib 名稱為 `SimpleSTWwiseMeta`，可能需要別名）。
 | | Directivity (0 omni ~ 1 cardioid, RTPC) | 以物件 front 為基準的指向性 |
 | | Stationary (never moves) | 不移動的 emitter 提示（建立時套用） |
 | | Bypass SimpleST (RTPC) | 不經過 SimpleST，由渲染器以 Wwise panning 混音 |
+| 兩者皆有（EQ 群組） | EQ / EQ Preamp (dB, RTPC) | 4 頻段 EQ 開關與前級增益 — [EQ](#eq) |
+| | Band n Type / Band n Frequency (Hz, RTPC) / Band n Gain (dB, RTPC) / Band n Q (RTPC) (n = 1 ~ 4) | 各頻段的濾波器種類、頻率、增益、Q |
 
 ![Source Settings metadata](/img/wwise/source-settings-metadata.png)
 
 CompanyID/PluginID、屬性名稱、AudioEnginePropertyID 會由專案與 bank 儲存，發布後不要更改。
+
+### EQ
+
+自 SDK 發行版 2.22.0-jhj 起，兩個外掛都有相同的 4 頻段 EQ 屬性群組。以與 FMOD 版相同的共用核心套用 SimpleST
+參數式 EQ。
+
+| 外掛 | 屬性群組 | 作用處 |
+|---|---|---|
+| Sound-tracing Source Settings | `Source EQ`、`Source EQ Band 1 ~ 4` | **音源 EQ** — 物件音訊進入 SimpleST 之前，於引擎分頻之前。直達聲、反射、繞射、殘響全部帶有相同音色 |
+| Sound-tracing Renderer | `Output EQ`、`Output EQ Band 1 ~ 4` | **輸出 EQ** — SimpleST 混音 |
+
+- `EQ` 為開關，`EQ Preamp` 為頻段前的增益（−48 ~ +12 dB）。
+- `Band n Type` 為 Off · Peaking · Low Shelf · High Shelf · High Cut（12 dB/oct）· Low Cut（12 dB/oct）· Notch。這是
+  列舉屬性，無法以 RTPC 變更。
+- `Band n Frequency` 為 20 ~ 20,000 Hz，`Band n Gain` 為 ±24 dB（僅 Peaking 與 shelf），`Band n Q` 為 0.1 ~ 30（shelf 最多 3），
+  Preamp、Frequency、Gain、Q 支援 RTPC。
+- 預設為關閉，關閉時不會呼叫引擎。只送出變更的值，引擎以 20 ms 交叉淡化切換。
+- EQ 屬性的 AudioEnginePropertyID 為 Source Settings 8 ~ 25、Renderer 3 ~ 20，在 bank 中依相同順序接在既有欄位之後。
+  從預熱池重複使用的引擎音源會先清除前一個 voice 的 EQ 或換成新的 EQ 後再開始。
 
 ## 單次音效與預熱音源池
 
@@ -148,7 +173,7 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal 軸**：Wwise for Unreal 2024.1+ 直接傳遞 Unreal 向量（+Z 向上），因此必須呼叫
   `SetWorldAxes(UNREAL)`，渲染器才會轉換為 (Y, Z, X)，與遊戲上傳的幾何體一致。若不呼叫，
   聆聽者與音源會被錯誤的牆壁遮蔽（2026-10-15 修正）。
-- **音源上限**（SDK 發行版 2.18.2-jhj.7）：`SimpleSTWwise_Config.maxSources` 是引擎音源數上限（0 = 平台
+- **音源上限**（自 SDK 發行版 2.18.2 起）：`SimpleSTWwise_Config.maxSources` 是引擎音源數上限（0 = 平台
   預設）。超過時引擎會拒絕建立音源，該 voice 以 dry 播放。這是附加在結構末端的欄位，因此傳入舊版較短
   結構的主機也能運作 — [音源記憶體預算](../core/simplest.md#音源記憶體預算)。
 
@@ -158,7 +183,7 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // 關閉。1 = 開啟（預設）
 ```
 
-SDK 發行版 2.18.2-jhj.7 新增的遊戲端 A/B 開關。套用於執行中的執行階段，並在控制執行緒上以非同步方式
+SDK 發行版 2.18.2 新增的遊戲端 A/B 開關。套用於執行中的執行階段，並在控制執行緒上以非同步方式
 反映。行為與 [FMOD 版](./fmod.md#開啟與關閉-sound-tracing) 相同。
 
 - **關閉時** 會啟用 SimpleST 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空預熱音源池後不再
@@ -206,6 +231,7 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 Wwise 模式中會呼叫此函�
 - 聆聽者 1 個（SimpleST 的限制）。若同一匯流排為第二個聆聽者再次實例化，該實例會把所有物件
   以 Wwise panning 混音。
 - 音訊物件沒有速度，因此沒有 SimpleST Doppler。
+- EQ 每個外掛固定 4 頻段（UE、Unity、Web 最多 16 頻段）。
 - 引擎音源數不會超過平台上限（`maxSources`）。超出的 voice 為 dry。
 - 第一次看到新的音訊物件時，會在音訊執行緒上配置一個小插槽。引擎音源本身由控制執行緒從預熱池
   重複使用或新建。

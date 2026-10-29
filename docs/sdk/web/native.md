@@ -52,7 +52,7 @@ facade의 control Worker가 사용하는 어댑터입니다. 직접 쓸 때는 W
 
 ```ts
 const M = await loadRealtimeModule(coreBaseUrl);
-const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, 재질 테이블 등록, Hybrid 적용
+const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, 등라우드니스 보정 끔, 재질 테이블 등록, Hybrid 적용
 
 rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
 rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + 품질 프리셋 적용
@@ -75,6 +75,10 @@ rt.reset(); rt.dispose();
   덮어쓰되 `reserved0 = 1`(Hybrid)을 항상 유지합니다. Hybrid가 풀리면 `diagnostics()`가 예외를 던집니다.
 - 렌더 시작마다 출력단을 명시합니다: 리미터 끔(`useLimiter: true`면 true-peak), 마스터 게인 0 dB.
   SimpleST 2.18의 생성 직후 기본값(true-peak 리미터 켜짐)에 기대지 않습니다.
+- 컨텍스트를 만든 직후 SimpleST 2.21이 켜는 등라우드니스 보정을 끕니다(`features.loudnessCompensation`일 때).
+- 리스너 방향은 forward/up에서 만든 쿼터니언으로 `st_rt_listener_set_orientation_q`에 넘겨 roll을 유지합니다.
+- 소스 EQ는 `st_rt_source_set_parametric_eq`(지우기 `st_rt_source_set_eq(NULL)`), 출력 EQ는
+  `st_rt_render_set_parametric_eq`로 겁니다. `features.sourceParametricEq`·`outputParametricEq`가 없으면 거부합니다.
 
 ## 진단 스냅샷
 
@@ -88,7 +92,7 @@ interface SimpleSTDiagnostics {
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
   features?: SimpleSTFeatures;                                                   // 1.1.0
-  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain };  // 1.1.0, 적용된 출력단
+  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // 1.1.0, 적용된 출력단(eq = 출력 EQ)
   inputs?: { live; clip };                                                       // 1.1.0, 라이브/클립 음원 수
 }
 ```

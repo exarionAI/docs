@@ -1,16 +1,18 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 0.4.0 (SimpleST 2.18.2 / ABI 6) installation, component Inspector contract, HRTF and output, materials, FMOD/Wwise integration modes, WebGL.
+description: SoundTrace Unity SDK 0.4.0 (SimpleST 2.22.0 / ABI 6) installation, component Inspector contract, HRTF and output, source and output EQ, materials, FMOD/Wwise integration modes, WebGL.
 ---
 
 # SoundTrace SDK for Unity
 
 The SoundTrace Unity SDK is a real-time spatial audio plug-in that connects Unity meshes, Renderer
 material slots, sources, and the listener to [SimpleST](../core/simplest.md). From 0.3.0 the engine
-has changed from STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.18.2 / ABI 6** (previous release:
-0.3.0 = SimpleST 2.12.0). The renderer starts in **Hybrid** mode. In SDK release 2.18.2-jhj.7 the
-package version is unchanged; it adds a [source count limit](#source-count-limit) and a minimum
-Android API of 28. The `SoundTraceManager`,
+has changed from STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.22.0 / ABI 6** (SDK release 2.22.0-jhj.5.
+In the previous SDK release 2.18.2-jhj.7 the same 0.4.0 used SimpleST 2.18.2; 0.3.0 = SimpleST 2.12.0). The
+renderer starts in **Hybrid** mode. In this release the package version is unchanged; it adds a
+[source EQ and an output EQ](#eq), and the listener orientation is passed as a quaternion so head tilt (roll) is
+reflected (previously yaw/pitch only). The 2.18.2 SDK added a [source count limit](#source-count-limit) and a
+minimum Android API of 28. The `SoundTraceManager`,
 `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`, and `SoundTracePathVisualizer`
 component names, script GUIDs, and sample scenes are unchanged.
 
@@ -99,6 +101,10 @@ renders.
   by the Unity mixer — SimpleST 2.18 turns on a true-peak limiter (137-sample latency) right after
   creation, so the wrapper turns it off. Render options are re-applied from the preset only at engine
   creation and on speaker-layout changes; `render_start` leaves them as they are.
+- Right after creating the engine, **equal-loudness compensation is turned off**
+  (`SoundTraceRuntime.DisableLoudnessCompensation`, WebGL included). It is the output-stage low/high shelf that
+  SimpleST 2.21 turns on right after creation; tone and level are handled by the Unity mixer. The output with it
+  off is bit-identical to engine 2.20.
 
 ## SoundTraceManager
 
@@ -161,8 +167,9 @@ Usually added to the Main Camera.
 | `HRTF` | `HRIR Interpolated` | The three modes below |
 | `Max Delay Seconds` | `0` | `0..5 s`; ceiling of the per-source delay ring. `0` = engine platform ceiling (desktop 2 s · Android/iOS 1 s · WebGL 0.5 s). A nonzero value overrides the ceiling (values below 0.012 s become 0.012 s) |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`; path appear/disappear crossfade |
+| `Output EQ` | Off | Parametric EQ over the whole SimpleST mix — see [EQ](#eq) |
 
-The `Max Delay Seconds` default changed from `2` → `0` (engine policy) in SDK release 2.18.2-jhj.7.
+The `Max Delay Seconds` default changed from `2` → `0` (engine policy) in SDK release 2.18.2.
 The engine allocates a delay ring per source only as large as its paths need and uses this value
 only as a ceiling. Existing scenes saved with `2` behave as before.
 Listeners that never saved the field (including the bundled samples 01–03) use `0`. On desktop the ceiling is
@@ -207,6 +214,7 @@ that SoundTrace handles spatialization and Doppler.
 | `Reverb Ray Depth` | `4` | Maximum reflection depth of transport rays. Range `1..16` |
 | `Enable Direct` / `Reflection` / `Diffraction` / `Reverb` / `Transmission` | `true` | Per-path gates |
 | `Bypass` | `false` | Skips the SoundTrace render and passes the original `AudioSource` output through |
+| `Source EQ` | Off | Parametric EQ applied to this source's signal — see [EQ](#eq) |
 
 STCoreV2's per-path `Distance Attenuation` (0.5 ~ 1.5), `Max Delay Rate`, and `Path Hold Time` are
 gone. SimpleST applies physical `1/r` attenuation and air absorption, and the maximum delay and fade
@@ -221,6 +229,27 @@ are Listener settings. `Show Gizmo` in the Scene View shows the audible range pe
 
 To align the playback timing of multiple `AudioSource`s, call `PlayScheduled()` against the same
 `AudioSettings.dspTime`.
+
+## EQ
+
+From SDK release 2.22.0-jhj, the SimpleST parametric EQ is available in two places.
+
+| Place | Inspector | Script | Where it applies |
+|---|---|---|---|
+| Source EQ | `Source EQ` on `SoundTraceSource` (and `SoundTraceClipSource`) | `SetSourceEq(SoundTraceEq)`, `SetSourceEqEnabled(bool)`, `GetSourceEq()` | The source signal, before SimpleST's band split. Every path of the source gets the same tone |
+| Output EQ | `Output EQ` on `SoundTraceListener` | `SetOutputEq(SoundTraceEq)`, `SetOutputEqEnabled(bool)`, `GetOutputEq()` | The whole SimpleST mix, at the end of the render (before the master gain) |
+
+- `SoundTraceEq`: `enabled`, `preampDb` (−48 ~ +12), `bands` (up to 16).
+- `SoundTraceEqBand`: `enabled`, `type`, `frequencyHz` (20 ~ 20,000), `gainDb` (±24, Peaking and shelves only), `q` (0.1 ~ 30, shelves up to 3).
+- `SoundTraceEqFilterType`: `Peaking (Bell)` · `Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` ·
+  `Notch`. Cuts are fixed at 12 dB/oct, and the Inspector hides Gain for the types that do not use it.
+- Off by default, and while off the engine is not called. Only changed settings are sent, and the engine
+  crossfades over 20 ms. An Inspector edit that changes only the output EQ does not restart rendering.
+- Turning the source EQ off clears it in the engine, and it is applied again when the native source is re-created.
+- Check support with `SoundTraceRuntime.SupportsSourceParametricEq` / `SupportsOutputParametricEq`. On an engine
+  without support, an enabled EQ is ignored with a one-time warning.
+- In FMOD/Wwise integration mode `SoundTraceListener` and `SoundTraceSource` are disabled, so use the middleware
+  plug-in's EQ — [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq).
 
 ## SoundTraceObject
 
@@ -420,6 +449,7 @@ and the room response.
 | Listener/Source disabled in FMOD/Wwise mode | Expected — the middleware plug-in renders |
 | Some sources are not spatialized and sound dry | The `ST_STATUS_BUDGET_EXCEEDED` warning in the Console — reduce the sources or raise `SoundTraceRuntime.MaxSources` |
 | Android build fails with `SimpleST requires Android API 28 or newer` | Set Player Settings › Minimum API Level to 28 or higher |
+| Turning on the EQ changes nothing | The EQ-unsupported warning in the Console, whether you are in FMOD/Wwise integration mode (middleware EQ) |
 | Pitch jumps after a teleport | Call `ResetMotionState()` right after changing the transform |
 | Not enough performance | In order: `Quality → Middle → Fast`, lower Reverb Ray Resolution, disable the path visualizer |
 | Multiple sources sound like comb filtering | Run `PlayScheduled()` against the same `AudioSettings.dspTime` |

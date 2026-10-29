@@ -1,15 +1,17 @@
 ---
 title: Unreal Engine
-description: SoundTracing UE5 插件 0.4.0（SimpleST 2.18.2 / ABI 6）的安装、Project Settings、听者/声源/对象组件、单次音效、Native/FMOD/Wwise 集成模式、平台链接约定。
+description: SoundTracing UE5 插件 0.4.0（SimpleST 2.22.0 / ABI 6）的安装、Project Settings、听者/声源/对象组件、声源/输出 EQ、单次音效、Native/FMOD/Wwise 集成模式、平台链接约定。
 ---
 
 # SoundTrace SDK for Unreal Engine
 
 SoundTracing UE5 插件通过 Unreal Audio Mixer 的 Spatialization 插件 + 子混音（submix）以及
 Actor Component 连接 [SimpleST](../core/simplest.md)。从 0.3.0 起，引擎由 STCoreV2 换成了
-SimpleST，0.4.0 使用 **SimpleST 2.18.2 / ABI 6**（上一版本：0.3.0 = SimpleST 2.12.0）。
-SDK 发行版 2.18.2-jhj.7 中插件版本保持不变，新增了 `Max Sources` 设置、FMOD/Wwise 模式下 Sound Tracing
-开关的传递，以及射线采样器的整理。
+SimpleST，0.4.0 使用 **SimpleST 2.22.0 / ABI 6**（SDK 发行版 2.22.0-jhj.5。上一 SDK 发行版
+2.18.2-jhj.7 中同一 0.4.0 使用 SimpleST 2.18.2；0.3.0 = SimpleST 2.12.0）。本次发行插件版本保持不变，新增了
+[声源 EQ 与输出 EQ](#eq)，并以四元数传入听者方向，从而反映头部倾斜（roll）（以前仅 yaw/pitch）。
+引擎 2.21 在创建后开启的等响度补偿由插件关闭 — 音色与电平由 Unreal 主输出链负责。
+2.18.2 SDK 新增了 `Max Sources` 设置、FMOD/Wwise 模式下 Sound Tracing 开关的传递，以及射线采样器的整理。
 如果项目中存在 FMOD 或 Wwise 插件，同一份源码会以挂接到该中间件 SimpleST 插件的**集成模式**构建。
 
 ## 当前状态
@@ -124,6 +126,7 @@ Audio Mixer Sample Rate 可以是任意值。SimpleST 以 44.1 kHz 运行并转�
 | Propagation | `Static Rebuild Delay Seconds` | `0.1` | 把静态几何体变更合入静态加速结构前的等待时间（用于 level streaming 批处理） |
 | Listener | `Default Listener Settings` | — | 下面的听者设置结构体 |
 | Sources | `Source Ray Resolution Cap` / `Source Ray Depth Cap` | `0` / `0` | 所有声源资源的 transport ray 网格与深度上限。0 = 按资源值 |
+| Listener | `Output EQ` | 关闭 | 作用于整个 SimpleST 混音的参数输出 EQ — [EQ](#eq)。开启期间取代听者的图示 `Output EQ`。仅 Native 模式 |
 | Materials | `Material Preset Library` | 空 | 启动时注册到 SimpleST 的库。为空时使用插件随包库 |
 
 ## 听者设置（`FSoundTracingListenerSettings`）
@@ -145,7 +148,7 @@ Audio Mixer Sample Rate 可以是任意值。SimpleST 以 44.1 kHz 运行并转�
 | Render | `Late Reverb` / `Late Reverb Coupling` | `true` / `Default` | FDN16 / Off · Subtle 6 dB · Default 9 dB · Strong 12 dB |
 | Render | `Path Fade Time Seconds` | `0.05` | 路径出现/消失的交叉淡化 |
 | Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak / True Peak。`True Peak`（0.4.0）为 SimpleST 2.18 true-peak 限制器（−1 dBTP，137 采样延迟）。引擎 2.18 在创建后会开启限制器，但插件默认为 `Off`，由 Unreal 主输出链负责限幅。0.4.0 修复为在扬声器输出（`Speakers`）下也会应用 `Off` |
-| Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 63 ~ 16k Hz 9 频段 ±24 dB |
+| Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | 63 ~ 16k Hz 9 频段 ±24 dB 图示 EQ。Project Settings 的参数 `Output EQ` 开启时以其为准，关闭后恢复此值 |
 | Paths | `Enable Direct/Transmission/Reflection/Diffraction/Reverb Path` | 全部 `true` | 全局路径门控 |
 | Acoustics | `Propagation Delay` / `Direct Occlusion` | `true` / `true` | 关闭后分别为：所有路径与直达声同时到达 / 直达声穿过几何体 |
 | Acoustics | `Reference Distance Meters` / `Min Distance Meters` | `1.0` / `1.0` | 物理 `1/r` 衰减的起始距离 / 近距离钳制 |
@@ -159,7 +162,7 @@ Audio Mixer Sample Rate 可以是任意值。SimpleST 以 44.1 kHz 运行并转�
 | 项目 | 说明 |
 |---|---|
 | `Override Project Listener Settings` / `Listener Settings` | 用上述结构体覆盖项目默认值 |
-| `Drive Listener Transform` | 把此组件的 world transform 和速度传给 SimpleST，代替音频设备听者 |
+| `Drive Listener Transform` | 把此组件的 world transform 和速度传给 SimpleST，代替音频设备听者（旋转包含 roll） |
 | `ApplyListenerSettings()`, `SetQualityPreset()`, `SetHrtfDataset()`, `SetOutputMode()`, `SetSpeakerLayout()` | 在 Blueprint 中运行时更改 |
 | `ResetMotionState()` | 传送、重生后防止 Doppler 尖峰 |
 
@@ -189,14 +192,37 @@ Sound Attenuation 的 spatialization plugin settings。请按用途把共享资�
 | Reverb Rays | `Stationary Emitter` | `false` | 不移动的发射器提示 |
 | Per-Path Enable | `Direct/Transmission/Reflection/Diffraction/Reverb Path Enabled` | 全部 `true` | 逐声源路径门控 |
 | Bypass | `Bypass` | `false` | 不经过 SimpleST 直接通过 |
+| EQ | `Source EQ` | 关闭 | 作用于使用此资产的声源信号的参数 EQ — [EQ](#eq) |
+
+## EQ
+
+从 SDK 发行版 2.22.0-jhj 起，在两个位置使用 SimpleST 参数 EQ。两处都使用同一个结构体
+`FSoundTracingEq`（`Enabled`、`Preamp (dB)` −48 ~ +12、`Bands` 最多 16 个）。
+
+| 位置 | 设置 | 运行时修改 | 作用点 |
+|---|---|---|---|
+| 声源 EQ | Source Settings 资产 `Source EQ` | `USoundTracingSourceSettings::SetSourceEq` / `GetSourceEq`（Blueprint） | 声源信号，SimpleST 频段拆分之前。直达声·反射·绕射·混响发送都得到相同音色 |
+| 输出 EQ | Project Settings › SoundTracing › Listener › `Output EQ` | `USoundTracingSubsystem::SetOutputEq` / `ClearOutputEqOverride` / `GetOutputEq` | 整个 SimpleST 混音，渲染末端（主增益之前） |
+
+频段（`FSoundTracingEqBand`）包括 `Enabled`、`Type`、`Frequency Hz`（20 ~ 20,000）、`Gain (dB)`（±24，仅 Peaking·搁架）、
+`Q`（0.1 ~ 30，搁架最多 3）。`Type`（`ESoundTracingEqFilterType`）为 `Peaking (Bell)` · `Low Shelf` · `High Shelf` ·
+`High Cut (Low-pass)` · `Low Cut (High-pass)` · `Notch`，切滤波固定为 12 dB/oct。
+
+- 默认关闭，关闭时不调用 SimpleST。值变化时 SimpleST 以 20 ms 交叉淡化过渡。
+- `SetSourceEq` 会立即作用于正在用该资产播放的 voice；从引擎声源池复用的声源在创建时重新应用或清除 EQ。
+- `SetOutputEq` 在调用 `ClearOutputEqOverride` 之前覆盖 Project Settings 的值，即使重启运行时也会保留。
+  传入关闭的 EQ 会关闭输出 EQ。
+- **仅限 Native 模式**。FMOD/Wwise 模式使用中间件插件的 EQ —
+  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq)。
+- 在没有 EQ export 的旧版 SimpleST 运行时上，EQ 设置会被忽略并输出一次警告。
 
 ## 单次音效
 
-引擎会在 150 ms 内淡入**新声源**的所有路径并等待第一个 IR，因此如果每次枪声、脚步声都新建引擎
-声源，短音效听起来会又小又迟。插件按模式处理这一问题。
+引擎会在 150 ms 内淡入**新声源**的所有路径并等待第一个 IR，因此如果每次播放短音效都新建引擎
+声源，声音听起来会又小又迟。插件按模式处理这一问题。
 
 - **Native 模式**：在上下文启动时预先创建引擎声源池，voice 结束后把该声源归还到池中，由距离最近的
-  下一个 voice 接手。即使每发都重新播放 Audio Component 和声音，也不会新建引擎声源。
+  下一个 voice 接手。即使每次都重新播放 Audio Component 和声音，也不会新建引擎声源。
 - **FMOD / Wwise 模式**：渲染由中间件插件完成，因此遵循其预热声源池（FMOD 0.3.0 · Wwise 0.2.0）
   — [FMOD](./fmod.md#单次音效与预热声源池) · [Wwise](./wwise.md#单次音效与预热声源池)。像
   **Wwise AudioLink** 这样为每个声音注册新游戏对象的情况也能处理。
@@ -245,7 +271,7 @@ asset 的情况。每个频段必须满足 `R + A + T = 1`（±0.001）。
 
 用 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` 整体开启和关闭 Sound Tracing。关闭期间，
 即使听者和声源移动也不会唤醒传播 lane，也不收集可视化路径，因此不会残留最后的路径。
-在 FMOD 和 Wwise 模式下，从 SDK 发行版 2.18.2-jhj.7 起会把此开关传给中间件插件
+在 FMOD 和 Wwise 模式下，从 SDK 发行版 2.18.2 起会把此开关传给中间件插件
 （`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`）。此前上下文由插件拥有，
 因此关闭不起作用。挂接到新运行时后也会重新发送关闭状态；如果是没有此 export 的旧版插件，则输出警告。
 SimpleST 没有传播暂停，因此只要还有声源存在，lane 就会按自身周期继续运行。
@@ -298,8 +324,9 @@ Mac/Linux 为相同代码路径）。
 | source 未空间化（Native） | Audio Component 是否连接了 SoundTracing Source Settings asset |
 | geometry 未生效 | Object Component 的 immediate parent 是否为支持的 mesh component、`Acoustic Mobility` |
 | 渲染块超时（音频断续） | `Early Reflections = Hybrid`、提高 `Reflection Update Interval`、降低 Quality Preset |
-| 枪声、脚步声偏小或延迟（FMOD/Wwise 模式） | 是否为 FMOD 插件 0.3.0 / Wwise 插件 0.2.0 或更高版本，是否设置了 `SIMPLESTFMOD_WARM_SOURCES=0` |
+| 短音效偏小或延迟（FMOD/Wwise 模式） | 是否为 FMOD 插件 0.3.0 / Wwise 插件 0.2.0 或更高版本，是否设置了 `SIMPLESTFMOD_WARM_SOURCES=0` |
 | 部分声源以 dry 播放（Native） | Output Log 中的 `ST_STATUS_BUDGET_EXCEEDED` — 减少声源或调高 `Max Sources` |
+| 开启 EQ 后声音没有变化 | 是否为 Native 模式（FMOD/Wwise 模式使用中间件 EQ），Output Log 中的 EQ 不支持警告（旧版 SimpleST 运行时） |
 | FMOD/Wwise 模式下关闭 Sound Tracing 后没有变化 | 插件是否为导出 `*_SetSoundTracingEnabled` 的版本（没有时 Output Log 中有警告） |
 | 看不到 path | visualizer component、Niagara plugin、path enable 状态、Sound Tracing 是否被关闭 |
 

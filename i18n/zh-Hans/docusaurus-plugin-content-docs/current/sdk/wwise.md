@@ -1,6 +1,6 @@
 ---
 title: Wwise
-description: Sound-tracing（SimpleSTWwise）— 面向 Wwise 2025.1 的 SimpleST Object Processor + Metadata 插件的结构、安装、创作、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成。
+description: Sound-tracing（SimpleSTWwise）— 面向 Wwise 2025.1 的 SimpleST Object Processor + Metadata 插件的结构、安装、创作、EQ、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成。
 ---
 
 # Sound-tracing Wwise 插件
@@ -12,7 +12,7 @@ description: Sound-tracing（SimpleSTWwise）— 面向 Wwise 2025.1 的 SimpleS
 
 | 项目 | 值 |
 |---|---|
-| 插件版本 | v0.2.0（SimpleST 2.18.2）。上一版本：v0.1.0（SimpleST 2.12.0，Wwise 2025.1.11 声音引擎 E2E 已验证） |
+| 插件版本 | v0.2.0（SimpleST 2.22.0，SDK 发行版 2.22.0-jhj.5 — 4 频段 [EQ](#eq)、听者 roll）。上一版本：v0.2.0（SimpleST 2.18.2）、v0.1.0（SimpleST 2.12.0，Wwise 2025.1.11 声音引擎 E2E 已验证） |
 | Audiokinetic | CompanyID **325**，PluginID 1001（Renderer）· 1002（Source Settings）。Launcher 包名 `Sound-tracing` |
 | Wwise | 2025.1（插件二进制与 SDK 版本绑定） |
 | 平台 | Windows（vc170）· macOS · Linux · Android · iOS（静态）· Web（静态） |
@@ -46,6 +46,10 @@ description: Sound-tracing（SimpleSTWwise）— 面向 Wwise 2025.1 的 SimpleS
   游戏侧通过 `SimpleSTWwise_GetRealtimeProc` 获取同一模块的 `st_rt_*`。
 - **关闭输出限制器**：SimpleST 2.18 在创建后会开启 true-peak 限制器，但在 Wwise 中由主总线
   负责限幅。
+- **同样关闭等响度补偿**：SimpleST 2.21 在创建后会开启输出级等响度补偿（低频搁架约 +7.2 dB @ 120 Hz），
+  但音色与电平由 Wwise 混音负责。与 FMOD 版相同的公用核心会与限制器一起将其关闭。
+- **听者方向**：把总线听者的 front·top 方向以 SimpleST 四元数传入，从而反映头部倾斜（roll）（自 SDK 发行版
+  2.22.0-jhj 起）。
 - **生命周期**：运行时在声音引擎 Init 钩子（静态注册）或第一个渲染器实例创建时启动，
   在 `AK::SoundEngine::Term` 的全局回调中终止。
 
@@ -103,10 +107,31 @@ Debug 插件放到 Debug 配置，Release 插件放到 Profile/Release 配置。
 | | Directivity (0 omni ~ 1 cardioid, RTPC) | 以对象 front 为基准的指向性 |
 | | Stationary (never moves) | 不移动的发射器提示（创建时应用） |
 | | Bypass SimpleST (RTPC) | 不经过 SimpleST，由渲染器用 Wwise 声像混合 |
+| 两者（EQ 组） | EQ / EQ Preamp (dB, RTPC) | 4 频段 EQ 开关·前级增益 — [EQ](#eq) |
+| | Band n Type / Band n Frequency (Hz, RTPC) / Band n Gain (dB, RTPC) / Band n Q (RTPC)（n = 1 ~ 4） | 各频段的滤波器类型·频率·增益·Q |
 
 ![Source Settings 元数据](/img/wwise/source-settings-metadata.png)
 
 CompanyID/PluginID、属性名称、AudioEnginePropertyID 由项目和 bank 保存，因此发布后不要更改。
+
+### EQ
+
+从 SDK 发行版 2.22.0-jhj 起，两个插件都有相同的 4 频段 EQ 属性组。通过与 FMOD 版相同的公用核心应用 SimpleST
+参数 EQ。
+
+| 插件 | 属性组 | 作用点 |
+|---|---|---|
+| Sound-tracing Source Settings | `Source EQ`、`Source EQ Band 1 ~ 4` | **声源 EQ** — 对象音频进入 SimpleST 之前，位于引擎频段拆分之前。直达声·反射·绕射·混响都得到相同音色 |
+| Sound-tracing Renderer | `Output EQ`、`Output EQ Band 1 ~ 4` | **输出 EQ** — SimpleST 混音 |
+
+- `EQ` 为开关，`EQ Preamp` 为频段之前的增益（−48 ~ +12 dB）。
+- `Band n Type` 为 Off · Peaking · Low Shelf · High Shelf · High Cut（12 dB/oct）· Low Cut（12 dB/oct）· Notch。
+  它是枚举属性，不能用 RTPC 修改。
+- `Band n Frequency` 为 20 ~ 20,000 Hz，`Band n Gain` 为 ±24 dB（仅 Peaking·搁架），`Band n Q` 为 0.1 ~ 30（搁架最多 3），
+  Preamp·Frequency·Gain·Q 支持 RTPC。
+- 默认关闭，关闭时不调用引擎。只发送变化的值，引擎以 20 ms 交叉淡化过渡。
+- EQ 属性的 AudioEnginePropertyID 为 Source Settings 8 ~ 25、Renderer 3 ~ 20，在 bank 中按相同顺序追加在现有字段之后。
+  从预热池复用的引擎声源会先清除上一个 voice 的 EQ 或换成新的 EQ，然后再开始。
 
 ## 单次音效与预热声源池
 
@@ -148,7 +173,7 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal 坐标轴**：Wwise for Unreal 2024.1+ 会原样传递 Unreal 向量（+Z 向上），因此必须调用
   `SetWorldAxes(UNREAL)`，渲染器才会转换为 (Y, Z, X)，与游戏上传的几何体一致。不调用的话，
   听者和声源会被错误的墙体遮挡（2026-10-15 修复）。
-- **声源上限**（SDK 发行版 2.18.2-jhj.7）：`SimpleSTWwise_Config.maxSources` 是引擎声源数上限（0 = 平台
+- **声源上限**（自 SDK 发行版 2.18.2 起）：`SimpleSTWwise_Config.maxSources` 是引擎声源数上限（0 = 平台
   默认）。超出时引擎拒绝创建声源，该 voice 以 dry 播放。这是追加在结构体末尾的字段，因此传入旧版较短
   结构体的主机也能正常工作 — [声源内存预算](../core/simplest.md#声源内存预算)。
 
@@ -158,7 +183,7 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // 关闭。1 = 开启（默认）
 ```
 
-这是 SDK 发行版 2.18.2-jhj.7 中新增的游戏侧 A/B 开关。它作用于正在运行的运行时，并在控制线程上
+这是 SDK 发行版 2.18.2 中新增的游戏侧 A/B 开关。它作用于正在运行的运行时，并在控制线程上
 异步生效。行为与 [FMOD 版](./fmod.md#开启和关闭-sound-tracing)相同。
 
 - **关闭时**，会启用 SimpleST 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空预热声源池后不再
@@ -206,6 +231,7 @@ Android 两个 ABI 构建通过，iOS device/simulator 和 Web 最终链接通�
 - 1 个听者（SimpleST 的限制）。如果同一总线为第二个听者再次实例化，该实例会把所有对象用
   Wwise 声像混合。
 - 音频对象没有速度，因此没有 SimpleST Doppler。
+- EQ 每个插件固定为 4 频段（UE、Unity、Web 最多 16 频段）。
 - 引擎声源数不会超过平台上限（`maxSources`）。超出的 voice 为 dry。
 - 首次看到新音频对象时，会在音频线程上分配一个小槽位。引擎声源本身在控制线程上复用预热池中的
   声源或新建。

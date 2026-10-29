@@ -50,7 +50,7 @@ STCoreV2 时期的 `SoundScene` / `SoundListener` / `SoundMesh` / `SoundObject` 
 
 ```ts
 const M = await loadRealtimeModule(coreBaseUrl);
-const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create、注册材质表、应用 Hybrid
+const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create、关闭等响度补偿、注册材质表、应用 Hybrid
 
 rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
 rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + 应用质量预设
@@ -73,6 +73,10 @@ rt.reset(); rt.dispose();
   但始终保持 `reserved0 = 1`（Hybrid）。如果 Hybrid 被解除，`diagnostics()` 会抛出异常。
 - 每次渲染启动时显式设置输出级：关闭限制器（`useLimiter: true` 时为 true-peak），主增益 0 dB。
   不依赖 SimpleST 2.18 创建后的默认值（true-peak 限制器开启）。
+- 创建上下文后立即关闭 SimpleST 2.21 开启的等响度补偿（`features.loudnessCompensation` 时）。
+- 听者方向由 forward/up 构造的四元数传给 `st_rt_listener_set_orientation_q`，从而保留 roll。
+- 声源 EQ 用 `st_rt_source_set_parametric_eq`（清除用 `st_rt_source_set_eq(NULL)`），输出 EQ 用
+  `st_rt_render_set_parametric_eq` 应用。没有 `features.sourceParametricEq`·`outputParametricEq` 时拒绝。
 
 ## 诊断快照
 
@@ -86,7 +90,7 @@ interface SimpleSTDiagnostics {
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
   features?: SimpleSTFeatures;                                                   // 1.1.0
-  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain };  // 1.1.0，已应用的输出级
+  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // 1.1.0，已应用的输出级（eq = 输出 EQ）
   inputs?: { live; clip };                                                       // 1.1.0，实时/剪辑声源数
 }
 ```

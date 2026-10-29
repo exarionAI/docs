@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 title: SimpleST
-description: SimpleST, the current native engine of Sound Tracing — C++20 geometric-acoustics core, 2-DLL public C ABI (ABI 6), 9-band materials, Hybrid early reflections, host pull render.
+description: SimpleST, the current native engine of Sound Tracing — C++20 geometric-acoustics core, 2-DLL public C ABI (ABI 6), 9-band materials, Hybrid early reflections, parametric EQ, host pull render.
 ---
 
 # SimpleST
@@ -19,7 +19,7 @@ top of its public C ABI.
 
 | Item | Value |
 |---|---|
-| Engine version | **2.18.2** (`ST_VERSION_STRING`), SDK release 2.18.2-jhj.7. Previous release: 2.12.0 |
+| Engine version | **2.22.0** (`ST_VERSION_STRING`), SDK release 2.22.0-jhj.5. Previous SDK releases: 2.18.2-jhj.7 (engine 2.18.2), 2.12.0 |
 | Public ABI | **ABI 6** (`ST_ABI_VERSION`, 3.0 clean break). All changes since 2.12.0 are additive |
 | Primary language | C++20 (C ABI exposed, C11-header compatible) |
 | Build system | CMake 3.21+ · platform entry point `mainBuild.sh` |
@@ -28,7 +28,7 @@ top of its public C ABI.
 | Sample rate | Fixed 44.1 kHz inside the engine; host rates converted by the built-in resampler |
 | Bands | 9 octave bands `63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz` |
 | Acceleration structure | TinyBVH (default) · BinnedSAH · HybridKD · LBVH · LBVH_SIMD |
-| Tests | Regression harness `SimpleST_demo` + about 90 CTest targets |
+| Tests | Regression harness `SimpleST_demo` + about 110 CTest targets |
 
 ## Architecture
 
@@ -66,8 +66,8 @@ The public ABI is physically split into two DLLs; the shared PODs live in `STTyp
 
 | Header | Context | Function prefix | Role |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | Real-time propagation + audio render (146 exports) |
-| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | Offline IR computation and render (116 exports) |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | Real-time propagation + audio render (181 exports) |
+| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | Offline IR computation and render (121 exports) |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | Shared PODs, enums, capability bits |
 
 The naming rule is `st_<dll>_<family>_<verb>[_<what>]`, where family is one of
@@ -97,14 +97,15 @@ Create functions return the handle by value and **failure is `v < 0`**. `0` is a
 | material | `st_rt_material_create`, `st_rt_material_load_defaults` |
 | mesh / object | `st_rt_mesh_create` (one material or per-triangle material indices), `st_rt_mesh_set_material`, `st_rt_object_create[_q]`, `st_rt_object_set_transform[_q]`, `*_destroy` |
 | scene | `st_rt_scene_set_accel`, `st_rt_scene_set_triangle_intersection`, `st_rt_scene_get_stats`, `st_rt_scene_raycast` |
-| source | `st_rt_source_create`, `set_position/direction/velocity`, `set_orientation_q`, `set_directivity`, `set_axis_attenuation`, `set_energy`, `set_path_enabled`, `set_path_volume`, `set_ray_count`, `set_depth`, `set_transport_refresh_steps` |
+| source | `st_rt_source_create`, `set_position/direction/velocity`, `set_orientation_q`, `set_directivity`, `set_axis_attenuation`, `set_energy`, `set_path_enabled`, `set_path_volume`, `set_ray_count`, `set_depth`, `set_transport_refresh_steps`, `set_parametric_eq` / `set_eq` (source EQ) |
 | source audio input | `st_rt_source_set_audio_file` (WAV/FLAC/MP3/Ogg), `st_rt_source_attach_stream` + `write_stream` + `get_stream_status` (host PCM), `st_rt_source_set_audio_clip` / `set_audio_clip_asset` (cached clip), `clear_audio` |
 | source playback control | `st_rt_source_play/pause/stop/seek`, `set_volume` (linear 0 ~ 16), `set_pitch` (0.25 ~ 4), `set_loop_count`, `st_rt_source_trigger`, `set_retrigger_interval` |
-| listener | `st_rt_listener_set_position/velocity/rotation`, `set_ray_count`, `set_ray_sampling_method` |
+| listener | `st_rt_listener_set_position/velocity/rotation`, `set_rotation_ypr`, `set_orientation_q` (2.22, includes head roll), `set_ray_count`, `set_ray_sampling_method` |
 | Propagation | `st_rt_build`, `st_rt_build_dynamic`, `st_rt_propagate`, `st_rt_set_max_depth`, `st_rt_set_transmission_max_depth`, `st_rt_set_path_type_enabled`, `st_rt_set_lane_update_interval` |
 | Acoustic policy | `st_rt_set_atmosphere`, `st_rt_set_physical_distance_attenuation`, `st_rt_set_acoustic_feature_enabled`, `st_rt_set_doppler_gain_mode`, `st_rt_set_late_coupling[_preset]`, `st_rt_set_early_late_band_energy_targets` |
-| render | `st_rt_render_start/stop`, `st_rt_render_process` (host pull), `set_options/get_options`, `set_spatializer`, `set_speaker_layout[_custom]`, `set_eq`, `set_master_gain_db`, `set_limiter_type`, `get_limiter_latency_samples`, `set_path_fade_time`, `set_max_delay_seconds`, `get_latency_frames`, `get_process_stats` |
+| render | `st_rt_render_start/stop`, `st_rt_render_process` (host pull), `set_options/get_options`, `set_spatializer`, `set_speaker_layout[_custom]`, `set_parametric_eq`, `set_eq`, `set_loudness_compensation`, `set_virtual_bass`, `set_master_gain_db`, `set_limiter_type`, `get_limiter_latency_samples`, `set_path_fade_time`, `set_max_delay_seconds`, `get_latency_frames`, `get_process_stats` |
 | Threads | `st_rt_set_thread_attributes`, `st_rt_get_thread_inventory`, `STRT_CreateOptions.maxComputeThreads` |
+| Idle / run | `st_rt_idle`, `st_rt_run`, `st_rt_get_idle_state`, `STRT_CreateOptions.startIdle` (2.20; 1 starts IDLE, so compute and render rest until `st_rt_run`), per-source `st_rt_source_idle/run` |
 | Memory budget | `st_rt_set_memory_budget`, `st_rt_get_memory_budget`, `st_rt_get_memory_stats`, `STRT_CreateOptions.maxSources` — [Source memory budget](#source-memory-budget) |
 | Diagnostics | `st_rt_get_timing`, `st_rt_ir_get_stats`, `st_rt_debug_acquire_snapshot`, `st_rt_debug_copy_visual_paths`, `st_rt_debug_copy_mesh/scene_accel_nodes` |
 
@@ -151,6 +152,13 @@ opt.hostSampleRate   = 48000;                 // host rate. 0 = keep 44100
 STRT_Context* ctx = NULL;
 if (st_rt_create(&opt, &ctx) != ST_STATUS_OK) { /* st_rt_get_last_error */ }
 
+// Since 2.21.0 st_rt_create turns equal-loudness compensation on. Turn it off right after creation
+// when the host mix owns the tone
+STLoudnessCompensationDesc lc = { sizeof lc, ST_ABI_VERSION };
+st_rt_render_get_loudness_compensation(ctx, &lc);
+lc.enabled = 0;
+st_rt_render_set_loudness_compensation(ctx, &lc);
+
 // 1. Materials — register the whole default library (24 BRAS presets). Returns the first handle.
 STMaterialId firstMat = st_rt_material_load_defaults(ctx);
 
@@ -166,7 +174,7 @@ desc.positionX = 2.f; desc.positionY = 1.5f; desc.positionZ = -1.f;
 desc.directionZ = 1.f; desc.intensity = 1.f; desc.isDynamic = 1;
 STSourceId srcId = st_rt_source_create(ctx, &desc);
 st_rt_listener_set_position(ctx, 0.f, 1.7f, 0.f);
-st_rt_listener_set_rotation(ctx, /*yaw*/0.f, /*pitch*/0.f);        // radians
+st_rt_listener_set_rotation(ctx, /*yaw*/0.f, /*pitch*/0.f);        // radians. With roll: set_orientation_q(XYZW)
 
 // 4. Host PCM stream input
 STStreamDesc sd = { sizeof sd, ST_ABI_VERSION, 48000, 1, 0 };     // mono, capacity 0 = 8192 frames
@@ -199,6 +207,10 @@ a speaker layout is turned on or off) are **Hybrid (`reserved0 = 1`) + true-peak
 (−1 dBTP, 137-sample latency) on**, with a master gain of 0 dB (up to 2.12.0: Objects + limiter off).
 Do not rely on the defaults; set Hybrid and the limiter explicitly **after `render_start` and after any
 layout change**. All official plug-ins re-apply their own defaults in this order.
+
+Since 2.21.0, `st_rt_create` also turns on [equal-loudness compensation](#equal-loudness-compensation). This
+setting is per context and `render_start` does not reset it, so decide it once right after creation. All
+official wrappers turn it off right after creation.
 :::
 
 ## Core Concepts
@@ -213,7 +225,9 @@ layout change**. All official plug-ins re-apply their own defaults in this order
   (cm = `0.01`, ft = `0.3048`) once at creation. Pass coordinates in scene units as they are; the
   engine multiplies only where meters are needed. **Double scaling is forbidden**: never pre-scale
   the geometry and also pass `sceneRatio`.
-- Angles: listener rotation is in **radians**; only speaker layouts use degrees.
+- Angles: listener rotation is in **radians**; only speaker layouts use degrees. Since 2.22.0,
+  `st_rt_listener_set_orientation_q` (local-to-world unit quaternion, XYZW) and `st_rt_listener_set_rotation_ypr`
+  (yaw · pitch · roll) also pass head tilt (roll). Of the three listener orientation setters, the last call wins.
 - Mesh winding: the intersection kernel is two-sided, so reflection and transmission are
   winding-independent, but two diffraction edge tests look at the normal sign. Keep the winding
   consistent within a mesh.
@@ -284,10 +298,14 @@ apply Hybrid explicitly after the render starts.
 
 Speaker output is enabled with `st_rt_render_set_speaker_layout` (2.0 / 2.1 / 4.1 / 5.1 / 7.1 /
 laptop near-field 2.0) or a custom layout, and produces N channels through an internal HOA3 decode.
-The output stage runs 9-band EQ → master gain → limiter, in that order.
+The output stage runs output EQ → (speaker) channel EQ → equal-loudness compensation → virtual bass →
+master gain → limiter, in that order.
 
-| Output stage | Function | 2.18.0 default |
+| Output stage | Function | Real-time default (2.22.0) |
 |---|---|---|
+| Output EQ | `st_rt_render_set_parametric_eq` — [Parametric EQ](#parametric-eq). The former 9-band `st_rt_render_set_eq` is a graphic view of the same EQ | Off |
+| Equal-loudness compensation | `st_rt_render_set_loudness_compensation` (2.21.0) | **On** (turned on by `st_rt_create`) |
+| Virtual bass | `st_rt_render_set_virtual_bass` (2.21.0) | Off |
 | Master gain | `st_rt_render_set_master_gain_db` (−96 ~ +24 dB, 20 ms ramp) | 0 dB |
 | Limiter type | `st_rt_render_set_limiter_type` — Envelope (0) / Lookahead peak (1) / True peak (2) | True peak, ceiling −1 dBTP |
 | Limiter on/off | `STRenderOptions.useLimiter` | On (1). Latency is `st_rt_render_get_limiter_latency_samples` = 137 samples |
@@ -297,6 +315,34 @@ channel-linked). Integrations where the host master chain handles limiting, such
 game engines, turn it off with `useLimiter = 0`. Check for the new features with
 `ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER` · `ST_CAP1_MASTER_GAIN` from `st_rt_get_capability_word(1)`
 (do not mix them with the word-0 bits of `st_rt_get_capabilities()` in an AND).
+
+### Parametric EQ
+
+Since 2.21.0 the EQ is a single parametric EQ that runs RBJ second-order filter bands in series. The same
+band struct (`STParametricEqBand`) is used in two places.
+
+| Place | Function | Where it applies |
+|---|---|---|
+| Source EQ | `st_rt_source_set_parametric_eq` (`ST_CAP1_SOURCE_PARAMETRIC_EQ`) | The source's raw PCM, **before** the 9-band crossover. Direct, reflection, diffraction, and reverb sends of that source all get the same tone. Clear it with `st_rt_source_set_eq(ctx, id, NULL)` |
+| Output EQ | `st_rt_render_set_parametric_eq` (`ST_CAP1_OUTPUT_PARAMETRIC_EQ`) | One global EQ at the end of the render, before the master gain. Turn it off with `enabled = 0` |
+
+- Six filter types: `ST_PARAMETRIC_EQ_PEAKING` · `LOW_SHELF` · `HIGH_SHELF` · `LOW_PASS` · `HIGH_PASS` · `NOTCH`.
+  The low and high cuts (HIGH_PASS / LOW_PASS) are fixed at 12 dB/oct.
+- Ranges: frequency 20 ~ 20,000 Hz, gain ±24 dB (PEAKING and shelves only), Q 0.1 ~ 30 (shelves up to 3),
+  preamp −48 ~ +12 dB, up to 16 bands.
+- When a value changes the engine crossfades over 20 ms. While off, samples are left untouched.
+- The offline DLL also has the source EQ (`st_off_source_set_parametric_eq`). The output EQ is real-time only.
+
+### Equal-loudness compensation
+
+Since 2.21.0 the real-time `st_rt_create` turns on equal-loudness compensation (ISO 226:2003, reference 83 →
+playback 70 phon). At 0 dB master gain this is a low shelf of about +7.2 dB (120 Hz) and a high shelf of about
++1.8 dB, and by default the amount follows the master gain. With it off, the output is bit-identical to 2.20.
+The offline DLL does not have it.
+
+This stage is a playback-device feature, so like the limiter we recommend turning it off in integrations where
+the host mix owns tone and level. The UE, Unity, FMOD, Wwise, and soundtrace.js wrappers all turn it off right
+after creating the context (SDK release 2.22.0-jhj.5).
 
 ### Host pull render
 
@@ -325,7 +371,7 @@ resampling is needed. There are **64** concurrent host stream slots.
 
 ### Source memory budget
 
-Starting with SDK release 2.18.2-jhj.7, the real-time context caps the number of simultaneously
+Starting with SDK release 2.18.2, the real-time context caps the number of simultaneously
 live sources and the source memory. This is an ABI 6 additive change, detected with
 `ST_CAP1_MEMORY_BUDGET` from `st_rt_get_capability_word(1)`. The memory of one source consists of a
 fixed cost (propagation · IR copies · transport · stream ring), the delay ring, and the path lanes.
@@ -383,6 +429,15 @@ typedef struct STMemoryBudget {
   `st_rt_render_set_max_delay_seconds`.
 - The offline DLL (`st_off_*`) is not subject to the budget (unlimited).
 - Mobile and web assume Hybrid early reflections. Objects mode exceeds 30 MB per source.
+:::
+
+:::caution Moving from SDK 2.18.2-jhj headers
+- From SDK release 2.22.0-jhj, `STRT_CreateOptions.maxSources` is at **offset 44**, because engine 2.20 uses
+  offset 40 for `startIdle` (the struct size stays 48). Rebuild hosts built with 2.18.2-jhj headers — writing the
+  source count at the old position makes `startIdle` something other than 0/1, and `st_rt_create` fails with
+  `ST_STATUS_INVALID_ARGUMENT`.
+- `ST_CAP1_MEMORY_BUDGET` is now bit 63 (bit 6 in 2.18.2-jhj; engine 2.19 uses that bit for `ST_CAP1_SPEAKER_SET`).
+  Do not hard-code bit numbers; check with the header constant.
 :::
 
 Per-wrapper settings are collected in the [SDK overview](../sdk/overview.md#source-count-limit).

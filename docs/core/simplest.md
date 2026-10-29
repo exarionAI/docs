@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 title: SimpleST
-description: Sound Tracing의 현행 네이티브 엔진 SimpleST — C++20 기하음향 코어, 2-DLL 공개 C ABI(ABI 6), 9밴드 재질, Hybrid 초기 반사, 호스트 pull 렌더.
+description: Sound Tracing의 현행 네이티브 엔진 SimpleST — C++20 기하음향 코어, 2-DLL 공개 C ABI(ABI 6), 9밴드 재질, Hybrid 초기 반사, 파라메트릭 EQ, 호스트 pull 렌더.
 ---
 
 # SimpleST
@@ -18,7 +18,7 @@ description: Sound Tracing의 현행 네이티브 엔진 SimpleST — C++20 기�
 
 | 항목 | 값 |
 |---|---|
-| 엔진 버전 | **2.18.2** (`ST_VERSION_STRING`), SDK 릴리스 2.18.2-jhj.7. 이전 릴리스: 2.12.0 |
+| 엔진 버전 | **2.22.0** (`ST_VERSION_STRING`), SDK 릴리스 2.22.0-jhj.5. 이전 SDK 릴리스: 2.18.2-jhj.7(엔진 2.18.2), 2.12.0 |
 | 공개 ABI | **ABI 6** (`ST_ABI_VERSION`, 3.0 클린 브레이크). 2.12.0 이후 변경은 전부 additive |
 | 주 언어 | C++20 (C ABI 노출, C11 헤더 호환) |
 | 빌드 시스템 | CMake 3.21+ · 플랫폼 진입점 `mainBuild.sh` |
@@ -27,7 +27,7 @@ description: Sound Tracing의 현행 네이티브 엔진 SimpleST — C++20 기�
 | 샘플레이트 | 엔진 내부 44.1 kHz 고정, 호스트 레이트는 내장 리샘플러로 변환 |
 | 밴드 | 9 옥타브 밴드 `63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz` |
 | 가속구조 | TinyBVH(기본) · BinnedSAH · HybridKD · LBVH · LBVH_SIMD |
-| 테스트 | 회귀 하네스 `SimpleST_demo` + CTest 90여 개 |
+| 테스트 | 회귀 하네스 `SimpleST_demo` + CTest 110여 개 |
 
 ## 아키텍처
 
@@ -63,8 +63,8 @@ SceneManager → STPropagator → STIRConverter ─┬→ STOnlineAuralizator  (
 
 | 헤더 | 컨텍스트 | 함수 접두 | 역할 |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | 실시간 전파 + 오디오 렌더 (146 export) |
-| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | 오프라인 IR 계산·렌더 (116 export) |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | 실시간 전파 + 오디오 렌더 (181 export) |
+| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | 오프라인 IR 계산·렌더 (121 export) |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | 공통 POD·enum·capability 비트 |
 
 이름 규칙은 `st_<dll>_<family>_<verb>[_<what>]`이고, family는
@@ -94,14 +94,15 @@ typedef struct STMaterialId { int32_t v; } STMaterialId;
 | material | `st_rt_material_create`, `st_rt_material_load_defaults` |
 | mesh / object | `st_rt_mesh_create`(재질 하나 또는 삼각형별 재질 인덱스), `st_rt_mesh_set_material`, `st_rt_object_create[_q]`, `st_rt_object_set_transform[_q]`, `*_destroy` |
 | scene | `st_rt_scene_set_accel`, `st_rt_scene_set_triangle_intersection`, `st_rt_scene_get_stats`, `st_rt_scene_raycast` |
-| source | `st_rt_source_create`, `set_position/direction/velocity`, `set_orientation_q`, `set_directivity`, `set_axis_attenuation`, `set_energy`, `set_path_enabled`, `set_path_volume`, `set_ray_count`, `set_depth`, `set_transport_refresh_steps` |
+| source | `st_rt_source_create`, `set_position/direction/velocity`, `set_orientation_q`, `set_directivity`, `set_axis_attenuation`, `set_energy`, `set_path_enabled`, `set_path_volume`, `set_ray_count`, `set_depth`, `set_transport_refresh_steps`, `set_parametric_eq` / `set_eq`(소스 EQ) |
 | source 오디오 입력 | `st_rt_source_set_audio_file`(WAV/FLAC/MP3/Ogg), `st_rt_source_attach_stream` + `write_stream` + `get_stream_status`(호스트 PCM), `st_rt_source_set_audio_clip` / `set_audio_clip_asset`(캐시 클립), `clear_audio` |
 | source 재생 제어 | `st_rt_source_play/pause/stop/seek`, `set_volume`(선형 0 ~ 16), `set_pitch`(0.25 ~ 4), `set_loop_count`, `st_rt_source_trigger`, `set_retrigger_interval` |
-| listener | `st_rt_listener_set_position/velocity/rotation`, `set_ray_count`, `set_ray_sampling_method` |
+| listener | `st_rt_listener_set_position/velocity/rotation`, `set_rotation_ypr`, `set_orientation_q`(2.22, 머리 roll 포함), `set_ray_count`, `set_ray_sampling_method` |
 | 전파 | `st_rt_build`, `st_rt_build_dynamic`, `st_rt_propagate`, `st_rt_set_max_depth`, `st_rt_set_transmission_max_depth`, `st_rt_set_path_type_enabled`, `st_rt_set_lane_update_interval` |
 | 음향 정책 | `st_rt_set_atmosphere`, `st_rt_set_physical_distance_attenuation`, `st_rt_set_acoustic_feature_enabled`, `st_rt_set_doppler_gain_mode`, `st_rt_set_late_coupling[_preset]`, `st_rt_set_early_late_band_energy_targets` |
-| render | `st_rt_render_start/stop`, `st_rt_render_process`(호스트 pull), `set_options/get_options`, `set_spatializer`, `set_speaker_layout[_custom]`, `set_eq`, `set_master_gain_db`, `set_limiter_type`, `get_limiter_latency_samples`, `set_path_fade_time`, `set_max_delay_seconds`, `get_latency_frames`, `get_process_stats` |
+| render | `st_rt_render_start/stop`, `st_rt_render_process`(호스트 pull), `set_options/get_options`, `set_spatializer`, `set_speaker_layout[_custom]`, `set_parametric_eq`, `set_eq`, `set_loudness_compensation`, `set_virtual_bass`, `set_master_gain_db`, `set_limiter_type`, `get_limiter_latency_samples`, `set_path_fade_time`, `set_max_delay_seconds`, `get_latency_frames`, `get_process_stats` |
 | 스레드 | `st_rt_set_thread_attributes`, `st_rt_get_thread_inventory`, `STRT_CreateOptions.maxComputeThreads` |
+| 쉼·실행 | `st_rt_idle`, `st_rt_run`, `st_rt_get_idle_state`, `STRT_CreateOptions.startIdle`(2.20, 1이면 IDLE로 시작해 `st_rt_run`까지 계산·렌더가 쉼), 음원별 `st_rt_source_idle/run` |
 | 메모리 예산 | `st_rt_set_memory_budget`, `st_rt_get_memory_budget`, `st_rt_get_memory_stats`, `STRT_CreateOptions.maxSources` — [음원 메모리 예산](#음원-메모리-예산) |
 | 진단 | `st_rt_get_timing`, `st_rt_ir_get_stats`, `st_rt_debug_acquire_snapshot`, `st_rt_debug_copy_visual_paths`, `st_rt_debug_copy_mesh/scene_accel_nodes` |
 
@@ -148,6 +149,12 @@ opt.hostSampleRate   = 48000;                 // 호스트 레이트. 0 = 44100 
 STRT_Context* ctx = NULL;
 if (st_rt_create(&opt, &ctx) != ST_STATUS_OK) { /* st_rt_get_last_error */ }
 
+// 2.21.0부터 st_rt_create가 등라우드니스 보정을 켠다. 호스트 믹스가 음색을 맡으면 생성 직후 끈다
+STLoudnessCompensationDesc lc = { sizeof lc, ST_ABI_VERSION };
+st_rt_render_get_loudness_compensation(ctx, &lc);
+lc.enabled = 0;
+st_rt_render_set_loudness_compensation(ctx, &lc);
+
 // 1. 재질 — 기본 라이브러리(BRAS 24종)를 통째로 등록. 첫 재질의 핸들이 돌아온다.
 STMaterialId firstMat = st_rt_material_load_defaults(ctx);
 
@@ -163,7 +170,7 @@ desc.positionX = 2.f; desc.positionY = 1.5f; desc.positionZ = -1.f;
 desc.directionZ = 1.f; desc.intensity = 1.f; desc.isDynamic = 1;
 STSourceId srcId = st_rt_source_create(ctx, &desc);
 st_rt_listener_set_position(ctx, 0.f, 1.7f, 0.f);
-st_rt_listener_set_rotation(ctx, /*yaw*/0.f, /*pitch*/0.f);        // 라디안
+st_rt_listener_set_rotation(ctx, /*yaw*/0.f, /*pitch*/0.f);        // 라디안. roll까지: set_orientation_q(XYZW)
 
 // 4. 호스트 PCM 스트림 입력
 STStreamDesc sd = { sizeof sd, ST_ABI_VERSION, 48000, 1, 0 };     // 모노, capacity 0 = 8192 프레임
@@ -195,6 +202,9 @@ st_rt_destroy(ctx);
 **Hybrid(`reserved0 = 1`) + true-peak 출력 리미터(−1 dBTP, 137샘플 지연) 켜짐**이고, 마스터 게인은 0 dB입니다
 (2.12.0까지는 Objects + 리미터 꺼짐). 기본값에 기대지 말고 Hybrid·리미터를 **`render_start`와 레이아웃 변경
 뒤에** 명시하세요. 모든 공식 플러그인이 이 순서로 자기 기본값을 다시 겁니다.
+
+2.21.0부터 `st_rt_create`는 [등라우드니스 보정](#등라우드니스-보정)도 켭니다. 이 설정은 컨텍스트 단위라
+`render_start`가 되돌리지 않으므로 생성 직후 한 번 정하면 됩니다. 공식 래퍼는 모두 생성 직후 끕니다.
 :::
 
 ## 핵심 개념
@@ -208,7 +218,9 @@ st_rt_destroy(ctx);
   (cm = `0.01`, ft = `0.3048`)를 생성 시 1회 지정합니다. 좌표는 씬 단위 그대로 넣고,
   엔진이 미터가 필요한 곳에서만 곱합니다. 지오메트리를 미리 스케일하면서 `sceneRatio`도
   주는 **이중 스케일은 금지**입니다.
-- 각도: 리스너 rotation은 **라디안**, 스피커 레이아웃만 도(degree)입니다.
+- 각도: 리스너 rotation은 **라디안**, 스피커 레이아웃만 도(degree)입니다. 2.22.0부터
+  `st_rt_listener_set_orientation_q`(로컬→월드 단위 쿼터니언, XYZW)와 `st_rt_listener_set_rotation_ypr`(yaw·pitch·roll)로
+  머리 기울임(roll)까지 넘길 수 있습니다. 리스너 방향 setter 셋은 마지막에 부른 쪽이 이깁니다.
 - 메시 와인딩: 교차 커널은 양면이라 반사·투과는 와인딩 무관이지만, 회절 엣지 판정 두 곳이
   법선 부호를 봅니다. 메시 하나 안에서 와인딩을 일관되게 유지하세요.
 
@@ -276,11 +288,14 @@ typedef struct STMaterial {
 | `2` SADIE_D2_KEMAR | 함께 배포되는 SADIE II D2 KEMAR HRIR(8,802방향 · 256탭) |
 
 스피커 출력은 `st_rt_render_set_speaker_layout`(2.0 / 2.1 / 4.1 / 5.1 / 7.1 / 랩톱 근접 2.0)
-또는 커스텀 레이아웃으로 켜며, 내부 HOA3 디코드로 N채널을 냅니다. 출력단은 9밴드 EQ → 마스터 게인 →
-리미터 순입니다.
+또는 커스텀 레이아웃으로 켜며, 내부 HOA3 디코드로 N채널을 냅니다. 출력단은 출력 EQ → (스피커) 채널 EQ →
+등라우드니스 보정 → 가상 베이스 → 마스터 게인 → 리미터 순입니다.
 
-| 출력단 | 함수 | 2.18.0 기본 |
+| 출력단 | 함수 | 실시간 기본 (2.22.0) |
 |---|---|---|
+| 출력 EQ | `st_rt_render_set_parametric_eq` — [파라메트릭 EQ](#파라메트릭-eq). 종전 9밴드 `st_rt_render_set_eq`는 같은 EQ의 그래픽 뷰 | 꺼짐 |
+| 등라우드니스 보정 | `st_rt_render_set_loudness_compensation` (2.21.0) | **켜짐**(`st_rt_create`가 켬) |
+| 가상 베이스 | `st_rt_render_set_virtual_bass` (2.21.0) | 꺼짐 |
 | 마스터 게인 | `st_rt_render_set_master_gain_db` (−96 ~ +24 dB, 20 ms 램프) | 0 dB |
 | 리미터 종류 | `st_rt_render_set_limiter_type` — Envelope(0) / Lookahead peak(1) / True peak(2) | True peak, 천장 −1 dBTP |
 | 리미터 켜기 | `STRenderOptions.useLimiter` | 켜짐(1). 지연은 `st_rt_render_get_limiter_latency_samples` = 137샘플 |
@@ -289,6 +304,32 @@ typedef struct STMaterial {
 엔진처럼 호스트 마스터 체인이 리미팅을 맡는 통합은 `useLimiter = 0`으로 끕니다. 새 기능은
 `st_rt_get_capability_word(1)`의 `ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER` · `ST_CAP1_MASTER_GAIN`으로 확인합니다
 (워드 0 = `st_rt_get_capabilities()`의 비트와 섞어 AND하지 마세요).
+
+### 파라메트릭 EQ
+
+2.21.0부터 EQ는 RBJ 2차 필터 밴드를 직렬로 거는 파라메트릭 EQ 하나입니다. 같은 밴드 구조체
+(`STParametricEqBand`)를 두 자리에서 씁니다.
+
+| 자리 | 함수 | 거는 곳 |
+|---|---|---|
+| 소스 EQ | `st_rt_source_set_parametric_eq` (`ST_CAP1_SOURCE_PARAMETRIC_EQ`) | 음원 원음 PCM, 9밴드 크로스오버 **앞**. 그 음원의 직접·반사·회절·잔향 송출이 모두 같은 톤이 됩니다. 지우기는 `st_rt_source_set_eq(ctx, id, NULL)` |
+| 출력 EQ | `st_rt_render_set_parametric_eq` (`ST_CAP1_OUTPUT_PARAMETRIC_EQ`) | 렌더 끝, 마스터 게인 앞의 전역 하나. 끄기는 `enabled = 0` |
+
+- 필터 종류는 `ST_PARAMETRIC_EQ_PEAKING` · `LOW_SHELF` · `HIGH_SHELF` · `LOW_PASS` · `HIGH_PASS` · `NOTCH` 6종입니다.
+  저역·고역 컷(HIGH_PASS / LOW_PASS)은 12 dB/oct 고정입니다.
+- 범위: 주파수 20 ~ 20,000 Hz, 게인 ±24 dB(PEAKING·셸프만), Q 0.1 ~ 30(셸프는 3까지), 프리앰프 −48 ~ +12 dB,
+  밴드 최대 16개.
+- 값이 바뀌면 엔진이 20 ms 크로스페이드로 넘어갑니다. 끈 상태에서는 샘플을 건드리지 않습니다.
+- 소스 EQ는 오프라인 DLL에도 있습니다(`st_off_source_set_parametric_eq`). 출력 EQ는 실시간 전용입니다.
+
+### 등라우드니스 보정
+
+2.21.0부터 실시간 `st_rt_create`가 등라우드니스 보정(ISO 226:2003, 기준 83 → 재생 70 phon)을 켭니다. 마스터 게인
+0 dB에서 저역 셸프 약 +7.2 dB(120 Hz), 고역 셸프 약 +1.8 dB이고, 기본적으로 마스터 게인을 따라 보정량이 바뀝니다.
+끄면 출력은 2.20과 비트 동일합니다. 오프라인 DLL에는 없습니다.
+
+이 단은 재생 장치 쪽 기능이라 리미터와 같이 호스트 믹스가 음색·레벨을 소유하는 통합에서는 끄는 것을 권장합니다.
+UE·Unity·FMOD·Wwise·soundtrace.js 래퍼는 모두 컨텍스트 생성 직후 끕니다(SDK 릴리스 2.22.0-jhj.5).
 
 ### 호스트 pull 렌더
 
@@ -316,7 +357,7 @@ UE·FMOD·Wwise·Unity 통합은 기본 `BUFFERED`입니다. `hostSampleRate`를
 
 ### 음원 메모리 예산
 
-SDK 릴리스 2.18.2-jhj.7부터 실시간 컨텍스트는 동시에 살아 있는 음원 수와 음원 메모리에 상한을 둡니다.
+SDK 릴리스 2.18.2부터 실시간 컨텍스트는 동시에 살아 있는 음원 수와 음원 메모리에 상한을 둡니다.
 ABI 6 additive이고 `st_rt_get_capability_word(1)`의 `ST_CAP1_MEMORY_BUDGET`으로 확인합니다. 음원 하나의
 메모리는 고정 비용(전파·IR 사본·수송·스트림 링)과 지연 링, 경로 레인으로 이루어집니다.
 
@@ -366,6 +407,14 @@ typedef struct STMemoryBudget {
   값이 필요하면 `st_rt_render_set_max_delay_seconds`로 지정합니다.
 - 오프라인 DLL(`st_off_*`)은 예산 대상이 아닙니다(무제한).
 - 모바일·웹은 Hybrid 초기 반사가 전제입니다. Objects 모드는 음원당 30 MB가 넘습니다.
+:::
+
+:::caution SDK 2.18.2-jhj 헤더에서 옮길 때
+- `STRT_CreateOptions.maxSources`는 SDK 릴리스 2.22.0-jhj부터 **오프셋 44**입니다. 엔진 2.20이 오프셋 40을
+  `startIdle`로 쓰기 때문입니다(구조체 크기 48은 그대로). 2.18.2-jhj 헤더로 빌드한 호스트는 다시 빌드하세요 —
+  옛 자리에 음원 수를 쓰면 `startIdle`이 0/1이 아니어서 `st_rt_create`가 `ST_STATUS_INVALID_ARGUMENT`로 실패합니다.
+- `ST_CAP1_MEMORY_BUDGET`은 이제 비트 63입니다(2.18.2-jhj는 비트 6, 엔진 2.19가 그 비트를 `ST_CAP1_SPEAKER_SET`에 씀).
+  비트 번호를 직접 쓰지 말고 헤더 상수로 확인하세요.
 :::
 
 래퍼별 설정은 [SDK 개요](../sdk/overview.md#음원-수-상한)에 모아 두었습니다.

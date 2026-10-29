@@ -1,6 +1,6 @@
 ---
 title: FMOD
-description: SimpleSTFmod — structure, installation, Studio authoring, one-shots and the warm source pool, game-side C API, and UE/Unity integration of the SimpleST DSP plug-in for FMOD Studio / FMOD Engine.
+description: SimpleSTFmod — structure, installation, Studio authoring, EQ, one-shots and the warm source pool, game-side C API, and UE/Unity integration of the SimpleST DSP plug-in for FMOD Studio / FMOD Engine.
 ---
 
 # SimpleST FMOD Plug-in
@@ -12,7 +12,7 @@ uploads geometry.
 
 | Item | Value |
 |---|---|
-| Plug-in version | v0.3.0 (SimpleST 2.18.2). Previous release: v0.2.0 (SimpleST 2.12.0). The DSP description version FMOD sees is 0.3.0 starting with SDK release 2.18.2-jhj.7 (earlier 0.3.0 builds showed 0.2.0) |
+| Plug-in version | v0.3.0 (SimpleST 2.22.0, SDK release 2.22.0-jhj.5 — 4-band [EQ](#eq), listener roll). Previous releases: v0.3.0 (SimpleST 2.18.2), v0.2.0 (SimpleST 2.12.0). The DSP description version FMOD sees is 0.3.0 (early SDK 2.18.2 builds showed 0.2.0) |
 | FMOD | Studio / Engine 2.03 ~ 2.04 (plug-in SDK 110 build = 2.00 ~ 2.04, 204 build = 2.04+) |
 | Platforms | Windows x64 · macOS · Linux · Android · iOS (static) · Web (static, FMOD HTML5 pthreads) |
 | Distribution | `SimpleST-fmod-release.zip` (per-platform `plugins/` + `install.py`, includes UE and Unity glue) |
@@ -46,6 +46,12 @@ uploads geometry.
   voice to reuse — see [One-shots and the warm source pool](#one-shots-and-the-warm-source-pool).
 - **The output limiter is turned off**: SimpleST 2.18 turns on a true-peak limiter (−1 dBTP,
   137-sample latency) right after creation, but inside FMOD the master bus handles limiting.
+- **Equal-loudness compensation is turned off too**: SimpleST 2.21 turns on output-stage equal-loudness
+  compensation (low shelf about +7.2 dB @ 120 Hz) right after creation, but tone and level belong to the FMOD mix.
+  It is turned off together with the limiter right after context creation and whenever sound tracing is turned
+  back on.
+- **Listener orientation**: the FMOD listener's forward and up are passed to SimpleST as a quaternion, so head
+  tilt (roll) is reflected (from SDK release 2.22.0-jhj).
 
 ## Installation
 
@@ -113,9 +119,32 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 | | 3D Attributes / Overall Gain / Atten Range | FMOD special data parameters (automatic) |
 | SimpleST Listener | Wet Level / Dry Level (dB) | Level of the SimpleST render / of the other audio on the bus |
 | | HRTF | On = binaural (headphones), off = stereo panning |
+| Both (EQ block) | EQ / EQ Preamp (dB) | 4-band EQ on/off and preamp — see [EQ](#eq) |
+| | EQn Type / EQn Freq (Hz) / EQn Gain (dB) / EQn Q (n = 1 ~ 4) | Per-band filter type, frequency, gain, Q |
 
 **Bypassing** the Listener returns the Sources to dry pass-through (for A/B comparison). DSP names and
 parameter names are stored as identifiers in the banks, so they are not changed after release.
+
+### EQ
+
+From SDK release 2.22.0-jhj both DSPs have the same 4-band EQ parameter block. It uses the SimpleST parametric EQ
+directly.
+
+| DSP | Where it applies |
+|---|---|
+| SimpleST Source | **Source EQ** — on the event signal going into SimpleST, before the engine's band split. Direct sound, reflections, diffraction, and reverb all get the same tone |
+| SimpleST Listener | **Output EQ** — on the SimpleST mix, before Wet Level |
+
+- `EQ` switches it on/off, and `EQ Preamp` is the gain ahead of the bands (−48 ~ +12 dB; use a negative value to
+  leave headroom for boosts).
+- `EQn Type` is Off · Peaking · Low Shelf · High Shelf · High Cut (12 dB/oct low-pass) · Low Cut (12 dB/oct high-pass) · Notch.
+- `EQn Freq` is 20 ~ 20,000 Hz, `EQn Gain` ±24 dB (Peaking and shelves only), `EQn Q` 0.1 ~ 30 (shelves up to 3).
+- Four bands are enough for a low cut, low shelf, high shelf, and high cut at once. `EQn Type` is an integer
+  parameter (7 value names, 0 = Off); the rest are float parameters.
+- Off by default, and while off the engine is not called. Only changed values are sent, and the engine crossfades
+  over 20 ms.
+- With several Listeners, the EQ of the instance elected as the renderer is used. Engine sources reused from the
+  warm pool clear the previous voice's EQ, or replace it with the new one, before starting.
 
 ## One-shots and the warm source pool
 
@@ -178,7 +207,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
   SoundTracing UE plugin.
 - The default material library is registered in the plug-in context first. Add the preset index to
   `defaultMaterialId`.
-- **Source cap** (SDK release 2.18.2-jhj.7): `SimpleSTFmod_Config.maxSources` is the engine source
+- **Source cap** (since SDK release 2.18.2): `SimpleSTFmod_Config.maxSources` is the engine source
   count cap (0 = platform default). Beyond it the engine rejects source creation and that voice plays
   dry. The field is appended to the end of the struct, so hosts that pass the older, shorter struct
   still work — see [Source memory budget](../core/simplest.md#source-memory-budget).
@@ -189,7 +218,7 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // off. 1 = on (default)
 ```
 
-A game-side A/B switch added in SDK release 2.18.2-jhj.7. It applies to one runtime
+A game-side A/B switch added in SDK release 2.18.2. It applies to one runtime
 (`systemIndex < 0` = the most recent) and takes effect asynchronously on the control thread.
 
 - **Turning it off** engages the SimpleST renderer bypass (`st_rt_render_set_sound_tracing_enabled`),
@@ -232,9 +261,10 @@ GUI was verified manually on 2026-10-15.
 
 ## Known limitations
 
-- One listener (no roll), 64 concurrent streams (excess goes dry), stereo output only (speaker
+- One listener, 64 concurrent streams (excess goes dry), stereo output only (speaker
   layouts not exposed).
 - The engine source count does not exceed the platform cap (`maxSources`). Excess voices are dry.
+- The EQ is fixed at 4 bands per DSP (UE, Unity, and Web have up to 16 bands).
 - Event effects/sends after the Source receive silence (the SimpleST mix comes out of the Listener bus).
 - `Overall Gain` (audibility for virtualization) is a distance-based estimate.
 - FMOD Studio may create multiple Systems, so each System gets its own SimpleST context.

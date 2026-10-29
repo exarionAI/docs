@@ -39,7 +39,7 @@ await sound.update(0);
 | `propagationThreadCount` | 同步 1 / 管線 3 | 計算預算 1 ~ 5（負數 = 5）。管線至少 3 |
 | `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT worker 預算的簡寫 |
 | `sceneRatio` | `1.0` | 每個場景長度單位對應的公尺數（cm = 0.01）。**禁止** 與預先縮放的幾何體混用 |
-| `maxSources` | `0` | 同時存活的引擎音源數上限（0 ~ 512 的整數）。`0` = wasm 平台預設（32 個音源 · 音源記憶體 64 MiB · 延遲環上限 0.5 s — 因堆積固定為 256 MiB 而偏保守）。超出的音源建立會被引擎以 status 11（`BUDGET_EXCEEDED`）拒絕，既有音源繼續渲染。自 SDK 發行版 2.18.2-jhj.7 起 |
+| `maxSources` | `0` | 同時存活的引擎音源數上限（0 ~ 512 的整數）。`0` = wasm 平台預設（32 個音源 · 音源記憶體 64 MiB · 延遲環上限 0.5 s — 因堆積固定為 256 MiB 而偏保守）。超出的音源建立會被引擎以 status 11（`BUDGET_EXCEEDED`）拒絕，既有音源繼續渲染。自 SDK 發行版 2.18.2 起 |
 | `autoLoadMaterials` | `true` | 載入預設材質表，啟用名稱對應 |
 | `transmissionModel` | `'surface'` | SimpleST 只支援表面 R/A/T。`'solid'` 會被 **拒絕** |
 | `defaultMeshBuild` | — | STCoreV2 的 BVH 選項。指定時載入會被 **拒絕** |
@@ -67,10 +67,11 @@ const sound = await SoundTrace.create(audioContext, {
 | `addSource(options)` | 新增空間音源 |
 | `setQuality(tier)` | 變更品質預設（聆聽者與音源的射線及深度） |
 | `setAudioOption(options)` | 輸入區塊大小、輸出聲道 override |
+| `setOutputEq(eq \| null)` | 全域輸出參數式 EQ（最多 16 頻段）。`null` 為關閉。`reset()` 後仍保留 — [EQ](../web.md#eq)。自 SDK 發行版 2.22.0-jhj 起 |
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'`（別名 `'convolution'` / `'steamaudio'`） |
 | `loadMaterialAssets()` | 手動載入材質表（`autoLoadMaterials: false` 時） |
 | `update(dt?)` | 更新場景並執行傳播。以這一影格的有效路徑數 resolve |
-| `debugSnapshot(options?)` | 非同步診斷快照。`.simplest` 含 SimpleST scene/timing/render/IR 統計，1.1.0 起另含 `features`、`output`（限幅器、種類、延遲、主增益）、`inputs`（即時／片段音源數） |
+| `debugSnapshot(options?)` | 非同步診斷快照。`.simplest` 含 SimpleST scene/timing/render/IR 統計，1.1.0 起另含 `features`、`output`（限幅器、種類、延遲、主增益，2.22.0-jhj 起含輸出 EQ `eq`）、`inputs`（即時／片段音源數） |
 | `getStatistics(options?)` | `debugSnapshot` 的包裝。`validPathCount` 與 `.simplest` |
 | `getIRs()` | 在獨立的 Offline Worker 中重新計算 9 頻段 early path IR |
 | `renderMonoImpulseResponse(source, sec)` | 在 Offline Worker 中計算 44.1 kHz 單聲道壓力 IR（最長 30 s） |
@@ -87,7 +88,8 @@ sound.listener
   .setOutputMode('hrtf');   // 'hrtf'（雙耳）| 'speaker'（立體聲 panning）
 ```
 
-場景中只有一個 listener，由 `SoundTrace` 擁有。`orientation` 直接傳入相機目前的旋轉四元數（XYZW）。
+場景中只有一個 listener，由 `SoundTrace` 擁有。`orientation` 直接傳入相機目前的旋轉四元數（XYZW）。自 SDK 發行版 2.22.0-jhj 起，頭部傾斜（roll）也會傳遞到引擎
+（即時與離線 IR 分析皆是）。
 
 `setRenderOptions` 接受的鍵：
 
@@ -124,6 +126,7 @@ source.setDirection([0, 0, -1]);
 | `setPathEnabled(path, on)` / `setPathOptions(o)` / `isPathEnabled(path)` | `'direct'`（含穿透）/ `'reflection'` / `'diffraction'` / `'reverberation'` |
 | `setDirection(v)` | 音源 forward。以不含 roll 的最小旋轉同步更新 orientation |
 | `setDirectivityTable(anglesDeg, attenDbPerBand)` / `setDirectivityEnabled(on)` | 將逐角度的 9 頻段衰減表轉換為 SimpleST 指向性表並套用 |
+| `setEq(eq \| null)` | 此音源的音源參數式 EQ（最多 16 頻段，引擎分頻之前）。`null` 為移除 — [EQ](../web.md#eq)。自 SDK 發行版 2.22.0-jhj 起 |
 | `dispose()` | 釋放音源與串流 |
 
 #### 距離衰減

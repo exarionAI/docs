@@ -8,10 +8,12 @@ description: SimpleST 实时空间声学引擎的 Web、Unity、Unreal Engine、
 
 SoundTrace SDK 是把 [SimpleST](../core/simplest.md) 引擎封装到 Web、游戏引擎和音频中间件中的
 产品线。所有封装都在同一仓库中消费同一份引擎 SDK（`out/dist/<platform>_release/SimpleST`），
-基于 **SimpleST 2.18.2 / ABI 6**。
-当前 SDK 发行版为 2.18.2-jhj.7（2026-10-27）。引擎加入了[声源内存预算](#声源数量上限)，封装版本
-保持不变。还修复了在销毁声源或更改渲染选项时可能使实时管线永久停滞的引擎死锁（无 API 变更）。
-上一版本：2.12.0 — Web 1.0.0 · Unity 0.3.0 · UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0。作为旧版产品线继续提供。
+基于 **SimpleST 2.22.0 / ABI 6**。
+当前 SDK 发行版为 2.22.0-jhj.5（2026-10-28）。封装版本保持不变，五个封装都加入了
+[声源 EQ 与输出 EQ](#音色调节-eq)。听者方向以四元数传入，头部倾斜（roll）得以保留；
+引擎 2.21 开启的等响度补偿由封装关闭（见下文原则 8）。[声源数量上限](#声源数量上限)与 2.18.2 SDK 相同。
+上一 SDK 发行版：2.18.2-jhj.7 — SimpleST 2.18.2，封装版本与当前相同。更早的发行版：2.12.0 — Web 1.0.0 · Unity 0.3.0 ·
+UE 0.3.0 · FMOD 0.2.0 · Wwise 0.1.0。作为旧版产品线继续提供。
 
 ## 集成阵列
 
@@ -54,10 +56,34 @@ SoundTrace SDK 是把 [SimpleST](../core/simplest.md) 引擎封装到 Web、游�
 7. **输出限制器由主机主输出链负责**。引擎 2.18.0 在创建上下文后立即开启 true-peak 限制器
    （−1 dBTP，137 采样延迟），但 UE、Unity、FMOD、Wwise、Web 封装按文档所述的默认值将限制器保持**关闭**。
    开启方法请参见各 SDK 页面。
+8. **等响度补偿同样由主机混音负责**。引擎 2.21.0 在创建上下文后立即开启
+   [等响度补偿](../core/simplest.md#等响度补偿)（低频搁架约 +7.2 dB @ 120 Hz，高频 +1.8 dB），
+   但所有封装都会在创建后立即将其关闭。关闭后的输出与引擎 2.20 逐位一致。音色请用下文的 EQ 或主机混音器调节。
+
+## 音色调节 (EQ)
+
+从 SDK 发行版 2.22.0-jhj 起，所有封装都在两个位置公开引擎的[参数 EQ](../core/simplest.md#参数-eq)。
+
+- **声源 EQ** — 在引擎频段拆分之前作用于声源信号本身。该声源的直达声·反射·绕射·混响都会得到相同的音色。
+- **输出 EQ** — 在渲染末端（主增益之前）作用于整个 SimpleST 混音。
+
+| SDK | 声源 EQ | 输出 EQ | 频段 |
+|---|---|---|---|
+| [Unreal Engine](./ue.md#eq) | Source Settings 资产 `Source EQ`、Blueprint `SetSourceEq` | Project Settings `Output EQ`、`USoundTracingSubsystem::SetOutputEq` | 最多 16 |
+| [Unity](./unity.md#eq) | `SoundTraceSource` Inspector `Source EQ`、`SetSourceEq` | `SoundTraceListener` Inspector `Output EQ`、`SetOutputEq` | 最多 16 |
+| [Web](./web.md#eq) | `source.setEq(eq \| null)` | `sound.setOutputEq(eq \| null)` | 最多 16 |
+| [FMOD](./fmod.md#eq) | SimpleST Source DSP 的 EQ 参数 | SimpleST Listener DSP 的 EQ 参数 | 固定 4 |
+| [Wwise](./wwise.md#eq) | Sound-tracing Source Settings 的 EQ 属性 | Sound-tracing Renderer 的 EQ 属性 | 固定 4 |
+
+- 滤波器类型为 Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 6 种（切滤波固定为 12 dB/oct）。
+  只有 Web 使用 Web Audio `BiquadFilterType` 名称（`'peaking'`、`'lowshelf'`、`'highshelf'`、`'lowpass'`、`'highpass'`、`'notch'`）。
+- 范围：频率 20 ~ 20,000 Hz，增益 ±24 dB（仅 Peaking·搁架），Q 0.1 ~ 30（搁架最多 3），前级增益 −48 ~ +12 dB。
+- **默认关闭**，关闭时不调用引擎，因此输出与没有 EQ 时相同。只发送变化的值，引擎以 20 ms 交叉淡化过渡。
+- UE、Unity 处于 FMOD/Wwise 集成模式时不发送游戏引擎侧 EQ。请使用中间件插件的 EQ。
 
 ## 声源数量上限
 
-从 SDK 发行版 2.18.2-jhj.7 起，引擎按平台对并发声源数和声源内存设有上限 — 桌面
+从 SDK 发行版 2.18.2 起，引擎按平台对并发声源数和声源内存设有上限 — 桌面
 128 个声源 · 内存无限制 · 延迟环上限 2.0 s，Android/iOS 48 个声源 · 96 MiB · 1.0 s，Web 32 个声源 · 64 MiB · 0.5 s。
 超出上限的声源由引擎拒绝创建（`ST_STATUS_BUDGET_EXCEEDED`），游戏不会因此停止。桌面
 默认 128 个声源相对以前（无限制）是一项**行为变更**。引擎侧细节请参见

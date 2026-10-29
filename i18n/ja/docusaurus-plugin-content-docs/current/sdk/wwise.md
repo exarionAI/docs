@@ -1,6 +1,6 @@
 ---
 title: Wwise
-description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 向け SimpleST Object Processor + Metadata プラグインの構造、インストール、オーサリング、ワンショットとウォーム音源プール、ゲーム側 C API、UE・Unity 統合。
+description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 向け SimpleST Object Processor + Metadata プラグインの構造、インストール、オーサリング、EQ、ワンショットとウォーム音源プール、ゲーム側 C API、UE・Unity 統合。
 ---
 
 # Sound-tracing Wwise プラグイン
@@ -12,7 +12,7 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 向け SimpleST Ob
 
 | 項目 | 値 |
 |---|---|
-| プラグインバージョン | v0.2.0（SimpleST 2.18.2）。以前のリリース: v0.1.0（SimpleST 2.12.0、Wwise 2025.1.11 サウンドエンジンで E2E 検証） |
+| プラグインバージョン | v0.2.0（SimpleST 2.22.0、SDK リリース 2.22.0-jhj.5 — 4 バンド [EQ](#eq)、リスナー roll）。以前のリリース: v0.2.0（SimpleST 2.18.2）、v0.1.0（SimpleST 2.12.0、Wwise 2025.1.11 サウンドエンジンで E2E 検証） |
 | Audiokinetic | CompanyID **325**、PluginID 1001（Renderer）· 1002（Source Settings）。ランチャーバンドル `Sound-tracing` |
 | Wwise | 2025.1（プラグインバイナリは SDK バージョンに紐づきます） |
 | プラットフォーム | Windows（vc170）· macOS · Linux · Android · iOS（静的）· Web（静的） |
@@ -47,6 +47,10 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 向け SimpleST Ob
   動的にバインドし、ゲーム側は `SimpleSTWwise_GetRealtimeProc` で同じモジュールの `st_rt_*` を受け取ります。
 - **出力リミッターは無効にします**: SimpleST 2.18 は生成直後に true-peak リミッターを有効にしますが、Wwise の中ではマスター
   バスがリミッティングを担います。
+- **等ラウドネス補正も無効にします**: SimpleST 2.21 は生成直後に出力段の等ラウドネス補正（低域シェルフ約 +7.2 dB @ 120 Hz）を
+  有効にしますが、音色とレベルは Wwise のミックスが担います。FMOD 版と同じ共通コアがリミッターとともに無効にします。
+- **リスナーの向き**: バスリスナーの front・top 方向を SimpleST のクォータニオンで渡し、頭部の傾き（roll）まで反映します（SDK リリース
+  2.22.0-jhj から）。
 - **ライフサイクル**: ランタイムはサウンドエンジンの Init フック（静的登録）または最初のレンダラーインスタンス生成時に開始し、
   `AK::SoundEngine::Term` のグローバルコールバックで終了します。
 
@@ -104,11 +108,32 @@ Debug プラグインは Debug、Release プラグインは Profile/Release 構�
 | | Directivity (0 omni ~ 1 cardioid, RTPC) | オブジェクトの front 基準の指向性 |
 | | Stationary (never moves) | 動かないエミッターのヒント（生成時に適用） |
 | | Bypass SimpleST (RTPC) | SimpleST を経由せず、レンダラーが Wwise パンニングでミックス |
+| 両方（EQ グループ） | EQ / EQ Preamp (dB, RTPC) | 4 バンド EQ の有効化・プリアンプ — [EQ](#eq) |
+| | Band n Type / Band n Frequency (Hz, RTPC) / Band n Gain (dB, RTPC) / Band n Q (RTPC) (n = 1 ~ 4) | バンドごとのフィルター種類・周波数・ゲイン・Q |
 
 ![Source Settings メタデータ](/img/wwise/source-settings-metadata.png)
 
 CompanyID/PluginID、プロパティ名、AudioEnginePropertyID はプロジェクトとバンクが保存するため、配布後は
 変更しません。
+
+### EQ
+
+SDK リリース 2.22.0-jhj から、2 つのプラグインに同じ 4 バンドの EQ プロパティグループがあります。FMOD 版と同じ共通コアで SimpleST の
+パラメトリック EQ をかけます。
+
+| プラグイン | プロパティグループ | かける場所 |
+|---|---|---|
+| Sound-tracing Source Settings | `Source EQ`、`Source EQ Band 1 ~ 4` | **ソース EQ** — オブジェクトのオーディオが SimpleST に入る前、エンジンのバンド分割の前。直接音・反射・回折・残響がすべて同じ音色 |
+| Sound-tracing Renderer | `Output EQ`、`Output EQ Band 1 ~ 4` | **出力 EQ** — SimpleST のミックス |
+
+- `EQ` は有効/無効、`EQ Preamp` はバンド前のゲイン（−48 ~ +12 dB）です。
+- `Band n Type` は Off · Peaking · Low Shelf · High Shelf · High Cut（12 dB/oct）· Low Cut（12 dB/oct）· Notch です。列挙
+  プロパティのため RTPC では変更できません。
+- `Band n Frequency` は 20 ~ 20,000 Hz、`Band n Gain` は ±24 dB（Peaking・シェルフのみ）、`Band n Q` は 0.1 ~ 30（シェルフは 3 まで）で、
+  Preamp・Frequency・Gain・Q は RTPC に対応します。
+- 既定は無効で、無効の間はエンジンを呼び出しません。変更された値だけを送り、エンジンが 20 ms のクロスフェードで切り替えます。
+- EQ プロパティの AudioEnginePropertyID は Source Settings 8 ~ 25、Renderer 3 ~ 20 で、バンクには既存フィールドの後ろに同じ順序で
+  付きます。ウォームプールで再利用するエンジン音源は、前のボイスの EQ を解除するか新しい EQ に置き換えてから開始します。
 
 ## ワンショットとウォーム音源プール
 
@@ -150,7 +175,7 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal の軸**: Wwise for Unreal 2024.1+ は Unreal のベクトルをそのまま渡すため（+Z 上）、`SetWorldAxes(UNREAL)` を
   呼ばないとレンダラーが (Y, Z, X) に変換せず、ゲームが登録したジオメトリと合いません。呼ばないとリスナー・音源が
   見当違いの壁に遮蔽されます（2026-10-15 修正）。
-- **音源の上限**（SDK リリース 2.18.2-jhj.7）: `SimpleSTWwise_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
+- **音源の上限**（SDK リリース 2.18.2 から）: `SimpleSTWwise_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
   既定）。超えるとエンジンが音源の生成を拒否し、そのボイスは dry で再生されます。構造体の末尾に追加したフィールドなので、以前の短い
   構造体を渡すホストも動作します — [音源メモリ予算](../core/simplest.md#音源メモリ予算)。
 
@@ -160,7 +185,7 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // オフ。1 = オン(既定)
 ```
 
-SDK リリース 2.18.2-jhj.7 で追加されたゲーム側の A/B スイッチです。実行中のランタイムに適用され、コントロールスレッドで
+SDK リリース 2.18.2 で追加されたゲーム側の A/B スイッチです。実行中のランタイムに適用され、コントロールスレッドで
 非同期に反映されます。動作は [FMOD 版](./fmod.md#サウンドトレーシングのオンオフ)と同じです。
 
 - **オフにすると** SimpleST レンダラーのバイパス（`st_rt_render_set_sound_tracing_enabled`）がかかり、ウォーム音源プールを空にした後は再び
@@ -208,6 +233,7 @@ WwiseConsole でプロジェクト生成 → WAAPI でバス・エフェクト�
 - リスナー 1 個（SimpleST の制約）。同じバスが 2 番目のリスナー用に再度インスタンス化されると、そのインスタンスはすべての
   オブジェクトを Wwise パンニングでミックスします。
 - オーディオオブジェクトには速度がないため SimpleST の Doppler はありません。
+- EQ はプラグインあたり 4 バンド固定です（UE・Unity・Web は最大 16 バンド）。
 - エンジン音源数はプラットフォームの上限（`maxSources`）を超えません。超過したボイスは dry です。
 - 新しいオーディオオブジェクトを初めて見たとき、オーディオスレッドで小さなスロットを 1 つ割り当てます。エンジン音源そのものは
   コントロールスレッドでウォームプールの音源を再利用するか、新しく作ります。

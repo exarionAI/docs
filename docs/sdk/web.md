@@ -1,6 +1,6 @@
 ---
 title: Web
-description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK의 설치, 배포 요건, HRTF, 품질 프리셋, 재질, 문제 해결.
+description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK의 설치, 배포 요건, HRTF, 품질 프리셋, 재질, EQ, 문제 해결.
 ---
 
 # Web SDK
@@ -9,10 +9,11 @@ description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK의 설치, �
 SDK입니다. Three.js 같은 렌더링 씬의 메시·재질·음원·리스너를 Sound Tracing 장면으로 연결하고,
 Web Audio graph에 공간화된 스테레오 출력을 제공합니다.
 
-1.0.0부터 엔진이 STCoreV2에서 SimpleST로 바뀌었고, 1.1.0은 **SimpleST 2.18.2 / ABI 6**을 씁니다
-(이전 릴리스: 1.0.0 = SimpleST 2.12.0). SDK 릴리스 2.18.2-jhj.7에서 패키지 버전은 그대로이고 `maxSources`
-옵션(음원 수 상한)이 들어갔습니다. 기존 호출부는
-바뀌지 않습니다. `SoundTrace`, `Source`, `Mesh`, `Listener` facade는 유지되지만 STCoreV2 대비
+1.0.0부터 엔진이 STCoreV2에서 SimpleST로 바뀌었고, 1.1.0은 **SimpleST 2.22.0 / ABI 6**을 씁니다
+(SDK 릴리스 2.22.0-jhj.5. 이전 SDK 릴리스 2.18.2-jhj.7은 같은 1.1.0이 SimpleST 2.18.2를 썼고, 1.0.0 = SimpleST 2.12.0).
+이번 릴리스에서 패키지 버전은 그대로이고 [소스 EQ와 출력 EQ](#eq)(`source.setEq`, `sound.setOutputEq`)가 들어갔으며,
+리스너 `orientation` 쿼터니언의 머리 기울임(roll)이 엔진까지 전달됩니다(종전 yaw/pitch만). 2.18.2 SDK에서 `maxSources`
+옵션(음원 수 상한)이 들어갔습니다. 기존 호출부는 바뀌지 않습니다. `SoundTrace`, `Source`, `Mesh`, `Listener` facade는 유지되지만 STCoreV2 대비
 백엔드·HRTF·재질·옵션 계약이 달라졌습니다.
 전체 옵션과 엔티티 API는 [Facade API](./web/facade.md), 저수준 SimpleST 모듈 접근은
 [Native API](./web/native.md)를 참고하세요.
@@ -31,6 +32,7 @@ Web Audio graph에 공간화된 스테레오 출력을 제공합니다.
 | 재질 | 9밴드(63 Hz ~ 16 kHz) SoundTrace 게임 재질 22종, 이름·별칭·인덱스로 지정 |
 | 출력 | 음원마다 모노 입력, 리스너 렌더러가 스테레오 1개를 믹스(`sound.output`) |
 | 음원 상한 | 기본 32음원 · 음원 메모리 64 MiB · 지연 링 천장 0.5 s. 음원 수는 `maxSources` 옵션으로 바꿉니다 — [음원 메모리 예산](../core/simplest.md#음원-메모리-예산) |
+| EQ | 음원별 소스 EQ와 전역 출력 EQ, 파라메트릭 최대 16밴드 — [EQ](#eq) |
 | GPU | 없음. `mode: 'gpu'`, `enableGpu()`는 오류 |
 
 ## 요구 사항
@@ -224,6 +226,39 @@ SDK는 출력 리미터를 **끈 상태**로 둡니다. SimpleST 2.18은 생성 
 지연)를 켜지만, `sound.output` 뒤의 Web Audio 마스터 버스는 앱이 소유하기 때문입니다. 엔진 리미터가
 필요하면 `sound.listener.setRenderOptions({ useLimiter: true })`로 true-peak 리미터를 켭니다.
 
+같은 이유로 SimpleST 2.21부터 엔진이 생성 직후 켜는 등라우드니스 보정(저역 셸프 약 +7.2 dB @ 120 Hz, 고역 +1.8 dB)도
+컨텍스트를 만든 직후 끕니다(`reset()` 포함). 끈 출력은 엔진 2.20과 비트 동일하고, 이 설정은 노출하지 않습니다.
+
+## EQ
+
+SDK 릴리스 2.22.0-jhj부터 SimpleST 파라메트릭 EQ를 음원과 출력에 걸 수 있습니다.
+
+```ts
+source.setEq({ bands: [
+  { type: 'highpass', frequencyHz: 150 },
+  { type: 'peaking', frequencyHz: 3000, gainDb: 4, q: 1.2 },
+] });
+sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, gainDb: 3 }] });
+
+source.setEq(null);        // 소스 EQ 제거
+sound.setOutputEq(null);   // 출력 EQ 끔
+```
+
+| API | 거는 곳 |
+|---|---|
+| `Source.setEq(eq \| null)` | 음원 신호, 엔진 밴드 분리 앞. 그 음원의 직접·반사·회절·잔향이 모두 같은 톤이 됩니다. 라이브·클립 입력 모두. `renderMonoImpulseResponse`의 오프라인 압력 IR에도 들어갑니다(`getIRs()`의 밴드 에너지에는 없음) |
+| `SoundTrace.setOutputEq(eq \| null)` | 전역 출력 EQ 하나, 렌더 끝(마스터 게인 앞). `reset()` 뒤에도 유지. 오프라인 분석에는 들어가지 않습니다 |
+
+- `eq = { enabled = true, preampDb = 0 (−48 ~ +12), bands = [] (최대 16) }`
+- `band = { type = 'peaking', enabled = true, frequencyHz = 1000 (20 ~ 20,000), gainDb = 0 (±24, peaking·셸프만), q = 0.7071 (0.1 ~ 30, 셸프는 엔진이 3으로 제한) }`
+- `type`은 `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'`입니다(Web Audio
+  `BiquadFilterType` 이름, 컷은 12 dB/oct 고정).
+- 범위 밖 값은 `RangeError`로 거절하고 명령을 보내지 않습니다. `{ enabled: false }`는 밴드를 보관한 채 통과시킵니다.
+- EQ를 부르지 않으면 엔진 EQ를 호출하지 않으므로 출력은 EQ가 없을 때와 비트 동일합니다. 같은 값은 다시 보내지 않고,
+  바뀐 값은 엔진이 20 ms 크로스페이드로 넘깁니다.
+- EQ를 지원하지 않는 이전 코어에서는 엔진 버전을 밝혀 실패합니다. 적용된 출력 EQ는 `debugSnapshot().simplest.output.eq`에
+  있습니다.
+
 ## 업데이트와 정리
 
 ```ts
@@ -274,6 +309,7 @@ Multi-room occlusion, Runtime capability 예제를 실행할 수 있습니다.
 | 재질이 안 먹는 것 같음 | 이름이 재질 테이블/별칭에 있는지(없으면 콘크리트로 대체) |
 | 코어/asset 404 | 번들러 사전 번들링 제외, `coreBaseUrl`·`assetBaseUrl`, `.wasm` MIME |
 | 성능이 부족함 | 품질 프리셋을 낮추고 `thread: 'mt'` 사용, 경로 시각화 끄기 |
+| `setEq` / `setOutputEq`가 `RangeError` | 주파수·게인·Q·프리앰프 범위, 밴드 16개 이하인지 |
 
 ## 다음 문서
 

@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 title: SimpleST
-description: Sound Tracing 的現行原生引擎 SimpleST — C++20 幾何聲學核心、2-DLL 公開 C ABI（ABI 6）、9 頻段材質、Hybrid 早期反射、主機 pull 渲染。
+description: Sound Tracing 的現行原生引擎 SimpleST — C++20 幾何聲學核心、2-DLL 公開 C ABI（ABI 6）、9 頻段材質、Hybrid 早期反射、參數式 EQ、主機 pull 渲染。
 ---
 
 # SimpleST
@@ -17,7 +17,7 @@ description: Sound Tracing 的現行原生引擎 SimpleST — C++20 幾何聲學
 
 | 項目 | 值 |
 |---|---|
-| 引擎版本 | **2.18.2**（`ST_VERSION_STRING`），SDK 發行版 2.18.2-jhj.7。前一版本：2.12.0 |
+| 引擎版本 | **2.22.0**（`ST_VERSION_STRING`），SDK 發行版 2.22.0-jhj.5。前一 SDK 發行版：2.18.2-jhj.7（引擎 2.18.2）、2.12.0 |
 | 公開 ABI | **ABI 6**（`ST_ABI_VERSION`，3.0 乾淨斷裂）。2.12.0 之後的變更全部為 additive |
 | 主要語言 | C++20（暴露 C ABI，相容 C11 標頭） |
 | 建置系統 | CMake 3.21+ · 平台進入點 `mainBuild.sh` |
@@ -26,7 +26,7 @@ description: Sound Tracing 的現行原生引擎 SimpleST — C++20 幾何聲學
 | 取樣率 | 引擎內部固定 44.1 kHz，主機取樣率由內建重取樣器轉換 |
 | 頻段 | 9 個八度頻段 `63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz` |
 | 加速結構 | TinyBVH（預設）· BinnedSAH · HybridKD · LBVH · LBVH_SIMD |
-| 測試 | 回歸測試框架 `SimpleST_demo` + 約 90 個 CTest |
+| 測試 | 回歸測試框架 `SimpleST_demo` + 約 110 個 CTest |
 
 ## 架構
 
@@ -62,8 +62,8 @@ SceneManager → STPropagator → STIRConverter ─┬→ STOnlineAuralizator  (
 
 | 標頭 | 上下文 | 函式前綴 | 角色 |
 |---|---|---|---|
-| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | 即時傳播 + 音訊渲染（146 個 export） |
-| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | 離線 IR 計算與渲染（116 個 export） |
+| `SimpleST/ABI/STRealtime.h` | `STRT_Context*` | `st_rt_*` | 即時傳播 + 音訊渲染（181 個 export） |
+| `SimpleST/ABI/STOffline.h` | `STOFF_Context*` | `st_off_*` | 離線 IR 計算與渲染（121 個 export） |
 | `SimpleST/ABI/STTypes.h` | — | `ST_*` | 共用 POD、enum、capability 位元 |
 
 命名規則為 `st_<dll>_<family>_<verb>[_<what>]`，family 為
@@ -93,14 +93,15 @@ typedef struct STMaterialId { int32_t v; } STMaterialId;
 | material | `st_rt_material_create`、`st_rt_material_load_defaults` |
 | mesh / object | `st_rt_mesh_create`（單一材質或逐三角形材質索引）、`st_rt_mesh_set_material`、`st_rt_object_create[_q]`、`st_rt_object_set_transform[_q]`、`*_destroy` |
 | scene | `st_rt_scene_set_accel`、`st_rt_scene_set_triangle_intersection`、`st_rt_scene_get_stats`、`st_rt_scene_raycast` |
-| source | `st_rt_source_create`、`set_position/direction/velocity`、`set_orientation_q`、`set_directivity`、`set_axis_attenuation`、`set_energy`、`set_path_enabled`、`set_path_volume`、`set_ray_count`、`set_depth`、`set_transport_refresh_steps` |
+| source | `st_rt_source_create`、`set_position/direction/velocity`、`set_orientation_q`、`set_directivity`、`set_axis_attenuation`、`set_energy`、`set_path_enabled`、`set_path_volume`、`set_ray_count`、`set_depth`、`set_transport_refresh_steps`、`set_parametric_eq` / `set_eq`（音源 EQ） |
 | source 音訊輸入 | `st_rt_source_set_audio_file`（WAV/FLAC/MP3/Ogg）、`st_rt_source_attach_stream` + `write_stream` + `get_stream_status`（主機 PCM）、`st_rt_source_set_audio_clip` / `set_audio_clip_asset`（快取片段）、`clear_audio` |
 | source 播放控制 | `st_rt_source_play/pause/stop/seek`、`set_volume`（線性 0 ~ 16）、`set_pitch`（0.25 ~ 4）、`set_loop_count`、`st_rt_source_trigger`、`set_retrigger_interval` |
-| listener | `st_rt_listener_set_position/velocity/rotation`、`set_ray_count`、`set_ray_sampling_method` |
+| listener | `st_rt_listener_set_position/velocity/rotation`、`set_rotation_ypr`、`set_orientation_q`（2.22，含頭部 roll）、`set_ray_count`、`set_ray_sampling_method` |
 | 傳播 | `st_rt_build`、`st_rt_build_dynamic`、`st_rt_propagate`、`st_rt_set_max_depth`、`st_rt_set_transmission_max_depth`、`st_rt_set_path_type_enabled`、`st_rt_set_lane_update_interval` |
 | 聲學政策 | `st_rt_set_atmosphere`、`st_rt_set_physical_distance_attenuation`、`st_rt_set_acoustic_feature_enabled`、`st_rt_set_doppler_gain_mode`、`st_rt_set_late_coupling[_preset]`、`st_rt_set_early_late_band_energy_targets` |
-| render | `st_rt_render_start/stop`、`st_rt_render_process`（主機 pull）、`set_options/get_options`、`set_spatializer`、`set_speaker_layout[_custom]`、`set_eq`、`set_master_gain_db`、`set_limiter_type`、`get_limiter_latency_samples`、`set_path_fade_time`、`set_max_delay_seconds`、`get_latency_frames`、`get_process_stats` |
+| render | `st_rt_render_start/stop`、`st_rt_render_process`（主機 pull）、`set_options/get_options`、`set_spatializer`、`set_speaker_layout[_custom]`、`set_parametric_eq`、`set_eq`、`set_loudness_compensation`、`set_virtual_bass`、`set_master_gain_db`、`set_limiter_type`、`get_limiter_latency_samples`、`set_path_fade_time`、`set_max_delay_seconds`、`get_latency_frames`、`get_process_stats` |
 | 執行緒 | `st_rt_set_thread_attributes`、`st_rt_get_thread_inventory`、`STRT_CreateOptions.maxComputeThreads` |
+| 休眠／執行 | `st_rt_idle`、`st_rt_run`、`st_rt_get_idle_state`、`STRT_CreateOptions.startIdle`（2.20，為 1 時以 IDLE 啟動，直到 `st_rt_run` 前計算與渲染都暫停）、逐音源的 `st_rt_source_idle/run` |
 | 記憶體預算 | `st_rt_set_memory_budget`、`st_rt_get_memory_budget`、`st_rt_get_memory_stats`、`STRT_CreateOptions.maxSources` — [音源記憶體預算](#音源記憶體預算) |
 | 診斷 | `st_rt_get_timing`、`st_rt_ir_get_stats`、`st_rt_debug_acquire_snapshot`、`st_rt_debug_copy_visual_paths`、`st_rt_debug_copy_mesh/scene_accel_nodes` |
 
@@ -147,6 +148,12 @@ opt.hostSampleRate   = 48000;                 // 主機取樣率。0 = 維持 44
 STRT_Context* ctx = NULL;
 if (st_rt_create(&opt, &ctx) != ST_STATUS_OK) { /* st_rt_get_last_error */ }
 
+// 自 2.21.0 起 st_rt_create 會啟用等響度補償。由主機混音負責音色時，請在建立後立即關閉
+STLoudnessCompensationDesc lc = { sizeof lc, ST_ABI_VERSION };
+st_rt_render_get_loudness_compensation(ctx, &lc);
+lc.enabled = 0;
+st_rt_render_set_loudness_compensation(ctx, &lc);
+
 // 1. 材質 — 整批註冊預設材質庫（BRAS 24 種）。回傳第一個材質的控制代碼。
 STMaterialId firstMat = st_rt_material_load_defaults(ctx);
 
@@ -162,7 +169,7 @@ desc.positionX = 2.f; desc.positionY = 1.5f; desc.positionZ = -1.f;
 desc.directionZ = 1.f; desc.intensity = 1.f; desc.isDynamic = 1;
 STSourceId srcId = st_rt_source_create(ctx, &desc);
 st_rt_listener_set_position(ctx, 0.f, 1.7f, 0.f);
-st_rt_listener_set_rotation(ctx, /*yaw*/0.f, /*pitch*/0.f);        // 弧度
+st_rt_listener_set_rotation(ctx, /*yaw*/0.f, /*pitch*/0.f);        // 弧度。含 roll：set_orientation_q(XYZW)
 
 // 4. 主機 PCM 串流輸入
 STStreamDesc sd = { sizeof sd, ST_ABI_VERSION, 48000, 1, 0 };     // 單聲道，capacity 0 = 8192 影格
@@ -194,6 +201,9 @@ st_rt_destroy(ctx);
 **Hybrid（`reserved0 = 1`）+ 啟用 true-peak 輸出限幅器（−1 dBTP，137 樣本延遲）**，主增益為 0 dB
 （至 2.12.0 為止為 Objects + 限幅器關閉）。請不要依賴預設值，而是在 **`render_start` 與配置變更之後**
 明確指定 Hybrid 與限幅器。所有官方外掛都依這個順序重新套用各自的預設值。
+
+自 2.21.0 起，`st_rt_create` 也會啟用[等響度補償](#等響度補償)。此設定以上下文為單位，`render_start`
+不會將其還原，因此在建立後設定一次即可。所有官方包裝層都會在建立後立即關閉它。
 :::
 
 ## 核心概念
@@ -206,7 +216,9 @@ st_rt_destroy(ctx);
 - **單位為公尺**。使用其他單位的主機在建立時一次指定 `STRT_CreateOptions.sceneRatio`
   （cm = `0.01`，ft = `0.3048`）。座標以場景單位原樣傳入，引擎只在需要公尺的地方才乘上比例。
   **禁止重複縮放**：不要在預先縮放幾何體的同時又指定 `sceneRatio`。
-- 角度：聆聽者 rotation 為 **弧度**，只有揚聲器配置使用度（degree）。
+- 角度：聆聽者 rotation 為 **弧度**，只有揚聲器配置使用度（degree）。自 2.22.0 起，可以用
+  `st_rt_listener_set_orientation_q`（本地→世界的單位四元數，XYZW）與 `st_rt_listener_set_rotation_ypr`（yaw · pitch · roll）
+  連同頭部傾斜（roll）一起傳入。三個聆聽者方向 setter 以最後呼叫者為準。
 - 網格繞序：交點核心為雙面，因此反射與穿透與繞序無關，但繞射邊緣判定有兩處會看法線符號。
   請在同一個網格內保持一致的繞序。
 
@@ -274,10 +286,14 @@ typedef struct STMaterial {
 | `2` SADIE_D2_KEMAR | 隨附發布的 SADIE II D2 KEMAR HRIR（8,802 個方向 · 256 tap） |
 
 揚聲器輸出透過 `st_rt_render_set_speaker_layout`（2.0 / 2.1 / 4.1 / 5.1 / 7.1 / 筆電近場 2.0）
-或自訂配置啟用，內部以 HOA3 解碼輸出 N 聲道。輸出端依序為 9 頻段 EQ → 主增益 → 限幅器。
+或自訂配置啟用，內部以 HOA3 解碼輸出 N 聲道。輸出端依序為輸出 EQ →（揚聲器）聲道 EQ →
+等響度補償 → 虛擬低音 → 主增益 → 限幅器。
 
-| 輸出端 | 函式 | 2.18.0 預設 |
+| 輸出端 | 函式 | 即時預設（2.22.0） |
 |---|---|---|
+| 輸出 EQ | `st_rt_render_set_parametric_eq` — [參數式 EQ](#參數式-eq)。舊的 9 頻段 `st_rt_render_set_eq` 是同一個 EQ 的圖形化檢視 | 關閉 |
+| 等響度補償 | `st_rt_render_set_loudness_compensation`（2.21.0） | **開啟**（由 `st_rt_create` 啟用） |
+| 虛擬低音 | `st_rt_render_set_virtual_bass`（2.21.0） | 關閉 |
 | 主增益 | `st_rt_render_set_master_gain_db`（−96 ~ +24 dB，20 ms 斜坡） | 0 dB |
 | 限幅器種類 | `st_rt_render_set_limiter_type` — Envelope(0) / Lookahead peak(1) / True peak(2) | True peak，上限 −1 dBTP |
 | 限幅器開關 | `STRenderOptions.useLimiter` | 開啟（1）。延遲為 `st_rt_render_get_limiter_latency_samples` = 137 樣本 |
@@ -286,6 +302,32 @@ typedef struct STMaterial {
 主機主輸出鏈負責限幅的整合，請以 `useLimiter = 0` 關閉。新功能以
 `st_rt_get_capability_word(1)` 的 `ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER` · `ST_CAP1_MASTER_GAIN` 確認
 （word 0 = `st_rt_get_capabilities()` 的位元，請勿混在一起做 AND）。
+
+### 參數式 EQ
+
+自 2.21.0 起，EQ 是將 RBJ 二階濾波器頻段串聯的單一參數式 EQ。同一個頻段結構體（`STParametricEqBand`）
+用於兩個位置。
+
+| 位置 | 函式 | 作用處 |
+|---|---|---|
+| 音源 EQ | `st_rt_source_set_parametric_eq`（`ST_CAP1_SOURCE_PARAMETRIC_EQ`） | 音源原始 PCM，9 頻段分頻器 **之前**。該音源的直達、反射、繞射、殘響送出全部帶有相同音色。清除為 `st_rt_source_set_eq(ctx, id, NULL)` |
+| 輸出 EQ | `st_rt_render_set_parametric_eq`（`ST_CAP1_OUTPUT_PARAMETRIC_EQ`） | 渲染末端、主增益之前的全域單一 EQ。關閉為 `enabled = 0` |
+
+- 濾波器種類為 `ST_PARAMETRIC_EQ_PEAKING` · `LOW_SHELF` · `HIGH_SHELF` · `LOW_PASS` · `HIGH_PASS` · `NOTCH` 共 6 種。
+  低頻／高頻切除（HIGH_PASS / LOW_PASS）固定為 12 dB/oct。
+- 範圍：頻率 20 ~ 20,000 Hz，增益 ±24 dB（僅 PEAKING 與 shelf），Q 0.1 ~ 30（shelf 最多 3），前級增益 −48 ~ +12 dB，
+  最多 16 個頻段。
+- 數值變更時，引擎以 20 ms 交叉淡化切換。關閉狀態下不會改動樣本。
+- 音源 EQ 在離線 DLL 中也有（`st_off_source_set_parametric_eq`）。輸出 EQ 僅限即時。
+
+### 等響度補償
+
+自 2.21.0 起，即時 `st_rt_create` 會啟用等響度補償（ISO 226:2003，基準 83 → 播放 70 phon）。主增益 0 dB 時，
+低頻 shelf 約 +7.2 dB（120 Hz），高頻 shelf 約 +1.8 dB，且預設補償量會跟隨主增益變化。關閉後輸出與 2.20 位元相同。
+離線 DLL 中沒有此功能。
+
+這一級屬於播放裝置端的功能，因此與限幅器相同，在由主機混音負責音色與音量的整合中建議關閉。
+UE、Unity、FMOD、Wwise、soundtrace.js 包裝層都會在上下文建立後立即關閉它（SDK 發行版 2.22.0-jhj.5）。
 
 ### 主機 pull 渲染
 
@@ -311,7 +353,7 @@ UE、FMOD、Wwise、Unity 整合預設為 `BUFFERED`。指定 `hostSampleRate` �
 
 ### 音源記憶體預算
 
-從 SDK 發行版 2.18.2-jhj.7 起，即時上下文會對同時存活的音源數與音源記憶體設定上限。
+從 SDK 發行版 2.18.2 起，即時上下文會對同時存活的音源數與音源記憶體設定上限。
 這是 ABI 6 additive 變更，以 `st_rt_get_capability_word(1)` 的 `ST_CAP1_MEMORY_BUDGET` 確認。一個音源的
 記憶體由固定成本（傳播、IR 副本、transport、串流環）加上延遲環與路徑 lane 組成。
 
@@ -360,6 +402,14 @@ typedef struct STMemoryBudget {
   值時，請以 `st_rt_render_set_max_delay_seconds` 指定。
 - 離線 DLL（`st_off_*`）不受預算限制（無限制）。
 - 行動與 Web 以 Hybrid 早期反射為前提。Objects 模式每個音源超過 30 MB。
+:::
+
+:::caution 從 SDK 2.18.2-jhj 標頭遷移時
+- 自 SDK 發行版 2.22.0-jhj 起，`STRT_CreateOptions.maxSources` 位於 **偏移 44**。這是因為引擎 2.20 將偏移 40
+  用於 `startIdle`（結構體大小 48 不變）。以 2.18.2-jhj 標頭建置的主機請重新建置 —
+  若在舊位置寫入音源數，`startIdle` 不是 0/1，`st_rt_create` 會以 `ST_STATUS_INVALID_ARGUMENT` 失敗。
+- `ST_CAP1_MEMORY_BUDGET` 現在是位元 63（2.18.2-jhj 為位元 6，引擎 2.19 將該位元用於 `ST_CAP1_SPEAKER_SET`）。
+  請不要直接寫位元編號，而是以標頭常數確認。
 :::
 
 各包裝層的設定彙整於 [SDK 概覽](../sdk/overview.md#音源數上限)。
