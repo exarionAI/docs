@@ -50,32 +50,21 @@ SimpleST 저장소의 `engine/ABI/*.h`, `plugins/*/README.md`다.
 | `core/demo-app.png` | `SimpleST_demo_app` 실시간 데모 화면(씬·경로 시각화) | core/simplest |
 | `intro/pipeline-concept.png` | 음원 → 직접음/투과/반사/회절 → 리스너, 확산 수송 → late reverb 개념도 | intro/what-is-soundtracing |
 | `web/architecture.png` | soundtrace.js: 메인 스레드 facade → control Worker(pthread WASM) → AudioWorklet, Offline Worker | sdk/web |
-| `ue/project-settings.png` | Project Settings › Plugins › SoundTracing (Runtime/Propagation/Listener/Sources/Materials) | sdk/ue |
-| `ue/listener-settings.png` | FSoundTracingListenerSettings 인스펙터 | sdk/ue |
-| `ue/source-settings-asset.png` | SoundTracing Source Settings 에셋 인스펙터 | sdk/ue |
-| `ue/object-component.png` | SoundTracingObjectComponent 인스펙터(Acoustic Mobility, 재질 슬롯, Auto Set Materials) | sdk/ue |
 | `ue/path-visualizer.png` | Niagara 경로 시각화 실행 화면 | sdk/ue |
-| `ue/audio-plugin-settings.png` | Project Settings › Platforms › Audio의 Spatialization / Source Data Override = SoundTracing | sdk/ue |
 | `ue/integration-mode.png` | Build.cs가 Wwise → FMODStudio → Native 순으로 통합을 고르는 도판 | sdk/ue |
 | `fmod/structure.png` | SimpleSTFmod 구조도(Source DSP → SystemRuntime → Listener DSP) | sdk/fmod |
-| `fmod/studio-master-bus-listener.png` | FMOD Studio 마스터 버스에 SimpleST Listener 삽입 화면 | sdk/fmod |
-| `fmod/studio-event-source.png` | 3D 이벤트 마스터 트랙의 SimpleST Source(FMOD Spatializer 제거) | sdk/fmod |
-| `fmod/studio-source-params.png` | SimpleST Source 덱 UI 파라미터 | sdk/fmod |
-| `fmod/studio-plugins-folder.png` | Studio 프로젝트 `Plugins/` 또는 사용자 플러그인 폴더의 배포 파일 | sdk/fmod |
 | `fmod/ue-plugin-files.png` | UE Project Settings › FMOD Studio › Plugin Files의 SimpleSTFmod | sdk/fmod, sdk/ue |
 | `fmod/unity-install-menu.png` | Unity SoundTrace › FMOD › Install 메뉴와 Dynamic Plugins 등록 결과 | sdk/fmod, sdk/unity |
 | `wwise/structure.png` | SimpleSTWwise 구조도(Audio Objects 버스 → Sound-tracing Renderer) | sdk/wwise |
-| `wwise/bus-audio-objects.png` | 버스 Bus Configuration = Audio Objects + Renderer 삽입 | sdk/wwise |
-| `wwise/renderer-properties.png` | Sound-tracing Renderer 프로퍼티(Wet/Dry/HRTF) | sdk/wwise |
-| `wwise/source-settings-metadata.png` | Metadata › Sound-tracing Source Settings 프로퍼티 | sdk/wwise |
-| `wwise/positioning-attenuation.png` | 3D 사운드 Positioning(Listener Relative Routing, Attenuation 끔) | sdk/wwise |
-| `wwise/launcher-bundle.png` | Audiokinetic Launcher › Add from directory 번들 설치 | sdk/wwise |
-| `wwise/ue-install.png` | UE WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin 설치 결과 | sdk/wwise, sdk/ue |
 | `wwise/unity-install-menu.png` | Unity SoundTrace › Wwise › Install 메뉴 | sdk/wwise, sdk/unity |
 
 실제 이미지가 이미 있는 것: `web/demo-*.png`, `intro/path-visualization.png`(공개 Sound-tracing 데모
-스크린샷 복사), `unity/*.png`(STCoreV2 시절 캡처 — Manager/Listener/Source/Object 인스펙터는 필드가
-바뀌었으므로 **재촬영 권장**: `Img_STManager.png`, `Img_STListener.png`, `Img_STSource.png`, `Img_STObj.png`).
+스크린샷 복사), `unity/*.png`(Manager/Listener/Source/Object/PathVisualizer 인스펙터는 2026-10-29 SDK 2.22로 재촬영,
+나머지는 STCoreV2 시절 캡처).
+
+2026-10-29 실제 화면으로 교체(macOS, SDK 2.22.0-jhj.5): UE 5.7(Lyra) Project Settings·Listener·Source Settings 에셋·Object 컴포넌트·
+Mac 오디오 플러그인 설정, Wwise 2025.1.11 버스·Renderer·Source Settings 메타데이터·Positioning·Launcher·UE 설치 결과,
+FMOD Studio 2.04 마스터 버스 Listener·이벤트 Source·Source 덱·플러그인 폴더. 위 표에 남은 것이 아직 플레이스홀더다.
 
 플레이스홀더를 다시 만들려면 `scripts/`가 아니라 세션 스크래치의 `placeholder.swift`를 썼다
 (AppKit으로 텍스트를 그린 PNG). 같은 형식이 필요하면 아무 PNG나 1280×720으로 덮어쓰면 된다.
