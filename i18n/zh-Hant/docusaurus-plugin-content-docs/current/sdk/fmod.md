@@ -1,51 +1,35 @@
 ---
 title: FMOD
-description: SimpleSTFmod — FMOD Studio / FMOD Engine 用 SimpleST DSP 外掛的結構、安裝、Studio 創作、EQ、單次音效與預熱音源池、遊戲端 C API、UE 與 Unity 整合。
+description: Sound-Tracing SDK for FMOD（SimpleSTFmod）— FMOD Studio / FMOD Engine 用 DSP 外掛的結構、安裝、Studio 創作、單次音效與預熱音源池、遊戲端 C API、UE 與 Unity 整合、EQ。
 ---
 
-# SimpleST FMOD 外掛
+# Sound-Tracing SDK for FMOD
 
-**SimpleSTFmod** 是在 FMOD Studio / FMOD Engine 中使用 [SimpleST](../core/simplest.md) 的 DSP 外掛。
-它由兩個 DSP 組成：在創作工具中插到事件上的 **SimpleST Source**，以及放在主匯流排上的一個
+**Sound-Tracing SDK for FMOD**（二進位檔名稱 `SimpleSTFmod`）是在 FMOD Studio / FMOD Engine 中使用
+Sound-Tracing SDK 的 DSP 外掛。它由兩個 DSP 組成：在創作工具中插到事件上的 **SimpleST Source**，以及放在主匯流排上的一個
 **SimpleST Listener**；另外還有供遊戲引擎上傳幾何體的 C API。
 
 | 項目 | 值 |
 |---|---|
-| 外掛版本 | v0.3.0（SimpleST 2.22.0，SDK 發行版 2.22.0-jhj.5 — 4 頻段 [EQ](#eq)、聆聽者 roll）。前一版本：v0.3.0（SimpleST 2.18.2）、v0.2.0（SimpleST 2.12.0）。FMOD 看到的 DSP 描述版本為 0.3.0（SDK 2.18.2 初期發布版顯示為 0.2.0） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 建置 = 2.00 ~ 2.04，204 建置 = 2.04+） |
 | 平台 | Windows x64 · macOS · Linux · Android · iOS（靜態）· Web（靜態，FMOD HTML5 pthreads） |
-| 發布 | `SimpleST-fmod-release.zip`（各平台 `plugins/` + `install.py`，含 FMOD 版 UE 外掛與 Unity 套件） |
-| 商業發布條件 | 需向 FMOD（sales@fmod.com）確認 |
+| 產品下載 | 請洽 [contact@exarion.ai](mailto:contact@exarion.ai) |
 
 ## 結構
 
 ![SimpleSTFmod 結構](/img/fmod/structure.png)
 
-```text
-[事件主軌]                                          [主匯流排]
- SimpleST Source  ──(單聲道 PCM, write_stream)──▶  SimpleST Listener ──▶ 立體聲（HRTF/panning）
-   · 3D Attributes（Studio 自動）→ 音源位置            · st_rt_render_process（全部音源一次渲染）
-   · 輸出為靜音（沒有 Listener 時 dry 直通）           · FMOD 聆聽者 0 → SimpleST 聆聽者
-                 └──────────── SystemRuntime（每個 FMOD::System 1 個）─┘
-                               · SimpleST 上下文 + 控制執行緒
-                               · 遊戲端 C API（幾何體上傳等）
-```
-
-- SimpleST 是「N 個音源輸入 → 1 個聆聽者混音輸出」的結構，因此不是 Steam Audio 式（逐音源輸出），
-  而是 **Resonance / Meta XR Audio 式**（Source 只推入並輸出靜音，由匯流排上的 Listener 一次渲染）。
+- 引擎是「N 個音源輸入 → 1 個聆聽者混音輸出」的結構，因此 Source 只推入並輸出靜音，由匯流排上的 Listener 一次渲染。
 - 外掛 **從自己的資料夾** 動態綁定 `SimpleSTRealtime`，遊戲端透過外掛 export 的
   `SimpleSTFmod_GetRealtimeProc` 取得 **同一模組** 的 `st_rt_*` — 引擎實例只有一個。
 - 渲染器在每個區塊選出「目前正在執行 process 的 Listener」。Studio 為預覽建立的虛設實例
   不會搶走即時的 Listener；若渲染器停止 250 ms，其他 Listener 會接手，若沒有任何 Listener，
   Source 們會回到 dry。
-- 引擎音源只為實際有音訊進入的 Source 建立（保護 64 個同時串流）。已結束 voice 的引擎音源會保留在
-  預熱池中，供下一個 voice 重複使用 — [單次音效與預熱音源池](#單次音效與預熱音源池)。
-- **輸出限幅器會關閉**：SimpleST 2.18 在建立後會立即啟用 true-peak 限幅器（−1 dBTP，137 樣本延遲），
-  但在 FMOD 中由主匯流排負責限幅。
-- **等響度補償也會關閉**：SimpleST 2.21 在建立後會立即啟用輸出端等響度補償（低頻 shelf 約 +7.2 dB @ 120 Hz），
-  但音色與音量由 FMOD 混音負責。與限幅器一起，在上下文建立後與重新開啟 Sound Tracing 時關閉。
-- **聆聽者方向**：將 FMOD 聆聽者的 forward 與 up 以 SimpleST 四元數傳入，連頭部傾斜（roll）也會反映（自 SDK 發行版
-  2.22.0-jhj 起）。
+- 引擎音源只為實際有音訊進入的 Source 建立（保護 64 個同時串流）。已結束 voice 的引擎
+  音源會保留在預熱池中，供下一個 voice 重複使用 — [單次音效與預熱音源池](#單次音效與預熱音源池)。
+- **輸出限幅器會關閉**：在 FMOD 中由主匯流排負責限幅。
+- **等響度補償也會關閉**：音色與音量由 FMOD 混音負責。
+- **聆聽者方向**：將 FMOD 聆聽者的 forward 與 up 以四元數傳入，連頭部傾斜（roll）也會反映。
 
 ## 安裝
 
@@ -59,11 +43,10 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine 用 SimpleST DSP 外掛�
    `Resources/HRTF/`）複製到 **Studio 專案的 `Plugins/`**（有利於版本控制）或使用者外掛資料夾，
    然後重新啟動 Studio。
    - Windows: `%localappdata%/FMOD Studio/Plugins`
-   - macOS: `~/Library/Preferences/FMOD Studio/Plugins/SimpleST`（`install.py fmod --payload mac --studio "/Applications/FMOD Studio.app"`）
+   - macOS: `~/Library/Preferences/FMOD Studio/Plugins/SimpleST`
 3. Studio 記錄中的 `No FMOD symbols found in dynamic library '.../SimpleSTRealtime.dll'` 無害
    （Studio 會把資料夾中的所有 DLL 當作外掛候選開啟。引擎 DLL 由 SimpleSTFmod 直接載入）。
 
-安裝程式會檢查 manifest 雜湊、平台、Studio/SDK 版本，並將既有檔案備份到掃描器之外。
 若沒有 HRTF 資源，會回退到引擎內建的 MIT KEMAR。
 
 ### 遊戲執行階段
@@ -75,7 +58,8 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine 用 SimpleST DSP 外掛�
 | ios | 靜態 | `SimpleSTFmod.xcframework`（含引擎物件） |
 | web | 靜態 | `libSimpleSTFmod.a`（含引擎）— FMOD HTML5 pthreads 建置 + 以 `-pthread` 連結 |
 
-動態平台上，FMOD 載入外掛後，外掛會在旁邊尋找引擎。靜態平台（iOS/Web）則在載入 bank 之前直接註冊。
+動態平台上，FMOD 載入外掛後，外掛會在旁邊尋找引擎。靜態平台（iOS/Web）則在載入 bank 之前
+直接註冊。
 
 ```cpp
 studioSystem->registerPlugin(FMOD_SimpleST_Source_GetDSPDescription());
@@ -102,12 +86,12 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 
 | DSP | 參數 | 意義 |
 |---|---|---|
-| SimpleST Source | Gain / Direct / Reflections / Diffraction / Reverb Send (dB) | 輸入位準、逐路徑音量（SimpleST path volume） |
+| SimpleST Source | Gain / Direct / Reflections / Diffraction / Reverb Send (dB) | 輸入位準、逐路徑音量（Sound-Tracing SDK path volume） |
 | | Directivity (0 ~ 1) | 0 全指向 ~ 1 心形（以事件 forward 為基準） |
 | | Stationary | 不移動的 emitter 提示（建立時套用） |
-| | Bypass | 不經過 SimpleST，dry 直通 |
+| | Bypass | 不經過 Sound-Tracing SDK，dry 直通 |
 | | 3D Attributes / Overall Gain / Atten Range | FMOD 特殊 data 參數（自動） |
-| SimpleST Listener | Wet Level / Dry Level (dB) | SimpleST 渲染 / 匯流排上其他音訊的位準 |
+| SimpleST Listener | Wet Level / Dry Level (dB) | Sound-Tracing SDK 渲染 / 匯流排上其他音訊的位準 |
 | | HRTF | 開啟為雙耳（耳機），關閉為立體聲 panning |
 | 兩者皆有（EQ 區塊） | EQ / EQ Preamp (dB) | 4 頻段 EQ 開關與前級增益 — [EQ](#eq) |
 | | EQn Type / EQn Freq (Hz) / EQn Gain (dB) / EQn Q (n = 1 ~ 4) | 各頻段的濾波器種類、頻率、增益、Q |
@@ -115,40 +99,21 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 將 Listener **bypass** 後，Source 們會回到 dry 直通（供 A/B 比較）。DSP 名稱與參數名稱會由 bank
 作為識別碼儲存，發布後不要更改。
 
-### EQ
-
-自 SDK 發行版 2.22.0-jhj 起，兩個 DSP 都有相同的 4 頻段 EQ 參數區塊，直接使用 SimpleST 參數式 EQ。
-
-| DSP | 作用處 |
-|---|---|
-| SimpleST Source | **音源 EQ** — 在進入 SimpleST 的事件訊號上，於引擎分頻之前。直達聲、反射、繞射、殘響全部帶有相同音色 |
-| SimpleST Listener | **輸出 EQ** — 在 SimpleST 混音上，於 Wet Level 之前 |
-
-- `EQ` 為開關，`EQ Preamp` 為頻段前的增益（−48 ~ +12 dB，提升時以負值預留餘量）。
-- `EQn Type` 為 Off · Peaking · Low Shelf · High Shelf · High Cut（12 dB/oct 低通）· Low Cut（12 dB/oct 高通）· Notch。
-- `EQn Freq` 為 20 ~ 20,000 Hz，`EQn Gain` 為 ±24 dB（僅 Peaking 與 shelf），`EQn Q` 為 0.1 ~ 30（shelf 最多 3）。
-- 4 頻段足以同時套用低頻切除、低頻 shelf、高頻 shelf、高頻切除。`EQn Type` 為整數參數（7 個值名稱，
-  0 = Off），其餘為實數參數。
-- 預設為關閉，關閉時不會呼叫引擎。只送出變更的值，引擎以 20 ms 交叉淡化切換。
-- 有多個 Listener 時，使用被選為渲染器之實例的 EQ。從預熱池重複使用的引擎音源會先清除前一個 voice 的 EQ
-  或換成新的 EQ 後再開始。
-
 ## 單次音效與預熱音源池
 
-為了每次事件都會產生新 voice 的短聲音，從 0.3.0 起外掛會在 voice 之間重複使用引擎
+為了每次事件都會產生新 voice 的短聲音，外掛會在 voice 之間重複使用引擎
 音源。不需要變更 FMOD Studio 事件或 DSP 設定。
 
-- 引擎會讓 **新音源** 的所有路徑在 150 ms 內淡入並等待第一個 IR。0.2.0 會為每個 voice 新建引擎
-  音源，使 25 ms 的聲音聽起來小 15 ~ 20 dB 而且延遲；而且 voice 一結束就立即刪除音源，導致串流環中
-  殘留的尾端被截斷。
-- 0.3.0 會將已結束 voice 已推入的 PCM **最多再播放 300 ms** 後才停止音源（殘響會延續），並將該音源
+- 引擎會讓 **新音源** 的所有路徑在 150 ms 內淡入並等待第一個 IR，因此若為每個 voice 新建引擎
+  音源，短聲音聽起來會小而且延遲。
+- 外掛會將已結束 voice 已推入的 PCM **最多再播放 300 ms** 後才停止音源（殘響會延續），並將該音源
   以預熱狀態保留 **最多 16 個、2 秒**。
 - 下一個 voice 會接到最近的預熱音源。**0.25 m 以內立即** 開始播放，更遠時約 25 ms 後開始播放。
   2 秒內沒有再被使用的預熱音源會被釋放。
 
-以核心測試（不含 FMOD 的同一執行階段）量測，相對於 0.2.0 的結果如下。
+以核心測試（不含 FMOD 的同一執行階段）量測的結果如下。
 
-| 項目 | 0.2.0（每個 voice 新建音源） | 0.3.0（預熱池） |
+| 項目 | 每個 voice 新建音源 | 預熱池 |
 |---|---|---|
 | 同一位置 16 個 voice（間隔 120 ms）的引擎音源建立數 | 16 | 4 |
 | 同一位置 voice 位準 | 基準 | +15.7 dB（正常音量） |
@@ -160,16 +125,16 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 
 ## 遊戲端 C API
 
-`include/SimpleSTFmod/SimpleSTFmod.h` — 由外掛函式庫 export。請從 **FMOD 載入的那個模組** 綁定。
-所有呼叫都在遊戲執行緒上進行，SimpleST `[control]` 呼叫必須在 `SimpleSTFmod_InvokeOnControlThread`
-之內進行。
+`include/SimpleSTFmod/SimpleSTFmod.h` — 由外掛函式庫 export。請從 **FMOD 載入的那個模組**
+綁定。所有呼叫都在遊戲執行緒上進行，Sound-Tracing SDK `[control]` 呼叫必須在
+`SimpleSTFmod_InvokeOnControlThread` 之內進行。
 
 ```c
 SimpleSTFmod_Config cfg; SimpleSTFmod_InitConfig(&cfg);
 cfg.renderMode = SIMPLESTFMOD_RENDER_BUFFERED;   // 預設。IN_CALLBACK = 在 FMOD 混音器回呼內渲染
 cfg.sceneRatio = 0.f;                            // 0 = 1.0（FMOD UE/Unity 整合的單位為公尺）
 cfg.maxSources = 0;                              // 0 = 引擎平台預設（桌面 128，Android/iOS 48，Web 32）
-SimpleSTFmod_Configure(&cfg);                    // 在執行階段啟動之前（建立第一個 SimpleST DSP 之前）
+SimpleSTFmod_Configure(&cfg);                    // 在執行階段啟動之前（建立第一個 Sound-Tracing SDK DSP 之前）
 
 SimpleSTFmod_Status st = { sizeof st };
 SimpleSTFmod_GetStatus(SIMPLESTFMOD_SYSTEM_LATEST, &st);   // state READY, boundSources, latency, defaultMaterialId
@@ -185,12 +150,13 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 
 - 系統索引 = `FMOD_DSP_STATE::systemobject`（行程中最先建立的 FMOD::System 為 0）。
   編輯器整合會建立多個 System，因此 `SIMPLESTFMOD_SYSTEM_LATEST(-1)` = 最近的執行階段。
-- FMOD 與 SimpleST 的座標系相同（左手系，+Y 向上，+Z 向前）。FMOD UE 整合的 `(UE.Y, UE.Z, UE.X)/100`
+- FMOD 與 Sound-Tracing SDK 的座標系相同（左手系，+Y 向上，+Z 向前）。FMOD UE 整合的 `(UE.Y, UE.Z, UE.X)/100`
   轉換與 SoundTracing UE 外掛的轉換相同。
-- 外掛上下文已先註冊了預設材質庫。請以 `defaultMaterialId` 加上 preset index 使用。
-- **音源上限**（自 SDK 發行版 2.18.2 起）：`SimpleSTFmod_Config.maxSources` 是引擎音源數上限（0 = 平台
+- 外掛上下文已先註冊了預設材質庫。請以 `defaultMaterialId` 加上 preset
+  index 使用。
+- **音源上限**：`SimpleSTFmod_Config.maxSources` 是引擎音源數上限（0 = 平台
   預設）。超過時引擎會拒絕建立音源，該 voice 以 dry 播放。這是附加在結構末端的欄位，因此傳入舊版較短
-  結構的主機也能運作 — [音源記憶體預算](../core/simplest.md#音源記憶體預算)。
+  結構的主機也能運作。
 
 ### 開啟與關閉 Sound Tracing
 
@@ -198,12 +164,12 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // 關閉。1 = 開啟（預設）
 ```
 
-SDK 發行版 2.18.2 新增的遊戲端 A/B 開關。套用於一個執行階段（`systemIndex < 0` = 最近的一個），
+這是遊戲端的 A/B 開關。套用於一個執行階段（`systemIndex < 0` = 最近的一個），
 並在控制執行緒上以非同步方式反映。
 
-- **關閉時** 會啟用 SimpleST 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空預熱音源池後不再
+- **關閉時** 會啟用 Sound-Tracing SDK 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空預熱音源池後不再
   重新填入，外掛也不會喚醒傳播 lane。
-- **傳播 lane 不會完全停止。** SimpleST 沒有傳播暫停功能，只要還有音源，lane 就會依自身週期
+- **傳播 lane 不會完全停止。** 引擎沒有傳播暫停功能，只要還有音源，lane 就會依自身週期
   持續運轉。
 - **開啟時** 會重新套用外掛的渲染選項。
 - 排入佇列時回傳 1，沒有執行階段時回傳 0。之後才啟動的執行階段會以開啟狀態啟動。
@@ -213,16 +179,12 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 FMOD 模式中會呼叫此函�
 
 ## UE · Unity 整合
 
-![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
-
 - **Unreal Engine**：將發布檔的 `Unreal/SoundTracing`（FMOD 版）放入專案的 `Plugins/` 並建置，
   建置會將外掛、引擎、HRTF 放進 `Plugins/FMODStudio/Binaries/<Plat>/`，並在 `DefaultEngine.ini` 加入
-  `+PluginFiles=SimpleSTFmod`。
-  SoundTracing 外掛以 FMOD 模式建置，只上傳幾何體 — [Unreal Engine SDK](./ue.md)。UE 5.7 + FMOD for
-  Unreal 2.04 聆聽驗證（2026-10-15）。
+  `+PluginFiles=SimpleSTFmod`。SoundTracing 外掛以 FMOD 模式建置，只上傳幾何體 — [Unreal Engine SDK](./ue.md)。
 - **Unity**：拖放 FMOD 版套件（`SoundTrace-SimpleST-FMOD-release.unitypackage`）後，編輯器載入時
   SoundTrace 會將 DLL/bundle 複製到 FMOD 外掛資料夾並註冊到 Dynamic Plugins —
-  [Unity SDK](./unity.md#與-fmod-搭配使用)。Unity 6000.3 + FMOD for Unity 2.04 E2E 通過。
+  [Unity SDK](./unity.md#與-fmod-搭配使用)。
 
 ![匯入 FMOD 版套件](/img/fmod/unity-fmod-edition-import.png)
 
@@ -243,9 +205,9 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 FMOD 模式中會呼叫此函�
 - 聆聽者 1 個、同時串流 64 個（超出部分為 dry）、輸出僅立體聲（未暴露揚聲器配置）。
 - EQ 每個 DSP 固定 4 頻段（UE、Unity、Web 最多 16 頻段）。
 - 引擎音源數不會超過平台上限（`maxSources`）。超出的 voice 為 dry。
-- Source 之後的事件效果／send 收到的是靜音（SimpleST 混音從 Listener 匯流排輸出）。
+- Source 之後的事件效果／send 收到的是靜音（Sound-Tracing SDK 混音從 Listener 匯流排輸出）。
 - `Overall Gain`（虛擬化用的可聽度）為基於距離的估計值。
-- FMOD Studio 可能建立多個 System，每個 System 都會產生一個 SimpleST 上下文。
+- FMOD Studio 可能建立多個 System，每個 System 都會產生一個 Sound-Tracing SDK 上下文。
 - SDK 110 發布建置必須以官方 FMOD 2.03 SDK 重新建置（FMOD EULA 禁止再發布 SDK）。
 
 ## 記錄 / 環境變數
@@ -261,8 +223,33 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 FMOD 模式中會呼叫此函�
 在 Windows 上永遠也會經 `OutputDebugString` 輸出。控制執行緒在渲染器狀態每次改變時會留下
 `SimpleST Listener rendering` / `no SimpleST Listener rendering`。
 
+## EQ
+
+在兩個位置套用 Sound-Tracing SDK 的參數式 EQ。
+
+- **音源 EQ** — 在引擎分頻之前作用於音源訊號本身。該音源的直達音、反射、繞射、殘響全部帶有相同音色。
+- **輸出 EQ** — 在渲染末端（主增益之前）作用於整個 Sound-Tracing SDK 混音。
+
+濾波器種類為 Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 共 6 種（切除固定 12 dB/oct），
+範圍為頻率 20 ~ 20,000 Hz，增益 ±24 dB（僅 Peaking 與 shelf），Q 0.1 ~ 30（shelf 最多 3），前級增益 −48 ~ +12 dB。
+預設為關閉，關閉時不會呼叫引擎，因此輸出與沒有 EQ 時相同。只送出變更的值，引擎以
+20 ms 交叉淡化切換。
+
+兩個 DSP 都有相同的 4 頻段 EQ 參數區塊。
+
+| DSP | 作用處 |
+|---|---|
+| SimpleST Source | **音源 EQ** — 進入引擎的事件訊號 |
+| SimpleST Listener | **輸出 EQ** — 渲染後的混音，Wet Level 之前 |
+
+- `EQ` 為開關，`EQ Preamp` 為頻段前的增益（−48 ~ +12 dB，提升時以負值預留餘量）。
+- `EQn Type`（n = 1 ~ 4）為 Off · Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 的整數參數（0 = Off），
+  `EQn Freq (Hz)` · `EQn Gain (dB)` · `EQn Q` 為實數參數。
+- 4 頻段足以同時套用低頻切除、低頻 shelf、高頻 shelf、高頻切除。
+- 有多個 Listener 時，使用被選為渲染器之實例的 EQ。從預熱池重複使用的引擎音源會先清除前一個 voice 的 EQ
+  或換成新的 EQ 後再開始。
+
 ## 下一篇
 
 - [Wwise 外掛](./wwise.md)
 - [Unreal Engine SDK](./ue.md) · [Unity SDK](./unity.md)
-- [SimpleST](../core/simplest.md)

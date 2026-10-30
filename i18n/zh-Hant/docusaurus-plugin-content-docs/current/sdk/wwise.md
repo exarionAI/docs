@@ -1,55 +1,40 @@
 ---
 title: Wwise
-description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Object Processor + Metadata 外掛的結構、安裝、創作、EQ、單次音效與預熱音源池、遊戲端 C API、UE 與 Unity 整合。
+description: Sound-Tracing SDK for Wwise（SimpleSTWwise）— Wwise 2025.1 用 Object Processor + Metadata 外掛的結構、安裝、創作、單次音效與預熱音源池、遊戲端 C API、UE 與 Unity 整合、EQ。
 ---
 
-# Sound-tracing Wwise 外掛
+# Sound-Tracing SDK for Wwise
 
-**Sound-tracing**（原始碼與二進位檔名稱為 `SimpleSTWwise`）是在 Wwise 2025.1 中使用
-[SimpleST](../core/simplest.md) 的外掛。它由兩個外掛組成：插在 Audio Objects 匯流排上的
-**Sound-tracing Renderer**（Object Processor），以及附加到聲音／Actor-Mixer 的
-**Sound-tracing Source Settings**（Metadata）；另外還有供遊戲引擎上傳幾何體的 C API。
+**Sound-Tracing SDK for Wwise**（Launcher 外掛名稱 `Sound-tracing`，二進位檔名稱 `SimpleSTWwise`）是在
+Wwise 2025.1 中使用 Sound-Tracing SDK 的外掛。它由兩個外掛組成：插在 Audio Objects 匯流排上的 **Sound-tracing Renderer**（Object Processor），
+以及附加到聲音／Actor-Mixer 的 **Sound-tracing Source Settings**（Metadata）；另外還有供遊戲引擎
+上傳幾何體的 C API。
 
 | 項目 | 值 |
 |---|---|
-| 外掛版本 | v0.2.0（SimpleST 2.22.0，SDK 發行版 2.22.0-jhj.5 — 4 頻段 [EQ](#eq)、聆聽者 roll）。前一版本：v0.2.0（SimpleST 2.18.2）、v0.1.0（SimpleST 2.12.0，已於 Wwise 2025.1.11 音效引擎 E2E 驗證） |
-| Audiokinetic | CompanyID **325**，PluginID 1001（Renderer）· 1002（Source Settings）。Launcher 套件組 `Sound-tracing` |
 | Wwise | 2025.1（外掛二進位檔綁定於 SDK 版本） |
+| Audiokinetic | CompanyID **325**，PluginID 1001（Renderer）· 1002（Source Settings）。Launcher 外掛名稱 `Sound-tracing` |
 | 平台 | Windows（vc170）· macOS · Linux · Android · iOS（靜態）· Web（靜態） |
-| 發布 | `SimpleST-wwise-release.zip`（各平台 SDK + Authoring + Launcher 套件組 `launcher/` + `install.py`，含 UE 與 Unity 整合程式碼） |
-| 合作夥伴核准 | Community Partner Program 第一階段核准（2026-10-08）。最終核准進行中 |
+| 下載 | Audiokinetic Launcher 商店 |
 
 ## 結構
 
 ![SimpleSTWwise 結構](/img/wwise/structure.png)
 
-```text
- 3D 聲音們 ──(Listener Relative Routing)──▶ [SimpleST 匯流排: Bus Configuration = Audio Objects]
-   + Sound-tracing Source Settings（Metadata，選用）        Sound-tracing Renderer (Object Processor)
-                                                        · 每個物件：單聲道降混 → st_rt_source_write_stream
-                                                          位置 = 以匯流排聆聽者為基準的相對座標 → 反變換為世界座標
-                                                        · st_rt_render_process 1 次 → 1 個立體聲輸出物件
-                                                        · SimpleST 不接收的物件（2D / Bypass / 超過 64 個）
-                                                          由渲染器以 Wwise panning 直接混音（"Dry Level"）
-                                   SystemRuntime（每個行程 1 個 = Wwise 音效引擎 1 個）
-```
-
 - **為什麼是 Object Processor**：匯流排上的所有音訊物件會連同位置 metadata 在同一個回呼中收到，
   因此 push 與 render 發生在同一個 `Execute` 內。與 FMOD 版（Source push + Listener pull）不同，
-  沒有區塊順序偏移，voice 也不需要輸出靜音，Wwise 的計量與虛擬化照常運作。也不會取代系統 Audio Device。
-- **座標**：Wwise 會將物件位置相對於匯流排聆聽者平移、旋轉後提供。渲染器以匯流排 game object
-  （= 聆聽者）的世界姿態還原。Wwise 與 SimpleST 都是左手系、+X 向右、+Y 向上、+Z 向前，
-  因此沒有軸轉換（只有 Unreal 整合例外 — 見下文）。
-- **voice 與引擎音源**：每個音訊物件（voice）使用一個 SimpleST 音源，但已結束 voice 的引擎音源會保留在
-  預熱池中，由下一個 voice 接手 — [單次音效與預熱音源池](#單次音效與預熱音源池)。
+  沒有區塊順序偏移，voice 也不需要輸出靜音，Wwise 的計量與虛擬化照常運作。也不會取代系統 Audio
+  Device。
+- **座標**：Wwise 會將物件位置相對於匯流排聆聽者平移、旋轉後提供。渲染器以匯流排
+  game object（= 聆聽者）的世界姿態還原。Wwise 與 Sound-Tracing SDK 都是左手系、+X 向右、+Y 向上、
+  +Z 向前，因此沒有軸轉換（只有 Unreal 整合例外 — 見下文）。
+- **voice 與引擎音源**：每個音訊物件（voice）使用一個 Sound-Tracing SDK 音源，但已結束 voice 的引擎
+  音源會保留在預熱池中，由下一個 voice 接手 — [單次音效與預熱音源池](#單次音效與預熱音源池)。
 - **共用核心**：與 FMOD 外掛共用同一層執行階段，從自己的資料夾動態綁定 `SimpleSTRealtime`，
   遊戲端以 `SimpleSTWwise_GetRealtimeProc` 取得同一模組的 `st_rt_*`。
-- **輸出限幅器會關閉**：SimpleST 2.18 在建立後會立即啟用 true-peak 限幅器，但在 Wwise 中由主匯流排
-  負責限幅。
-- **等響度補償也會關閉**：SimpleST 2.21 在建立後會立即啟用輸出端等響度補償（低頻 shelf 約 +7.2 dB @ 120 Hz），
-  但音色與音量由 Wwise 混音負責。與 FMOD 版相同的共用核心會與限幅器一起將其關閉。
-- **聆聽者方向**：將匯流排聆聽者的 front 與 top 方向以 SimpleST 四元數傳入，連頭部傾斜（roll）也會反映（自 SDK 發行版
-  2.22.0-jhj 起）。
+- **輸出限幅器會關閉**：在 Wwise 中由主匯流排負責限幅。
+- **等響度補償也會關閉**：音色與音量由 Wwise 混音負責。
+- **聆聽者方向**：將匯流排聆聽者的 front 與 top 方向以四元數傳入，連頭部傾斜（roll）也會反映。
 - **生命週期**：執行階段在音效引擎 Init 掛勾（靜態註冊）或建立第一個 Renderer 實例時啟動，
   並在 `AK::SoundEngine::Term` 的全域回呼中結束。
 
@@ -59,14 +44,10 @@ description: Sound-tracing（SimpleSTWwise）— Wwise 2025.1 用 SimpleST Objec
 
 ![Launcher 套件組安裝](/img/wwise/launcher-bundle.png)
 
-在 Audiokinetic Launcher › **Plug-ins › Add from directory** 中選擇發布檔的 `launcher` 資料夾（`bundle.json` + `*.tar.xz`），
-即可安裝 **Sound-tracing**（Windows、macOS 通用）。套件組含 Authoring 外掛以及 Windows（vc170）、macOS
-（Xcode 16/26）音效引擎外掛。Authoring 外掛在 Mac 上也是 **Windows DLL**
+從 Audiokinetic Launcher 商店取得 **Sound-Tracing SDK for Wwise**（外掛名稱 `Sound-tracing`）後，
+在 Launcher › **Plug-ins** 安裝到所使用的 Wwise 版本（Windows、macOS 通用）。外掛含 Authoring 外掛以及
+Windows（vc170）、macOS 音效引擎外掛。Authoring 外掛在 Mac 上也是 **Windows DLL**
 （`Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + 引擎 + HRTF）。
-
-不使用 Launcher 安裝時，可將發布資料夾覆寫到 Wwise 安裝資料夾（`SDK/…`、`Authoring/…`），或使用
-`python3 install.py wwise --payload win --wwise-root "/Applications/Audiokinetic/Wwise_2025.1.11.9262"`
-（既有檔案會保存在 `bin/.simplest-backups`）。
 
 ### 遊戲執行階段（SoundEngine）
 
@@ -84,11 +65,11 @@ lib 名稱為 `SimpleSTWwiseMeta`，可能需要別名）。
 
 ![Audio Objects 匯流排](/img/wwise/bus-audio-objects.png)
 
-1. 建立一個匯流排（例如 `SimpleST`），並設定 **Bus Configuration = Audio Objects**。
+1. 建立一個匯流排（例如 `SoundTracing`），並設定 **Bus Configuration = Audio Objects**。
 2. 在該匯流排的 Effects 插入 **Sound-tracing Renderer**。匯流排輸出會成為 1 個立體聲
    （開啟 HRTF 為雙耳 — 耳機）。
 3. 將 3D 聲音路由到該匯流排：在 Positioning 中設定 **3D Spatialization = Position（或 + Orientation）**，
-   開啟 Listener Relative Routing。**距離衰減（Attenuation）關閉或設為平坦** — SimpleST 自行進行物理
+   開啟 Listener Relative Routing。**距離衰減（Attenuation）關閉或設為平坦** — Sound-Tracing SDK 自行進行物理
    距離衰減，不關閉會造成雙重衰減（物件緩衝區送來時已經乘上 Wwise 的音量／衰減）。
 4. 需要逐音源調整時，在聲音／Actor-Mixer／匯流排上加入 **Metadata › Sound-tracing Source Settings**。
 5. 創作工具內沒有遊戲場景，因此在 `Wwise.exe` / `WwiseConsole.exe` 中會自動鋪設 **8 × 3 × 10 m 的試聽室**
@@ -102,46 +83,28 @@ lib 名稱為 `SimpleSTWwiseMeta`，可能需要別名）。
 
 | 外掛 | 屬性 | 意義 |
 |---|---|---|
-| Sound-tracing Renderer | Wet Level / Dry Level (dB, RTPC) | SimpleST 渲染 / 由渲染器直接 panning 的物件位準 |
+| Sound-tracing Renderer | Wet Level / Dry Level (dB, RTPC) | Sound-Tracing SDK 渲染 / 由渲染器直接 panning 的物件位準 |
 | | HRTF (Binaural) | 開啟為雙耳，關閉為立體聲 panning |
-| Sound-tracing Source Settings | Gain / Direct / Reflections / Diffraction / Reverb Send (dB, RTPC) | 輸入位準、逐路徑音量（SimpleST path volume） |
+| Sound-tracing Source Settings | Gain / Direct / Reflections / Diffraction / Reverb Send (dB, RTPC) | 輸入位準、逐路徑音量（Sound-Tracing SDK path volume） |
 | | Directivity (0 omni ~ 1 cardioid, RTPC) | 以物件 front 為基準的指向性 |
 | | Stationary (never moves) | 不移動的 emitter 提示（建立時套用） |
-| | Bypass SimpleST (RTPC) | 不經過 SimpleST，由渲染器以 Wwise panning 混音 |
+| | Bypass SimpleST (RTPC) | 不經過 Sound-Tracing SDK，由渲染器以 Wwise panning 混音 |
 | 兩者皆有（EQ 群組） | EQ / EQ Preamp (dB, RTPC) | 4 頻段 EQ 開關與前級增益 — [EQ](#eq) |
 | | Band n Type / Band n Frequency (Hz, RTPC) / Band n Gain (dB, RTPC) / Band n Q (RTPC) (n = 1 ~ 4) | 各頻段的濾波器種類、頻率、增益、Q |
 
 ![Source Settings metadata](/img/wwise/source-settings-metadata.png)
 
-CompanyID/PluginID、屬性名稱、AudioEnginePropertyID 會由專案與 bank 儲存，發布後不要更改。
-
-### EQ
-
-自 SDK 發行版 2.22.0-jhj 起，兩個外掛都有相同的 4 頻段 EQ 屬性群組。以與 FMOD 版相同的共用核心套用 SimpleST
-參數式 EQ。
-
-| 外掛 | 屬性群組 | 作用處 |
-|---|---|---|
-| Sound-tracing Source Settings | `Source EQ`、`Source EQ Band 1 ~ 4` | **音源 EQ** — 物件音訊進入 SimpleST 之前，於引擎分頻之前。直達聲、反射、繞射、殘響全部帶有相同音色 |
-| Sound-tracing Renderer | `Output EQ`、`Output EQ Band 1 ~ 4` | **輸出 EQ** — SimpleST 混音 |
-
-- `EQ` 為開關，`EQ Preamp` 為頻段前的增益（−48 ~ +12 dB）。
-- `Band n Type` 為 Off · Peaking · Low Shelf · High Shelf · High Cut（12 dB/oct）· Low Cut（12 dB/oct）· Notch。這是
-  列舉屬性，無法以 RTPC 變更。
-- `Band n Frequency` 為 20 ~ 20,000 Hz，`Band n Gain` 為 ±24 dB（僅 Peaking 與 shelf），`Band n Q` 為 0.1 ~ 30（shelf 最多 3），
-  Preamp、Frequency、Gain、Q 支援 RTPC。
-- 預設為關閉，關閉時不會呼叫引擎。只送出變更的值，引擎以 20 ms 交叉淡化切換。
-- EQ 屬性的 AudioEnginePropertyID 為 Source Settings 8 ~ 25、Renderer 3 ~ 20，在 bank 中依相同順序接在既有欄位之後。
-  從預熱池重複使用的引擎音源會先清除前一個 voice 的 EQ 或換成新的 EQ 後再開始。
+CompanyID/PluginID、屬性名稱、AudioEnginePropertyID 會由專案與 bank 儲存，發布後
+不要更改。
 
 ## 單次音效與預熱音源池
 
-從 0.2.0 起加入與 FMOD 外掛 0.3.0 相同的預熱音源池（共用核心）。即使每個聲音都會
+內含與 FMOD 外掛相同的預熱音源池（共用核心）。即使每個聲音都會
 產生新 voice，也不會為每個 voice 新建引擎音源，因此省去了新音源 150 ms 的路徑淡入與等待第一個 IR，
 短聲音能以正常音量準時聽到。不需要變更 Wwise 專案設定。
 
-- 已結束 voice 已交出的 PCM 會最多再播放 300 ms 後才停止音源（殘響會延續），並將最多 16 個音源以預熱
-  狀態保留 2 秒。
+- 已結束 voice 已交出的 PCM 會最多再播放 300 ms 後才停止音源（殘響會延續），並將最多
+  16 個音源以預熱狀態保留 2 秒。
 - 下一個 voice 會接到最近的預熱音源。0.25 m 以內立即播放，更遠時約 25 ms 後播放。
 - 像 Unreal 的 **Wwise AudioLink** 這樣每個聲音都註冊新 game object 的整合，也由這條路徑處理。
 
@@ -151,9 +114,9 @@ Wwise 版也使用同一名稱）時，會像以前一樣為每個 voice 新建�
 
 ## 遊戲端 C API
 
-`include/SimpleSTWwise/SimpleSTWwise.h` — 由 SoundEngine 函式庫 export。請從 **Wwise 載入的那個模組** 綁定
-（Unreal：`FAkPlatform::GetDSPPluginsDirectory()` + `SimpleSTWwise.dll`，靜態平台則直接呼叫）。
-與 FMOD 版契約相同，但沒有系統索引（每個行程 1 個音效引擎）。
+`include/SimpleSTWwise/SimpleSTWwise.h` — 由 SoundEngine 函式庫 export。請從 **Wwise 載入的那個模組**
+綁定（Unreal：`FAkPlatform::GetDSPPluginsDirectory()` + `SimpleSTWwise.dll`，靜態平台則直接
+呼叫）。與 FMOD 版契約相同，但沒有系統索引（每個行程 1 個音效引擎）。
 
 ```c
 SimpleSTWwise_Config cfg; SimpleSTWwise_InitConfig(&cfg);
@@ -169,14 +132,14 @@ SimpleSTWwise_InvokeOnControlThread(
     [](STRT_Context* ctx, void* user) { /* st_rt_mesh_create / object_create / build ... */ }, user, 1);
 ```
 
-- 執行階段啟動：靜態註冊時在 `SoundEngine::Init` 內，DLL 註冊時在第一個 SimpleST 匯流排播放時。
+- 執行階段啟動：靜態註冊時在 `SoundEngine::Init` 內，DLL 註冊時在第一個 Sound-Tracing SDK 匯流排播放時。
   在那之前 `GetStatus` 為 0。
 - **Unreal 軸**：Wwise for Unreal 2024.1+ 直接傳遞 Unreal 向量（+Z 向上），因此必須呼叫
   `SetWorldAxes(UNREAL)`，渲染器才會轉換為 (Y, Z, X)，與遊戲上傳的幾何體一致。若不呼叫，
-  聆聽者與音源會被錯誤的牆壁遮蔽（2026-10-15 修正）。
-- **音源上限**（自 SDK 發行版 2.18.2 起）：`SimpleSTWwise_Config.maxSources` 是引擎音源數上限（0 = 平台
+  聆聽者與音源會被錯誤的牆壁遮蔽。
+- **音源上限**：`SimpleSTWwise_Config.maxSources` 是引擎音源數上限（0 = 平台
   預設）。超過時引擎會拒絕建立音源，該 voice 以 dry 播放。這是附加在結構末端的欄位，因此傳入舊版較短
-  結構的主機也能運作 — [音源記憶體預算](../core/simplest.md#音源記憶體預算)。
+  結構的主機也能運作。
 
 ### 開啟與關閉 Sound Tracing
 
@@ -184,12 +147,12 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // 關閉。1 = 開啟（預設）
 ```
 
-SDK 發行版 2.18.2 新增的遊戲端 A/B 開關。套用於執行中的執行階段，並在控制執行緒上以非同步方式
+這是遊戲端的 A/B 開關。套用於執行中的執行階段，並在控制執行緒上以非同步方式
 反映。行為與 [FMOD 版](./fmod.md#開啟與關閉-sound-tracing) 相同。
 
-- **關閉時** 會啟用 SimpleST 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空預熱音源池後不再
+- **關閉時** 會啟用 Sound-Tracing SDK 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空預熱音源池後不再
   重新填入，外掛也不會喚醒傳播 lane。
-- **傳播 lane 不會完全停止。** SimpleST 沒有傳播暫停功能，只要還有音源，lane 就會依自身週期
+- **傳播 lane 不會完全停止。** 引擎沒有傳播暫停功能，只要還有音源，lane 就會依自身週期
   持續運轉。
 - **開啟時** 會重新套用外掛的渲染選項。
 - 排入佇列時回傳 1，沒有執行中的執行階段時回傳 0。之後才啟動的執行階段會以開啟狀態啟動，因此請在
@@ -203,7 +166,6 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 Wwise 模式中會呼叫此函�
 - **Unreal Engine**：在 Launcher 安裝 Sound-tracing 後執行 Launcher › Unreal Engine › **Modify Wwise in Project**，
   Launcher 會將 `SimpleSTWwise`、`SimpleSTRealtime`、HRTF 複製到 `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`。SoundTracing 外掛以 Wwise 模式建置，
   設定 `sceneRatio = 0.01` 與 Unreal 軸，只上傳幾何體 — [Unreal Engine SDK](./ue.md)。
-  E2E PASS（2026-10-07：物件 6 / 三角形 288 / 路徑 1 → 346 → 1）。
 - **Unity**：在 Launcher 安裝 Sound-tracing 後執行 Launcher › Unity › **Integrate/Modify Wwise in Project**，
   Launcher 會將外掛放入 Wwise Unity 整合的 DSP 資料夾。引擎共用 SoundTrace 的 `SimpleSTRealtime`，單位為公尺 —
   [Unity SDK](./unity.md#與-wwise-搭配使用)。
@@ -231,15 +193,13 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 Wwise 模式中會呼叫此函�
 
 ## 已知限制
 
-- 聆聽者 1 個（SimpleST 的限制）。若同一匯流排為第二個聆聽者再次實例化，該實例會把所有物件
+- 聆聽者 1 個（引擎的限制）。若同一匯流排為第二個聆聽者再次實例化，該實例會把所有物件
   以 Wwise panning 混音。
-- 音訊物件沒有速度，因此沒有 SimpleST Doppler。
+- 音訊物件沒有速度，因此沒有 Doppler。
 - EQ 每個外掛固定 4 頻段（UE、Unity、Web 最多 16 頻段）。
 - 引擎音源數不會超過平台上限（`maxSources`）。超出的 voice 為 dry。
 - 第一次看到新的音訊物件時，會在音訊執行緒上配置一個小插槽。引擎音源本身由控制執行緒從預熱池
   重複使用或新建。
-- Launcher 套件組目前包含 Authoring + Windows_vc170 + macOS（Xcode 16/26）。Linux、Android 套件組與 EULA、標誌準備中；iOS 為靜態連結，不經由套件組部署。
-- Wwise 創作工具 GUI 的手動試聽尚未記錄。
 
 ## 記錄 / 環境變數
 
@@ -253,8 +213,32 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 Wwise 模式中會呼叫此函�
 
 渲染器警告也會顯示在 Wwise Capture Log（`PostMonitorMessage`）。
 
+## EQ
+
+在兩個位置套用 Sound-Tracing SDK 的參數式 EQ。
+
+- **音源 EQ** — 在引擎分頻之前作用於音源訊號本身。該音源的直達音、反射、繞射、殘響全部帶有相同音色。
+- **輸出 EQ** — 在渲染末端（主增益之前）作用於整個 Sound-Tracing SDK 混音。
+
+濾波器種類為 Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 共 6 種（切除固定 12 dB/oct），
+範圍為頻率 20 ~ 20,000 Hz，增益 ±24 dB（僅 Peaking 與 shelf），Q 0.1 ~ 30（shelf 最多 3），前級增益 −48 ~ +12 dB。
+預設為關閉，關閉時不會呼叫引擎，因此輸出與沒有 EQ 時相同。只送出變更的值，引擎以
+20 ms 交叉淡化切換。
+
+兩個外掛都有相同的 4 頻段 EQ 屬性群組（與 FMOD 版相同的共用核心）。
+
+| 外掛 | 屬性群組 | 作用處 |
+|---|---|---|
+| Sound-tracing Source Settings | `Source EQ`、`Source EQ Band 1 ~ 4` | **音源 EQ** — 物件音訊進入引擎之前 |
+| Sound-tracing Renderer | `Output EQ`、`Output EQ Band 1 ~ 4` | **輸出 EQ** — 渲染後的混音 |
+
+- `EQ` 為開關，`EQ Preamp` 為頻段前的增益（−48 ~ +12 dB）。
+- `Band n Type` 為 Off · Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 的列舉屬性，無法以 RTPC 變更。
+  Preamp · `Band n Frequency` · `Band n Gain` · `Band n Q` 支援 RTPC。
+- EQ 屬性的 AudioEnginePropertyID 為 Source Settings 8 ~ 25、Renderer 3 ~ 20，在 bank 中依相同順序接在既有欄位之後。
+  從預熱池重複使用的引擎音源會先清除前一個 voice 的 EQ 或換成新的 EQ 後再開始。
+
 ## 下一篇
 
 - [FMOD 外掛](./fmod.md)
 - [Unreal Engine SDK](./ue.md) · [Unity SDK](./unity.md)
-- [SimpleST](../core/simplest.md)

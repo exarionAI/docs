@@ -8,23 +8,11 @@
   "homepage.hero.summaryLabel": {
     "message": "SoundTrace 文档入口"
   },
-  "homepage.hero.summary.core": {
-    "message": "原生声学引擎"
-  },
   "homepage.hero.summary.sdk": {
     "message": "Web、Unity、Unreal、FMOD、Wwise"
   },
-  "homepage.hero.summary.tools": {
-    "message": "渲染与分析工作流"
-  },
-  "homepage.products.core.desc": {
-    "message": "C++20 几何声学引擎 SimpleST：9 频段材质、Hybrid 早期反射、主机 pull 渲染、公开 C ABI 6。"
-  },
   "homepage.products.sdk.desc": {
-    "message": "Web、Unity 与 Unreal Engine 封装，以及 FMOD 和 Wwise 插件。Python 计划中。"
-  },
-  "homepage.products.exatools.desc": {
-    "message": "用于处理声学仿真结果的工具，包括 IR 分析、验证和可视化。"
+    "message": "Web、Unity 与 Unreal Engine SDK，以及 FMOD 和 Wwise 插件。"
   },
   "homepage.products.title": {
     "message": "产品线"

@@ -24,49 +24,36 @@ npm run build:github         # GitHub Pages project URL(/docs/)용 전체 locale
 
 ```
 docs/                 # 한국어 정본
-├── intro/            # 소개 (what-is-soundtracing, features, products)
-├── core/             # simplest (현행 엔진), stcorev2 (STCoreV2 → SimpleST 마이그레이션, 구 URL 유지)
-├── sdk/              # overview, web(+web/facade, web/native), unity, ue, fmod, wwise, python, performance
-├── exatools/         # ExaTools (overview, iranalyzer)
+├── intro/            # 소개 (what-is-soundtracing, features)
+├── sdk/              # overview, web(+web/facade, web/native), unity, ue, fmod, wwise, performance
 └── legal/            # licenses
 i18n/<locale>/docusaurus-plugin-content-docs/current/   # en, ja, zh-Hans, zh-Hant 번역 (같은 경로)
-static/img/           # 이미지 (아래 플레이스홀더 목록 참고)
+static/img/           # 이미지 (아래 이미지 이력 참고)
 ```
 
-문서 기준: **SimpleST 2.22.0 / ABI 6**, SDK 릴리스 2.22.0-jhj.5 (2026-10-28, 이전 SDK 릴리스: 2.18.2-jhj.7 · 엔진 2.12.0). 엔진·플러그인 사실관계의 원천은
-SimpleST 저장소의 `engine/ABI/*.h`, `plugins/*/README.md`다.
+문서 기준: 엔진 2.22.0 / ABI 6, SDK 릴리스 2.22.0-jhj.6. 엔진·플러그인 사실관계의 원천은
+SimpleST 저장소의 `engine/ABI/*.h`, `plugins/*/README.md`다. 문서상 제품명은 **Sound-Tracing SDK**(for Unity / for Unreal Engine /
+for FMOD / for Wwise / for Web)로 통일하고, `SimpleST*`는 바이너리·식별자·DSP 이름으로만 남긴다(2026-10-30).
+STCoreV2 대응표, Python 바인딩, ExaTools, Core(네이티브 엔진), 제품군 페이지와 릴리스 이력 서술은 2026-10-30에 제거했다. `static/img/core/*`는 페이지가 없어 현재 미사용이다.
 
-## 이미지 플레이스홀더 교체 목록
+## 이미지 이력
 
-아래 파일은 `PLACEHOLDER`가 찍힌 1280×720 PNG다. **같은 파일명으로 실제 스크린샷/도판을 덮어쓰면**
-문서 수정 없이 반영된다. 각 항목의 설명이 그 자리에 들어갈 그림의 내용이다.
+플레이스홀더 PNG는 2026-10-30 기준 모두 실제 이미지로 교체됐다(남은 것 없음).
 
-| 파일 (`static/img/`) | 들어갈 그림 | 쓰이는 페이지 |
-|---|---|---|
-| `core/pipeline-overview.png` | SceneManager → STPropagator → STIRConverter → Auralizator(Online/Offline) 파이프라인 도판 | core/simplest |
-| `core/engine-shells.png` | STRealTimeEngine / STRealTimeMultiEngine / STOfflineEngine 셸 3종 도판 | core/simplest |
-| `core/hybrid-early-reflections.png` | Hybrid 초기 반사: exact 오브젝트 예산(반사 12+4·회절 3+1) + HOA3 bed 개념도 | core/simplest |
-| `core/host-pull-render.png` | DEVICE / HOST_PULL / HOST_PULL_BUFFERED 출력 모드와 호스트 콜백 흐름 | core/simplest |
-| `core/demo-app.png` | `SimpleST_demo_app` 실시간 데모 화면(씬·경로 시각화) | core/simplest |
-| `intro/pipeline-concept.png` | 음원 → 직접음/투과/반사/회절 → 리스너, 확산 수송 → late reverb 개념도 | intro/what-is-soundtracing |
-| `web/architecture.png` | soundtrace.js: 메인 스레드 facade → control Worker(pthread WASM) → AudioWorklet, Offline Worker | sdk/web |
-| `ue/path-visualizer.png` | Niagara 경로 시각화 실행 화면 | sdk/ue |
-| `ue/integration-mode.png` | Build.cs가 Wwise → FMODStudio → Native 순으로 통합을 고르는 도판 | sdk/ue |
-| `fmod/structure.png` | SimpleSTFmod 구조도(Source DSP → SystemRuntime → Listener DSP) | sdk/fmod |
-| `fmod/ue-plugin-files.png` | UE Project Settings › FMOD Studio › Plugin Files의 SimpleSTFmod | sdk/fmod, sdk/ue |
-| `wwise/structure.png` | SimpleSTWwise 구조도(Audio Objects 버스 → Sound-tracing Renderer) | sdk/wwise |
-
-실제 이미지가 이미 있는 것: `web/demo-*.png`, `intro/path-visualization.png`(공개 Sound-tracing 데모
-스크린샷 복사), `unity/*.png`(Manager/Listener/Source/Object/PathVisualizer 인스펙터는 2026-10-29 SDK 2.22로 재촬영,
+실제 이미지가 이미 있는 것: `web/demo-*.png`, `intro/path-visualization.png`(2026-10-30 사용자 제공 데모 캡처 873×484), `unity/*.png`(Manager/Listener/Source/Object/PathVisualizer 인스펙터는 2026-10-29 SDK 2.22로 재촬영,
 나머지는 STCoreV2 시절 캡처).
 
 2026-10-29 실제 화면으로 교체(macOS, SDK 2.22.0-jhj.5): UE 5.7(Lyra) Project Settings·Listener·Source Settings 에셋·Object 컴포넌트·
 Mac 오디오 플러그인 설정, Wwise 2025.1.11 버스·Renderer·Source Settings 메타데이터·Positioning·Launcher·UE 설치 결과,
-FMOD Studio 2.04 마스터 버스 Listener·이벤트 Source·Source 덱·플러그인 폴더. 위 표에 남은 것이 아직 플레이스홀더다.
+FMOD Studio 2.04 마스터 버스 Listener·이벤트 Source·Source 덱·플러그인 폴더.
 
 2026-10-29 설치 흐름 변경(SDK 2.22.0-jhj.6, Unity·UE 설치 메뉴 제거)으로 `fmod/unity-install-menu.png`·`wwise/unity-install-menu.png`를
 지우고 `fmod/unity-fmod-edition-import.png`(FMOD 에디션 패키지 가져오기)·`wwise/launcher-modify-project.png`(런처 Modify Wwise in Project)를
 새로 찍었다. `wwise/launcher-bundle.png`는 Sound-tracing이 설치된 목록으로 다시 찍었다.
+
+2026-10-30 개념도 9장(`core/pipeline-overview`·`engine-shells`·`hybrid-early-reflections`·`host-pull-render`, `intro/pipeline-concept`,
+`web/architecture`, `ue/integration-mode`, `fmod/structure`, `wwise/structure`)을 HTML→PNG(Playwright, 1280×720 @2x, 영문 라벨)로
+그려 넣었다. `ue/path-visualizer.png`는 2026-10-30 Lyra Mac Shipping 패키지(Expanse, F6 경로 시각화)에서 캡처했다. `fmod/ue-plugin-files.png`는 2026-10-30 문서에서 빼고 삭제했다(FMOD for Unreal이 이 Mac에 없어 촬영 불가). 플레이스홀더는 더 없다.
 
 플레이스홀더를 다시 만들려면 `scripts/`가 아니라 세션 스크래치의 `placeholder.swift`를 썼다
 (AppKit으로 텍스트를 그린 PNG). 같은 형식이 필요하면 아무 PNG나 1280×720으로 덮어쓰면 된다.

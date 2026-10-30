@@ -1,21 +1,15 @@
 ---
 title: Web
-description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安装、部署要求、HRTF、质量预设、材质、EQ 与故障排除。
+description: Sound-Tracing SDK for Web（soundtrace.js）— WebAssembly SDK 的安装、部署要求、HRTF、质量预设、材质、EQ 与故障排除。
 ---
 
-# Web SDK
+# Sound-Tracing SDK for Web
 
-**soundtrace.js** 是在浏览器中使用 [SimpleST](../core/simplest.md) 的 TypeScript/WebAssembly SDK。
+**soundtrace.js** 是在浏览器中使用 Sound-Tracing SDK 的 TypeScript/WebAssembly SDK。
 它把 Three.js 等渲染场景中的网格、材质、声源和听者连接到 Sound Tracing 场景，
 并向 Web Audio graph 提供空间化的立体声输出。
 
-从 1.0.0 起，引擎由 STCoreV2 换成了 SimpleST，1.1.0 使用 **SimpleST 2.22.0 / ABI 6**
-（SDK 发行版 2.22.0-jhj.5。上一 SDK 发行版 2.18.2-jhj.7 中同一 1.1.0 使用 SimpleST 2.18.2；1.0.0 = SimpleST 2.12.0）。
-本次发行包版本保持不变，新增了[声源 EQ 与输出 EQ](#eq)（`source.setEq`、`sound.setOutputEq`），
-听者 `orientation` 四元数中的头部倾斜（roll）也会传到引擎（以前仅 yaw/pitch）。2.18.2 SDK 新增了 `maxSources`
-选项（声源数量上限）。现有调用代码无需修改。`SoundTrace`、`Source`、`Mesh`、`Listener` facade 保持不变，但相对 STCoreV2，后端、HRTF、
-材质和选项约定发生了变化。完整选项和实体 API 见
-[Facade API](./web/facade.md)，低层 SimpleST 模块访问见 [Native API](./web/native.md)。
+完整选项和实体 API 见 [Facade API](./web/facade.md)，低层模块访问见 [Native API](./web/native.md)。
 
 ![soundtrace.js 架构](/img/web/architecture.png)
 
@@ -23,16 +17,15 @@ description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安装、
 
 | 项目 | 当前行为 |
 |---|---|
-| 引擎 | SimpleST Realtime（pthreads WASM）+ Offline（单线程，仅用于 IR 分析） |
+| 引擎 | Sound-Tracing SDK Realtime（pthreads WASM）+ Offline（单线程，仅用于 IR 分析） |
 | 运行模式 | `single_thread`（同步传播）/ `multi_thread`（管线传播）。**两者都使用专用 Worker + pthread WASM** |
 | 早期反射 | 始终为 **Hybrid**。渲染启动、HRTF 更改、reset 之后也会重新应用 |
 | HRTF | 内置 MIT KEMAR（`'mit-kemar'`），随包 SADIE II D2（`'sadie-d2'`） |
 | 质量 | `fast` / `balanced` / `quality` — 同时设置听者与声源射线网格和反射深度 |
 | 材质 | 9 频段（63 Hz ~ 16 kHz）SoundTrace 游戏材质 22 种，按名称、别名或索引指定 |
 | 输出 | 每个声源单声道输入，听者渲染器混合为一路立体声（`sound.output`） |
-| 声源上限 | 默认 32 个声源 · 声源内存 64 MiB · 延迟环上限 0.5 s。声源数用 `maxSources` 选项修改 — [声源内存预算](../core/simplest.md#声源内存预算) |
+| 声源上限 | 默认 32 个声源 · 声源内存 64 MiB · 延迟环上限 0.5 s。声源数用 `maxSources` 选项修改 |
 | EQ | 逐声源的声源 EQ 和全局输出 EQ，参数式最多 16 频段 — [EQ](#eq) |
-| GPU | 无。`mode: 'gpu'`、`enableGpu()` 报错 |
 
 ## 要求
 
@@ -48,7 +41,7 @@ description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK 的安装、
 
 | 形式 | 文件 | 安装 |
 |---|---|---|
-| vendor 目录树 | `soundtrace-js-release-vendor.zip`（根目录 `sdk/`） | 解压到静态路径并提供服务。随附的 `install.py` 校验哈希后安装到 `vendor/sound-tracing/sdk` |
+| vendor 目录树 | `soundtrace-js-release-vendor.zip`（根目录 `sdk/`） | 解压到静态路径（例如 `vendor/sound-tracing/sdk`）并提供服务 |
 | npm 包 | `exarionai-soundtrace.js-1.1.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.1.0.tgz` |
 
 ```ts
@@ -112,7 +105,7 @@ await sound.update(0);
 player.start();
 ```
 
-SimpleST 的坐标系与 Unity 相同，为 `+Z` forward。Three.js 这类朝向 `-Z` 的渲染器必须传入上面的
+Sound-Tracing SDK 的坐标系与 Unity 相同，为 `+Z` forward。Three.js 这类朝向 `-Z` 的渲染器必须传入上面的
 `coordinateBasis`，左右和前后才会正确。
 
 ## 运行模式
@@ -133,9 +126,6 @@ SimpleST 的坐标系与 Unity 相同，为 `+Z` forward。Three.js 这类朝向
 | （不调用） | 内置 MIT KEMAR（SDK 默认）。`setOutputMode('speaker')` 切换为立体声声像 | 无 |
 | `loadHrtf('mit-kemar')` 或 `'convolution'` | 引擎内置 MIT KEMAR 128 tap | 无 |
 | `loadHrtf('sadie-d2')` 或 `'steamaudio'` | SADIE II D2 KEMAR 8,802 方向 256 tap | `SADIE_D2_44K_16bit_256tap.hrtfbin` |
-
-旧的 KU100 parametric / convolution / SADIE H12 表和 `Band8` 模式已不存在。
-`loadHrtf('parametric')` 会报错。
 
 ```ts
 await sound.loadHrtf('sadie-d2');
@@ -160,9 +150,7 @@ sound.setQuality('quality');
 ## 材质
 
 网格可以指定材质名称、别名或索引。默认表是 SoundTrace 游戏材质 22 种，与 Unity SDK 使用同一张表、
-同一套索引。这些是游戏用预设，不是测量数据，所有值都是 9 频段 R/A/T/scattering。转换方式：保留原
-8 频段（63 Hz ~ 8 kHz）的反射 R 和透射 T，吸收 A = 1 − R − T，16 kHz 频段重复 8 kHz 的值，
-scattering 在 9 个频段上取相同值。
+同一套索引。这些是游戏用预设，不是测量数据，所有值都是 9 频段 R/A/T/scattering。
 
 名称和别名不区分大小写。材质名称保留原始拼写（`Sherdded-woodFiberborad`）。
 
@@ -200,8 +188,7 @@ sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
 
 :::warning
 表中不存在的名称不会抛出异常，而是静默回退到默认材质（`defaultMaterialType = 0`，`Concrete`）。
-旧文档中的 `BRAS_*` 名称已不在表中，因此也会变成 `Concrete`。要确认材质是否按预期生效，请准确使用
-上面的名称或别名。
+要确认材质是否按预期生效，请准确使用上面的名称或别名。
 :::
 
 若要自定义材质，请传入四组各 9 个值，每个频段满足 `R + A + T = 1`（容差 0.001）。
@@ -218,41 +205,10 @@ sound.output.connect(audioContext.destination);
 **输入捕获节点**和唯一的**听者主输出**（`sound.output`）。逐声源的输出效果器必须移到
 `sound.output` 之后。
 
-SDK 将输出限制器保持**关闭**。SimpleST 2.18 在创建后会开启 true-peak 限制器（−1 dBTP，137 采样
-延迟），但 `sound.output` 之后的 Web Audio 主总线归应用所有。如需引擎限制器，请用
+SDK 将输出限制器保持**关闭**，因为 `sound.output` 之后的 Web Audio 主总线归应用所有。如需引擎限制器，请用
 `sound.listener.setRenderOptions({ useLimiter: true })` 开启 true-peak 限制器。
 
-出于同样的原因，SimpleST 2.21 起引擎在创建后开启的等响度补偿（低频搁架约 +7.2 dB @ 120 Hz，高频 +1.8 dB）
-也会在创建上下文后立即关闭（包括 `reset()`）。关闭后的输出与引擎 2.20 逐位一致，此设置不对外公开。
-
-## EQ
-
-从 SDK 发行版 2.22.0-jhj 起，可以对声源和输出应用 SimpleST 参数 EQ。
-
-```ts
-source.setEq({ bands: [
-  { type: 'highpass', frequencyHz: 150 },
-  { type: 'peaking', frequencyHz: 3000, gainDb: 4, q: 1.2 },
-] });
-sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, gainDb: 3 }] });
-
-source.setEq(null);        // 移除声源 EQ
-sound.setOutputEq(null);   // 关闭输出 EQ
-```
-
-| API | 作用点 |
-|---|---|
-| `Source.setEq(eq \| null)` | 声源信号，引擎频段拆分之前。该声源的直达·反射·绕射·混响都得到相同音色。实时输入和剪辑输入都适用。也会进入 `renderMonoImpulseResponse` 的离线声压 IR（`getIRs()` 的频段能量中没有） |
-| `SoundTrace.setOutputEq(eq \| null)` | 全局唯一的输出 EQ，渲染末端（主增益之前）。`reset()` 后仍保留。不进入离线分析 |
-
-- `eq = { enabled = true, preampDb = 0 (−48 ~ +12), bands = [] (最多 16) }`
-- `band = { type = 'peaking', enabled = true, frequencyHz = 1000 (20 ~ 20,000), gainDb = 0 (±24, 仅 peaking·搁架), q = 0.7071 (0.1 ~ 30, 搁架由引擎限制为 3) }`
-- `type` 为 `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'`（Web Audio
-  `BiquadFilterType` 名称，切滤波固定为 12 dB/oct）。
-- 超出范围的值以 `RangeError` 拒绝，不发送命令。`{ enabled: false }` 保留频段并直通。
-- 不调用 EQ 时不会调用引擎 EQ，因此输出与没有 EQ 时逐位一致。相同的值不会重复发送，
-  变化的值由引擎以 20 ms 交叉淡化过渡。
-- 在不支持 EQ 的旧版内核上会注明引擎版本并失败。已应用的输出 EQ 位于 `debugSnapshot().simplest.output.eq`。
+出于同样的原因，引擎在创建后开启的等响度补偿也会在创建上下文后立即关闭（包括 `reset()`）。此设置不对外公开。
 
 ## 更新与清理
 
@@ -298,16 +254,51 @@ Multi-room occlusion、Runtime capability 示例。
 |---|---|
 | 没有声音 | 是否在用户手势中先调用了 `AudioContext.resume()`，是否把 `sound.output` 连接到了 destination |
 | `SoundTrace.create` 因 cross-origin isolation 错误被拒绝 | 页面和 Worker 响应的 COOP/COEP 响应头，`crossOriginIsolated === true`（ST 也需要） |
-| `mode: 'gpu'` / `enableGpu()` 报错 | SimpleST Web 仅支持 CPU。移除该选项 |
-| `transmissionModel: 'solid'`、`defaultMeshBuild`、`hrtfQuality` 等被拒绝 | STCoreV2 专用选项。参见 [Facade API](./web/facade.md) 的拒绝列表 |
 | 方向听起来相反 | 与渲染器坐标系匹配的 `coordinateBasis`（`-Z` forward 时必需） |
 | 材质似乎不起作用 | 名称是否在材质表/别名中（否则回退为混凝土） |
 | 核心/资源 404 | 打包器预打包排除、`coreBaseUrl`、`assetBaseUrl`、`.wasm` MIME |
 | 性能不足 | 降低质量预设并使用 `thread: 'mt'`，关闭路径可视化 |
 | `setEq` / `setOutputEq` 抛出 `RangeError` | 频率·增益·Q·前级增益范围，频段是否不超过 16 个 |
 
+## EQ
+
+Sound-Tracing SDK 的参数 EQ 可在两个位置应用。
+
+- **声源 EQ** — 在引擎频段拆分之前作用于声源信号本身。该声源的直达声、反射、绕射、混响都会得到相同的音色。
+- **输出 EQ** — 在渲染末端（主增益之前）作用于整个 Sound-Tracing SDK 混音。
+
+滤波器类型为 Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 6 种（切滤波固定为 12 dB/oct），
+范围为频率 20 ~ 20,000 Hz，增益 ±24 dB（仅 Peaking·搁架），Q 0.1 ~ 30（搁架最多 3），前级增益 −48 ~ +12 dB。
+默认关闭，关闭时不调用引擎，因此输出与没有 EQ 时相同。只发送变化的值，引擎以
+20 ms 交叉淡化过渡。
+
+```ts
+source.setEq({ bands: [
+  { type: 'highpass', frequencyHz: 150 },
+  { type: 'peaking', frequencyHz: 3000, gainDb: 4, q: 1.2 },
+] });
+sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, gainDb: 3 }] });
+
+source.setEq(null);        // 移除声源 EQ
+sound.setOutputEq(null);   // 关闭输出 EQ
+```
+
+| API | 作用点 |
+|---|---|
+| `Source.setEq(eq \| null)` | 声源信号，引擎频段拆分之前。该声源的直达·反射·绕射·混响都得到相同音色。实时输入和剪辑输入都适用。也会进入 `renderMonoImpulseResponse` 的离线声压 IR（`getIRs()` 的频段能量中没有） |
+| `SoundTrace.setOutputEq(eq \| null)` | 全局唯一的输出 EQ，渲染末端（主增益之前）。`reset()` 后仍保留。不进入离线分析 |
+
+- `eq = { enabled = true, preampDb = 0 (−48 ~ +12), bands = [] (最多 16) }`
+- `band = { type = 'peaking', enabled = true, frequencyHz = 1000 (20 ~ 20,000), gainDb = 0 (±24, 仅 peaking·搁架), q = 0.7071 (0.1 ~ 30, 搁架由引擎限制为 3) }`
+- `type` 为 `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'`（Web Audio
+  `BiquadFilterType` 名称，切滤波固定为 12 dB/oct）。
+- 超出范围的值以 `RangeError` 拒绝，不发送命令。`{ enabled: false }` 保留频段并直通。
+- 不调用 EQ 时不会调用引擎 EQ，因此输出与没有 EQ 时逐位一致。相同的值不会重复发送，
+  变化的值由引擎以 20 ms 交叉淡化过渡。
+- 在不支持 EQ 的旧版内核上会注明引擎版本并失败。已应用的输出 EQ 位于 `debugSnapshot().simplest.output.eq`。
+
 ## 下一步
 
-- [Facade API](./web/facade.md) — 创建选项、场景/声源/网格 API、生命周期、被拒绝的旧选项
-- [Native API](./web/native.md) — SimpleST 模块加载器与低层适配器
+- [Facade API](./web/facade.md) — 创建选项、场景/声源/网格 API、生命周期
+- [Native API](./web/native.md) — Sound-Tracing SDK 模块加载器与低层适配器
 - [Performance Guide](./performance.md)

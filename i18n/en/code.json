@@ -8,23 +8,11 @@
   "homepage.hero.summaryLabel": {
     "message": "SoundTrace documentation entry points"
   },
-  "homepage.hero.summary.core": {
-    "message": "Native acoustic engine"
-  },
   "homepage.hero.summary.sdk": {
     "message": "Web, Unity, Unreal, FMOD, Wwise"
   },
-  "homepage.hero.summary.tools": {
-    "message": "Rendering and analysis workflows"
-  },
-  "homepage.products.core.desc": {
-    "message": "SimpleST, the C++20 geometric-acoustics engine: nine-band materials, Hybrid early reflections, host-pull rendering, public C ABI 6."
-  },
   "homepage.products.sdk.desc": {
-    "message": "Web, Unity and Unreal Engine wrappers plus FMOD and Wwise plug-ins. Python is planned."
-  },
-  "homepage.products.exatools.desc": {
-    "message": "Utilities for working with acoustic simulation results, including IR analysis, validation, and visualization."
+    "message": "Web, Unity and Unreal Engine SDKs plus FMOD and Wwise plug-ins."
   },
   "homepage.products.title": {
     "message": "Product Family"

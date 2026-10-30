@@ -8,23 +8,11 @@
   "homepage.hero.summaryLabel": {
     "message": "SoundTraceドキュメントの入口"
   },
-  "homepage.hero.summary.core": {
-    "message": "ネイティブ音響エンジン"
-  },
   "homepage.hero.summary.sdk": {
     "message": "Web・Unity・Unreal・FMOD・Wwise"
   },
-  "homepage.hero.summary.tools": {
-    "message": "レンダリング・解析ワークフロー"
-  },
-  "homepage.products.core.desc": {
-    "message": "C++20 幾何音響エンジン SimpleST。9バンド材質、Hybrid 初期反射、ホスト pull レンダー、公開 C ABI 6。"
-  },
   "homepage.products.sdk.desc": {
-    "message": "Web、Unity、Unreal Engine ラッパーに加え、FMOD・Wwise プラグインを提供。Python は予定です。"
-  },
-  "homepage.products.exatools.desc": {
-    "message": "IR解析、検証、可視化など、音響シミュレーション結果を扱うためのユーティリティ。"
+    "message": "Web、Unity、Unreal Engine SDK に加え、FMOD・Wwise プラグインを提供。"
   },
   "homepage.products.title": {
     "message": "製品群"

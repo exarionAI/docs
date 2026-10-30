@@ -1,42 +1,28 @@
 ---
 title: Unreal Engine
-description: SoundTracing UE5 plugin 0.4.0 (SimpleST 2.22.0 / ABI 6) installation, Project Settings, listener/source/object components, source and output EQ, one-shot sounds, Native/FMOD/Wwise integration modes, platform link contract.
+description: Sound-Tracing SDK for Unreal Engine — installation, Native/FMOD/Wwise integration modes, Project Settings, listener/source/object components, one-shot sounds, source and output EQ.
 ---
 
-# SoundTrace SDK for Unreal Engine
+# Sound-Tracing SDK for Unreal Engine
 
-The SoundTracing UE5 plugin connects [SimpleST](../core/simplest.md) through the Unreal Audio Mixer
-Spatialization plugin + submix and through Actor Components. From 0.3.0 the engine has changed from
-STCoreV2 to SimpleST, and 0.4.0 uses **SimpleST 2.22.0 / ABI 6** (SDK release 2.22.0-jhj.5. In the previous
-SDK release 2.18.2-jhj.7 the same 0.4.0 used SimpleST 2.18.2; 0.3.0 = SimpleST 2.12.0). In this release the plugin
-version is unchanged; it adds a [source EQ and an output EQ](#eq), and the listener orientation is passed as a
-quaternion so head tilt (roll) is reflected (previously yaw/pitch only). The plugin turns off the equal-loudness
-compensation that engine 2.21 turns on right after creation — tone and level belong to the Unreal master chain.
-The 2.18.2 SDK added the `Max Sources` setting, forwarding of the sound tracing switch in FMOD/Wwise mode, and a
-ray sampler cleanup. When the project has an FMOD or Wwise plugin the same source builds in an
-**integration mode** that attaches to that middleware's SimpleST plug-in.
+The Sound-Tracing SDK for UE5 plugin connects the engine through the Unreal Audio Mixer Spatialization
+plugin + submix and through Actor Components.
 
 ## Current status
 
 | Item | Details |
 |---|---|
 | Engine | Unreal Engine 5.6 (verified on 5.7) |
-| Plugin | `Plugins/SoundTracing` 0.4.0 (`SoundTracing` runtime + `SoundTracingEditor` modules, depends on Niagara) |
+| Plugin | `Plugins/SoundTracing` (`SoundTracing` runtime + `SoundTracingEditor` modules, depends on Niagara) |
 | Supported platforms | Win64, Mac, Linux, Android, IOS |
-| Distribution | `SoundTracing-release.zip` (plugin + standalone Python installer) |
 | Engine binaries | `ThirdParty/SimpleST/Binaries/<Plat>/<Config>/` — only UE Debug uses the SDK Debug build, everything else uses Release |
-| Demo scenes | 3 documentation placeholders. Shipped scenes are not included yet |
 
 ## Installation
 
-Run the installer in an environment with Python 3.9+. It installs every included platform into the
-project's `Plugins/SoundTracing` and keeps any existing plugin in `.simplest-backups/`. Project
-settings are not modified.
-
-```bash
-python3 install.py /path/to/Game.uproject
-python3 install.py /path/to/Game.uproject --dry-run
-```
+Put the downloaded `SoundTracing` plugin folder into your Unreal project's `Plugins/` folder (create it if it does
+not exist). To use it across several projects you can also put it in `<UE install folder>/Engine/Plugins/Marketplace/`.
+Reopening the editor compiles the modules (a non-C++ project shows a dialog asking to compile); check that
+**SoundTracing** is enabled in `Edit > Plugins`, then restart the editor.
 
 ```text
 YourProject/
@@ -50,9 +36,8 @@ YourProject/
          └─ Resources/HRTF/
 ```
 
-After installation, enable the `SoundTracing` plugin in the `.uproject` and restart the editor to
-finish the module compile. The installation contains only the UE wrapper source, assets, the public
-C ABI headers, per-platform engine binaries, the HRTF, and licenses.
+The plugin contains the UE wrapper source, assets, the public C ABI headers, per-platform engine binaries, the
+HRTF, and licenses.
 
 ## Integration modes — Native / FMOD / Wwise
 
@@ -65,13 +50,16 @@ in all three modes.
 
 | | Native | FMOD | Wwise |
 |---|---|---|---|
-| SimpleST context and render | SoundTracing (UE Audio Mixer Spatialization + submix) | `SimpleSTFmod` (Source/Listener DSP) | `SimpleSTWwise` (Sound-tracing Renderer) |
-| What SoundTracing does | Everything | Geometry, materials, visualization, statistics only | Same (`sceneRatio = 0.01`, Unreal axes notification) |
-| Listener | UE listener / `ListenerComponent` | FMOD listener 0 | Wwise listener |
+| Sound-Tracing SDK context and render | SoundTracing (UE Audio Mixer Spatialization + submix) | `SimpleSTFmod` (Source/Listener DSP) | `SimpleSTWwise` (Sound-tracing Renderer) |
+| Listener | UE listener / `ListenerComponent` | FMOD listener | Wwise listener |
 | Engine DLL location | `ThirdParty/SimpleST/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
 
 In FMOD and Wwise modes, the output settings of `ListenerComponent` (HRTF, output mode) and the
 Source Settings assets are not used — the middleware plug-in's parameters take over that role.
+
+- **DSP**: Native mode renders inside the Unreal Audio Mixer; FMOD/Wwise modes let the middleware plug-in render.
+- **Transform updates**: objects — `SoundTracingObjectComponent.cpp` `TickComponent()` → `SyncNativeTransform()`;
+  listener — `SoundTracingListenerComponent.cpp` `TickComponent()`. Common to all three modes.
 
 ### FMOD mode installation
 
@@ -83,16 +71,14 @@ Source Settings assets are not used — the middleware plug-in's parameters take
    the files above into `Plugins/FMODStudio/Binaries/<Plat>/` and adds `+PluginFiles=SimpleSTFmod` to
    `Config/DefaultEngine.ini` (= Project Settings › FMOD Studio › Plugin Files). Files that are already
    there are skipped. Win64 · Mac.
-3. Then, in FMOD Studio, put SimpleST Listener on the master bus and SimpleST Source on
-   the master track of 3D events — see [FMOD plug-in](./fmod.md).
-
-![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
+3. Then, in FMOD Studio, put SimpleST Listener on the master bus and Sound-Tracing SDK Source on
+the master track of 3D events — see [FMOD plug-in](./fmod.md).
 
 ### Wwise mode installation
 
 The Wwise plug-in is installed by the Audiokinetic Launcher, like any other Wwise plug-in.
 
-1. In Launcher › **Plug-ins › Add from directory**, choose the `launcher` folder of the Wwise distribution and install **Sound-tracing**.
+1. Install **Sound-Tracing SDK for Wwise** (plug-in name `Sound-tracing`), obtained from the Audiokinetic Launcher store, into Wwise.
 2. Run Launcher › **Unreal Engine › Modify Wwise in Project** (Integrate the first time). The Launcher copies the
    Wwise SDK plug-ins (including Sound-tracing) into `WwiseSoundEngine/ThirdParty`.
 3. Put `SoundTracing` into the project's `Plugins/` and build.
@@ -116,7 +102,7 @@ Spatialization Plugin: SoundTracing
 Source Data Override Plugin: SoundTracing
 ```
 
-Any Audio Mixer Sample Rate works. SimpleST runs at 44.1 kHz and converts to the device rate (the
+Any Audio Mixer Sample Rate works. The Sound-Tracing SDK runs at 44.1 kHz and converts to the device rate (the
 conversion is skipped at 44.1 kHz).
 
 ## Project Settings › Plugins › SoundTracing
@@ -125,10 +111,10 @@ conversion is skipped at 44.1 kHz).
 
 | Category | Item | Default | Description |
 |---|---|---:|---|
-| Runtime | `Max Compute Threads` | `0` | Upper bound of SimpleST compute threads. 0 = auto (min(performance cores, 6)). Requires restart |
+| Runtime | `Max Compute Threads` | `0` | Upper bound of Sound-Tracing SDK compute threads. 0 = auto (min(performance cores, 6)). Requires restart |
 | Runtime | `Prefer Performance Cores` | `true` | Pins the propagation lanes and compute pool to performance cores (disables Windows 11 EcoQoS). Recommended on hybrid CPUs |
-| Runtime | `Render Mode` | `Buffered` | `Buffered` (the SimpleST render thread fills a ring and the callback copies, ≈3 blocks of latency) / `In Callback` (renders inside the Unreal audio callback, lowest latency) |
-| Runtime | `Max Sources` | `0` | Advanced. Cap on the number of simultaneously live engine sources. 0 = engine platform default (desktop 128, Android/iOS 48). The engine rejects sources beyond it (`ST_STATUS_BUDGET_EXCEEDED`, shown in the log) and the component falls back to the dry path. Applied at creation in Native mode, where SoundTracing creates the context (requires restart). FMOD/Wwise modes follow the plug-in settings — see [Source memory budget](../core/simplest.md#source-memory-budget) |
+| Runtime | `Render Mode` | `Buffered` | `Buffered` (the Sound-Tracing SDK render thread fills a ring and the callback copies, ≈3 blocks of latency) / `In Callback` (renders inside the Unreal audio callback, lowest latency) |
+| Runtime | `Max Sources` | `0` | Advanced. Cap on the number of simultaneously live engine sources. 0 = engine platform default (desktop 128, Android/iOS 48). The engine rejects sources beyond it (`ST_STATUS_BUDGET_EXCEEDED`, shown in the log) and the component falls back to the dry path. Applied at creation in Native mode, where SoundTracing creates the context (requires restart). FMOD/Wwise modes follow the plug-in settings |
 | Runtime | `Max Delay Seconds` | `0` | Advanced. Ceiling of the per-source delay ring. 0 = engine platform default (desktop 2 s, Android/iOS 1 s). The ring grows only as far as the paths need |
 | Runtime | `Dry Fallback When Unavailable` | `true` | When the runtime is missing or fails, plays sources dry instead of silent |
 | Runtime | `Output Submix Parent` | Empty | Parent of the spatialized output submix |
@@ -138,8 +124,8 @@ conversion is skipped at 44.1 kHz).
 | Propagation | `Static Rebuild Delay Seconds` | `0.1` | Wait before folding static geometry changes into the static acceleration structure (level-streaming batching) |
 | Listener | `Default Listener Settings` | — | The listener settings struct below |
 | Sources | `Source Ray Resolution Cap` / `Source Ray Depth Cap` | `0` / `0` | Upper bound on the transport ray grid and depth of every source asset. 0 = asset values as they are |
-| Listener | `Output EQ` | Off | Parametric output EQ over the whole SimpleST mix — see [EQ](#eq). While on, it replaces the listener's graphic `Output EQ`. Native mode only |
-| Materials | `Material Preset Library` | Empty | Library registered with SimpleST at startup. Empty = the plugin's bundled library |
+| Listener | `Output EQ` | Off | Parametric output EQ over the whole Sound-Tracing SDK mix — see [EQ](#eq). While on, it replaces the listener's graphic `Output EQ`. Native mode only |
+| Materials | `Material Preset Library` | Empty | Library registered with the Sound-Tracing SDK at startup. Empty = the plugin's bundled library |
 
 ## Listener settings (`FSoundTracingListenerSettings`)
 
@@ -151,7 +137,7 @@ Project defaults live in Project Settings; per-level overrides go on `USoundTrac
 |---|---|---:|---|
 | Quality Preset | `Quality Preset` | `Balanced` | `Custom` (keeps the fields) / `Fast` (12×12, depth 4) / `Balanced` (16×16, depth 8 = engine default) / `Quality` (24×24, depth 8) |
 | Listener Rays | `Ray Resolution` / `Ray Depth` | `16` / `8` | Guide rays N×N (`4..64`), maximum reflection order (`1..16`). Editable only in Custom |
-| Listener Rays | `Ray Sampling` | `FibonacciSphere` | `FibonacciSphere` only. SimpleST 2.18 accepts only Fibonacci, so the other four (LegacyGrid / EqualAreaGrid / SobolSphere / Icosahedral) are hidden in the editor; saved values are sent as FibonacciSphere with a one-time warning |
+| Listener Rays | `Ray Sampling` | `FibonacciSphere` | `FibonacciSphere` only |
 | Output | `Output Mode` | `Headphones` | `Headphones` (binaural HRIR) / `Speakers (HOA decode)` / `Stereo Panning` |
 | Output | `HRTF Dataset` | `SADIE II D2 KEMAR` | SADIE II D2 (8,802 directions, 256 taps, bundled with the plugin) / MIT KEMAR (128 taps, embedded in the engine) |
 | Output | `Speaker Layout` | `Stereo 2.0` | Stereo 2.0 / Laptop Stereo 2.0 / 2.1 / 4.1 / 5.1 / 7.1 |
@@ -159,7 +145,7 @@ Project defaults live in Project Settings; per-level overrides go on `USoundTrac
 | Render | `Doppler` / `Doppler Gain` | `true` / `Off` | Variable-delay pitch / moving-monopole radiation gain |
 | Render | `Late Reverb` / `Late Reverb Coupling` | `true` / `Default` | FDN16 / Off · Subtle 6 dB · Default 9 dB · Strong 12 dB |
 | Render | `Path Fade Time Seconds` | `0.05` | Path appear/disappear crossfade |
-| Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak / True Peak. `True Peak` (0.4.0) is the SimpleST 2.18 true-peak limiter (−1 dBTP, 137-sample latency). Engine 2.18 turns the limiter on right after creation, but the plugin default is `Off` so that the Unreal master chain handles limiting. 0.4.0 fixes `Off` so it also applies to speaker output (`Speakers`) |
+| Render | `Limiter` | `Off` | Off / Envelope / LookaheadPeak / True Peak (−1 dBTP, 137-sample latency). Default `Off` — the Unreal master chain handles limiting |
 | Render | `Output EQ Enabled` / `Output EQ Gains Db` | `false` | Graphic EQ, 9 bands from 63 to 16k Hz, ±24 dB. While the parametric `Output EQ` in Project Settings is on it wins; turning it off brings these values back |
 | Paths | `Enable Direct/Transmission/Reflection/Diffraction/Reverb Path` | All `true` | Global path gates |
 | Acoustics | `Propagation Delay` / `Direct Occlusion` | `true` / `true` | When disabled: every path collapses onto the direct-sound time / the direct sound passes through geometry |
@@ -175,7 +161,7 @@ to drive the transform directly.
 | Item | Description |
 |---|---|
 | `Override Project Listener Settings` / `Listener Settings` | Overrides the project defaults with the struct above |
-| `Drive Listener Transform` | Passes this component's world transform and velocity to SimpleST instead of the audio device listener (rotation includes roll) |
+| `Drive Listener Transform` | Passes this component's world transform and velocity to the Sound-Tracing SDK instead of the audio device listener (rotation includes roll) |
 | `ApplyListenerSettings()`, `SetQualityPreset()`, `SetHrtfDataset()`, `SetOutputMode()`, `SetSpeakerLayout()` | Runtime changes from Blueprint |
 | `ResetMotionState()` | Prevents a Doppler spike after a teleport or respawn |
 
@@ -195,41 +181,18 @@ purpose like presets.
 
 | Category | Item | Default | Description |
 |---|---|---:|---|
-| Attenuation | `Preserve Unreal Attenuation` | `false` | Keeps Unreal distance attenuation when enabled (usually off — SimpleST applies physical attenuation) |
+| Attenuation | `Preserve Unreal Attenuation` | `false` | Keeps Unreal distance attenuation when enabled (usually off — the Sound-Tracing SDK applies physical attenuation) |
 | Attenuation | `Disable Unreal Reverb Sends` | `false` | Blocks Unreal reverb sends |
 | Emission | `Gain Boost Db` | `0` | Input level (±24 dB) |
-| Emission | `Direct/Reflection/Diffraction/Reverb Send Db` | `0` | SimpleST path volume |
+| Emission | `Direct/Reflection/Diffraction/Reverb Send Db` | `0` | Sound-Tracing SDK path volume |
 | Emission | `Directivity` | `0` | 0 omnidirectional ~ 1 cardioid |
 | Reverb Rays | `Ray Preset` | `Balanced` | `Fast` (8×4, depth 3) / `Balanced` (16×8, depth 4 = engine default) / `Quality` (24×12, depth 6) / `Custom` |
 | Reverb Rays | `Ray Resolution` / `Ray Depth` | `16` / `4` | N×N/2 transport rays, depth. Editable only in Custom |
 | Reverb Rays | `Transport Refresh Steps` | `0` | Spreads the transport grid refresh over n propagations (0 = engine default) |
 | Reverb Rays | `Stationary Emitter` | `false` | Hint that the emitter never moves |
 | Per-Path Enable | `Direct/Transmission/Reflection/Diffraction/Reverb Path Enabled` | All `true` | Per-source path gates |
-| Bypass | `Bypass` | `false` | Passes through without going through SimpleST |
+| Bypass | `Bypass` | `false` | Passes through without going through the Sound-Tracing SDK |
 | EQ | `Source EQ` | Off | Parametric EQ applied to the signal of sources using this asset — see [EQ](#eq) |
-
-## EQ
-
-From SDK release 2.22.0-jhj, the SimpleST parametric EQ is available in two places. Both use the same struct
-`FSoundTracingEq` (`Enabled`, `Preamp (dB)` −48 ~ +12, `Bands` up to 16).
-
-| Place | Setting | Runtime change | Where it applies |
-|---|---|---|---|
-| Source EQ | Source Settings asset `Source EQ` | `USoundTracingSourceSettings::SetSourceEq` / `GetSourceEq` (Blueprint) | The source signal, before SimpleST's band split. Direct sound, reflections, diffraction, and reverb send all get the same tone |
-| Output EQ | Project Settings › SoundTracing › Listener › `Output EQ` | `USoundTracingSubsystem::SetOutputEq` / `ClearOutputEqOverride` / `GetOutputEq` | The whole SimpleST mix, at the end of the render (before the master gain) |
-
-A band (`FSoundTracingEqBand`) has `Enabled`, `Type`, `Frequency Hz` (20 ~ 20,000), `Gain (dB)` (±24, Peaking and
-shelves only), and `Q` (0.1 ~ 30, shelves up to 3). `Type` (`ESoundTracingEqFilterType`) is `Peaking (Bell)` ·
-`Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` · `Notch`; cuts are fixed at 12 dB/oct.
-
-- Off by default, and while off SimpleST is not called. When a value changes, SimpleST crossfades over 20 ms.
-- `SetSourceEq` also applies immediately to voices already playing with that asset, and sources reused from the
-  engine source pool get their EQ set or cleared when created.
-- `SetOutputEq` overrides the Project Settings value until `ClearOutputEqOverride` is called, and persists across
-  runtime restarts. Passing a disabled EQ turns the output EQ off.
-- **Native mode only.** In FMOD/Wwise mode use the middleware plug-in's EQ —
-  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq).
-- On an older SimpleST runtime without the EQ exports, EQ settings are ignored with a one-time warning.
 
 ## One-shot sounds
 
@@ -241,7 +204,7 @@ The plugin handles this per mode.
   voice ends its source returns to the pool so the nearest next voice picks it up. Playing a new
   Audio Component or sound for every playback does not create a new engine source.
 - **FMOD / Wwise mode**: rendering is done by the middleware plug-in, so this follows its warm source
-  pool (FMOD 0.3.0 · Wwise 0.2.0) — [FMOD](./fmod.md#one-shots-and-the-warm-source-pool) ·
+  pool — [FMOD](./fmod.md#one-shots-and-the-warm-source-pool) ·
   [Wwise](./wwise.md#one-shots-and-the-warm-source-pool). Cases that register a new game object per
   sound, such as **Wwise AudioLink**, are handled as well.
 
@@ -251,13 +214,13 @@ The plugin handles this per mode.
 
 Add it as the **immediate child** of the `StaticMeshComponent` or `SkinnedMeshComponent` to be used
 as acoustic geometry. Objects that use the same mesh asset, LOD, and material layout share one
-SimpleST mesh.
+Sound-Tracing SDK mesh.
 
 | Item | Default | Description |
 |---|---:|---|
 | `Acoustic Mobility` | `Auto` | `Auto` (follows the parent Mobility) / `Static` (static acceleration structure, rebuilt when moved) / `Movable` (dynamic instance, transform applied every propagation cycle) |
 | `Sound Material Slots` | — | Render material slot → `Sound Material Type` (preset index). The `Auto Set Materials` button assigns by name and alias |
-| `Skinned Pose Refresh Seconds` | `0` | Skinned parents only. SimpleST has no vertex refit, so a **new mesh is built** and swapped in at this interval. 0 = keep the pose at registration |
+| `Skinned Pose Refresh Seconds` | `0` | Skinned parents only. The Sound-Tracing SDK has no vertex refit, so a **new mesh is built** and swapped in at this interval. 0 = keep the pose at registration |
 | `Auto Register Native Object` / `Sync Transform On Tick` / `Auto Sync Materials` | `true` | Advanced |
 | Debug: `Visualize Acoustic Mesh`, `Visualize BVH` (+ `BVH Depth`, `BVH Leaves Only`) | Off | When selected, shows the uploaded triangles and acceleration-structure node boxes in the editor |
 
@@ -269,10 +232,7 @@ getters/setters.
 
 The `SoundTraceMaterialPresetLibrary` in the plugin content provides the 22 SoundTrace game materials
 as 9-band presets, with the same names, order (index 0 `Concrete` ~ 21 `FiberglassReinforcedPlastic`)
-and 9-band values as the Unity and Web SDKs. They are game presets, not measured data, converted from
-the previous 8-band values: reflection R and transmission T are kept, absorption A = 1 − R − T, and the
-16 kHz band repeats the 8 kHz value. Legacy STCoreV2 material libraries and `soundMaterial.json` tables
-are converted the same way on load (including `Import From JSON`); resave converted assets.
+and 9-band values as the Unity and Web SDKs. They are game presets, not measured data.
 `Sound Material Slots` picks the closest preset from the render material name and aliases. Limit
 direct editing of the 9-band reflection, absorption, transmission, and scattering values to cases
 where you have created a separate Material Preset Library asset. Every band must satisfy
@@ -296,12 +256,9 @@ counts, valid path count, per-lane propagation/IR/render time (ms), and render b
 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` turn sound tracing on and off as a whole.
 While it is off, moving the listener or sources does not wake the propagation lanes, and
 visualization paths are not collected either, so no stale paths remain. In FMOD and Wwise modes,
-starting with SDK release 2.18.2, this switch is passed on to the middleware plug-in
-(`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`). Before that, the
-context was owned by the plug-in, so turning it off had no effect. The off state is sent again after
-attaching to a new runtime, and a warning is logged if the plug-in is an older one without this
-export. SimpleST has no propagation pause, so while sources remain the lanes keep running at their
-own cadence.
+this switch is passed on to the middleware plug-in
+(`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`). The engine has no
+propagation pause, so while sources remain the lanes keep running at their own cadence.
 
 ## Platform link contract
 
@@ -317,33 +274,6 @@ Only UE Debug uses the SDK Debug build; Development/DebugGame/Shipping use Relea
 is a UBT-stage error. FMOD/Wwise modes are not yet supported on iOS and Web, where the middleware
 plug-ins are statically linked (verified on desktop Win64; Mac/Linux share the same code path).
 
-## Demo scene placeholders
-
-The current SDK checkout does not include the three documentation demo scenes below. They are
-placeholders to be linked in the same pattern as the Unity documentation once the actual assets are
-added.
-
-### SampleScene01 — Basic Room
-
-:::note Placeholder
-A scene to explain a basic source, listener, static room geometry, material presets, and
-direct/reflection paths.
-:::
-
-### SampleScene02 — Material and Dynamic Door
-
-:::note Placeholder
-A scene to explain shared source presets, material changes, Movable door occlusion, and a comparison
-of the Buffered/In Callback render modes.
-:::
-
-### SampleScene03 — Multiroom
-
-:::note Placeholder
-A scene to explain multiple sources, moving between rooms, diffraction/transmission, HRTF
-directionality, and late reverb coupling.
-:::
-
 ## Troubleshooting
 
 | Symptom | What to check |
@@ -351,18 +281,45 @@ directionality, and late reverb coupling.
 | The plugin is not in the selection list | Plugin enabled, module compile, target platform Audio settings |
 | Native library load failure | Per-target binaries under `ThirdParty/SimpleST/Binaries`, Config (Debug/Release) matching |
 | Integration mode differs from what you expect | Wwise/FMODStudio plugin enabled state in the `.uproject`, `SOUNDTRACING_UNREAL_INTEGRATION` |
-| Sound is not spatialized in FMOD/Wwise mode | SimpleST DSP configuration on the FMOD Studio / Wwise project side, runtime READY state (Output Log) |
+| Sound is not spatialized in FMOD/Wwise mode | Sound-Tracing SDK DSP configuration on the FMOD Studio / Wwise project side, runtime READY state (Output Log) |
 | Source is not spatialized (Native) | A SoundTracing Source Settings asset is attached to the Audio Component |
 | Geometry is not reflected | The Object Component's immediate parent is a supported mesh component, `Acoustic Mobility` |
 | Render block overrun (audio dropouts) | `Early Reflections = Hybrid`, raise `Reflection Update Interval`, lower the Quality Preset |
-| Short sounds play quiet or late (FMOD/Wwise mode) | FMOD plug-in 0.3.0 / Wwise plug-in 0.2.0 or later, `SIMPLESTFMOD_WARM_SOURCES=0` is not set |
+| Short sounds play quiet or late (FMOD/Wwise mode) | `SIMPLESTFMOD_WARM_SOURCES=0` is not set |
 | Some sources play dry (Native) | `ST_STATUS_BUDGET_EXCEEDED` in the Output Log — reduce the sources or raise `Max Sources` |
-| Turning on the EQ changes nothing | Whether you are in Native mode (FMOD/Wwise mode uses the middleware EQ), the EQ-unsupported warning in the Output Log (older SimpleST runtime) |
+| Turning on the EQ changes nothing | Whether you are in Native mode (FMOD/Wwise mode uses the middleware EQ), the EQ-unsupported warning in the Output Log |
 | Turning sound tracing off has no effect in FMOD/Wwise mode | Whether the plug-in version exports `*_SetSoundTracingEnabled` (if not, a warning appears in the Output Log) |
 | No paths visible | Visualizer component, Niagara plugin, path enable state, sound tracing is not turned off |
+
+## EQ
+
+The Sound-Tracing SDK's parametric EQ is applied in two places.
+
+- **Source EQ** — applied to the source signal itself, before the engine's band split. That source's direct sound, reflections, diffraction, and reverb all get the same tone.
+- **Output EQ** — applied to the whole Sound-Tracing SDK mix at the end of the render (before the master gain).
+
+There are 6 filter types: Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch (cuts are fixed at 12 dB/oct).
+Ranges are frequency 20 ~ 20,000 Hz, gain ±24 dB (Peaking and shelves only), Q 0.1 ~ 30 (shelves up to 3), preamp −48 ~ +12 dB.
+Off by default, and while off the engine is not called, so the output is the same as without EQ. Only changed values are
+sent, and the engine crossfades over 20 ms.
+
+Both places use the same struct `FSoundTracingEq` (`Enabled`, `Preamp (dB)`, `Bands` up to 16).
+
+| Place | Setting | Runtime change |
+|---|---|---|
+| Source EQ | Source Settings asset `Source EQ` | `USoundTracingSourceSettings::SetSourceEq` / `GetSourceEq` (Blueprint) |
+| Output EQ | Project Settings › SoundTracing › Listener › `Output EQ` | `USoundTracingSubsystem::SetOutputEq` / `ClearOutputEqOverride` / `GetOutputEq` |
+
+- A band (`FSoundTracingEqBand`) has `Enabled`, `Type`, `Frequency Hz`, `Gain (dB)`, and `Q`. `Type` (`ESoundTracingEqFilterType`) is
+  `Peaking (Bell)` · `Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` · `Notch`.
+- `SetSourceEq` also applies immediately to voices already playing with that asset, and sources reused from the
+  engine source pool get their EQ set or cleared when created.
+- `SetOutputEq` overrides the Project Settings value until `ClearOutputEqOverride` is called, and persists across
+  runtime restarts. Passing a disabled EQ turns the output EQ off. While on, it replaces the listener's 9-band graphic `Output EQ`.
+- **Native mode only.** In FMOD/Wwise mode use the middleware plug-in's EQ —
+  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq).
 
 ## Next
 
 - [FMOD plug-in](./fmod.md) · [Wwise plug-in](./wwise.md)
 - [Unity SDK](./unity.md) · [Web SDK](./web.md)
-- [SimpleST](../core/simplest.md)

@@ -31,9 +31,9 @@
 
 .heroSummary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 1px;
-  max-width: 48rem;
+  max-width: 28rem;
   margin: 0 auto;
   overflow: hidden;
   border: 1px solid var(--ifm-color-emphasis-200);

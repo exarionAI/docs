@@ -1,11 +1,11 @@
 ---
 title: Performance Guide
-description: SimpleST ベース統合の性能軸 — レイ予算、レーン周期、Hybrid 初期反射、レンダーモード、スレッド、測定指標。
+description: Sound-Tracing SDK ベース統合の性能軸 — レイ予算、レーン周期、Hybrid 初期反射、レンダーモード、スレッド、測定指標。
 ---
 
 # Performance Guide
 
-SimpleST は、リスナー guide ray、音源 transport ray、反射深度、音源数、ジオメトリサイズを上げるほど
+Sound-Tracing SDK は、リスナー guide ray、音源 transport ray、反射深度、音源数、ジオメトリサイズを上げるほど
 経路が安定し空間感が良くなりますが、伝搬時間とオーディオレンダーブロックのコストも同時に上がります。
 このドキュメントは、Web・Unity・UE・FMOD・Wwise 統合に共通するコスト軸と出発点をまとめたものです。
 
@@ -103,7 +103,7 @@ PIPELINED スケジューラは Direct / Reflection-Diffraction / Reverb レー�
 
 | 項目 | 基準 |
 |---|---|
-| 実測済みの値 | プラットフォーム、ホストバージョン、SimpleST の commit・バージョン、シナリオを併記 |
+| 実測済みの値 | プラットフォーム、ホストバージョン、Sound-Tracing SDK の commit・バージョン、シナリオを併記 |
 | 未測定の値 | 数値を推定せず `Measurement pending` と表記 |
 | ストリーム上限 | エンジン上限 64 と実際の推奨音源数を分離 |
 | Raw log | 顧客向けドキュメントにそのまま入れず、要約 table と解釈のみ公開 |

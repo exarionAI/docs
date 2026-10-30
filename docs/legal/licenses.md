@@ -1,58 +1,44 @@
 ---
 title: 오픈소스 라이선스
 sidebar_label: 오픈소스 라이선스
-description: SimpleST 엔진과 SDK 배포물에 포함된 서드파티 라이브러리·데이터셋의 라이선스 고지
+description: Sound-Tracing SDK 배포물에 포함된 서드파티 라이브러리·데이터셋의 라이선스 고지
 ---
 
 # 오픈소스 라이선스
 
-SimpleST 엔진 바이너리와 각 SDK 배포물(UE · Unity · FMOD · Wwise · soundtrace.js)에는 다음
+Sound-Tracing SDK와 각 플러그인 배포물(UE · Unity · FMOD · Wwise · soundtrace.js)에는 다음
 서드파티 구성 요소가 포함됩니다. 전체 라이선스 원문은 SDK의 `Licenses/`와 `Resources/HRTF/`에
-그대로 동봉됩니다. SimpleST 자체와 래퍼는 Exarion의 비공개 라이선스를 따릅니다.
+그대로 동봉됩니다. Sound-Tracing SDK 자체와 플러그인은 Exarion의 비공개 라이선스를 따릅니다.
 
-## 엔진에 벤더링된 라이브러리
+## 라이브러리
 
 ### tinybvh
 
 - Copyright © 2024 Jacco Bikker
 - Source: [jbikker/tinybvh](https://github.com/jbikker/tinybvh)
 - License: MIT
-- 용도: 기본 가속구조(BLAS/TLAS)
+- 용도: 가속구조(BLAS/TLAS)
 
 ### miniaudio
 
 - Copyright © David Reid
-- Source: [mackron/miniaudio](https://github.com/mackron/miniaudio) 0.11.25
-- License: Public Domain(Unlicense) 또는 MIT No Attribution 중 선택
+- Source: [mackron/miniaudio](https://github.com/mackron/miniaudio)
+- License: MIT
 - 용도: 오디오 파일 디코드(WAV / FLAC / MP3), 플랫폼 오디오 장치
 
 ### stb_vorbis
 
 - Copyright © Sean Barrett
-- Source: [nothings/stb](https://github.com/nothings/stb) (stb_vorbis v1.22, miniaudio extras 경유)
-- License: Public Domain 또는 MIT 중 선택
+- Source: [nothings/stb](https://github.com/nothings/stb)
+- License: MIT
 - 용도: Ogg Vorbis 디코드
 
 ### pocketfft
 
 - Copyright © 2010-2024 Max-Planck-Society, © 2019-2020 Peter Bell
-- Source: [mreineck/pocketfft](https://github.com/mreineck/pocketfft) (header-only C++ 버전)
+- Source: [mreineck/pocketfft](https://github.com/mreineck/pocketfft)
 - License: BSD-3-Clause
-- 용도: HRIR / early bed 파티션 컨볼루션용 FFT
-
-### tinyobjloader
-
-- Copyright © 2012-Present Syoyo Fujita and contributors
-- Source: [tinyobjloader/tinyobjloader](https://github.com/tinyobjloader/tinyobjloader)
-- License: MIT
-- 용도: OBJ 씬 임포트(데모·도구)
-
-### ufbx
-
-- Copyright © Samuli Raivio
-- Source: [ufbx/ufbx](https://github.com/ufbx/ufbx)
-- License: MIT 또는 Public Domain(Unlicense) 중 선택
-- 용도: FBX 씬 임포트(데모·도구)
+- 용도: HRIR 컨볼루션용 FFT
 
 ## HRTF 데이터셋
 
@@ -69,7 +55,7 @@ SimpleST 엔진 바이너리와 각 SDK 배포물(UE · Unity · FMOD · Wwise �
 - Creator: Bill Gardner, Keith Martin — MIT Media Lab Machine Listening Group (1994)
 - Source: [MIT KEMAR HRTF Measurements](https://sound.media.mit.edu/resources/KEMAR.html)
 - License: 저작권 고지를 유지하는 조건으로 자유 사용 (Copyright © 1994 MIT Media Laboratory)
-- 용도: 엔진에 내장된 기본 HRIR(128탭)
+- 용도: 엔진에 내장된 기본 HRIR
 
 ## 재질 데이터
 
@@ -78,18 +64,5 @@ SimpleST 엔진 바이너리와 각 SDK 배포물(UE · Unity · FMOD · Wwise �
 - Creator: RWTH Aachen University, TU Berlin
 - Source: [BRAS](https://depositonce.tu-berlin.de/handle/11303/13050)
 - License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-- 용도: 엔진 기본 재질 라이브러리(`st_rt_material_load_defaults` — FMOD·Wwise 런타임, 저작툴 오디션 룸)
-  24종의 9밴드 흡음·산란 계수를 측정값에서 적합(fitted). Unity·Web·UE SDK의 기본 재질은 BRAS가 아닌
-  SoundTrace 게임 프리셋입니다.
-
-## 데모·테스트 전용 (SDK 배포물에 미포함)
-
-| 라이브러리 | License | 용도 |
-|---|---|---|
-| raylib / raygui | zlib | 데모 앱 GUI |
-| Google Test | BSD-3-Clause | 단위 테스트 |
-
-## 더 이상 포함되지 않는 구성 요소
-
-STCoreV2 시절의 **Google Highway**, **Neumann KU100 HRTF(CC BY 3.0)**, **Dawn / Emdawnwebgpu**(WebGPU)는
-SimpleST 배포물에 포함되지 않습니다.
+- 용도: 엔진 기본 재질 라이브러리(`st_rt_material_load_defaults` — FMOD·Wwise 플러그인)의 9밴드
+  흡음·산란 계수를 측정값에서 적합(fitted)

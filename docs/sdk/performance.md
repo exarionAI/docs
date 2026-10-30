@@ -1,11 +1,11 @@
 ---
 title: Performance Guide
-description: SimpleST 기반 통합의 성능 축 — 레이 예산, 레인 주기, Hybrid 초기 반사, 렌더 모드, 스레드, 측정 지표.
+description: Sound-Tracing SDK 기반 통합의 성능 축 — 레이 예산, 레인 주기, Hybrid 초기 반사, 렌더 모드, 스레드, 측정 지표.
 ---
 
 # Performance Guide
 
-SimpleST는 리스너 guide ray, 음원 transport ray, 반사 깊이, 음원 수, 지오메트리 크기를 높일수록
+Sound-Tracing SDK는 리스너 guide ray, 음원 transport ray, 반사 깊이, 음원 수, 지오메트리 크기를 높일수록
 경로가 안정되고 공간감이 좋아지지만, 전파 시간과 오디오 렌더 블록 비용도 함께 오릅니다.
 이 문서는 Web·Unity·UE·FMOD·Wwise 통합에 공통인 비용 축과 시작점을 정리합니다.
 
@@ -103,7 +103,7 @@ PIPELINED 스케줄러는 Direct / Reflection-Diffraction / Reverb 레인을 독
 
 | 항목 | 기준 |
 |---|---|
-| 실측 완료 값 | 플랫폼, 호스트 버전, SimpleST commit·버전, 시나리오를 함께 표기 |
+| 실측 완료 값 | 플랫폼, 호스트 버전, Sound-Tracing SDK commit·버전, 시나리오를 함께 표기 |
 | 미측정 값 | 숫자를 추정하지 않고 `Measurement pending`으로 표기 |
 | 스트림 상한 | 엔진 상한 64와 실제 권장 음원 수를 분리 |
 | Raw log | 고객 문서에 그대로 넣지 않고 요약 table과 해석만 공개 |

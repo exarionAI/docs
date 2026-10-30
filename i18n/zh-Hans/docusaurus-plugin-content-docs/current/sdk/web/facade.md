@@ -1,6 +1,6 @@
 ---
 title: Facade API
-description: 在 ST 与 MT 上用法一致的 soundtrace.js 1.1.0 推荐 API，以及因切换到 SimpleST 而变化的选项。
+description: 在 ST 与 MT 上用法一致的 soundtrace.js 推荐 API — 创建选项、场景/声源/网格 API、生命周期、EQ。
 ---
 
 # Facade API
@@ -29,7 +29,7 @@ await sound.update(0);
 | 选项 | 默认值 | 说明 |
 |---|---|---|
 | `thread` | `'auto'` | `'st'`（同步传播）/ `'mt'`（管线传播）。两者都使用专用 Worker + pthread WASM |
-| `mode` | 未指定 | `'single_thread'` / `'multi_thread'`。是 `thread` 的别名，`mode` 优先。`'gpu'` 会被**拒绝** |
+| `mode` | 未指定 | `'single_thread'` / `'multi_thread'`。是 `thread` 的别名，`mode` 优先 |
 | `quality` | `'balanced'` | `'fast'`、`'balanced'`、`'quality'` |
 | `earlyReflectionMode` | `'hybrid'` | 实时始终为 Hybrid。其他值会被拒绝 |
 | `coordinateBasis` | 引擎坐标系（`+Z` forward） | 把渲染器坐标系转换为 SDK 坐标系 |
@@ -38,10 +38,8 @@ await sound.update(0);
 | `propagationThreadCount` | 同步 1 / 管线 3 | 计算预算 1 ~ 5（负数 = 5）。管线模式至少 3 |
 | `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT 工作线程预算的简写 |
 | `sceneRatio` | `1.0` | 每个场景长度单位对应的米数（cm = 0.01）。**不要**与预缩放几何体混用 |
-| `maxSources` | `0` | 同时存活的引擎声源数上限（0 ~ 512 的整数）。`0` = wasm 平台默认（32 个声源 · 声源内存 64 MiB · 延迟环上限 0.5 s — 堆固定为 256 MiB，因此较为保守）。超出的声源创建会被引擎以 status 11（`BUDGET_EXCEEDED`）拒绝，已有声源继续渲染。自 SDK 发行版 2.18.2 起 |
+| `maxSources` | `0` | 同时存活的引擎声源数上限（0 ~ 512 的整数）。`0` = wasm 平台默认（32 个声源 · 声源内存 64 MiB · 延迟环上限 0.5 s — 堆固定为 256 MiB，因此较为保守）。超出的声源创建会被引擎以 status 11（`BUDGET_EXCEEDED`）拒绝，已有声源继续渲染 |
 | `autoLoadMaterials` | `true` | 加载默认材质表并启用按名称映射 |
-| `transmissionModel` | `'surface'` | SimpleST 只支持表面 R/A/T。`'solid'` 会被**拒绝** |
-| `defaultMeshBuild` | — | STCoreV2 BVH 选项。指定后加载会被**拒绝** |
 | `debug` | `false` | 输出一行初始化诊断日志 |
 
 ```ts
@@ -66,15 +64,14 @@ const sound = await SoundTrace.create(audioContext, {
 | `addSource(options)` | 添加空间声源 |
 | `setQuality(tier)` | 更改质量预设（听者与声源射线和深度） |
 | `setAudioOption(options)` | 覆盖输入块大小、输出通道 |
-| `setOutputEq(eq \| null)` | 全局输出参数 EQ（最多 16 频段）。`null` 表示关闭。`reset()` 后仍保留 — [EQ](../web.md#eq)。自 SDK 发行版 2.22.0-jhj 起 |
+| `setOutputEq(eq \| null)` | 全局输出参数 EQ（最多 16 频段）。`null` 表示关闭。`reset()` 后仍保留 — [EQ](#eq) |
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'`（别名 `'convolution'` / `'steamaudio'`） |
 | `loadMaterialAssets()` | 手动加载材质表（`autoLoadMaterials: false` 时） |
 | `update(dt?)` | 更新场景并执行传播。以本帧的有效路径数 resolve |
-| `debugSnapshot(options?)` | 异步诊断快照。`.simplest` 中包含 SimpleST scene/timing/render/IR 统计，从 1.1.0 起还包含 `features`、`output`（限制器、类型、延迟、主增益，自 2.22.0-jhj 起含输出 EQ `eq`）、`inputs`（实时/剪辑声源数） |
+| `debugSnapshot(options?)` | 异步诊断快照。`.simplest` 中包含 scene/timing/render/IR 统计、`features`、`output`（限制器、类型、延迟、主增益、输出 EQ `eq`）、`inputs`（实时/剪辑声源数） |
 | `getStatistics(options?)` | `debugSnapshot` 的封装。`validPathCount` 与 `.simplest` |
 | `getIRs()` | 在独立 Offline Worker 中重新计算 9 频段 early path IR |
 | `renderMonoImpulseResponse(source, sec)` | 在 Offline Worker 中生成 44.1 kHz 单声道压力 IR（最长 30 s） |
-| `enableGpu()` / `getGpuStats()` | **拒绝** — SimpleST Web 仅支持 CPU |
 | `reset()` | 重置引擎状态（async）。Hybrid、材质、质量会重新应用 |
 | `dispose()` | 释放 SDK 拥有的资源。幂等，可配合 `using` |
 
@@ -88,20 +85,18 @@ sound.listener
 ```
 
 场景中只有一个 listener，由 `SoundTrace` 拥有。`orientation` 直接传入相机的当前旋转四元数（XYZW）。
-自 SDK 发行版 2.22.0-jhj 起，头部倾斜（roll）也会传到引擎（实时和离线 IR 分析均适用）。
+头部倾斜（roll）也会传到引擎（实时和离线 IR 分析均适用）。
 
 `setRenderOptions` 接受的键：
 
 | 键 | 含义 |
 |---|---|
 | `earlyReflectionMode` | 仅允许 `'hybrid'` |
-| `useDoppler` | 可变延迟 Doppler 音高 — 自 SimpleST 2.18.1 起实时渲染中始终开启，`false` 会被忽略 |
-| `useLimiter` | 输出限制器。默认 `false` — 由应用的 Web Audio 主总线负责限幅（引擎 2.18 创建后的默认为开启，但 SDK 会在每次渲染启动、HRTF/输出变更、reset 时将其关闭）。为 `true` 时使用 SimpleST 2.18 true-peak 限制器（−1 dBTP，137 采样延迟） |
+| `useDoppler` | 可变延迟 Doppler 音高 — 实时渲染中始终开启，`false` 会被忽略 |
+| `useLimiter` | 输出限制器。默认 `false` — 由应用的 Web Audio 主总线负责限幅（SDK 会在每次渲染启动、HRTF/输出变更、reset 时将其关闭）。为 `true` 时使用 true-peak 限制器（−1 dBTP，137 采样延迟） |
 | `pathFadeTime` | 路径出现/消失的交叉淡化（秒） |
 | `maxDelaySeconds` | 每个声源延迟环的上限（秒）。引擎按每个声源的路径所需分配环（下限 0.25 s）。Web 平台默认上限为 0.5 s |
-| `diffuseEnabled` | late reverb 渲染开关。从 1.1.0 起也会一并开关 2.18 的一阶散射（diffuse rain）渲染 |
-
-`hrtfQuality`、`diffuseQuality`、`delayInterpolation`、`hrtfMode` 为 STCoreV2 专用，会被**拒绝**。
+| `diffuseEnabled` | late reverb 渲染开关。也会一并开关一阶散射（diffuse rain）渲染 |
 
 ### `Source`
 
@@ -124,14 +119,14 @@ source.setDirection([0, 0, -1]);
 | `setPose(pose)` / `setGain(g)` | 位置、速度、方向，增益 |
 | `setPathEnabled(path, on)` / `setPathOptions(o)` / `isPathEnabled(path)` | `'direct'`（含透射）/ `'reflection'` / `'diffraction'` / `'reverberation'` |
 | `setDirection(v)` | 声源 forward。以无 roll 的最小旋转同时更新 orientation |
-| `setDirectivityTable(anglesDeg, attenDbPerBand)` / `setDirectivityEnabled(on)` | 把按角度的 9 频段衰减表转换为 SimpleST 指向性表并应用 |
-| `setEq(eq \| null)` | 此声源的声源参数 EQ（最多 16 频段，引擎频段拆分之前）。`null` 表示移除 — [EQ](../web.md#eq)。自 SDK 发行版 2.22.0-jhj 起 |
+| `setDirectivityTable(anglesDeg, attenDbPerBand)` / `setDirectivityEnabled(on)` | 把按角度的 9 频段衰减表转换为 Sound-Tracing SDK 指向性表并应用 |
+| `setEq(eq \| null)` | 此声源的声源参数 EQ（最多 16 频段，引擎频段拆分之前）。`null` 表示移除 — [EQ](#eq) |
 | `dispose()` | 释放声源与流 |
 
 #### 距离衰减
 
-STCoreV2 的逐声源多项式衰减（`constant / linear / quadratic`）已不存在。SimpleST 对所有路径应用
-物理 `1/r` 衰减和 ISO 9613-1 空气吸收，参考距离（1 m）与最小距离（1 m）是引擎策略。
+对所有路径应用物理 `1/r` 衰减和 ISO 9613-1 空气吸收，参考距离（1 m）与最小距离（1 m）是引擎策略。
+没有逐声源的衰减曲线选项。
 
 ### `Mesh`
 
@@ -154,29 +149,13 @@ mesh.setPose({
 
 | API | 说明 |
 |---|---|
-| `setMaterial(material)` | 替换整个网格的材质。SimpleST 材质不可变，内部会重新绑定到新的材质/网格句柄 |
+| `setMaterial(material)` | 替换整个网格的材质。Sound-Tracing SDK 材质不可变，内部会重新绑定到新的材质/网格句柄 |
 | `setMaterialRange(triStart, triCount, material)` | 按三角形范围替换材质 |
-| `setUpdateType(type)` / `getUpdateType()` | `'static'`（静态 TLAS）/ `'dynamic'`（只更新变换）。`'refit'`、`'rebuild'` 仅为兼容保留，在 SimpleST 中会重新创建网格 |
+| `setUpdateType(type)` / `getUpdateType()` | `'static'`（静态 TLAS）/ `'dynamic'`（只更新变换）。`'refit'`、`'rebuild'` 仅为兼容保留，会重新创建网格 |
 | `setPose(pose)` | 更新 position、orientation、scale |
 | `dispose()` | 释放网格与对象 |
 
-BVH 由 SimpleST 拥有（默认 TinyBVH）。没有逐网格构建选项。
-
-## 相对 STCoreV2 的选项变更摘要
-
-| 之前 | 现在 |
-|---|---|
-| `mode: 'gpu'`, `enableGpu()`, `getGpuStats()` | 拒绝（仅 CPU） |
-| `transmissionModel: 'solid'` | 拒绝（仅表面 T） |
-| `defaultMeshBuild`, `BvhType` | 拒绝（SimpleST 拥有 BVH） |
-| `hrtfQuality`, `diffuseQuality`, `delayInterpolation`, `hrtfMode` | 拒绝 |
-| `loadHrtf('parametric')`，KU100/H12 表 | 无。改为 `'mit-kemar'` / `'sadie-d2'` |
-| path cache（`seedValue`, `pathCacheSize`） | 无 |
-| 逐声源多项式距离衰减 | 物理衰减（引擎） |
-| 连接 `source.play()` 的输出节点 | 输出只有 `sound.output` 一个。`play()` 节点用于输入捕获 |
-| 8 频段材质 | 9 频段，严格 R+A+T=1 |
-| 同步 `getStatistics()` 等 | 全部为 `Promise` |
-| `./internal` entry, `SoundTraceMtUnsupportedError` | 已移除。通过 `./native` 访问 SimpleST 模块 |
+BVH 由 Sound-Tracing SDK 拥有（默认 TinyBVH）。没有逐网格构建选项。
 
 ## 帧更新
 
@@ -196,6 +175,36 @@ pose 变更可以快速记录，但同一时刻只执行一个传播 update 更�
 
 `SoundTrace`、`Source`、`Mesh` 都支持 `dispose()`。`SoundTrace.dispose()` 会清理包括 listener 和
 Worker 在内的所有 SDK 所有资源，多次调用也是安全的。
+
+## EQ
+
+Sound-Tracing SDK 的参数 EQ 可在两个位置应用。
+
+- **声源 EQ** — 在引擎频段拆分之前作用于声源信号本身。该声源的直达声、反射、绕射、混响都会得到相同的音色。
+- **输出 EQ** — 在渲染末端（主增益之前）作用于整个 Sound-Tracing SDK 混音。
+
+滤波器类型为 Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 6 种（切滤波固定为 12 dB/oct），
+范围为频率 20 ~ 20,000 Hz，增益 ±24 dB（仅 Peaking·搁架），Q 0.1 ~ 30（搁架最多 3），前级增益 −48 ~ +12 dB。
+默认关闭，关闭时不调用引擎，因此输出与没有 EQ 时相同。只发送变化的值，引擎以
+20 ms 交叉淡化过渡。
+
+| API | 作用点 |
+|---|---|
+| `Source.setEq(eq \| null)` | 此声源的声源 EQ（最多 16 频段）。`null` 表示移除 |
+| `SoundTrace.setOutputEq(eq \| null)` | 全局唯一的输出 EQ。`null` 表示关闭。`reset()` 后仍保留 |
+
+```ts
+source.setEq({ bands: [
+  { type: 'highpass', frequencyHz: 150 },
+  { type: 'peaking', frequencyHz: 3000, gainDb: 4, q: 1.2 },
+] });
+sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, gainDb: 3 }] });
+```
+
+- `eq = { enabled = true, preampDb = 0, bands = [] }`，`band = { type = 'peaking', enabled = true, frequencyHz = 1000, gainDb = 0, q = 0.7071 }`
+- `type` 为 Web Audio `BiquadFilterType` 名称 `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'`。
+- 超出范围的值以 `RangeError` 拒绝，不发送命令。`{ enabled: false }` 保留频段并直通。
+- 已应用的输出 EQ 位于 `debugSnapshot().simplest.output.eq`。
 
 ## 相关文档
 

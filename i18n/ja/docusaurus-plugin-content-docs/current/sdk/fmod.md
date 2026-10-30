@@ -1,38 +1,25 @@
 ---
 title: FMOD
-description: SimpleSTFmod — FMOD Studio / FMOD Engine 向け SimpleST DSP プラグインの構造、インストール、Studio でのオーサリング、EQ、ワンショットとウォーム音源プール、ゲーム側 C API、UE・Unity 統合。
+description: Sound-Tracing SDK for FMOD（SimpleSTFmod）— FMOD Studio / FMOD Engine 向け DSP プラグインの構造、インストール、Studio でのオーサリング、ワンショットとウォーム音源プール、ゲーム側 C API、UE・Unity 統合、EQ。
 ---
 
-# SimpleST FMOD プラグイン
+# Sound-Tracing SDK for FMOD
 
-**SimpleSTFmod** は、[SimpleST](../core/simplest.md) を FMOD Studio / FMOD Engine で使うための DSP
-プラグインです。オーサリングツールでイベントに挿して使う **SimpleST Source** と、マスターバスに 1 つ置く
+**Sound-Tracing SDK for FMOD**（バイナリ名 `SimpleSTFmod`）は、Sound-Tracing SDK を
+FMOD Studio / FMOD Engine で使うための DSP プラグインです。オーサリングツールでイベントに挿して使う **SimpleST Source** と、マスターバスに 1 つ置く
 **SimpleST Listener** の 2 つの DSP、そしてゲームエンジンがジオメトリを登録する C API で構成されます。
 
 | 項目 | 値 |
 |---|---|
-| プラグインバージョン | v0.3.0（SimpleST 2.22.0、SDK リリース 2.22.0-jhj.5 — 4 バンド [EQ](#eq)、リスナー roll）。以前のリリース: v0.3.0（SimpleST 2.18.2）、v0.2.0（SimpleST 2.12.0）。FMOD が参照する DSP ディスクリプションのバージョンは 0.3.0 です（SDK 2.18.2 の初期配布物は 0.2.0 と表示） |
 | FMOD | Studio / Engine 2.03 ~ 2.04（plug-in SDK 110 ビルド = 2.00 ~ 2.04、204 ビルド = 2.04+） |
 | プラットフォーム | Windows x64 · macOS · Linux · Android · iOS（静的）· Web（静的、FMOD HTML5 pthreads） |
-| 配布 | `SimpleST-fmod-release.zip`（プラットフォーム別 `plugins/` + `install.py`、FMOD エディションの UE プラグイン・Unity パッケージを含む） |
-| 商用配布条件 | FMOD（sales@fmod.com）への確認が必要 |
+| 製品のダウンロード | [contact@exarion.ai](mailto:contact@exarion.ai) までお問い合わせください |
 
 ## 構造
 
 ![SimpleSTFmod の構造](/img/fmod/structure.png)
 
-```text
-[イベントマスタートラック]                         [マスターバス]
- SimpleST Source  ──(モノ PCM, write_stream)──▶  SimpleST Listener ──▶ ステレオ(HRTF/パンニング)
-   · 3D Attributes(Studio 自動) → 音源位置          · st_rt_render_process (全音源を 1 回レンダー)
-   · 出力は無音 (Listener がなければ dry 通過)       · FMOD リスナー 0 → SimpleST リスナー
-                 └──────────── SystemRuntime (FMOD::System ごとに 1 個) ─┘
-                               · SimpleST コンテキスト + コントロールスレッド
-                               · ゲーム側 C API (ジオメトリアップロードなど)
-```
-
-- SimpleST は「音源 N 個の入力 → リスナーミックス 1 つの出力」構造なので、Steam Audio 方式（音源ごとの出力）ではなく
-  **Resonance / Meta XR Audio 方式**（Source は送り込んで無音、バスの Listener が一度にレンダー）です。
+- エンジンは「音源 N 個の入力 → リスナーミックス 1 つの出力」構造なので、Source は送り込んで無音、バスの Listener が一度にレンダーします。
 - プラグインが `SimpleSTRealtime` を**自分のフォルダーから**動的にバインドし、ゲーム側はプラグインが export する
   `SimpleSTFmod_GetRealtimeProc` で**同じモジュール**の `st_rt_*` を受け取ります — エンジンインスタンスは 1 つです。
 - レンダラーは「今 process が動いている Listener」がブロックごとに選出されます。Studio が作るプレビュー用のダミー
@@ -40,13 +27,9 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine 向け SimpleST DSP プ�
   誰もいなければ Source は dry に戻ります。
 - エンジン音源は、実際にオーディオが入ってきた Source にのみ作られます（同時ストリーム 64 個の保護）。終了したボイスの
   エンジン音源はウォームプールに残し、次のボイスが再利用します — [ワンショットとウォーム音源プール](#ワンショットとウォーム音源プール)。
-- **出力リミッターは無効にします**: SimpleST 2.18 は生成直後に true-peak リミッター（−1 dBTP、137 サンプル遅延）を有効にしますが、
-  FMOD の中ではマスターバスがリミッティングを担います。
-- **等ラウドネス補正も無効にします**: SimpleST 2.21 は生成直後に出力段の等ラウドネス補正（低域シェルフ約 +7.2 dB @ 120 Hz）を
-  有効にしますが、音色とレベルは FMOD のミックスが担います。リミッターとともに、コンテキスト生成直後とサウンドトレーシングを
-  再び有効にしたときに無効にします。
-- **リスナーの向き**: FMOD リスナーの forward・up を SimpleST のクォータニオンで渡し、頭部の傾き（roll）まで反映します（SDK リリース
-  2.22.0-jhj から）。
+- **出力リミッターは無効にします**: FMOD の中ではマスターバスがリミッティングを担います。
+- **等ラウドネス補正も無効にします**: 音色とレベルは FMOD のミックスが担います。
+- **リスナーの向き**: FMOD リスナーの forward・up をクォータニオンで渡し、頭部の傾き（roll）まで反映します。
 
 ## インストール
 
@@ -60,11 +43,10 @@ description: SimpleSTFmod — FMOD Studio / FMOD Engine 向け SimpleST DSP プ�
    `Resources/HRTF/`）を **Studio プロジェクトの `Plugins/`**（バージョン管理に有利）またはユーザープラグインフォルダーに
    コピーし、Studio を再起動します。
    - Windows: `%localappdata%/FMOD Studio/Plugins`
-   - macOS: `~/Library/Preferences/FMOD Studio/Plugins/SimpleST`（`install.py fmod --payload mac --studio "/Applications/FMOD Studio.app"`）
+   - macOS: `~/Library/Preferences/FMOD Studio/Plugins/SimpleST`
 3. Studio ログの `No FMOD symbols found in dynamic library '.../SimpleSTRealtime.dll'` は無害です
    （Studio はフォルダー内のすべての DLL をプラグイン候補として開きます。エンジン DLL は SimpleSTFmod が直接ロードします）。
 
-インストーラーは manifest のハッシュ・プラットフォーム・Studio/SDK バージョンを検査し、既存ファイルをスキャナーの外にバックアップします。
 HRTF リソースがない場合はエンジン内蔵の MIT KEMAR にフォールバックします。
 
 ### ゲームランタイム
@@ -104,12 +86,12 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 
 | DSP | パラメータ | 意味 |
 |---|---|---|
-| SimpleST Source | Gain / Direct / Reflections / Diffraction / Reverb Send (dB) | 入力レベル、経路ごとのボリューム（SimpleST path volume） |
+| SimpleST Source | Gain / Direct / Reflections / Diffraction / Reverb Send (dB) | 入力レベル、経路ごとのボリューム（Sound-Tracing SDK path volume） |
 | | Directivity (0 ~ 1) | 0 全指向 ~ 1 カーディオイド（イベントの forward 基準） |
 | | Stationary | 動かないエミッターのヒント（生成時に適用） |
-| | Bypass | SimpleST を経由せず dry で通過 |
+| | Bypass | Sound-Tracing SDK を経由せず dry で通過 |
 | | 3D Attributes / Overall Gain / Atten Range | FMOD 特殊 data パラメータ（自動） |
-| SimpleST Listener | Wet Level / Dry Level (dB) | SimpleST レンダー / バスの他のオーディオのレベル |
+| SimpleST Listener | Wet Level / Dry Level (dB) | Sound-Tracing SDK レンダー / バスの他のオーディオのレベル |
 | | HRTF | 有効でバイノーラル（ヘッドフォン）、無効でステレオパンニング |
 | 両方（EQ ブロック） | EQ / EQ Preamp (dB) | 4 バンド EQ の有効化・プリアンプ — [EQ](#eq) |
 | | EQn Type / EQn Freq (Hz) / EQn Gain (dB) / EQn Q (n = 1 ~ 4) | バンドごとのフィルター種類・周波数・ゲイン・Q |
@@ -117,40 +99,21 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 Listener を **bypass** すると Source は dry 通過に戻ります（A/B 比較用）。DSP 名とパラメータ
 名はバンクが識別子として保存するため、配布後は変更しません。
 
-### EQ
-
-SDK リリース 2.22.0-jhj から、2 つの DSP に同じ 4 バンドの EQ パラメータブロックがあります。SimpleST のパラメトリック EQ をそのまま使います。
-
-| DSP | かける場所 |
-|---|---|
-| SimpleST Source | **ソース EQ** — SimpleST に入るイベント信号に、エンジンのバンド分割の前で。直接音・反射・回折・残響がすべて同じ音色 |
-| SimpleST Listener | **出力 EQ** — SimpleST のミックスに、Wet Level の前で |
-
-- `EQ` は有効/無効、`EQ Preamp` はバンド前のゲイン（−48 ~ +12 dB、ブーストするときは負の値で余裕を確保します）です。
-- `EQn Type` は Off · Peaking · Low Shelf · High Shelf · High Cut（12 dB/oct ローパス）· Low Cut（12 dB/oct ハイパス）· Notch です。
-- `EQn Freq` は 20 ~ 20,000 Hz、`EQn Gain` は ±24 dB（Peaking・シェルフのみ）、`EQn Q` は 0.1 ~ 30（シェルフは 3 まで）です。
-- 4 バンドは低域カット・低域シェルフ・高域シェルフ・高域カットを一度にかけられる数です。`EQn Type` は整数パラメータ（値の名前 7 個、
-  0 = Off）、残りは実数パラメータです。
-- 既定は無効で、無効の間はエンジンを呼び出しません。変更された値だけを送り、エンジンが 20 ms のクロスフェードで切り替えます。
-- Listener が複数ある場合は、レンダラーに選出されたインスタンスの EQ が使われます。ウォームプールで再利用するエンジン音源は、前のボイスの EQ を
-  解除するか新しい EQ に置き換えてから開始します。
-
 ## ワンショットとウォーム音源プール
 
-イベントごとに新しいボイスが来る短い音のために、0.3.0 からプラグインがエンジン音源をボイス間で
+イベントごとに新しいボイスが来る短い音のために、プラグインがエンジン音源をボイス間で
 再利用します。FMOD Studio のイベントや DSP 構成を変更する必要はありません。
 
-- エンジンは**新しい音源**のすべての経路を 150 ms かけてフェードインし、最初の IR を待ちます。0.2.0 はボイスごとに
-  エンジン音源を新しく作っていたため 25 ms の音が 15 ~ 20 dB 小さく遅れて聞こえ、ボイスが終わるとすぐに音源を削除して
-  ストリームリングに残った末尾が切れていました。
-- 0.3.0 は、終了したボイスがすでに送り込んだ PCM を**最大 300 ms まで最後まで再生**してから音源を停止し（残響は
+- エンジンは**新しい音源**のすべての経路を 150 ms かけてフェードインし、最初の IR を待つため、ボイスごとにエンジン音源を
+  新しく作ると短い音が小さく遅れて聞こえます。
+- プラグインは、終了したボイスがすでに送り込んだ PCM を**最大 300 ms まで最後まで再生**してから音源を停止し（残響は
   続きます）、その音源を**最大 16 個、2 秒間**ウォーム状態で保持します。
 - 次のボイスは最も近いウォーム音源に割り当てられます。**0.25 m 以内なら即座に**、それより遠ければ約 25 ms 後に再生を
   開始します。2 秒以内に再利用されなかったウォーム音源は解放されます。
 
-コアテスト（FMOD なしで同じランタイム）で測定した 0.2.0 との比較結果です。
+コアテスト（FMOD なしで同じランタイム）で測定した結果です。
 
-| 項目 | 0.2.0（ボイスごとに新しい音源） | 0.3.0（ウォームプール） |
+| 項目 | ボイスごとに新しい音源 | ウォームプール |
 |---|---|---|
 | 同じ位置のボイス 16 個（120 ms 間隔）のエンジン音源生成 | 16 | 4 |
 | 同じ位置のボイスのレベル | 基準 | +15.7 dB（本来の音量） |
@@ -163,7 +126,7 @@ SDK リリース 2.22.0-jhj から、2 つの DSP に同じ 4 バンドの EQ �
 ## ゲーム側 C API
 
 `include/SimpleSTFmod/SimpleSTFmod.h` — プラグインライブラリが export します。**FMOD がロードしたそのモジュール**から
-バインドします。すべての呼び出しはゲームスレッドで行い、SimpleST の `[control]` 呼び出しは必ず
+バインドします。すべての呼び出しはゲームスレッドで行い、Sound-Tracing SDK の `[control]` 呼び出しは必ず
 `SimpleSTFmod_InvokeOnControlThread` の中で行います。
 
 ```c
@@ -171,7 +134,7 @@ SimpleSTFmod_Config cfg; SimpleSTFmod_InitConfig(&cfg);
 cfg.renderMode = SIMPLESTFMOD_RENDER_BUFFERED;   // 既定。IN_CALLBACK = FMOD ミキサーコールバック内でレンダー
 cfg.sceneRatio = 0.f;                            // 0 = 1.0 (FMOD UE/Unity 統合の単位はメートル)
 cfg.maxSources = 0;                              // 0 = エンジンのプラットフォーム既定(デスクトップ 128, Android/iOS 48, Web 32)
-SimpleSTFmod_Configure(&cfg);                    // ランタイム開始前(最初の SimpleST DSP 生成前)
+SimpleSTFmod_Configure(&cfg);                    // ランタイム開始前(最初の Sound-Tracing SDK DSP 生成前)
 
 SimpleSTFmod_Status st = { sizeof st };
 SimpleSTFmod_GetStatus(SIMPLESTFMOD_SYSTEM_LATEST, &st);   // state READY, boundSources, latency, defaultMaterialId
@@ -187,13 +150,13 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 
 - システムインデックス = `FMOD_DSP_STATE::systemobject`（プロセスで最初に作られた FMOD::System が 0）。
   エディター統合は System を複数作るため、`SIMPLESTFMOD_SYSTEM_LATEST(-1)` = 最新のランタイム。
-- 座標系は FMOD と SimpleST で同じです（左手系、+Y up、+Z forward）。FMOD UE 統合の `(UE.Y, UE.Z, UE.X)/100`
+- 座標系は FMOD と Sound-Tracing SDK で同じです（左手系、+Y up、+Z forward）。FMOD UE 統合の `(UE.Y, UE.Z, UE.X)/100`
   変換は SoundTracing UE プラグインの変換と同一です。
 - プラグインのコンテキストには既定材質ライブラリが先に登録されています。`defaultMaterialId` に preset
   index を加えて使ってください。
-- **音源の上限**（SDK リリース 2.18.2 から）: `SimpleSTFmod_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
+- **音源の上限**: `SimpleSTFmod_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
   既定）。超えるとエンジンが音源の生成を拒否し、そのボイスは dry で再生されます。構造体の末尾に追加したフィールドなので、以前の短い
-  構造体を渡すホストも動作します — [音源メモリ予算](../core/simplest.md#音源メモリ予算)。
+  構造体を渡すホストも動作します。
 
 ### サウンドトレーシングのオンオフ
 
@@ -201,12 +164,12 @@ SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
 SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // オフ。1 = オン(既定)
 ```
 
-SDK リリース 2.18.2 で追加されたゲーム側の A/B スイッチです。1 つのランタイム（`systemIndex < 0` = 最新）に適用され、
+ゲーム側の A/B スイッチです。1 つのランタイム（`systemIndex < 0` = 最新）に適用され、
 コントロールスレッドで非同期に反映されます。
 
-- **オフにすると** SimpleST レンダラーのバイパス（`st_rt_render_set_sound_tracing_enabled`）がかかり、ウォーム音源プールを空にした後は再び
+- **オフにすると** Sound-Tracing SDK レンダラーのバイパス（`st_rt_render_set_sound_tracing_enabled`）がかかり、ウォーム音源プールを空にした後は再び
   満たさず、プラグインが伝搬レーンを起こしません。
-- **伝搬レーンが完全に止まるわけではありません。** SimpleST には伝搬の一時停止がないため、音源が残っている間、レーンは
+- **伝搬レーンが完全に止まるわけではありません。** エンジンには伝搬の一時停止がないため、音源が残っている間、レーンは
   独自の周期で動き続けます。
 - **オンにすると**プラグインのレンダーオプションを再適用します。
 - キューに入れば 1、ランタイムがなければ 0 を返します。後から開始されたランタイムはオンの状態で開始します。
@@ -216,16 +179,12 @@ UE SoundTracing の `SetSoundTracingEnabled` が FMOD モードでこの関数�
 
 ## UE · Unity 統合
 
-![UE FMOD Plugin Files](/img/fmod/ue-plugin-files.png)
-
 - **Unreal Engine**: 配布物の `Unreal/SoundTracing`（FMOD エディション）をプロジェクトの `Plugins/` に入れてビルドすると、
   ビルドがプラグイン・エンジン・HRTF を `Plugins/FMODStudio/Binaries/<Plat>/` に入れ、`DefaultEngine.ini` に
-  `+PluginFiles=SimpleSTFmod` を追加します。SoundTracing
-  プラグインは FMOD モードでビルドされ、ジオメトリのみを登録します — [Unreal Engine SDK](./ue.md)。UE 5.7 + FMOD for
-  Unreal 2.04 で聴取検証（2026-10-15）。
+  `+PluginFiles=SimpleSTFmod` を追加します。SoundTracing プラグインは FMOD モードでビルドされ、ジオメトリのみを登録します — [Unreal Engine SDK](./ue.md)。
 - **Unity**: FMOD エディションパッケージ（`SoundTrace-SimpleST-FMOD-release.unitypackage`）をドラッグ＆ドロップすると、
   エディターのロード時に SoundTrace が DLL/bundle を FMOD プラグインフォルダーにコピーし、Dynamic Plugins に登録します —
-  [Unity SDK](./unity.md#fmodと併用する)。Unity 6000.3 + FMOD for Unity 2.04 で E2E 通過。
+  [Unity SDK](./unity.md#fmodと併用する)。
 
 ![FMOD エディションパッケージのインポート](/img/fmod/unity-fmod-edition-import.png)
 
@@ -246,9 +205,9 @@ UE SoundTracing の `SetSoundTracingEnabled` が FMOD モードでこの関数�
 - リスナー 1 個、同時ストリーム 64 個（超過分は dry）、出力はステレオのみ（スピーカーレイアウト未公開）。
 - EQ は DSP あたり 4 バンド固定です（UE・Unity・Web は最大 16 バンド）。
 - エンジン音源数はプラットフォームの上限（`maxSources`）を超えません。超過したボイスは dry です。
-- Source の後ろのイベントエフェクト/センドは無音を受け取ります（SimpleST のミックスは Listener バスから出ます）。
+- Source の後ろのイベントエフェクト/センドは無音を受け取ります（Sound-Tracing SDK のミックスは Listener バスから出ます）。
 - `Overall Gain`（仮想化用の可聴度）は距離に基づく推定値です。
-- FMOD Studio は System を複数作ることがあり、System ごとに SimpleST コンテキストができます。
+- FMOD Studio は System を複数作ることがあり、System ごとに Sound-Tracing SDK コンテキストができます。
 - SDK 110 の配布ビルドは公式 FMOD 2.03 SDK で再ビルドする必要があります（FMOD EULA 上、SDK の再配布は禁止）。
 
 ## ログ / 環境変数
@@ -264,8 +223,33 @@ UE SoundTracing の `SetSoundTracingEnabled` が FMOD モードでこの関数�
 Windows では常に `OutputDebugString` にも出力されます。コントロールスレッドはレンダラーの状態が変わるたびに
 `SimpleST Listener rendering` / `no SimpleST Listener rendering` を記録します。
 
+## EQ
+
+Sound-Tracing SDK のパラメトリック EQ を 2 か所でかけます。
+
+- **ソース EQ** — 音源信号そのものに、エンジンのバンド分割の前でかけます。その音源の直接音・反射・回折・残響がすべて同じ音色になります。
+- **出力 EQ** — Sound-Tracing SDK のミックス全体に、レンダー末尾（マスターゲインの前）でかけます。
+
+フィルターの種類は Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch の 6 種（カットは 12 dB/oct 固定）、
+範囲は周波数 20 ~ 20,000 Hz、ゲイン ±24 dB（Peaking・シェルフのみ）、Q 0.1 ~ 30（シェルフは 3 まで）、プリアンプ −48 ~ +12 dB です。
+既定は無効で、無効の間はエンジンを呼び出さないため、出力は EQ がないときと同じです。変更された値だけを送り、エンジンが
+20 ms のクロスフェードで切り替えます。
+
+2 つの DSP に同じ 4 バンドの EQ パラメータブロックがあります。
+
+| DSP | かける場所 |
+|---|---|
+| SimpleST Source | **ソース EQ** — エンジンに入るイベント信号 |
+| SimpleST Listener | **出力 EQ** — レンダーされたミックス、Wet Level の前 |
+
+- `EQ` は有効/無効、`EQ Preamp` はバンド前のゲイン（−48 ~ +12 dB、ブーストするときは負の値で余裕を確保します）です。
+- `EQn Type`（n = 1 ~ 4）は Off · Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch の整数パラメータ（0 = Off）で、
+  `EQn Freq (Hz)` · `EQn Gain (dB)` · `EQn Q` は実数パラメータです。
+- 4 バンドは低域カット・低域シェルフ・高域シェルフ・高域カットを一度にかけられる数です。
+- Listener が複数ある場合は、レンダラーに選出されたインスタンスの EQ が使われます。ウォームプールで再利用するエンジン音源は、前のボイスの EQ を
+  解除するか新しい EQ に置き換えてから開始します。
+
 ## 次のドキュメント
 
 - [Wwise プラグイン](./wwise.md)
 - [Unreal Engine SDK](./ue.md) · [Unity SDK](./unity.md)
-- [SimpleST](../core/simplest.md)

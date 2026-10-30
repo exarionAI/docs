@@ -1,11 +1,11 @@
 ---
 title: Performance Guide
-description: SimpleST 整合的效能軸線 — 射線預算、lane 週期、Hybrid 早期反射、渲染模式、執行緒、量測指標。
+description: 以 Sound-Tracing SDK 為基礎之整合的效能軸線 — 射線預算、lane 週期、Hybrid 早期反射、渲染模式、執行緒、量測指標。
 ---
 
 # Performance Guide
 
-在 SimpleST 中，提高聆聽者 guide ray、音源 transport ray、反射深度、音源數與幾何體規模，
+在 Sound-Tracing SDK 中，提高聆聽者 guide ray、音源 transport ray、反射深度、音源數與幾何體規模，
 會讓路徑更穩定、空間感更好，但傳播時間與音訊渲染區塊成本也會隨之上升。
 本文整理 Web、Unity、UE、FMOD、Wwise 整合共通的成本軸線與起點。
 
@@ -103,7 +103,7 @@ PIPELINED 排程器讓 Direct / Reflection-Diffraction / Reverb lane 以各自�
 
 | 項目 | 準則 |
 |---|---|
-| 已實測的值 | 一併標註平台、主機版本、SimpleST commit 與版本、情境 |
+| 已實測的值 | 一併標註平台、主機版本、Sound-Tracing SDK commit 與版本、情境 |
 | 未量測的值 | 不要估算數字，標註為 `Measurement pending` |
 | 串流上限 | 將引擎上限 64 與實際建議音源數分開 |
 | Raw log | 不要原樣放進客戶文件，只公開彙總表與解讀 |

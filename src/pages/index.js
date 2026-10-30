@@ -33,21 +33,9 @@ function Hero() {
             message: 'SoundTrace 문서 진입점',
           })}>
           <span className={styles.heroSummaryItem} role="listitem">
-            <strong>Core</strong>
-            <span className={styles.heroSummaryDetail}>
-              <Translate id="homepage.hero.summary.core">네이티브 음향 엔진</Translate>
-            </span>
-          </span>
-          <span className={styles.heroSummaryItem} role="listitem">
             <strong>SDK</strong>
             <span className={styles.heroSummaryDetail}>
               <Translate id="homepage.hero.summary.sdk">Web · Unity · Unreal · FMOD · Wwise</Translate>
-            </span>
-          </span>
-          <span className={styles.heroSummaryItem} role="listitem">
-            <strong>Tools</strong>
-            <span className={styles.heroSummaryDetail}>
-              <Translate id="homepage.hero.summary.tools">렌더링 · 분석 워크플로우</Translate>
             </span>
           </span>
         </div>
@@ -59,30 +47,12 @@ function Hero() {
 function getProducts() {
   return [
     {
-      title: 'Core',
-      href: '/core/simplest',
-      desc: translate({
-        id: 'homepage.products.core.desc',
-        message:
-          'C++20 기하음향 엔진 SimpleST. 9밴드 재질, Hybrid 초기 반사, 호스트 pull 렌더, 공개 C ABI 6.',
-      }),
-    },
-    {
       title: 'SDK',
       href: '/sdk/overview',
       desc: translate({
         id: 'homepage.products.sdk.desc',
         message:
-          'Web · Unity · Unreal Engine 래퍼와 FMOD · Wwise 플러그인. Python 예정.',
-      }),
-    },
-    {
-      title: 'ExaTools',
-      href: '/exatools/overview',
-      desc: translate({
-        id: 'homepage.products.exatools.desc',
-        message:
-          'IR 분석·검증·시각화 등 음향 시뮬레이션 결과를 다루는 유틸리티.',
+          'Web · Unity · Unreal Engine SDK와 FMOD · Wwise 플러그인.',
       }),
     },
   ];

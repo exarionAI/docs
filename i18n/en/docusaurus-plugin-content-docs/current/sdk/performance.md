@@ -1,13 +1,13 @@
 ---
 title: Performance Guide
-description: The performance axes of SimpleST-based integrations — ray budget, lane intervals, Hybrid early reflections, render modes, threads, and the metrics to measure.
+description: The performance axes of Sound-Tracing SDK-based integrations — ray budget, lane intervals, Hybrid early reflections, render modes, threads, and the metrics to measure.
 ---
 
 # Performance Guide
 
-In SimpleST, raising the listener guide rays, source transport rays, reflection depth, source count,
-and geometry size makes paths more stable and improves the sense of space, but propagation time and
-the per-block audio render cost rise with them. This document summarizes the cost axes and starting
+In the Sound-Tracing SDK, raising the listener guide rays, source transport rays, reflection depth,
+source count, and geometry size makes paths more stable and improves the sense of space, but
+propagation time and the per-block audio render cost rise with them. This document summarizes the cost axes and starting
 points shared by the Web, Unity, UE, FMOD, and Wwise integrations.
 
 ## Fixed runtime contract
@@ -108,7 +108,7 @@ general). On hybrid CPUs, pinning to performance cores with `st_rt_set_thread_at
 
 | Item | Rule |
 |---|---|
-| Measured values | State the platform, host version, SimpleST commit/version, and scenario together |
+| Measured values | State the platform, host version, Sound-Tracing SDK commit/version, and scenario together |
 | Unmeasured values | Do not estimate numbers; mark them `Measurement pending` |
 | Stream limit | Separate the engine limit of 64 from the actually recommended source count |
 | Raw logs | Do not paste into customer documents; publish only summary tables and interpretation |

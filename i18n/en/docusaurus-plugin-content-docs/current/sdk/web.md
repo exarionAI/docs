@@ -1,23 +1,16 @@
 ---
 title: Web
-description: soundtrace.js 1.1.0 — installation, deployment requirements, HRTF, quality presets, materials, EQ, and troubleshooting for the SimpleST ABI 6 WebAssembly SDK.
+description: Sound-Tracing SDK for Web (soundtrace.js) — installation, deployment requirements, HRTF, quality presets, materials, EQ, and troubleshooting for the WebAssembly SDK.
 ---
 
-# Web SDK
+# Sound-Tracing SDK for Web
 
-**soundtrace.js** is the TypeScript/WebAssembly SDK for using [SimpleST](../core/simplest.md) in the
+**soundtrace.js** is the TypeScript/WebAssembly SDK for using the Sound-Tracing SDK in the
 browser. It connects the meshes, materials, sources, and listener of a rendering scene such as
 Three.js to a Sound Tracing scene, and provides spatialized stereo output to the Web Audio graph.
 
-From 1.0.0 the engine has changed from STCoreV2 to SimpleST, and 1.1.0 uses **SimpleST 2.22.0 /
-ABI 6** (SDK release 2.22.0-jhj.5. In the previous SDK release 2.18.2-jhj.7 the same 1.1.0 used SimpleST
-2.18.2; 1.0.0 = SimpleST 2.12.0). In this release the package version is unchanged; it adds a
-[source EQ and an output EQ](#eq) (`source.setEq`, `sound.setOutputEq`), and head tilt (roll) in the listener
-`orientation` quaternion now reaches the engine (previously yaw/pitch only). The 2.18.2 SDK added the
-`maxSources` option (source count limit). Existing call sites do not change. The `SoundTrace`, `Source`,
-`Mesh`, and `Listener` facades are kept, but the backend, HRTF, material, and option contracts have
-changed relative to STCoreV2. See [Facade API](./web/facade.md) for the full options and entity API, and
-[Native API](./web/native.md) for low-level access to the SimpleST module.
+See [Facade API](./web/facade.md) for the full options and entity API, and
+[Native API](./web/native.md) for low-level module access.
 
 ![soundtrace.js architecture](/img/web/architecture.png)
 
@@ -25,16 +18,15 @@ changed relative to STCoreV2. See [Facade API](./web/facade.md) for the full opt
 
 | Item | Current behavior |
 |---|---|
-| Engine | SimpleST Realtime (pthreads WASM) + Offline (single-threaded, IR analysis only) |
+| Engine | Sound-Tracing SDK Realtime (pthreads WASM) + Offline (single-threaded, IR analysis only) |
 | Execution modes | `single_thread` (synchronous propagation) / `multi_thread` (pipelined propagation). **Both use a dedicated Worker + pthread WASM** |
 | Early reflections | Always **Hybrid**. Re-applied after render start, HRTF change, and reset |
 | HRTF | Embedded MIT KEMAR (`'mit-kemar'`), bundled SADIE II D2 (`'sadie-d2'`) |
 | Quality | `fast` / `balanced` / `quality` — sets the listener and source ray grids and reflection depth together |
 | Materials | 9-band (63 Hz ~ 16 kHz), 22 SoundTrace game materials, selected by name, alias, or index |
 | Output | Mono input per source; the listener renderer mixes one stereo output (`sound.output`) |
-| Source cap | Default 32 sources · source memory 64 MiB · delay ring ceiling 0.5 s. The source count is changed with the `maxSources` option — see [Source memory budget](../core/simplest.md#source-memory-budget) |
+| Source cap | Default 32 sources · source memory 64 MiB · delay ring ceiling 0.5 s. The source count is changed with the `maxSources` option |
 | EQ | Per-source source EQ and a global output EQ, parametric, up to 16 bands — see [EQ](#eq) |
-| GPU | None. `mode: 'gpu'` and `enableGpu()` are errors |
 
 ## Requirements
 
@@ -51,7 +43,7 @@ agreement. It is distributed in two forms.
 
 | Form | File | Installation |
 |---|---|---|
-| vendor tree | `soundtrace-js-release-vendor.zip` (root `sdk/`) | Extract to a static path and serve it. The bundled `install.py` verifies hashes and installs to `vendor/sound-tracing/sdk` |
+| vendor tree | `soundtrace-js-release-vendor.zip` (root `sdk/`) | Extract to a static path (e.g. `vendor/sound-tracing/sdk`) and serve it |
 | npm package | `exarionai-soundtrace.js-1.1.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.1.0.tgz` |
 
 ```ts
@@ -116,7 +108,7 @@ await sound.update(0);
 player.start();
 ```
 
-SimpleST's coordinate system is `+Z` forward, the same as Unity. Renderers that look down `-Z`,
+The Sound-Tracing SDK's coordinate system is `+Z` forward, the same as Unity. Renderers that look down `-Z`,
 such as Three.js, need the `coordinateBasis` above for left/right and front/back to line up.
 
 ## Execution modes
@@ -138,9 +130,6 @@ changes go through an ordered command path.
 | (not called) | Embedded MIT KEMAR — the SDK default. `setOutputMode('speaker')` switches to stereo panning | None |
 | `loadHrtf('mit-kemar')` or `'convolution'` | Engine-embedded MIT KEMAR, 128 taps | None |
 | `loadHrtf('sadie-d2')` or `'steamaudio'` | SADIE II D2 KEMAR, 8,802 directions, 256 taps | `SADIE_D2_44K_16bit_256tap.hrtfbin` |
-
-The old KU100 parametric / convolution / SADIE H12 tables and the `Band8` mode no longer exist.
-`loadHrtf('parametric')` is an error.
 
 ```ts
 await sound.loadHrtf('sadie-d2');
@@ -166,9 +155,7 @@ problems, step down `quality → balanced → fast` before touching individual r
 
 A mesh takes a material name, alias, or index. The default table is the 22 SoundTrace game
 materials, the same table and indices as the Unity SDK. These are game presets, not measured data,
-and every entry is 9-band R/A/T/scattering. They were converted from the previous 8-band
-(63 Hz ~ 8 kHz) values: reflection R and transmission T are kept, absorption A = 1 − R − T, the
-16 kHz band repeats the 8 kHz value, and scattering takes the same value in all 9 bands.
+and every entry is 9-band R/A/T/scattering.
 
 Names and aliases are case-insensitive. Material names keep their original spelling
 (`Sherdded-woodFiberborad`).
@@ -208,9 +195,8 @@ sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
 
 :::warning
 A name that is not in the table is silently replaced by the default material
-(`defaultMaterialType = 0`, `Concrete`) without throwing. The `BRAS_*` names from earlier docs are no
-longer in the table, so they also become `Concrete`. Use the exact names or aliases above to make sure
-the intended material is applied.
+(`defaultMaterialType = 0`, `Concrete`) without throwing. Use the exact names or aliases above to
+make sure the intended material is applied.
 :::
 
 To define a material yourself, pass four sets of 9 values satisfying `R + A + T = 1` (tolerance
@@ -227,45 +213,12 @@ sound.output.connect(audioContext.destination);
 the SDK provides a per-source **input capture node** and one **listener master output**
 (`sound.output`). Per-source output effects must be moved behind `sound.output`.
 
-The SDK keeps the output limiter **off**. SimpleST 2.18 turns on a true-peak limiter (−1 dBTP,
-137-sample latency) right after creation, but the Web Audio master bus after `sound.output` is owned
+The SDK keeps the output limiter **off**, because the Web Audio master bus after `sound.output` is owned
 by the app. If you need the engine limiter, turn on the true-peak limiter with
 `sound.listener.setRenderOptions({ useLimiter: true })`.
 
-For the same reason, the equal-loudness compensation that the engine turns on right after creation since
-SimpleST 2.21 (low shelf about +7.2 dB @ 120 Hz, high +1.8 dB) is turned off right after the context is created
-(including `reset()`). The output with it off is bit-identical to engine 2.20, and this setting is not exposed.
-
-## EQ
-
-From SDK release 2.22.0-jhj you can apply the SimpleST parametric EQ to sources and to the output.
-
-```ts
-source.setEq({ bands: [
-  { type: 'highpass', frequencyHz: 150 },
-  { type: 'peaking', frequencyHz: 3000, gainDb: 4, q: 1.2 },
-] });
-sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, gainDb: 3 }] });
-
-source.setEq(null);        // remove the source EQ
-sound.setOutputEq(null);   // turn the output EQ off
-```
-
-| API | Where it applies |
-|---|---|
-| `Source.setEq(eq \| null)` | The source signal, before the engine's band split. Direct, reflection, diffraction, and reverb of that source all get the same tone. Both live and clip input. Also included in the offline pressure IR of `renderMonoImpulseResponse` (not in the band energies of `getIRs()`) |
-| `SoundTrace.setOutputEq(eq \| null)` | One global output EQ at the end of the render (before the master gain). Kept across `reset()`. Not included in offline analysis |
-
-- `eq = { enabled = true, preampDb = 0 (−48 ~ +12), bands = [] (up to 16) }`
-- `band = { type = 'peaking', enabled = true, frequencyHz = 1000 (20 ~ 20,000), gainDb = 0 (±24, peaking and shelves only), q = 0.7071 (0.1 ~ 30, the engine limits shelves to 3) }`
-- `type` is `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'` (Web Audio
-  `BiquadFilterType` names; cuts are fixed at 12 dB/oct).
-- Out-of-range values are rejected with a `RangeError` and no command is sent. `{ enabled: false }` keeps the bands
-  and passes the signal through.
-- If you never call the EQ, the engine EQ is not called, so the output is bit-identical to having no EQ. The same
-  value is not sent again, and changed values are crossfaded by the engine over 20 ms.
-- An older core without EQ support fails with a message naming the engine version. The applied output EQ is in
-  `debugSnapshot().simplest.output.eq`.
+For the same reason, the equal-loudness compensation that the engine turns on right after creation is
+turned off right after the context is created (including `reset()`). This setting is not exposed.
 
 ## Update and cleanup
 
@@ -311,16 +264,53 @@ the Shoebox room, Multi-room occlusion, and Runtime capability examples.
 |---|---|
 | No sound | `AudioContext.resume()` was called first inside a user gesture; `sound.output` is connected to the destination |
 | `SoundTrace.create` rejects with a cross-origin isolation error | COOP/COEP headers on the page and Worker responses, `crossOriginIsolated === true` (required for ST too) |
-| `mode: 'gpu'` / `enableGpu()` error | SimpleST Web is CPU only. Remove the option |
-| `transmissionModel: 'solid'`, `defaultMeshBuild`, `hrtfQuality` etc. rejected | STCoreV2-only options. See the rejected list in [Facade API](./web/facade.md) |
 | Directions sound reversed | A `coordinateBasis` matching the renderer's coordinate system (required for `-Z` forward) |
 | Materials do not seem to apply | The name exists in the material table/aliases (otherwise it falls back to concrete) |
 | Core/asset 404 | Bundler pre-bundling exclusion, `coreBaseUrl`/`assetBaseUrl`, `.wasm` MIME type |
 | Not enough performance | Lower the quality preset, use `thread: 'mt'`, disable path visualization |
 | `setEq` / `setOutputEq` throws `RangeError` | Frequency, gain, Q, and preamp ranges; 16 bands or fewer |
 
+## EQ
+
+The Sound-Tracing SDK's parametric EQ can be applied at two points.
+
+- **Source EQ** — applied to the source signal itself, before the engine's band split. Direct, reflection, diffraction, and reverb of that source all get the same tone.
+- **Output EQ** — applied to the whole Sound-Tracing SDK mix at the end of the render (before the master gain).
+
+There are six filter types: Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch (cuts are fixed at 12 dB/oct).
+Ranges are frequency 20 ~ 20,000 Hz, gain ±24 dB (Peaking and shelves only), Q 0.1 ~ 30 (shelves up to 3), preamp −48 ~ +12 dB.
+The default is off, and while off the engine is not called, so the output is the same as with no EQ. Only changed values
+are sent, and the engine crossfades to them over 20 ms.
+
+```ts
+source.setEq({ bands: [
+  { type: 'highpass', frequencyHz: 150 },
+  { type: 'peaking', frequencyHz: 3000, gainDb: 4, q: 1.2 },
+] });
+sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, gainDb: 3 }] });
+
+source.setEq(null);        // remove the source EQ
+sound.setOutputEq(null);   // turn the output EQ off
+```
+
+| API | Where it applies |
+|---|---|
+| `Source.setEq(eq \| null)` | The source signal, before the engine's band split. Direct, reflection, diffraction, and reverb of that source all get the same tone. Both live and clip input. Also included in the offline pressure IR of `renderMonoImpulseResponse` (not in the band energies of `getIRs()`) |
+| `SoundTrace.setOutputEq(eq \| null)` | One global output EQ at the end of the render (before the master gain). Kept across `reset()`. Not included in offline analysis |
+
+- `eq = { enabled = true, preampDb = 0 (−48 ~ +12), bands = [] (up to 16) }`
+- `band = { type = 'peaking', enabled = true, frequencyHz = 1000 (20 ~ 20,000), gainDb = 0 (±24, peaking and shelves only), q = 0.7071 (0.1 ~ 30, the engine limits shelves to 3) }`
+- `type` is `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'` (Web Audio
+  `BiquadFilterType` names; cuts are fixed at 12 dB/oct).
+- Out-of-range values are rejected with a `RangeError` and no command is sent. `{ enabled: false }` keeps the bands
+  and passes the signal through.
+- If you never call the EQ, the engine EQ is not called, so the output is bit-identical to having no EQ. The same
+  value is not sent again, and changed values are crossfaded by the engine over 20 ms.
+- An older core without EQ support fails with a message naming the engine version. The applied output EQ is in
+  `debugSnapshot().simplest.output.eq`.
+
 ## Next
 
-- [Facade API](./web/facade.md) — creation options, scene/source/mesh API, lifecycle, rejected legacy options
-- [Native API](./web/native.md) — the SimpleST module loader and low-level adapters
+- [Facade API](./web/facade.md) — creation options, scene/source/mesh API, lifecycle
+- [Native API](./web/native.md) — the Sound-Tracing SDK module loader and low-level adapters
 - [Performance Guide](./performance.md)

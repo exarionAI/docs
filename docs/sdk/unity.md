@@ -1,49 +1,71 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 0.4.0(SimpleST 2.22.0 / ABI 6) 설치, 컴포넌트 Inspector 계약, HRTF·출력, 소스·출력 EQ, 재질, FMOD/Wwise 통합 모드, WebGL.
+description: Sound-Tracing SDK for Unity — 설치, FMOD/Wwise 통합, 컴포넌트 Inspector 계약, HRTF·출력, 재질, 소스·출력 EQ.
 ---
 
-# SoundTrace SDK for Unity
+# Sound-Tracing SDK for Unity
 
-SoundTrace Unity SDK는 Unity의 메시, Renderer 재질 슬롯, 음원, 리스너를
-[SimpleST](../core/simplest.md)에 연결하는 실시간 공간 음향 플러그인입니다. 0.3.0부터 엔진이
-STCoreV2에서 SimpleST로 바뀌었고, 0.4.0은 **SimpleST 2.22.0 / ABI 6**을 씁니다(SDK 릴리스 2.22.0-jhj.5. 이전 SDK
-릴리스 2.18.2-jhj.7은 같은 0.4.0이 SimpleST 2.18.2를 썼고, 0.3.0 = SimpleST 2.12.0). 렌더러는 **Hybrid**로 시작합니다.
-이번 릴리스에서 패키지 버전은 그대로이고 [소스 EQ와 출력 EQ](#eq)가 들어갔으며, 리스너 방향을 쿼터니언으로 넘겨
-머리 기울임(roll)이 반영됩니다(종전 yaw/pitch만). 2.18.2 SDK에서 [음원 수 상한](#음원-수-상한)과 Android 최소 API 28이
-들어갔습니다.
-`SoundTraceManager`, `SoundTraceListener`, `SoundTraceSource`, `SoundTraceObject`,
-`SoundTracePathVisualizer` 컴포넌트 이름과 스크립트 GUID, 샘플 씬은 그대로입니다.
+Sound-Tracing SDK for Unity는 사운드 트레이싱 엔진 DLL을 Unity 사용자에 맞춰 래핑한 Unity 패키지입니다.
+Unity의 컴포넌트 패턴, 매니저 스크립트와 스크립터블 오브젝트를 그대로 사용해 쾌적하게 콘텐츠를
+제작할 수 있습니다. 데모 씬도 함께 구성되어 있습니다.
 
 ## 요구 사항과 플랫폼
 
-| 항목 | 현재 패키지 기준 |
+| 항목 | 값 |
 |---|---|
-| Unity | 2022.3 LTS 이상 (2022.3.62f2 · 6000.3 검증) |
+| Unity | 2022.3 LTS 이상 (Unity 6 검증) |
 | 패키지 | `SoundTrace-SimpleST-release.unitypackage`(기본·Wwise용) / `SoundTrace-SimpleST-FMOD-release.unitypackage`(FMOD 에디션) → `Assets/SoundTrace` |
-| 번들 네이티브 플러그인 | Windows x64 · macOS Universal · Linux x86_64 · Android(ARMv7/ARM64/x86_64, API 28+ — 엔진 `.so`가 `libaaudio`를 직접 링크하므로 빌드 단계에서 검사) · iOS 15+(device/simulator XCFramework) · WebGL |
-| WebGL | 지원 — 독립 pthread WASM + AudioWorklet 경로 (`OnAudioFilterRead` 미사용) |
-| GPU | 없음. `SoundTraceManager.IsGpuPropagate`는 항상 `false` |
+| 플랫폼 | Windows x64 · macOS Universal · Linux x86_64 · Android(ARMv7/ARM64/x86_64, API 28+) · iOS 15+ |
+| WebGL | 미지원 — Unity WebGL은 오디오 필터(`OnAudioFilterRead`)를 지원하지 않습니다. 웹은 C SDK의 WASM 빌드인 [Web SDK](./web.md)를 쓰십시오 |
 
 ## 설치
 
-1. 대상 프로젝트의 Unity를 닫지 않아도 됩니다. `Assets > Import Package > Custom Package`에서
-   `.unitypackage`를 선택하면 `Assets/SoundTrace`에 설치됩니다.
-2. STCoreV2 기반 구버전 `Assets/SoundTrace`가 있으면 **먼저 Assets 밖으로 백업**한 뒤 임포트합니다.
-   옛 네이티브 플러그인이 함께 로드되지 않게 하기 위해서입니다. 같은 SimpleST 패키지의 업데이트는
-   GUID를 유지하므로 덮어써도 됩니다.
-3. 배포 폴더의 `install.py`로 자동 설치할 수도 있습니다. 파일 해시·GUID를 검사하고 기존 설치를
-   프로젝트의 `.simplest-backups`에 보존합니다.
-
-```bash
-python3 install.py /path/to/UnityProject
-```
+`.unitypackage`를 Project 창에 드래그 앤 드롭하거나 `Assets > Import Package > Custom Package`로 가져오면
+`Assets/SoundTrace`에 설치됩니다. 같은 패키지의 업데이트는 GUID를 유지하므로 덮어써도 됩니다.
 
 FMOD·Wwise와 함께 쓸 때는 아래 [FMOD와 함께 쓰기](#fmod와-함께-쓰기)·[Wwise와 함께 쓰기](#wwise와-함께-쓰기)를 따릅니다.
 FMOD는 FMOD 에디션 패키지를 넣으면 끝나고, Wwise 플러그인은 Audiokinetic Launcher가 넣습니다.
 
-샘플은 Package Manager에서 SoundTrace SDK를 선택한 뒤 `Samples > Demo Assets > Import`로
-가져옵니다. 샘플 UI는 `com.unity.ugui`가 있을 때만 컴파일됩니다.
+## FMOD와 함께 쓰기
+
+프로젝트에 Sound-Tracing SDK FMOD 플러그인(`SimpleSTFmod`)이 있으면 SoundTrace는 자동으로 **FMOD 통합**으로
+동작합니다. 공간 음향 렌더는 FMOD Studio의 SimpleST Source / Listener DSP가 하고, SoundTrace는
+`SoundTraceManager` + `SoundTraceObject`로 지오메트리·재질만 플러그인 컨텍스트에 올립니다.
+`SoundTraceListener` / `SoundTraceSource`는 경고를 남기고 꺼집니다.
+
+![FMOD 에디션 패키지 가져오기](/img/fmod/unity-fmod-edition-import.png)
+
+1. FMOD for Unity 2.04를 프로젝트에 넣습니다(`Assets/Plugins/FMOD`. tgz로 설치했다면 `Packages/`로 embed).
+2. **FMOD 에디션** 패키지 `SoundTrace-SimpleST-FMOD-release.unitypackage`를 Project 창에 드래그 앤 드롭합니다.
+   별도 메뉴는 없습니다. 패키지의 `Runtime/Plugins/FMOD`에 `SimpleSTFmod`(Windows x64·macOS)가 들어 있고,
+   에디터가 로드될 때 SoundTrace가 이를 FMOD 플러그인 폴더에 복사하고 FMOD Settings › Dynamic Plugins에
+   등록합니다. FMOD를 나중에 넣어도 다음 로드 때 같은 일을 합니다.
+3. FMOD Studio에서 마스터 버스에 **SimpleST Listener**, 3D 이벤트 마스터 트랙에 FMOD Spatializer 대신
+   **SimpleST Source**를 넣습니다 — [FMOD 플러그인](./fmod.md).
+4. 씬에는 `SoundTraceManager`와 지오메트리용 `SoundTraceObject`, FMOD `StudioListener`를 둡니다.
+
+엔진 인스턴스는 하나입니다. SimpleSTFmod가 SoundTrace가 P/Invoke하는 같은 `SimpleSTRealtime`을
+로드하고, 모든 제어 호출은 플러그인의 컨트롤 스레드에서 실행됩니다.
+
+## Wwise와 함께 쓰기
+
+Wwise Unity 통합의 DSP 폴더에 `SimpleSTWwise`가 있으면 **Wwise 통합**으로 동작합니다(FMOD가
+함께 있으면 FMOD 우선).
+
+SoundTrace는 기본 패키지를 쓰고, Wwise 플러그인은 다른 Wwise 플러그인처럼 Audiokinetic Launcher가 넣습니다.
+
+![런처에 설치된 Sound-tracing](/img/wwise/launcher-bundle.png)
+
+1. 기본 패키지 `SoundTrace-SimpleST-release.unitypackage`를 Project 창에 드래그 앤 드롭합니다.
+2. Audiokinetic Launcher 스토어에서 획득한 **Sound-Tracing SDK for Wwise**(플러그인 이름 `Sound-tracing`)를
+   Wwise에 설치합니다.
+3. Launcher › **Unity › Integrate(또는 Modify) Wwise in Project**를 실행합니다. 런처가 Wwise SDK에 설치된
+   플러그인(Sound-tracing 포함)을 Wwise Unity 통합의 DSP 폴더에 넣고, Wwise 사운드엔진이 로드합니다.
+   Unity 에디터를 닫은 상태에서 실행합니다.
+4. Wwise 프로젝트에서 Audio Objects 버스에 **Sound-tracing Renderer**를 넣고 3D 사운드를 그 버스로
+   보냅니다(Attenuation은 끄거나 평탄) — [Wwise 플러그인](./wwise.md).
+5. 씬에는 `AkInitializer`, `AkAudioListener`, 이미터의 `AkGameObj`와 `SoundTraceManager`,
+   `SoundTraceObject`를 둡니다. Wwise Unity의 단위는 미터이므로 `sceneRatio = 1`입니다.
 
 ## Unity Audio 설정
 
@@ -54,13 +76,12 @@ FMOD는 FMOD 에디션 패키지를 넣으면 끝나고, Wwise 플러그인은 A
 ![Unity Audio 설정](/img/unity/Image01_AudioSetting.png)
 
 Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니다. 출력 샘플레이트는 장치
-값을 그대로 쓰며(SimpleST가 내부 44.1 kHz와 변환), 장치 레이트가 바뀌면 네이티브 상태를
+값을 그대로 쓰며(Sound-Tracing SDK가 내부 44.1 kHz와 변환), 장치 레이트가 바뀌면 네이티브 상태를
 같은 설정으로 재생성합니다.
 
 ## Audio Asset Import 설정
 
-모노 사운드 소스 사용을 전제로 하며, 오디오 클립은 PCM 포맷으로 설정합니다. WebGL은
-`Decompress On Load`가 필요합니다.
+모노 사운드 소스 사용을 전제로 하며, 오디오 클립은 PCM 포맷으로 설정합니다.
 
 ![Audio Asset Import 설정](/img/unity/ImportSetting.png)
 
@@ -74,7 +95,7 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 6. Play Mode에서 Console 오류, 소리, path를 확인합니다.
 
 동시에 로드된 scene 전체에서 활성 Manager와 Path Visualizer는 각각 하나만 사용할 수
-있습니다. 리스너는 SimpleST 컨텍스트당 하나이며 첫 번째로 등록된 `PrimaryListener`가 렌더합니다.
+있습니다. 리스너는 Sound-Tracing SDK 컨텍스트당 하나이며 첫 번째로 등록된 `PrimaryListener`가 렌더합니다.
 
 ## 컴포넌트 개요
 
@@ -96,12 +117,10 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 - 위치는 고정 스텝 모션 샘플링(`SoundTraceFixedStepMotion`)으로 속도를 추정합니다. 텔레포트
   뒤에는 `ResetMotionState()`로 Doppler 스파이크를 막습니다.
 - 렌더를 시작할 때마다(재시작·HRTF 토글 포함) Hybrid(`reserved0 = 1`)와 **엔진 리미터 끔**을 명시하고
-  마스터 게인은 0 dB로 둡니다. 리미팅은 Unity 믹서가 맡습니다 — SimpleST 2.18은 생성 직후 true-peak
-  리미터(137샘플 지연)를 켜므로 래퍼가 끕니다. 렌더 옵션은 엔진 생성 시와 스피커 레이아웃 변경 때만 프리셋으로
+  마스터 게인은 0 dB로 둡니다. 리미팅은 Unity 믹서가 맡습니다. 렌더 옵션은 엔진 생성 시와 스피커 레이아웃 변경 때만 프리셋으로
   다시 깔리고 `render_start`는 그대로 둡니다.
-- 엔진을 만든 직후 **등라우드니스 보정을 끕니다**(`SoundTraceRuntime.DisableLoudnessCompensation`, WebGL 포함).
-  SimpleST 2.21부터 생성 직후 켜지는 출력단 저역·고역 셸프로, 음색과 레벨은 Unity 믹서가 맡습니다. 끈 출력은 엔진 2.20과
-  비트 동일합니다.
+- 엔진을 만든 직후 **등라우드니스 보정을 끕니다**(`SoundTraceRuntime.DisableLoudnessCompensation`).
+  음색과 레벨은 Unity 믹서가 맡습니다.
 
 ## SoundTraceManager
 
@@ -113,7 +132,7 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 |---|---:|---|
 | `Propagate On Start` | `true` | `Start()`에서 초기 scene graph와 transform을 동기화한 뒤 첫 전파를 요청합니다. |
 | `Load Default Materials On Enable` | `true` | `OnEnable()`에서 번들 Material Preset Library(SoundTrace 게임 재질 22종)를 네이티브 재질 테이블에 등록합니다. |
-| `Propagation Thread Count` | `-1` | SimpleST 계산 풀 폭(`maxComputeThreads`). `-1`은 자동(논리 스레드 수 기준, 엔진이 min(퍼포먼스 코어, 6)로 조정), `0`/`1`은 싱글, `2` 이상은 지정 수. 네이티브 초기화 전에 적용됩니다. |
+| `Propagation Thread Count` | `-1` | Sound-Tracing SDK 계산 풀 폭(`maxComputeThreads`). `-1`은 자동(논리 스레드 수 기준, 엔진이 min(퍼포먼스 코어, 6)로 조정), `0`/`1`은 싱글, `2` 이상은 지정 수. 네이티브 초기화 전에 적용됩니다. |
 
 ### 공개 프로퍼티
 
@@ -126,7 +145,6 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 | `LastValidPathCount` | `int` | 가장 최근 전파의 유효 path 수 |
 | `LastNativeError` | `string` | 최근 scene graph/전파 오류 |
 | `PropagationThreadCount` | `int` | 적용된 계산 스레드 수 |
-| `IsGpuPropagate` / `GpuBackendStatus` | `bool` / `string` | 호환용. 항상 `false` / `"CPU"` |
 
 ### 공개 메서드
 
@@ -137,10 +155,9 @@ Manager와 Listener Inspector는 이 설정이 다르면 경고를 표시합니�
 ### 음원 수 상한
 
 `SoundTraceRuntime.MaxSources`(정적 `uint`, 기본 `0`)는 동시에 살아 있는 엔진 음원 수의 상한입니다.
-`0`이면 엔진 플랫폼 기본(데스크톱 128 · Android/iOS 48 · WebGL 32)을 씁니다. 첫 `SoundTraceListener`가 활성화되기
+`0`이면 엔진 플랫폼 기본(데스크톱 128 · Android/iOS 48)을 씁니다. 첫 `SoundTraceListener`가 활성화되기
 **전에** 설정합니다(`STRT_CreateOptions.maxSources`로 전달). 상한을 넘는 음원은 예외를 던지지 않습니다 —
 `SoundSourceCore`가 `ST_STATUS_BUDGET_EXCEEDED`를 한 번 경고하고 그 `AudioSource`를 dry로 둡니다.
-엔진 정책은 [SimpleST — 음원 메모리 예산](../core/simplest.md#음원-메모리-예산)을 참고하세요.
 
 ```csharp
 SoundTraceRuntime.MaxSources = 64;   // 첫 Listener 활성화 전
@@ -161,15 +178,12 @@ SoundTraceRuntime.MaxSources = 64;   // 첫 Listener 활성화 전
 | `Ray Depth` | `4` | `1..16`; 반사 최대 깊이 |
 | `Output Mode` | `Headset` | `Headset`(바이노럴), `Speaker`(스테레오 패닝) |
 | `HRTF` | `HRIR Interpolated` | 아래 세 모드 |
-| `Max Delay Seconds` | `0` | `0..5 s`; 음원별 지연 링의 천장. `0` = 엔진 플랫폼 천장(데스크톱 2 s · Android/iOS 1 s · WebGL 0.5 s). 0이 아니면 천장을 덮어씁니다(0.012 s 미만은 0.012 s) |
+| `Max Delay Seconds` | `0` | `0..5 s`; 음원별 지연 링의 천장. `0` = 엔진 플랫폼 천장(데스크톱 2 s · Android/iOS 1 s). 0이 아니면 천장을 덮어씁니다(0.012 s 미만은 0.012 s) |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`; 경로 등장/소멸 크로스페이드 |
-| `Output EQ` | 꺼짐 | SimpleST 믹스 전체에 거는 파라메트릭 EQ — [EQ](#eq) |
+| `Output EQ` | 꺼짐 | Sound-Tracing SDK 믹스 전체에 거는 파라메트릭 EQ — [EQ](#eq) |
 
-`Max Delay Seconds` 기본값은 SDK 릴리스 2.18.2에서 `2` → `0`(엔진 정책)으로 바뀌었습니다. 엔진은 음원마다
-경로가 필요한 만큼만 지연 링을 잡고 이 값을 천장으로만 씁니다. `2`가 저장된 기존 씬은 종전처럼 동작합니다.
-이 값을 저장한 적이 없는 리스너(번들 샘플 01–03 포함)는 `0`을 씁니다. 데스크톱은 천장이 그대로 2 s라 달라지지 않지만,
-Android/iOS는 1 s, WebGL은 0.5 s를 넘는 경로가 렌더되지 않습니다. 그 플랫폼에서 종전 거리를 유지하려면 리스너의
-`maxDelaySeconds`를 `2`로 지정하십시오.
+엔진은 음원마다 경로가 필요한 만큼만 지연 링을 잡고 `Max Delay Seconds`를 천장으로만 씁니다. Android/iOS는
+기본 천장이 1 s라 그보다 긴 경로가 렌더되지 않습니다. 더 먼 경로가 필요하면 리스너의 `maxDelaySeconds`를 지정하십시오.
 
 `Fast`, `Middle`, `Quality`를 선택하면 ray 값이 함께 적용되고 Inspector에서 잠깁니다. 직접
 편집하려면 `Custom`을 선택하십시오.
@@ -185,12 +199,11 @@ Android/iOS는 1 s, WebGL은 0.5 s를 넘는 경로가 렌더되지 않습니다
 
 | 모드 | 필요한 asset | 설명 |
 |---|---|---|
-| `Band8` | 없음 | 외부 테이블 없는 경량 모드 — SimpleST에서는 **스테레오 패닝**으로 렌더됩니다 |
+| `Band8` | 없음 | 외부 테이블 없는 경량 모드 — **스테레오 패닝**으로 렌더됩니다 |
 | `Hrir` | 없음 | 엔진에 내장된 **MIT KEMAR** HRIR |
-| `HRIR Interpolated` | 없음 | MIT KEMAR HRIR(기본). SimpleST는 광대역 HRIR 컨볼루션을 수행합니다 |
+| `HRIR Interpolated` | 없음 | MIT KEMAR HRIR(기본). Sound-Tracing SDK는 광대역 HRIR 컨볼루션을 수행합니다 |
 
-구 `KU100_convolution.bytes` 리소스는 더 이상 쓰이지 않습니다. `Output Mode = Speaker`는
-패닝 출력입니다.
+`Output Mode = Speaker`는 패닝 출력입니다.
 
 ## SoundTraceSource
 
@@ -211,9 +224,8 @@ Android/iOS는 1 s, WebGL은 0.5 s를 넘는 경로가 렌더되지 않습니다
 | `Bypass` | `false` | SoundTrace 렌더를 건너뛰고 원본 `AudioSource` 출력을 그대로 전달 |
 | `Source EQ` | 꺼짐 | 이 음원 신호에 거는 파라메트릭 EQ — [EQ](#eq) |
 
-STCoreV2의 path별 `Distance Attenuation`(0.5 ~ 1.5)과 `Max Delay Rate`, `Path Hold Time`은
-없습니다. SimpleST는 물리 `1/r` 감쇠와 공기 흡수를 적용하며, 최대 지연과 페이드는 Listener
-설정입니다. Scene View의 `Show Gizmo`는 path별 가청 범위를 표시합니다.
+거리 감쇠는 물리 `1/r` 감쇠와 공기 흡수로 엔진이 적용하며, 최대 지연과 페이드는 Listener 설정입니다.
+Scene View의 `Show Gizmo`는 path별 가청 범위를 표시합니다.
 
 ### 공개 메서드
 
@@ -224,27 +236,6 @@ STCoreV2의 path별 `Distance Attenuation`(0.5 ~ 1.5)과 `Max Delay Rate`, `Path
 
 여러 `AudioSource`의 재생 시점을 맞출 때는 동일한 `AudioSettings.dspTime`을 기준으로
 `PlayScheduled()`를 호출하십시오.
-
-## EQ
-
-SDK 릴리스 2.22.0-jhj부터 SimpleST 파라메트릭 EQ를 두 자리에서 씁니다.
-
-| 자리 | Inspector | 스크립트 | 거는 곳 |
-|---|---|---|---|
-| 소스 EQ | `SoundTraceSource`(와 `SoundTraceClipSource`)의 `Source EQ` | `SetSourceEq(SoundTraceEq)`, `SetSourceEqEnabled(bool)`, `GetSourceEq()` | 음원 신호, SimpleST 밴드 분리 앞. 그 음원의 모든 경로가 같은 톤 |
-| 출력 EQ | `SoundTraceListener`의 `Output EQ` | `SetOutputEq(SoundTraceEq)`, `SetOutputEqEnabled(bool)`, `GetOutputEq()` | SimpleST 믹스 전체, 렌더 끝(마스터 게인 앞) |
-
-- `SoundTraceEq`: `enabled`, `preampDb`(−48 ~ +12), `bands`(최대 16개).
-- `SoundTraceEqBand`: `enabled`, `type`, `frequencyHz`(20 ~ 20,000), `gainDb`(±24, Peaking·셸프만), `q`(0.1 ~ 30, 셸프는 3까지).
-- `SoundTraceEqFilterType`: `Peaking (Bell)` · `Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` ·
-  `Notch`. 컷은 12 dB/oct 고정이고, Inspector는 Gain을 쓰지 않는 종류에서 Gain을 숨깁니다.
-- 기본은 꺼짐이고 꺼져 있으면 엔진을 호출하지 않습니다. 바뀐 설정만 보내며 엔진이 20 ms 크로스페이드로 넘어갑니다.
-  출력 EQ만 바꾼 Inspector 편집은 렌더를 다시 시작하지 않습니다.
-- 소스 EQ를 끄면 엔진에서 지우고, 네이티브 음원을 다시 만들면 다시 겁니다.
-- 지원 여부는 `SoundTraceRuntime.SupportsSourceParametricEq` / `SupportsOutputParametricEq`로 확인합니다. 지원하지 않는
-  엔진에서는 켠 EQ를 경고 한 번과 함께 무시합니다.
-- FMOD/Wwise 통합 모드에서는 `SoundTraceListener`·`SoundTraceSource`가 꺼지므로 미들웨어 플러그인의 EQ를 씁니다 —
-  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq).
 
 ## SoundTraceObject
 
@@ -260,8 +251,8 @@ Build에서 메시 데이터를 읽어야 하므로 Import Settings의 `Read/Wri
 
 | 필드 | 기본값 | 설명 |
 |---|---:|---|
-| `BVH Type` | `LBVH_SIMD8` | `HKDTree`(→ SimpleST HybridKD), `LBVH`(→ LBVH), `LBVH_SIMD4/8/16`(→ LBVH_SIMD) |
-| `BVH Max Depth` / `Primitives Per Leaf` | `12` / `16` | 호환용 필드. **SimpleST가 leaf 크기를 내부에서 정하므로 무시**됩니다 |
+| `BVH Type` | `LBVH_SIMD8` | `HKDTree`(→ Sound-Tracing SDK HybridKD), `LBVH`(→ LBVH), `LBVH_SIMD4/8/16`(→ LBVH_SIMD) |
+| `BVH Max Depth` / `Primitives Per Leaf` | `12` / `16` | 호환용 필드. **엔진이 leaf 크기를 내부에서 정하므로 무시**됩니다 |
 | `Update Mode` | `Static` | `Static`(정적 TLAS) / `Dynamic`(변환만 갱신). `Refit`·`Rebuild`는 호환용 |
 
 `BVH Type`은 메시 등록 시점의 가속구조 종류만 고릅니다. 같은 Mesh asset·재질 슬롯·BVH 설정을
@@ -269,7 +260,7 @@ Build에서 메시 데이터를 읽어야 하므로 Import Settings의 `Read/Wri
 
 ### 스킨드·절차적 메시
 
-SimpleST에는 vertex refit이 없습니다. 변형된 지오메트리를 반영하려면 새 Mesh를 굽고
+엔진에는 vertex refit이 없습니다. 변형된 지오메트리를 반영하려면 새 Mesh를 굽고
 `SoundTraceObject`를 다시 등록(또는 `MeshCore.SetData`)해 **새 네이티브 메시로 교체**합니다.
 매 프레임 교체는 비용이 크므로 주기적으로(예: 0.2 ~ 0.5 s) 갱신하십시오.
 
@@ -303,8 +294,7 @@ mesh가 없고 child가 geometry를 소유하면 `Add To Child Meshes`를 사용
 각 밴드의 `R + A + T`는 `1`이어야 하며 허용오차는 `0.001`입니다. 잘못된 길이와 계수는 오류로
 보고하고, 8밴드 입력을 9밴드로 자동으로 채우지 않습니다.
 
-기본 재질은 SoundTrace 게임 재질 22종으로, 이전 버전과 이름·인덱스가 같습니다. 기존 씬의 재질
-슬롯 인덱스는 원래 재질을 그대로 가리킵니다.
+기본 재질은 SoundTrace 게임 재질 22종입니다.
 
 | 인덱스 | 재질 |
 |---|---|
@@ -313,15 +303,11 @@ mesh가 없고 child가 geometry를 소유하면 `Add To Child Meshes`를 사용
 | 12 ~ 17 | `Sherdded-woodFiberborad`, `Snow`, `Soil`, `Steel`, `Stone`, `WaterSurface` |
 | 18 ~ 21 | `TunableAbsorber`, `LowVarianceTarget`, `ConcreteBlockPainted`, `FiberglassReinforcedPlastic` |
 
-측정 데이터가 아닌 게임용 프리셋입니다. 기존 8밴드(63 Hz ~ 8 kHz) 값에서 반사 R과 투과 T는 그대로
-두고, 흡수는 A = 1 − R − T, 16 kHz 밴드는 8 kHz 값을 반복, scattering은 9밴드에 같은 값으로
-변환했습니다. 엔진과 밴드 구성이 바뀌었으므로 STCore와 음향 결과가 똑같지는 않습니다. 사용자 재질은
-9밴드로 다시 입력합니다.
+측정 데이터가 아닌 게임용 프리셋입니다. 사용자 재질은 9밴드로 입력합니다.
 
 ![재질 대역별 그래프 편집](/img/unity/Image_Mat_02.png)
 
-STCoreV2의 `Transmission Model`(`Surface` / `Solid Distance`)은 없습니다. 투과는 밴드별 표면
-투과 계수 `T`로만 표현합니다.
+투과는 밴드별 표면 투과 계수 `T`로 표현합니다.
 
 ## SoundTracePathVisualizer
 
@@ -343,60 +329,7 @@ Direct, Reflection, Diffraction, Reverb, Transmission을 path 종류별 색으�
 디버그용이며 성능 측정과 release build에서는 비활성화하십시오. 주요 공개 멤버는
 `Active`, `Render()`, `Clear()`입니다.
 
-## FMOD와 함께 쓰기
-
-프로젝트에 SimpleST FMOD 플러그인(`SimpleSTFmod`)이 있으면 SoundTrace는 자동으로 **FMOD 통합**으로
-동작합니다. 공간 음향 렌더는 FMOD Studio의 SimpleST Source / Listener DSP가 하고, SoundTrace는
-`SoundTraceManager` + `SoundTraceObject`로 지오메트리·재질만 플러그인 컨텍스트에 올립니다.
-`SoundTraceListener` / `SoundTraceSource`는 경고를 남기고 꺼집니다.
-
-![FMOD 에디션 패키지 가져오기](/img/fmod/unity-fmod-edition-import.png)
-
-1. FMOD for Unity 2.04를 프로젝트에 넣습니다(`Assets/Plugins/FMOD`. tgz로 설치했다면 `Packages/`로 embed).
-2. **FMOD 에디션** 패키지 `SoundTrace-SimpleST-FMOD-release.unitypackage`를 Project 창에 드래그 앤 드롭합니다.
-   별도 메뉴는 없습니다. 패키지의 `Runtime/Plugins/FMOD`에 `SimpleSTFmod`(Windows x64·macOS)가 들어 있고,
-   에디터가 로드될 때 SoundTrace가 이를 FMOD 플러그인 폴더에 복사하고 FMOD Settings › Dynamic Plugins에
-   등록합니다. FMOD를 나중에 넣어도 다음 로드 때 같은 일을 합니다.
-3. FMOD Studio에서 마스터 버스에 **SimpleST Listener**, 3D 이벤트 마스터 트랙에 FMOD Spatializer 대신
-   **SimpleST Source**를 넣습니다 — [FMOD 플러그인](./fmod.md).
-4. 씬에는 `SoundTraceManager`와 지오메트리용 `SoundTraceObject`, FMOD `StudioListener`를 둡니다.
-
-엔진 인스턴스는 하나입니다. SimpleSTFmod가 SoundTrace가 P/Invoke하는 같은 `SimpleSTRealtime`을
-로드하고, 모든 제어 호출은 플러그인의 컨트롤 스레드에서 실행됩니다. 2026-10-07 Unity 6000.3 +
-FMOD for Unity 2.04 E2E 통과(오브젝트 0→6→0, 경로 1→266→1).
-
-## Wwise와 함께 쓰기
-
-Wwise Unity 통합의 DSP 폴더에 `SimpleSTWwise`가 있으면 **Wwise 통합**으로 동작합니다(FMOD가
-함께 있으면 FMOD 우선).
-
-SoundTrace는 기본 패키지를 쓰고, Wwise 플러그인은 다른 Wwise 플러그인처럼 Audiokinetic Launcher가 넣습니다.
-
-![런처에 설치된 Sound-tracing](/img/wwise/launcher-bundle.png)
-
-1. 기본 패키지 `SoundTrace-SimpleST-release.unitypackage`를 Project 창에 드래그 앤 드롭합니다.
-2. Audiokinetic Launcher › **Plug-ins › Add from directory**에서 Wwise 배포물의 `launcher` 폴더를 골라
-   **Sound-tracing**을 설치합니다.
-3. Launcher › **Unity › Integrate(또는 Modify) Wwise in Project**를 실행합니다. 런처가 Wwise SDK에 설치된
-   플러그인(Sound-tracing 포함)을 Wwise Unity 통합의 DSP 폴더에 넣고, Wwise 사운드엔진이 로드합니다.
-   Unity 에디터를 닫은 상태에서 실행합니다.
-4. Wwise 프로젝트에서 Audio Objects 버스에 **Sound-tracing Renderer**를 넣고 3D 사운드를 그 버스로
-   보냅니다(Attenuation은 끄거나 평탄) — [Wwise 플러그인](./wwise.md).
-5. 씬에는 `AkInitializer`, `AkAudioListener`, 이미터의 `AkGameObj`와 `SoundTraceManager`,
-   `SoundTraceObject`를 둡니다. Wwise Unity의 단위는 미터이므로 `sceneRatio = 1`입니다.
-
-## WebGL
-
-Unity WebGL은 `OnAudioFilterRead`를 제공하지 않으므로 별도 경로를 사용합니다. AudioClip PCM과
-재생 상태를 전달하고, SimpleST buffered host renderer 결과를 공유 링버퍼로 AudioWorklet에 보냅니다.
-
-- AudioClip은 **Decompress On Load**로 임포트합니다.
-- HTTPS 또는 localhost에서 `Cross-Origin-Opener-Policy: same-origin`,
-  `Cross-Origin-Embedder-Policy: require-corp` 헤더로 서비스합니다. 오디오는 사용자 입력 후 시작합니다.
-- 빌드 후처리가 `Runtime/Web/*.bytes`를 `StreamingAssets/SoundTrace/`에 복사하므로 그 폴더를 함께 배포합니다.
-- Unity AudioMixer 효과 체인은 WebGL의 별도 SoundTrace 출력에 적용되지 않습니다.
-
-## 샘플
+## 데모 씬
 
 ### ST_SampleScene01
 
@@ -417,39 +350,49 @@ source/listener 이동, material preset 변경, Unity 원본 audio와 SoundTrace
 
 넓은 공간의 여러 source, wall occlusion, 이동 중 HRTF 방향감과 room response를 확인합니다.
 
-## STCoreV2에서 바뀐 계약
-
-| 이전 | 현재 |
-|---|---|
-| `exaSound` / STCoreV2 진입점 | `st_rt_*` / SimpleST ABI 6 |
-| 0 = 무효 핸들 | **-1 = 무효**, 0은 유효 |
-| 소스마다 리스너 렌더 | 소스별 mono stream + 리스너 전체 mix |
-| 8밴드 재질·scalar scattering | 63…16000 Hz **9밴드** R/A/T/scattering |
-| 변경 가능한 native material | 불변 material, 새 material/mesh로 재바인딩 |
-| STCore 다항식 거리 감쇠 | SimpleST 물리 거리 감쇠 |
-| STCore GPU/provider/path-cache 설정 | SimpleST CPU pipeline 스케줄러 |
-| KU100 Resources 테이블 | 내장 MIT KEMAR HRTF |
-| `exaMeshUpdateVertices` → `exaMeshRefit` | 새 메시로 교체 |
-
 ## 문제 해결
 
 | 증상 | 확인할 것 |
 |---|---|
 | 소리가 나지 않음 | Console의 첫 Manager 초기화 오류, Stereo/Best latency, AudioSource clip, Manager/Listener 존재 여부 |
 | Source/Listener/Object가 Manager를 요구함 | cascade 오류보다 먼저 기록된 `Failed to initialize SoundTraceManager` 원인 확인 |
-| 구버전과 충돌 | STCoreV2 `Assets/SoundTrace`를 Assets 밖으로 옮겼는지 |
 | Geometry가 반영되지 않음 | `Read/Write Enabled`, MeshFilter/MeshRenderer, child mesh 위치, 등록 상태 |
-| 실행 중 변형 mesh가 반영되지 않음 | SimpleST는 refit이 없음. 새 메시로 교체 |
+| 실행 중 변형 mesh가 반영되지 않음 | 엔진에 refit이 없음. 새 메시로 교체 |
 | FMOD/Wwise 모드에서 Listener/Source가 꺼짐 | 정상 — 렌더는 미들웨어 플러그인이 담당 |
 | 일부 음원이 공간화되지 않고 dry로 들림 | Console의 `ST_STATUS_BUDGET_EXCEEDED` 경고 — 음원을 줄이거나 `SoundTraceRuntime.MaxSources`를 올림 |
-| Android 빌드가 `SimpleST requires Android API 28 or newer`로 실패 | Player Settings › Minimum API Level을 28 이상으로 |
+| Android 빌드가 `Sound-Tracing SDK requires Android API 28 or newer`로 실패 | Player Settings › Minimum API Level을 28 이상으로 |
 | EQ를 켜도 소리가 그대로임 | Console의 EQ 미지원 경고, FMOD/Wwise 통합 모드인지(미들웨어 EQ 사용) |
 | Teleport 뒤 pitch가 튐 | transform 변경 직후 `ResetMotionState()` 호출 |
 | 성능이 부족함 | `Quality → Middle → Fast`, Reverb Ray Resolution 축소, path visualizer 비활성화 순서로 확인 |
 | 여러 음원이 comb filtering처럼 들림 | 동일한 `AudioSettings.dspTime`으로 `PlayScheduled()` 실행 |
 
+## EQ
+
+Sound-Tracing SDK의 파라메트릭 EQ를 두 자리에서 겁니다.
+
+- **소스 EQ** — 음원 신호 자체에 엔진의 밴드 분리 앞에서 겁니다. 그 음원의 직접음·반사·회절·잔향이 모두 같은 톤이 됩니다.
+- **출력 EQ** — Sound-Tracing SDK 믹스 전체에 렌더 끝(마스터 게인 앞)에서 겁니다.
+
+필터 종류는 Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 6종(컷은 12 dB/oct 고정),
+범위는 주파수 20 ~ 20,000 Hz, 게인 ±24 dB(Peaking·셸프만), Q 0.1 ~ 30(셸프는 3까지), 프리앰프 −48 ~ +12 dB입니다.
+기본은 꺼짐이고, 꺼져 있으면 엔진을 호출하지 않으므로 출력은 EQ가 없을 때와 같습니다. 바뀐 값만 보내며 엔진이
+20 ms 크로스페이드로 넘어갑니다.
+
+| 자리 | Inspector | 스크립트 |
+|---|---|---|
+| 소스 EQ | `SoundTraceSource`(와 `SoundTraceClipSource`)의 `Source EQ` | `SetSourceEq(SoundTraceEq)`, `SetSourceEqEnabled(bool)`, `GetSourceEq()` |
+| 출력 EQ | `SoundTraceListener`의 `Output EQ` | `SetOutputEq(SoundTraceEq)`, `SetOutputEqEnabled(bool)`, `GetOutputEq()` |
+
+- `SoundTraceEq`: `enabled`, `preampDb`, `bands`(최대 16개). `SoundTraceEqBand`: `enabled`, `type`, `frequencyHz`, `gainDb`, `q`.
+- `SoundTraceEqFilterType`: `Peaking (Bell)` · `Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` · `Notch`.
+  Inspector는 Gain을 쓰지 않는 종류에서 Gain을 숨깁니다.
+- 출력 EQ만 바꾼 Inspector 편집은 렌더를 다시 시작하지 않습니다. 소스 EQ를 끄면 엔진에서 지우고, 네이티브 음원을 다시 만들면 다시 겁니다.
+- 지원 여부는 `SoundTraceRuntime.SupportsSourceParametricEq` / `SupportsOutputParametricEq`로 확인합니다.
+- FMOD/Wwise 통합 모드에서는 `SoundTraceListener`·`SoundTraceSource`가 꺼지므로 미들웨어 플러그인의 EQ를 씁니다 —
+  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq).
+
 ## 다음 문서
 
-- [SDK 개요](./overview.md)
+- [지원 플랫폼](./overview.md)
 - [FMOD 플러그인](./fmod.md) · [Wwise 플러그인](./wwise.md)
 - [Web SDK](./web.md) · [Unreal Engine SDK](./ue.md)

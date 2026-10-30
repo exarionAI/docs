@@ -105,9 +105,7 @@ const config = {
           {
             title: '제품',
             items: [
-              {label: 'Core', to: '/core/simplest'},
               {label: 'SDK', to: '/sdk/overview'},
-              {label: 'ExaTools', to: '/exatools/overview'},
             ],
           },
           {

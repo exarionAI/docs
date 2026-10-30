@@ -1,21 +1,15 @@
 ---
 title: Web
-description: soundtrace.js 1.1.0 — SimpleST ABI 6 WebAssembly SDK のインストール、配信要件、HRTF、品質プリセット、材質、EQ、トラブルシューティング。
+description: Sound-Tracing SDK for Web（soundtrace.js）— WebAssembly SDK のインストール、配信要件、HRTF、品質プリセット、材質、EQ、トラブルシューティング。
 ---
 
-# Web SDK
+# Sound-Tracing SDK for Web
 
-**soundtrace.js** は、[SimpleST](../core/simplest.md) をブラウザーで使うための TypeScript/WebAssembly
+**soundtrace.js** は、Sound-Tracing SDK をブラウザーで使うための TypeScript/WebAssembly
 SDK です。Three.js のようなレンダリングシーンのメッシュ・材質・音源・リスナーを Sound Tracing のシーンに接続し、
 Web Audio graph に空間化されたステレオ出力を提供します。
 
-1.0.0 からエンジンが STCoreV2 から SimpleST に変わり、1.1.0 は **SimpleST 2.22.0 / ABI 6** を使います
-（SDK リリース 2.22.0-jhj.5。以前の SDK リリース 2.18.2-jhj.7 では同じ 1.1.0 が SimpleST 2.18.2 を使い、1.0.0 = SimpleST 2.12.0）。
-今回のリリースでパッケージバージョンはそのままで、[ソース EQ と出力 EQ](#eq)（`source.setEq`、`sound.setOutputEq`）が入り、
-リスナー `orientation` クォータニオンの頭部の傾き（roll）がエンジンまで伝わります（従来は yaw/pitch のみ）。2.18.2 SDK で `maxSources`
-オプション（音源数の上限）が入りました。既存の呼び出し側は変わりません。`SoundTrace`、`Source`、`Mesh`、`Listener` の facade は維持されますが、STCoreV2 と比べて
-バックエンド・HRTF・材質・オプションの契約が変わっています。
-全オプションとエンティティ API は [Facade API](./web/facade.md)、低レベルの SimpleST モジュールアクセスは
+全オプションとエンティティ API は [Facade API](./web/facade.md)、低レベルのモジュールアクセスは
 [Native API](./web/native.md) を参照してください。
 
 ![soundtrace.js の構造](/img/web/architecture.png)
@@ -24,16 +18,15 @@ Web Audio graph に空間化されたステレオ出力を提供します。
 
 | 項目 | 現在の動作 |
 |---|---|
-| エンジン | SimpleST Realtime（pthreads WASM）+ Offline（シングルスレッド、IR 解析専用） |
+| エンジン | Sound-Tracing SDK Realtime（pthreads WASM）+ Offline（シングルスレッド、IR 解析専用） |
 | 実行モード | `single_thread`（同期伝搬）/ `multi_thread`（パイプライン伝搬）。**どちらも専用 Worker + pthread WASM** |
 | 初期反射 | 常に **Hybrid**。レンダー開始・HRTF 変更・reset の後も再適用 |
 | HRTF | 内蔵 MIT KEMAR（`'mit-kemar'`）、同梱 SADIE II D2（`'sadie-d2'`） |
 | 品質 | `fast` / `balanced` / `quality` — リスナー・音源のレイ格子と反射深度をまとめて設定 |
 | 材質 | 9バンド（63 Hz ~ 16 kHz）SoundTrace ゲーム材質 22 種、名前・エイリアス・インデックスで指定 |
 | 出力 | 音源ごとにモノ入力、リスナーレンダラーがステレオ 1 本をミックス（`sound.output`） |
-| 音源の上限 | 既定 32 音源 · 音源メモリ 64 MiB · 遅延リングの天井 0.5 s。音源数は `maxSources` オプションで変更します — [音源メモリ予算](../core/simplest.md#音源メモリ予算) |
+| 音源の上限 | 既定 32 音源 · 音源メモリ 64 MiB · 遅延リングの天井 0.5 s。音源数は `maxSources` オプションで変更します |
 | EQ | 音源ごとのソース EQ とグローバルな出力 EQ、パラメトリック最大 16 バンド — [EQ](#eq) |
-| GPU | なし。`mode: 'gpu'`、`enableGpu()` はエラー |
 
 ## 要件
 
@@ -50,7 +43,7 @@ Web Audio graph に空間化されたステレオ出力を提供します。
 
 | 形態 | ファイル | インストール |
 |---|---|---|
-| vendor ツリー | `soundtrace-js-release-vendor.zip`（ルート `sdk/`） | 静的パスに展開して配信。同梱の `install.py` がハッシュ検証後に `vendor/sound-tracing/sdk` へインストール |
+| vendor ツリー | `soundtrace-js-release-vendor.zip`（ルート `sdk/`） | 静的パス（例: `vendor/sound-tracing/sdk`）に展開して配信 |
 | npm パッケージ | `exarionai-soundtrace.js-1.1.0.tgz` | `npm install /absolute/path/exarionai-soundtrace.js-1.1.0.tgz` |
 
 ```ts
@@ -114,7 +107,7 @@ await sound.update(0);
 player.start();
 ```
 
-SimpleST の座標系は Unity と同じ `+Z` forward です。Three.js のように `-Z` を見るレンダラーでは、上の
+Sound-Tracing SDK の座標系は Unity と同じ `+Z` forward です。Three.js のように `-Z` を見るレンダラーでは、上の
 `coordinateBasis` を指定しないと左右・前後が合いません。
 
 ## 実行モード
@@ -133,12 +126,9 @@ pool は 5 で、`propagationThreadCount` は 1 ~ 5 です。メインスレッ�
 
 | 呼び出し | テーブル | 追加 asset |
 |---|---|---|
-| （呼び出さない） | 内蔵 MIT KEMAR（SDK 既定）。`setOutputMode('speaker')` でステレオパンニングに切り替え | なし |
+| （呼び出さない） | エンジン内蔵 MIT KEMAR — SDK 既定。`setOutputMode('speaker')` ならステレオパンニング | なし |
 | `loadHrtf('mit-kemar')` または `'convolution'` | エンジン内蔵 MIT KEMAR 128 タップ | なし |
 | `loadHrtf('sadie-d2')` または `'steamaudio'` | SADIE II D2 KEMAR 8,802 方向 256 タップ | `SADIE_D2_44K_16bit_256tap.hrtfbin` |
-
-旧 KU100 parametric / convolution / SADIE H12 テーブルと `Band8` モードはもうありません。
-`loadHrtf('parametric')` はエラーです。
 
 ```ts
 await sound.loadHrtf('sadie-d2');
@@ -164,10 +154,10 @@ sound.setQuality('quality');
 
 メッシュには材質の名前、エイリアス、またはインデックスを指定します。既定テーブルは SoundTrace ゲーム材質
 22 種で、Unity SDK と同じ表・同じインデックスです。測定データではなくゲーム用プリセットで、すべての値は
-9バンド R/A/T/scattering です。既存の 8バンド（63 Hz ~ 8 kHz）値から反射 R と透過 T はそのまま残し、
-吸収は A = 1 − R − T、16 kHz バンドは 8 kHz の値を繰り返し、scattering は 9バンドに同じ値として変換しました。
+9バンド R/A/T/scattering です。
 
-名前とエイリアスは大文字・小文字を区別しません。材質名は元の綴りのままです（`Sherdded-woodFiberborad`）。
+名前とエイリアスは大文字・小文字を区別しません。材質名は元の綴りのままです
+（`Sherdded-woodFiberborad`）。
 
 | インデックス | 材質名 | エイリアス |
 |---:|---|---|
@@ -203,8 +193,8 @@ sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
 
 :::warning
 テーブルにない名前は例外を出さず、既定材質（`defaultMaterialType = 0`、`Concrete`）に黙って
-置き換えられます。以前のドキュメントの `BRAS_*` 名もテーブルにないため `Concrete` になります。材質が
-意図どおり適用されているか確認するには、上の名前かエイリアスを正確に使ってください。
+置き換えられます。材質が意図どおり
+適用されているか確認するには、上の名前かエイリアスを正確に使ってください。
 :::
 
 材質を直接定義するには、バンドごとに `R + A + T = 1`（許容誤差 0.001）を満たす 9 個の値を 4 組
@@ -221,42 +211,10 @@ sound.output.connect(audioContext.destination);
 SDK は音源ごとの**入力キャプチャノード**と**リスナーマスター出力**（`sound.output`）を 1 つ提供します。
 音源ごとの出力エフェクトは `sound.output` の後ろへ移す必要があります。
 
-SDK は出力リミッターを**無効の状態**にしておきます。SimpleST 2.18 は生成直後に true-peak リミッター（−1 dBTP、137 サンプル
-遅延）を有効にしますが、`sound.output` の後ろの Web Audio マスターバスはアプリが所有するためです。エンジンのリミッターが
+SDK は出力リミッターを**無効の状態**にしておきます。`sound.output` の後ろの Web Audio マスターバスはアプリが所有するためです。エンジンのリミッターが
 必要なら、`sound.listener.setRenderOptions({ useLimiter: true })` で true-peak リミッターを有効にします。
 
-同じ理由で、SimpleST 2.21 からエンジンが生成直後に有効にする等ラウドネス補正（低域シェルフ約 +7.2 dB @ 120 Hz、高域 +1.8 dB）も
-コンテキスト作成直後に無効にします（`reset()` を含む）。無効にした出力はエンジン 2.20 とビット一致し、この設定は公開しません。
-
-## EQ
-
-SDK リリース 2.22.0-jhj から、SimpleST のパラメトリック EQ を音源と出力にかけられます。
-
-```ts
-source.setEq({ bands: [
-  { type: 'highpass', frequencyHz: 150 },
-  { type: 'peaking', frequencyHz: 3000, gainDb: 4, q: 1.2 },
-] });
-sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, gainDb: 3 }] });
-
-source.setEq(null);        // ソース EQ を削除
-sound.setOutputEq(null);   // 出力 EQ を無効化
-```
-
-| API | かける場所 |
-|---|---|
-| `Source.setEq(eq \| null)` | 音源信号、エンジンのバンド分割の前。その音源の直接音・反射・回折・残響がすべて同じ音色になります。ライブ・クリップ入力の両方。`renderMonoImpulseResponse` のオフライン圧力 IR にも入ります（`getIRs()` のバンドエネルギーには入りません） |
-| `SoundTrace.setOutputEq(eq \| null)` | グローバルな出力 EQ 1 つ、レンダー末尾（マスターゲインの前）。`reset()` 後も維持。オフライン分析には入りません |
-
-- `eq = { enabled = true, preampDb = 0 (−48 ~ +12), bands = [] (最大 16) }`
-- `band = { type = 'peaking', enabled = true, frequencyHz = 1000 (20 ~ 20,000), gainDb = 0 (±24、peaking・シェルフのみ), q = 0.7071 (0.1 ~ 30、シェルフはエンジンが 3 に制限) }`
-- `type` は `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'` です（Web Audio
-  `BiquadFilterType` の名前、カットは 12 dB/oct 固定）。
-- 範囲外の値は `RangeError` で拒否し、コマンドを送りません。`{ enabled: false }` はバンドを保持したまま素通しします。
-- EQ を呼ばなければエンジンの EQ を呼び出さないため、出力は EQ がないときとビット一致します。同じ値は再送せず、
-  変更された値はエンジンが 20 ms のクロスフェードで切り替えます。
-- EQ に対応しない以前のコアでは、エンジンのバージョンを示して失敗します。適用された出力 EQ は `debugSnapshot().simplest.output.eq` に
-  あります。
+同じ理由で、エンジンが生成直後に有効にする等ラウドネス補正もコンテキスト作成直後に無効にします（`reset()` を含む）。この設定は公開しません。
 
 ## 更新と破棄
 
@@ -302,16 +260,52 @@ Multi-room occlusion、Runtime capability のサンプルを実行できます�
 |---|---|
 | 音が出ない | ユーザー gesture 内で `AudioContext.resume()` を先に呼んだか、`sound.output` を destination に接続したか |
 | `SoundTrace.create` が cross-origin isolation エラーで拒否される | ページと Worker 応答の COOP/COEP ヘッダー、`crossOriginIsolated === true`（ST でも必要） |
-| `mode: 'gpu'` / `enableGpu()` のエラー | SimpleST Web は CPU 専用。オプションを削除 |
-| `transmissionModel: 'solid'`、`defaultMeshBuild`、`hrtfQuality` などが拒否される | STCoreV2 専用オプション。[Facade API](./web/facade.md) の拒否リストを参照 |
 | 方向が逆に聞こえる | レンダラーの座標系に合った `coordinateBasis`（`-Z` forward なら必須） |
 | 材質が効いていないように見える | 名前が材質テーブル/エイリアスにあるか（なければコンクリートに置き換え） |
 | コア/asset の 404 | バンドラーの事前バンドル除外、`coreBaseUrl`・`assetBaseUrl`、`.wasm` の MIME |
 | 性能が足りない | 品質プリセットを下げて `thread: 'mt'` を使用、経路可視化を無効化 |
 | `setEq` / `setOutputEq` が `RangeError` | 周波数・ゲイン・Q・プリアンプの範囲、バンドが 16 個以下か |
 
+## EQ
+
+Sound-Tracing SDK のパラメトリック EQ を 2 か所でかけます。
+
+- **ソース EQ** — 音源信号そのものに、エンジンのバンド分割の前でかけます。その音源の直接音・反射・回折・残響がすべて同じ音色になります。
+- **出力 EQ** — Sound-Tracing SDK のミックス全体に、レンダー末尾（マスターゲインの前）でかけます。
+
+フィルターの種類は Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch の 6 種（カットは 12 dB/oct 固定）、
+範囲は周波数 20 ~ 20,000 Hz、ゲイン ±24 dB（Peaking・シェルフのみ）、Q 0.1 ~ 30（シェルフは 3 まで）、プリアンプ −48 ~ +12 dB です。
+既定は無効で、無効の間はエンジンを呼び出さないため、出力は EQ がないときと同じです。変更された値だけを送り、エンジンが
+20 ms のクロスフェードで切り替えます。
+
+```ts
+source.setEq({ bands: [
+  { type: 'highpass', frequencyHz: 150 },
+  { type: 'peaking', frequencyHz: 3000, gainDb: 4, q: 1.2 },
+] });
+sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, gainDb: 3 }] });
+
+source.setEq(null);        // ソース EQ を削除
+sound.setOutputEq(null);   // 出力 EQ を無効化
+```
+
+| API | かける場所 |
+|---|---|
+| `Source.setEq(eq \| null)` | 音源信号、エンジンのバンド分割の前。その音源の直接音・反射・回折・残響がすべて同じ音色になります。ライブ・クリップ入力の両方。`renderMonoImpulseResponse` のオフライン圧力 IR にも入ります（`getIRs()` のバンドエネルギーには入りません） |
+| `SoundTrace.setOutputEq(eq \| null)` | グローバルな出力 EQ 1 つ、レンダー末尾（マスターゲインの前）。`reset()` 後も維持。オフライン分析には入りません |
+
+- `eq = { enabled = true, preampDb = 0 (−48 ~ +12), bands = [] (最大 16) }`
+- `band = { type = 'peaking', enabled = true, frequencyHz = 1000 (20 ~ 20,000), gainDb = 0 (±24、peaking・シェルフのみ), q = 0.7071 (0.1 ~ 30、シェルフはエンジンが 3 に制限) }`
+- `type` は `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'` です（Web Audio
+  `BiquadFilterType` の名前、カットは 12 dB/oct 固定）。
+- 範囲外の値は `RangeError` で拒否し、コマンドを送りません。`{ enabled: false }` はバンドを保持したまま素通しします。
+- EQ を呼ばなければエンジンの EQ を呼び出さないため、出力は EQ がないときとビット一致します。同じ値は再送せず、
+  変更された値はエンジンが 20 ms のクロスフェードで切り替えます。
+- EQ に対応しない以前のコアでは、エンジンのバージョンを示して失敗します。適用された出力 EQ は `debugSnapshot().simplest.output.eq` に
+  あります。
+
 ## 次のドキュメント
 
-- [Facade API](./web/facade.md) — 生成オプション、シーン・音源・メッシュ API、ライフサイクル、拒否される旧オプション
-- [Native API](./web/native.md) — SimpleST モジュールローダーと低レベルアダプター
+- [Facade API](./web/facade.md) — 生成オプション、シーン・音源・メッシュ API、ライフサイクル
+- [Native API](./web/native.md) — Sound-Tracing SDK モジュールローダーと低レベルアダプター
 - [Performance Guide](./performance.md)

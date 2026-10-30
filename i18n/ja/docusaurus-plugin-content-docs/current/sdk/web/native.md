@@ -1,12 +1,12 @@
 ---
 title: Native API
-description: soundtrace.js の低レベルエントリポイント `@exarionai/soundtrace.js/native` — SimpleST WASM モジュールローダー、ヒープヘルパー、Realtime/Offline アダプター。
+description: soundtrace.js の低レベルエントリポイント `@exarionai/soundtrace.js/native` — WASM モジュールローダー、ヒープヘルパー、Realtime/Offline アダプター、EQ。
 ---
 
 # Native API
 
-`@exarionai/soundtrace.js/native` は、facade が内部で使う SimpleST モジュールローダーとアダプターを
-公開します。一般的なアプリは [Facade API](./facade.md) を使ってください。この表面は SimpleST C ABI の
+`@exarionai/soundtrace.js/native` は、facade が内部で使う Sound-Tracing SDK モジュールローダーとアダプターを
+公開します。一般的なアプリは [Facade API](./facade.md) を使ってください。この表面は Sound-Tracing SDK C ABI の
 契約（パッケージに同梱された `core/Include/SimpleST/ABI/*.h`）にそのまま従い、バージョン間の互換性保証は
 facade より弱くなります。
 
@@ -22,13 +22,7 @@ import {
 
 ## サポート範囲
 
-:::warning 変更点
-STCoreV2 時代の `SoundScene` / `SoundListener` / `SoundMesh` / `SoundObject` / `SoundCollider` /
-`MaterialTable` / `Propagator` / `Diagnostics` クラスと `./internal` entry は 1.0.0 で削除されました。
-現在の低レベル契約は SimpleST ABI 6 ヘッダーと以下のアダプターです。
-:::
-
-- すべての SimpleST `[control]` 呼び出しは**1 つの Worker** でのみ行います。facade は専用の control Worker を
+- すべての Sound-Tracing SDK `[control]` 呼び出しは**1 つの Worker** でのみ行います。facade は専用の control Worker を
   持ち、そこでのみエンジンを操作します。
 - メインスレッドで `st_rt_propagate` のようなブロッキングエントリポイントを呼ぶと、`Atomics.wait` がブロックされて失敗します。
 
@@ -41,7 +35,7 @@ STCoreV2 時代の `SoundScene` / `SoundListener` / `SoundMesh` / `SoundObject` 
 | `Heap` | WASM ヒープに POD を書き込み・読み出すヘルパー。`structSize`/`apiVersion` のスタンプが付いた構造体の割り当て（`stamped`）を含む |
 | `layout` | `STRT_CreateOptions`、`STMaterial`、`STRenderOptions`、`STTiming`、`STSceneStats`、`STProcessStats`、`STIrStats` などのオフセット/サイズ |
 | `packMaterial` / `validateMaterial` | 9バンド R/A/T/scattering を `STMaterial` にパックし、`R+A+T=1` を検証 |
-| `SimpleSTRealtime` | リスナー 1 つと共有レンダラーを所有するアダプター。facade のコマンドを `st_rt_*` 呼び出しに変換します。`features`（1.1.0）は、エンジンが capability ビットと export の両方を備えたオプション機能（クリップ・trigger・再生制御・true-peak リミッター・マスターゲイン）です |
+| `SimpleSTRealtime` | リスナー 1 つと共有レンダラーを所有するアダプター。facade のコマンドを `st_rt_*` 呼び出しに変換します。`features`は、エンジンが capability ビットと export の両方を備えたオプション機能（クリップ・trigger・再生制御・true-peak リミッター・マスターゲイン）です |
 | `analyzeScene(module, snapshot, …)` | Offline コンテキストにシーンスナップショットを複製して Raw IR / 圧力 IR を計算 |
 | `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
@@ -74,31 +68,27 @@ rt.reset(); rt.dispose();
 - レンダーオプションの変更（`useDoppler`、`useLimiter`、`diffuseEnabled`）は `STRenderOptions` の該当フィールドを
   上書きしますが、`reserved0 = 1`（Hybrid）は常に維持します。Hybrid が外れると `diagnostics()` が例外を投げます。
 - レンダー開始のたびに出力段を明示します: リミッター無効（`useLimiter: true` なら true-peak）、マスターゲイン 0 dB。
-  SimpleST 2.18 の生成直後の既定値（true-peak リミッター有効）には頼りません。
-- コンテキスト作成直後に SimpleST 2.21 が有効にする等ラウドネス補正を無効にします（`features.loudnessCompensation` のとき）。
+- コンテキスト作成直後にエンジンが有効にする等ラウドネス補正を無効にします（`features.loudnessCompensation` のとき）。
 - リスナーの向きは forward/up から作ったクォータニオンで `st_rt_listener_set_orientation_q` に渡し、roll を保ちます。
-- ソース EQ は `st_rt_source_set_parametric_eq`（解除は `st_rt_source_set_eq(NULL)`）、出力 EQ は
-  `st_rt_render_set_parametric_eq` でかけます。`features.sourceParametricEq`・`outputParametricEq` がなければ拒否します。
 
 ## 診断スナップショット
 
 ```ts
 interface SimpleSTDiagnostics {
-  engine: 'SimpleST'; abiVersion: number; version: string;
+  engine: 'Sound-Tracing SDK'; abiVersion: number; version: string;
   scheduler: 'synchronous' | 'pipelined'; earlyReflectionMode: 'hybrid'; spatializer: number;
   scene:  { meshes; objects; sources; triangles };
   timing: { propagationMs; directMs; reflectionDiffractionMs; reverbMs; irMs; renderMs };
   render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
-  features?: SimpleSTFeatures;                                                   // 1.1.0
-  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // 1.1.0、適用された出力段（eq = 出力 EQ）
-  inputs?: { live; clip };                                                       // 1.1.0、ライブ/クリップ音源数
+  features?: SimpleSTFeatures;
+  output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // 適用された出力段（eq = 出力 EQ）
+  inputs?: { live; clip };                                                       // ライブ/クリップ音源数
 }
 ```
 
 facade の `debugSnapshot().simplest` と `getStatistics().simplest` は同じオブジェクトを返します。
-旧 STCore の profile / memory / ray 統計と音源ごとの `ExaRenderStats` はありません。
 
 ## オーディオ契約
 
@@ -109,8 +99,27 @@ facade の `debugSnapshot().simplest` と `getStatistics().simplest` は同じ�
   リングからコピーします。
 - 同時ストリームのスロットは 64 個です。超過した音源は生成に失敗します。
 
+## EQ
+
+Sound-Tracing SDK のパラメトリック EQ を 2 か所でかけます。
+
+- **ソース EQ** — 音源信号そのものに、エンジンのバンド分割の前でかけます。その音源の直接音・反射・回折・残響がすべて同じ音色になります。
+- **出力 EQ** — Sound-Tracing SDK のミックス全体に、レンダー末尾（マスターゲインの前）でかけます。
+
+フィルターの種類は Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch の 6 種（カットは 12 dB/oct 固定）、
+範囲は周波数 20 ~ 20,000 Hz、ゲイン ±24 dB（Peaking・シェルフのみ）、Q 0.1 ~ 30（シェルフは 3 まで）、プリアンプ −48 ~ +12 dB です。
+既定は無効で、無効の間はエンジンを呼び出さないため、出力は EQ がないときと同じです。変更された値だけを送り、エンジンが
+20 ms のクロスフェードで切り替えます。
+
+| 位置 | エンジン呼び出し | サポート確認 |
+|---|---|---|
+| ソース EQ | `st_rt_source_set_parametric_eq`（解除は `st_rt_source_set_eq(ctx, id, NULL)`） | `features.sourceParametricEq` |
+| 出力 EQ | `st_rt_render_set_parametric_eq`（無効化は `enabled = 0`） | `features.outputParametricEq` |
+
+`SimpleSTRealtime` アダプターは facade の `source.setEq` / `sound.setOutputEq` コマンドをこの 2 つの呼び出しに変換し、両 feature がない
+コアでは拒否します。適用された出力 EQ は `diagnostics().output.eq` にあります。
+
 ## 関連ドキュメント
 
 - [Web SDK 概要](../web.md)
 - [Facade API](./facade.md)
-- [SimpleST エンジン](../../core/simplest.md) — C ABI の全契約

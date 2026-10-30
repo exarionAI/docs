@@ -1,47 +1,71 @@
 ---
 title: Unity
-description: SoundTrace Unity SDK 0.4.0（SimpleST 2.22.0 / ABI 6）的安装、组件 Inspector 约定、HRTF 与输出、声源/输出 EQ、材质、FMOD/Wwise 集成模式、WebGL。
+description: Sound-Tracing SDK for Unity — 安装、FMOD/Wwise 集成、组件 Inspector 约定、HRTF 与输出、材质、声源/输出 EQ。
 ---
 
-# SoundTrace SDK for Unity
+# Sound-Tracing SDK for Unity
 
-SoundTrace Unity SDK 是一款实时空间声学插件，用于把 Unity 的网格、Renderer 材质槽、声源和听者
-连接到 [SimpleST](../core/simplest.md)。从 0.3.0 起，引擎由 STCoreV2 换成了 SimpleST，
-0.4.0 使用 **SimpleST 2.22.0 / ABI 6**（SDK 发行版 2.22.0-jhj.5。上一 SDK 发行版 2.18.2-jhj.7 中同一 0.4.0 使用
-SimpleST 2.18.2；0.3.0 = SimpleST 2.12.0）。渲染器以 **Hybrid** 模式启动。本次发行包版本保持不变，新增了
-[声源 EQ 与输出 EQ](#eq)，并以四元数传入听者方向，从而反映头部倾斜（roll）（以前仅 yaw/pitch）。2.18.2 SDK 新增了
-[声源数量上限](#声源数量上限)和 Android 最低 API 28。
-`SoundTraceManager`、`SoundTraceListener`、`SoundTraceSource`、`SoundTraceObject`、
-`SoundTracePathVisualizer` 组件名称、脚本 GUID 和示例场景保持不变。
+Sound-Tracing SDK for Unity 是把声音追踪引擎 DLL 针对 Unity 用户封装而成的 Unity 包。
+可以直接沿用 Unity 的组件模式、管理器脚本和 ScriptableObject，舒适地制作内容。
+同时附带演示场景。
 
 ## 要求与平台
 
-| 项目 | 当前包状态 |
+| 项目 | 值 |
 |---|---|
-| Unity | 2022.3 LTS 或更高（已验证 2022.3.62f2 · 6000.3） |
+| Unity | 2022.3 LTS 或更高（Unity 6 已验证） |
 | 包 | `SoundTrace-SimpleST-release.unitypackage`（基础版，用于 Wwise）/ `SoundTrace-SimpleST-FMOD-release.unitypackage`（FMOD 版）→ `Assets/SoundTrace` |
-| 随包原生插件 | Windows x64 · macOS Universal · Linux x86_64 · Android（ARMv7/ARM64/x86_64，API 28+ — 引擎 `.so` 直接链接 `libaaudio`，因此在构建阶段检查）· iOS 15+（device/simulator XCFramework）· WebGL |
-| WebGL | 支持 — 独立 pthread WASM + AudioWorklet 路径（不使用 `OnAudioFilterRead`） |
-| GPU | 无。`SoundTraceManager.IsGpuPropagate` 始终为 `false` |
+| 平台 | Windows x64 · macOS Universal · Linux x86_64 · Android（ARMv7/ARM64/x86_64，API 28+）· iOS 15+ |
+| WebGL | 不支持 — Unity WebGL 不支持音频滤波器（`OnAudioFilterRead`）。Web 请使用 C SDK 的 WASM 构建 [Web SDK](./web.md) |
 
 ## 安装
 
-1. 不需要关闭目标项目的 Unity。在 `Assets > Import Package > Custom Package` 中选择
-   `.unitypackage`，即可安装到 `Assets/SoundTrace`。
-2. 如果存在基于 STCoreV2 的旧版 `Assets/SoundTrace`，请**先备份到 Assets 之外**再导入，
-   以免旧的原生插件一起被加载。同一 SimpleST 包的更新会保留 GUID，可以直接覆盖。
-3. 也可以用发行文件夹中的 `install.py` 自动安装。它会检查文件哈希和 GUID，并把现有安装
-   保留到项目的 `.simplest-backups` 中。
-
-```bash
-python3 install.py /path/to/UnityProject
-```
+把 `.unitypackage` 拖放到 Project 窗口，或通过 `Assets > Import Package > Custom Package` 导入，
+即可安装到 `Assets/SoundTrace`。同一包的更新会保留 GUID，可以直接覆盖。
 
 与 FMOD、Wwise 配合使用时，请按照下文的 [与 FMOD 配合使用](#与-fmod-配合使用)、[与 Wwise 配合使用](#与-wwise-配合使用) 操作。
 FMOD 只需导入 FMOD 版包即可，Wwise 插件则由 Audiokinetic Launcher 安装。
 
-示例通过在 Package Manager 中选择 SoundTrace SDK，然后 `Samples > Demo Assets > Import` 导入。
-示例 UI 只有在存在 `com.unity.ugui` 时才会编译。
+## 与 FMOD 配合使用
+
+如果项目中存在 Sound-Tracing SDK FMOD 插件（`SimpleSTFmod`），SoundTrace 会自动以 **FMOD 集成**方式工作。
+空间声学渲染由 FMOD Studio 的 SimpleST Source / Listener DSP 完成，SoundTrace 只通过
+`SoundTraceManager` + `SoundTraceObject` 把几何体和材质上传到插件上下文。
+`SoundTraceListener` / `SoundTraceSource` 会记录警告并关闭。
+
+![导入 FMOD 版包](/img/fmod/unity-fmod-edition-import.png)
+
+1. 把 FMOD for Unity 2.04 放入项目（`Assets/Plugins/FMOD`；如果用 tgz 安装，则以 embed 方式放入 `Packages/`）。
+2. 把 **FMOD 版**包 `SoundTrace-SimpleST-FMOD-release.unitypackage` 拖放到 Project 窗口。
+   没有单独的菜单。包的 `Runtime/Plugins/FMOD` 中含有 `SimpleSTFmod`（Windows x64、macOS），
+   编辑器加载时 SoundTrace 会把它复制到 FMOD 插件文件夹，并注册到 FMOD Settings › Dynamic Plugins。
+   即使之后才放入 FMOD，下次加载时也会执行同样的操作。
+3. 在 FMOD Studio 中，在主总线上放置 **SimpleST Listener**，在 3D 事件的主轨道上用
+   **SimpleST Source** 替代 FMOD Spatializer — 参见 [FMOD 插件](./fmod.md)。
+4. 场景中放置 `SoundTraceManager`、用于几何体的 `SoundTraceObject` 和 FMOD `StudioListener`。
+
+引擎实例只有一个。SimpleSTFmod 加载的 `SimpleSTRealtime` 与 SoundTrace 通过 P/Invoke 使用的是同一个，
+所有控制调用都在插件的控制线程上执行。
+
+## 与 Wwise 配合使用
+
+如果 Wwise Unity 集成的 DSP 文件夹中存在 `SimpleSTWwise`，则以 **Wwise 集成**方式工作
+（如果同时存在 FMOD，则 FMOD 优先）。
+
+SoundTrace 使用基础包，Wwise 插件则与其他 Wwise 插件一样由 Audiokinetic Launcher 安装。
+
+![Launcher 中已安装的 Sound-tracing](/img/wwise/launcher-bundle.png)
+
+1. 把基础包 `SoundTrace-SimpleST-release.unitypackage` 拖放到 Project 窗口。
+2. 把从 Audiokinetic Launcher 商店获取的 **Sound-Tracing SDK for Wwise**（插件名称 `Sound-tracing`）
+   安装到 Wwise。
+3. 运行 Launcher › **Unity › Integrate（或 Modify）Wwise in Project**。Launcher 会把 Wwise SDK 中已安装的
+   插件（包括 Sound-tracing）放入 Wwise Unity 集成的 DSP 文件夹，并由 Wwise 声音引擎加载。
+   请在关闭 Unity 编辑器的状态下运行。
+4. 在 Wwise 项目中，在 Audio Objects 总线上放置 **Sound-tracing Renderer**，并把 3D 声音发送到该总线
+   （Attenuation 关闭或设为平坦）— 参见 [Wwise 插件](./wwise.md)。
+5. 场景中放置 `AkInitializer`、`AkAudioListener`、发射器上的 `AkGameObj`，以及 `SoundTraceManager`、
+   `SoundTraceObject`。Wwise Unity 的单位是米，因此 `sceneRatio = 1`。
 
 ## Unity Audio 设置
 
@@ -52,11 +76,11 @@ FMOD 只需导入 FMOD 版包即可，Wwise 插件则由 Audiokinetic Launcher �
 ![Unity Audio 设置](/img/unity/Image01_AudioSetting.png)
 
 如果这些设置不一致，Manager 和 Listener Inspector 会显示警告。输出采样率直接使用设备值
-（SimpleST 与内部 44.1 kHz 相互转换），设备采样率变化时会以相同设置重建原生状态。
+（Sound-Tracing SDK 与内部 44.1 kHz 相互转换），设备采样率变化时会以相同设置重建原生状态。
 
 ## Audio Asset Import 设置
 
-以使用单声道声源为前提，音频剪辑设置为 PCM 格式。WebGL 需要 `Decompress On Load`。
+以使用单声道声源为前提，音频剪辑设置为 PCM 格式。
 
 ![Audio Asset Import 设置](/img/unity/ImportSetting.png)
 
@@ -70,7 +94,7 @@ FMOD 只需导入 FMOD 版包即可，Wwise 插件则由 Audiokinetic Launcher �
 6. 在 Play Mode 中检查 Console 错误、声音和 path。
 
 在所有同时加载的 scene 中，只能各有一个活动的 Manager 和 Path Visualizer。
-每个 SimpleST 上下文只有一个听者，由第一个注册的 `PrimaryListener` 渲染。
+每个 Sound-Tracing SDK 上下文只有一个听者，由第一个注册的 `PrimaryListener` 渲染。
 
 ## 组件概览
 
@@ -92,12 +116,10 @@ FMOD 只需导入 FMOD 版包即可，Wwise 插件则由 Audiokinetic Launcher �
 - 位置通过固定步长运动采样（`SoundTraceFixedStepMotion`）估算速度。传送后调用
   `ResetMotionState()` 防止 Doppler 尖峰。
 - 每次启动渲染时（包括重启和 HRTF 切换），都会显式设置 Hybrid（`reserved0 = 1`）和**关闭引擎限制器**，
-  并把主增益保持为 0 dB。限幅由 Unity 混音器负责 — SimpleST 2.18 在创建后会开启 true-peak 限制器
-  （137 采样延迟），因此由封装将其关闭。渲染选项只在引擎创建时和扬声器布局变更时以预设重新铺设，
+  并把主增益保持为 0 dB。限幅由 Unity 混音器负责。渲染选项只在引擎创建时和扬声器布局变更时以预设重新铺设，
   `render_start` 会保持原样。
-- 创建引擎后立即**关闭等响度补偿**（`SoundTraceRuntime.DisableLoudnessCompensation`，包括 WebGL）。
-  这是 SimpleST 2.21 起在创建后开启的输出级低频·高频搁架，音色与电平由 Unity 混音器负责。关闭后的输出与引擎 2.20
-  逐位一致。
+- 创建引擎后立即**关闭等响度补偿**（`SoundTraceRuntime.DisableLoudnessCompensation`）。
+  音色与电平由 Unity 混音器负责。
 
 ## SoundTraceManager
 
@@ -109,7 +131,7 @@ FMOD 只需导入 FMOD 版包即可，Wwise 插件则由 Audiokinetic Launcher �
 |---|---:|---|
 | `Propagate On Start` | `true` | 在 `Start()` 中同步初始 scene graph 和 transform，然后请求第一次传播。 |
 | `Load Default Materials On Enable` | `true` | 在 `OnEnable()` 中把随包 Material Preset Library（SoundTrace 游戏材质 22 种）注册到原生材质表。 |
-| `Propagation Thread Count` | `-1` | SimpleST 计算池宽度（`maxComputeThreads`）。`-1` 为自动（按逻辑线程数，引擎调整为 min(性能核数, 6)），`0`/`1` 为单线程，`2` 及以上为指定数量。在原生初始化之前生效。 |
+| `Propagation Thread Count` | `-1` | Sound-Tracing SDK 计算池宽度（`maxComputeThreads`）。`-1` 为自动（按逻辑线程数，引擎调整为 min(性能核数, 6)），`0`/`1` 为单线程，`2` 及以上为指定数量。在原生初始化之前生效。 |
 
 ### 公开属性
 
@@ -122,7 +144,6 @@ FMOD 只需导入 FMOD 版包即可，Wwise 插件则由 Audiokinetic Launcher �
 | `LastValidPathCount` | `int` | 最近一次传播的有效 path 数 |
 | `LastNativeError` | `string` | 最近的 scene graph/传播错误 |
 | `PropagationThreadCount` | `int` | 生效的计算线程数 |
-| `IsGpuPropagate` / `GpuBackendStatus` | `bool` / `string` | 仅为兼容保留。始终为 `false` / `"CPU"` |
 
 ### 公开方法
 
@@ -133,10 +154,9 @@ FMOD 只需导入 FMOD 版包即可，Wwise 插件则由 Audiokinetic Launcher �
 ### 声源数量上限
 
 `SoundTraceRuntime.MaxSources`（静态 `uint`，默认 `0`）是同时存活的引擎声源数上限。
-为 `0` 时使用引擎平台默认（桌面 128 · Android/iOS 48 · WebGL 32）。请在第一个 `SoundTraceListener` 启用
+为 `0` 时使用引擎平台默认（桌面 128 · Android/iOS 48）。请在第一个 `SoundTraceListener` 启用
 **之前**设置（通过 `STRT_CreateOptions.maxSources` 传递）。超出上限的声源不会抛出异常 —
 `SoundSourceCore` 会对 `ST_STATUS_BUDGET_EXCEEDED` 警告一次，并让该 `AudioSource` 保持 dry。
-引擎策略请参见 [SimpleST — 声源内存预算](../core/simplest.md#声源内存预算)。
 
 ```csharp
 SoundTraceRuntime.MaxSources = 64;   // 第一个 Listener 启用之前
@@ -157,15 +177,12 @@ SoundTraceRuntime.MaxSources = 64;   // 第一个 Listener 启用之前
 | `Ray Depth` | `4` | `1..16`；反射最大深度 |
 | `Output Mode` | `Headset` | `Headset`（双耳）、`Speaker`（立体声声像） |
 | `HRTF` | `HRIR Interpolated` | 以下三种模式 |
-| `Max Delay Seconds` | `0` | `0..5 s`；每个声源延迟环的上限。`0` = 引擎平台上限（桌面 2 s · Android/iOS 1 s · WebGL 0.5 s）。非 0 时覆盖该上限（小于 0.012 s 时按 0.012 s） |
+| `Max Delay Seconds` | `0` | `0..5 s`；每个声源延迟环的上限。`0` = 引擎平台上限（桌面 2 s · Android/iOS 1 s）。非 0 时覆盖该上限（小于 0.012 s 时按 0.012 s） |
 | `Path Fade Time Seconds` | `0.066 s` | `0.001..0.5 s`；路径出现/消失的交叉淡化 |
-| `Output EQ` | 关闭 | 作用于整个 SimpleST 混音的参数 EQ — [EQ](#eq) |
+| `Output EQ` | 关闭 | 作用于整个 Sound-Tracing SDK 混音的参数 EQ — [EQ](#eq) |
 
-`Max Delay Seconds` 的默认值在 SDK 发行版 2.18.2 中由 `2` 改为 `0`（引擎策略）。引擎按每个声源的
-路径所需分配延迟环，此值仅用作上限。已保存为 `2` 的现有场景行为与以前相同。
-从未保存过此值的听者（包括随附示例 01–03）使用 `0`。桌面平台上限仍为 2 s，因此没有变化；但在 Android/iOS 上
-超过 1 s、在 WebGL 上超过 0.5 s 的路径将不再渲染。若要在这些平台上保持以前的范围，请将听者的
-`maxDelaySeconds` 设为 `2`。
+引擎按每个声源的路径所需分配延迟环，`Max Delay Seconds` 仅用作上限。Android/iOS 的默认上限为 1 s，
+因此更长的路径不会被渲染。需要更远的路径时，请指定听者的 `maxDelaySeconds`。
 
 选择 `Fast`、`Middle` 或 `Quality` 时会同时应用 ray 值，并在 Inspector 中锁定。
 要直接编辑，请选择 `Custom`。
@@ -181,11 +198,11 @@ SoundTraceRuntime.MaxSources = 64;   // 第一个 Listener 启用之前
 
 | 模式 | 所需 asset | 说明 |
 |---|---|---|
-| `Band8` | 无 | 不使用外部表的轻量模式 — 在 SimpleST 中以**立体声声像**渲染 |
+| `Band8` | 无 | 不使用外部表的轻量模式 — 以**立体声声像**渲染 |
 | `Hrir` | 无 | 引擎内置的 **MIT KEMAR** HRIR |
-| `HRIR Interpolated` | 无 | MIT KEMAR HRIR（默认）。SimpleST 执行宽带 HRIR 卷积 |
+| `HRIR Interpolated` | 无 | MIT KEMAR HRIR（默认）。Sound-Tracing SDK 执行宽带 HRIR 卷积 |
 
-旧的 `KU100_convolution.bytes` 资源不再使用。`Output Mode = Speaker` 为声像输出。
+`Output Mode = Speaker` 为声像输出。
 
 ## SoundTraceSource
 
@@ -206,9 +223,8 @@ SoundTraceRuntime.MaxSources = 64;   // 第一个 Listener 启用之前
 | `Bypass` | `false` | 跳过 SoundTrace 渲染，直接传递原始 `AudioSource` 输出 |
 | `Source EQ` | 关闭 | 作用于此声源信号的参数 EQ — [EQ](#eq) |
 
-STCoreV2 的逐 path `Distance Attenuation`（0.5 ~ 1.5）、`Max Delay Rate`、`Path Hold Time` 已不存在。
-SimpleST 应用物理 `1/r` 衰减和空气吸收，最大延迟与淡化是 Listener 的设置。Scene View 中的
-`Show Gizmo` 显示各 path 的可听范围。
+距离衰减由引擎以物理 `1/r` 衰减和空气吸收应用，最大延迟与淡化是 Listener 的设置。
+Scene View 中的 `Show Gizmo` 显示各 path 的可听范围。
 
 ### 公开方法
 
@@ -218,27 +234,6 @@ SimpleST 应用物理 `1/r` 衰减和空气吸收，最大延迟与淡化是 Lis
 | `ResetMotionState()` | 将当前 Transform 重新设为 motion 基准点，防止 teleport 后出现 Doppler spike。 |
 
 要同步多个 `AudioSource` 的播放时机，请基于同一个 `AudioSettings.dspTime` 调用 `PlayScheduled()`。
-
-## EQ
-
-从 SDK 发行版 2.22.0-jhj 起，在两个位置使用 SimpleST 参数 EQ。
-
-| 位置 | Inspector | 脚本 | 作用点 |
-|---|---|---|---|
-| 声源 EQ | `SoundTraceSource`（及 `SoundTraceClipSource`）的 `Source EQ` | `SetSourceEq(SoundTraceEq)`、`SetSourceEqEnabled(bool)`、`GetSourceEq()` | 声源信号，SimpleST 频段拆分之前。该声源的所有路径得到相同音色 |
-| 输出 EQ | `SoundTraceListener` 的 `Output EQ` | `SetOutputEq(SoundTraceEq)`、`SetOutputEqEnabled(bool)`、`GetOutputEq()` | 整个 SimpleST 混音，渲染末端（主增益之前） |
-
-- `SoundTraceEq`：`enabled`、`preampDb`（−48 ~ +12）、`bands`（最多 16 个）。
-- `SoundTraceEqBand`：`enabled`、`type`、`frequencyHz`（20 ~ 20,000）、`gainDb`（±24，仅 Peaking·搁架）、`q`（0.1 ~ 30，搁架最多 3）。
-- `SoundTraceEqFilterType`：`Peaking (Bell)` · `Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` ·
-  `Notch`。切滤波固定为 12 dB/oct，对不使用 Gain 的类型，Inspector 会隐藏 Gain。
-- 默认关闭，关闭时不调用引擎。只发送变化的设置，引擎以 20 ms 交叉淡化过渡。
-  只修改输出 EQ 的 Inspector 编辑不会重启渲染。
-- 关闭声源 EQ 会在引擎中清除它；重新创建原生声源时会再次应用。
-- 是否支持可用 `SoundTraceRuntime.SupportsSourceParametricEq` / `SupportsOutputParametricEq` 确认。在不支持的
-  引擎上，开启的 EQ 会被忽略并输出一次警告。
-- 在 FMOD/Wwise 集成模式下 `SoundTraceListener`、`SoundTraceSource` 会关闭，因此请使用中间件插件的 EQ —
-  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq)。
 
 ## SoundTraceObject
 
@@ -254,8 +249,8 @@ SimpleST 应用物理 `1/r` 衰减和空气吸收，最大延迟与淡化是 Lis
 
 | 字段 | 默认值 | 说明 |
 |---|---:|---|
-| `BVH Type` | `LBVH_SIMD8` | `HKDTree`（→ SimpleST HybridKD）、`LBVH`（→ LBVH）、`LBVH_SIMD4/8/16`（→ LBVH_SIMD） |
-| `BVH Max Depth` / `Primitives Per Leaf` | `12` / `16` | 兼容字段。**SimpleST 在内部决定 leaf 大小，因此被忽略** |
+| `BVH Type` | `LBVH_SIMD8` | `HKDTree`（→ Sound-Tracing SDK HybridKD）、`LBVH`（→ LBVH）、`LBVH_SIMD4/8/16`（→ LBVH_SIMD） |
+| `BVH Max Depth` / `Primitives Per Leaf` | `12` / `16` | 兼容字段。**引擎在内部决定 leaf 大小，因此被忽略** |
 | `Update Mode` | `Static` | `Static`（静态 TLAS）/ `Dynamic`（只更新变换）。`Refit`、`Rebuild` 仅为兼容保留 |
 
 `BVH Type` 只选择网格注册时的加速结构类型。使用相同 Mesh asset、材质槽和 BVH 设置的 object
@@ -263,7 +258,7 @@ SimpleST 应用物理 `1/r` 衰减和空气吸收，最大延迟与淡化是 Lis
 
 ### 蒙皮与程序化网格
 
-SimpleST 没有 vertex refit。要反映变形后的几何体，请烘焙新 Mesh 并重新注册 `SoundTraceObject`
+引擎没有 vertex refit。要反映变形后的几何体，请烘焙新 Mesh 并重新注册 `SoundTraceObject`
 （或调用 `MeshCore.SetData`），**替换为新的原生网格**。每帧替换成本很高，请定期（例如 0.2 ~ 0.5 s）更新。
 
 ### 公开方法
@@ -296,8 +291,7 @@ SimpleST 没有 vertex refit。要反映变形后的几何体，请烘焙新 Mes
 每个频段的 `R + A + T` 必须为 `1`，容差 `0.001`。错误的长度和系数会报错，并且不会把 8 频段输入
 自动填充为 9 频段。
 
-默认材质是 SoundTrace 游戏材质 22 种，名称和索引与之前版本相同。现有场景的材质槽位索引仍然指向
-原来的材质。
+默认材质是 SoundTrace 游戏材质 22 种。
 
 | 索引 | 材质 |
 |---|---|
@@ -306,14 +300,11 @@ SimpleST 没有 vertex refit。要反映变形后的几何体，请烘焙新 Mes
 | 12 ~ 17 | `Sherdded-woodFiberborad`, `Snow`, `Soil`, `Steel`, `Stone`, `WaterSurface` |
 | 18 ~ 21 | `TunableAbsorber`, `LowVarianceTarget`, `ConcreteBlockPainted`, `FiberglassReinforcedPlastic` |
 
-这些是游戏用预设，不是测量数据。转换方式：保留原 8 频段（63 Hz ~ 8 kHz）的反射 R 和透射 T，
-吸收 A = 1 − R − T，16 kHz 频段重复 8 kHz 的值，scattering 在 9 个频段上取相同值。由于引擎和频段
-构成已改变，声学结果与 STCore 并不完全相同。用户材质需要重新按 9 频段录入。
+这些是游戏用预设，不是测量数据。用户材质按 9 频段录入。
 
 ![按频段编辑材质图表](/img/unity/Image_Mat_02.png)
 
-STCoreV2 的 `Transmission Model`（`Surface` / `Solid Distance`）已不存在。透射只用各频段的
-表面透射系数 `T` 表示。
+透射用各频段的表面透射系数 `T` 表示。
 
 ## SoundTracePathVisualizer
 
@@ -335,60 +326,7 @@ Direct、Reflection、Diffraction、Reverb 和 Transmission 按 path 类型用�
 此组件用于调试，在性能测量和 release build 中应禁用。主要公开成员为
 `Active`、`Render()` 和 `Clear()`。
 
-## 与 FMOD 配合使用
-
-如果项目中存在 SimpleST FMOD 插件（`SimpleSTFmod`），SoundTrace 会自动以 **FMOD 集成**方式工作。
-空间声学渲染由 FMOD Studio 的 SimpleST Source / Listener DSP 完成，SoundTrace 只通过
-`SoundTraceManager` + `SoundTraceObject` 把几何体和材质上传到插件上下文。
-`SoundTraceListener` / `SoundTraceSource` 会记录警告并关闭。
-
-![导入 FMOD 版包](/img/fmod/unity-fmod-edition-import.png)
-
-1. 把 FMOD for Unity 2.04 放入项目（`Assets/Plugins/FMOD`；如果用 tgz 安装，则以 embed 方式放入 `Packages/`）。
-2. 把 **FMOD 版**包 `SoundTrace-SimpleST-FMOD-release.unitypackage` 拖放到 Project 窗口。
-   没有单独的菜单。包的 `Runtime/Plugins/FMOD` 中含有 `SimpleSTFmod`（Windows x64、macOS），
-   编辑器加载时 SoundTrace 会把它复制到 FMOD 插件文件夹，并注册到 FMOD Settings › Dynamic Plugins。
-   即使之后才放入 FMOD，下次加载时也会执行同样的操作。
-3. 在 FMOD Studio 中，在主总线上放置 **SimpleST Listener**，在 3D 事件的主轨道上用
-   **SimpleST Source** 替代 FMOD Spatializer — 参见 [FMOD 插件](./fmod.md)。
-4. 场景中放置 `SoundTraceManager`、用于几何体的 `SoundTraceObject` 和 FMOD `StudioListener`。
-
-引擎实例只有一个。SimpleSTFmod 加载的 `SimpleSTRealtime` 与 SoundTrace 通过 P/Invoke 使用的是同一个，
-所有控制调用都在插件的控制线程上执行。2026-10-07 在 Unity 6000.3 + FMOD for Unity 2.04 上 E2E 通过
-（对象 0→6→0，路径 1→266→1）。
-
-## 与 Wwise 配合使用
-
-如果 Wwise Unity 集成的 DSP 文件夹中存在 `SimpleSTWwise`，则以 **Wwise 集成**方式工作
-（如果同时存在 FMOD，则 FMOD 优先）。
-
-SoundTrace 使用基础包，Wwise 插件则与其他 Wwise 插件一样由 Audiokinetic Launcher 安装。
-
-![Launcher 中已安装的 Sound-tracing](/img/wwise/launcher-bundle.png)
-
-1. 把基础包 `SoundTrace-SimpleST-release.unitypackage` 拖放到 Project 窗口。
-2. 在 Audiokinetic Launcher › **Plug-ins › Add from directory** 中选择 Wwise 发行包的 `launcher` 文件夹，
-   安装 **Sound-tracing**。
-3. 运行 Launcher › **Unity › Integrate（或 Modify）Wwise in Project**。Launcher 会把 Wwise SDK 中已安装的
-   插件（包括 Sound-tracing）放入 Wwise Unity 集成的 DSP 文件夹，并由 Wwise 声音引擎加载。
-   请在关闭 Unity 编辑器的状态下运行。
-4. 在 Wwise 项目中，在 Audio Objects 总线上放置 **Sound-tracing Renderer**，并把 3D 声音发送到该总线
-   （Attenuation 关闭或设为平坦）— 参见 [Wwise 插件](./wwise.md)。
-5. 场景中放置 `AkInitializer`、`AkAudioListener`、发射器上的 `AkGameObj`，以及 `SoundTraceManager`、
-   `SoundTraceObject`。Wwise Unity 的单位是米，因此 `sceneRatio = 1`。
-
-## WebGL
-
-Unity WebGL 不提供 `OnAudioFilterRead`，因此使用单独的路径。它传递 AudioClip PCM 和播放状态，
-并把 SimpleST buffered host renderer 的结果通过共享环形缓冲发送给 AudioWorklet。
-
-- AudioClip 以 **Decompress On Load** 导入。
-- 在 HTTPS 或 localhost 上，以 `Cross-Origin-Opener-Policy: same-origin`、
-  `Cross-Origin-Embedder-Policy: require-corp` 响应头提供服务。音频在用户输入之后开始。
-- 构建后处理会把 `Runtime/Web/*.bytes` 复制到 `StreamingAssets/SoundTrace/`，请一并部署该文件夹。
-- Unity AudioMixer 效果链不会应用于 WebGL 上独立的 SoundTrace 输出。
-
-## 示例
+## 演示场景
 
 ### ST_SampleScene01
 
@@ -408,39 +346,49 @@ Unity WebGL 不提供 `OnAudioFilterRead`，因此使用单独的路径。它传
 
 用于检查大空间中的多个 source、wall occlusion、移动期间的 HRTF 方位感和 room response。
 
-## 相对 STCoreV2 的约定变化
-
-| 之前 | 现在 |
-|---|---|
-| `exaSound` / STCoreV2 入口 | `st_rt_*` / SimpleST ABI 6 |
-| 0 = 无效句柄 | **-1 = 无效**，0 有效 |
-| 每个 source 由 listener 渲染 | 每个 source 一路 mono stream + listener 整体 mix |
-| 8 频段材质、scalar scattering | 63…16000 Hz **9 频段** R/A/T/scattering |
-| 可修改的 native material | 不可变 material，重新绑定到新的 material/mesh |
-| STCore 多项式距离衰减 | SimpleST 物理距离衰减 |
-| STCore GPU/provider/path-cache 设置 | SimpleST CPU pipeline 调度器 |
-| KU100 Resources 表 | 内置 MIT KEMAR HRTF |
-| `exaMeshUpdateVertices` → `exaMeshRefit` | 替换为新网格 |
-
 ## 故障排除
 
 | 症状 | 检查项 |
 |---|---|
 | 没有声音 | Console 中首个 Manager 初始化错误、Stereo/Best latency、AudioSource clip、是否存在 Manager/Listener |
 | Source/Listener/Object 要求 Manager | 检查级联错误之前记录的 `Failed to initialize SoundTraceManager` 原因 |
-| 与旧版本冲突 | 是否已把 STCoreV2 `Assets/SoundTrace` 移出 Assets |
 | Geometry 未生效 | `Read/Write Enabled`、MeshFilter/MeshRenderer、child mesh 位置、注册状态 |
-| 运行时变形 mesh 未生效 | SimpleST 没有 refit。替换为新网格 |
+| 运行时变形 mesh 未生效 | 引擎没有 refit。替换为新网格 |
 | FMOD/Wwise 模式下 Listener/Source 被关闭 | 正常 — 渲染由中间件插件负责 |
 | 部分声源未空间化，听起来是 dry | Console 中的 `ST_STATUS_BUDGET_EXCEEDED` 警告 — 减少声源或调高 `SoundTraceRuntime.MaxSources` |
-| Android 构建因 `SimpleST requires Android API 28 or newer` 失败 | 将 Player Settings › Minimum API Level 设为 28 或更高 |
+| Android 构建因 `Sound-Tracing SDK requires Android API 28 or newer` 失败 | 将 Player Settings › Minimum API Level 设为 28 或更高 |
 | 开启 EQ 后声音没有变化 | Console 中的 EQ 不支持警告，是否处于 FMOD/Wwise 集成模式（使用中间件 EQ） |
 | Teleport 后 pitch 跳变 | 更改 transform 后立即调用 `ResetMotionState()` |
 | 性能不足 | 按 `Quality → Middle → Fast`、缩小 Reverb Ray Resolution、禁用 path visualizer 的顺序检查 |
 | 多个声源听起来像 comb filtering | 使用相同的 `AudioSettings.dspTime` 调用 `PlayScheduled()` |
 
+## EQ
+
+Sound-Tracing SDK 的参数 EQ 可在两个位置应用。
+
+- **声源 EQ** — 在引擎频段拆分之前作用于声源信号本身。该声源的直达声、反射、绕射、混响都会得到相同的音色。
+- **输出 EQ** — 在渲染末端（主增益之前）作用于整个 Sound-Tracing SDK 混音。
+
+滤波器类型为 Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 6 种（切滤波固定为 12 dB/oct），
+范围为频率 20 ~ 20,000 Hz，增益 ±24 dB（仅 Peaking·搁架），Q 0.1 ~ 30（搁架最多 3），前级增益 −48 ~ +12 dB。
+默认关闭，关闭时不调用引擎，因此输出与没有 EQ 时相同。只发送变化的值，引擎以
+20 ms 交叉淡化过渡。
+
+| 位置 | Inspector | 脚本 |
+|---|---|---|
+| 声源 EQ | `SoundTraceSource`（及 `SoundTraceClipSource`）的 `Source EQ` | `SetSourceEq(SoundTraceEq)`、`SetSourceEqEnabled(bool)`、`GetSourceEq()` |
+| 输出 EQ | `SoundTraceListener` 的 `Output EQ` | `SetOutputEq(SoundTraceEq)`、`SetOutputEqEnabled(bool)`、`GetOutputEq()` |
+
+- `SoundTraceEq`：`enabled`、`preampDb`、`bands`（最多 16 个）。`SoundTraceEqBand`：`enabled`、`type`、`frequencyHz`、`gainDb`、`q`。
+- `SoundTraceEqFilterType`：`Peaking (Bell)` · `Low Shelf` · `High Shelf` · `High Cut (Low-pass)` · `Low Cut (High-pass)` · `Notch`。
+  对不使用 Gain 的类型，Inspector 会隐藏 Gain。
+- 只修改输出 EQ 的 Inspector 编辑不会重启渲染。关闭声源 EQ 会在引擎中清除它；重新创建原生声源时会再次应用。
+- 是否支持可用 `SoundTraceRuntime.SupportsSourceParametricEq` / `SupportsOutputParametricEq` 确认。
+- 在 FMOD/Wwise 集成模式下 `SoundTraceListener`、`SoundTraceSource` 会关闭，因此请使用中间件插件的 EQ —
+  [FMOD](./fmod.md#eq) · [Wwise](./wwise.md#eq)。
+
 ## 后续文档
 
-- [SDK 概览](./overview.md)
+- [支持的平台](./overview.md)
 - [FMOD 插件](./fmod.md) · [Wwise 插件](./wwise.md)
 - [Web SDK](./web.md) · [Unreal Engine SDK](./ue.md)

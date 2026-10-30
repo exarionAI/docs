@@ -1,55 +1,39 @@
 ---
 title: Wwise
-description: Sound-tracing（SimpleSTWwise）— 面向 Wwise 2025.1 的 SimpleST Object Processor + Metadata 插件的结构、安装、创作、EQ、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成。
+description: Sound-Tracing SDK for Wwise（SimpleSTWwise）— 面向 Wwise 2025.1 的 Object Processor + Metadata 插件的结构、安装、创作、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成、EQ。
 ---
 
-# Sound-tracing Wwise 插件
+# Sound-Tracing SDK for Wwise
 
-**Sound-tracing**（源码和二进制名称为 `SimpleSTWwise`）是在 Wwise 2025.1 中使用
-[SimpleST](../core/simplest.md) 的插件。它由两个插件 — 插到 Audio Objects 总线上的
+**Sound-Tracing SDK for Wwise**（Launcher 插件名称 `Sound-tracing`，二进制名称 `SimpleSTWwise`）是在 Wwise 2025.1 中使用
+Sound-Tracing SDK 的插件。它由两个插件 — 插到 Audio Objects 总线上的
 **Sound-tracing Renderer**（Object Processor）和附加到 sound/actor-mixer 上的
 **Sound-tracing Source Settings**（Metadata）— 以及供游戏引擎上传几何体的 C API 组成。
 
 | 项目 | 值 |
 |---|---|
-| 插件版本 | v0.2.0（SimpleST 2.22.0，SDK 发行版 2.22.0-jhj.5 — 4 频段 [EQ](#eq)、听者 roll）。上一版本：v0.2.0（SimpleST 2.18.2）、v0.1.0（SimpleST 2.12.0，Wwise 2025.1.11 声音引擎 E2E 已验证） |
-| Audiokinetic | CompanyID **325**，PluginID 1001（Renderer）· 1002（Source Settings）。Launcher 包名 `Sound-tracing` |
 | Wwise | 2025.1（插件二进制与 SDK 版本绑定） |
+| Audiokinetic | CompanyID **325**，PluginID 1001（Renderer）· 1002（Source Settings）。Launcher 插件名称 `Sound-tracing` |
 | 平台 | Windows（vc170）· macOS · Linux · Android · iOS（静态）· Web（静态） |
-| 分发 | `SimpleST-wwise-release.zip`（各平台 SDK + Authoring + Launcher 包 `launcher/` + `install.py`，含 UE/Unity 胶水代码） |
-| 合作伙伴审批 | Community Partner Program 第一阶段已批准（2026-10-08）。最终审批进行中 |
+| 下载 | Audiokinetic Launcher 商店 |
 
 ## 结构
 
 ![SimpleSTWwise 结构](/img/wwise/structure.png)
 
-```text
- 3D 声音 ──(Listener Relative Routing)──▶ [SimpleST 总线: Bus Configuration = Audio Objects]
-   + Sound-tracing Source Settings (元数据, 可选)           Sound-tracing Renderer (Object Processor)
-                                                        · 每个对象: 单声道下混 → st_rt_source_write_stream
-                                                          位置 = 相对总线听者的坐标 → 反变换为世界坐标
-                                                        · st_rt_render_process 1 次 → 1 个立体声输出对象
-                                                        · SimpleST 不接收的对象(2D / Bypass / 超过 64 个)
-                                                          由渲染器用 Wwise 声像直接混合 ("Dry Level")
-                                   SystemRuntime (每个进程 1 个 = 1 个 Wwise 声音引擎)
-```
-
 - **为什么是 Object Processor**：它在一个回调中接收总线上所有带位置元数据的音频对象，
   因此 push 和 render 发生在同一个 `Execute` 内。与 FMOD 版（Source push + Listener pull）不同，
   没有块顺序偏差，voice 也不需要输出静音，所以 Wwise 的计量/虚拟化照常工作。也不替换系统 Audio Device。
 - **坐标**：Wwise 给出的对象位置是相对总线听者平移和旋转后的。渲染器用总线游戏对象（= 听者）的
-  世界姿态把它还原回去。Wwise 和 SimpleST 都是左手系、+X right、+Y up、+Z forward，
+  世界姿态把它还原回去。Wwise 和 Sound-Tracing SDK 都是左手系、+X right、+Y up、+Z forward，
   因此没有坐标轴转换（只有 Unreal 集成例外 — 见下文）。
-- **voice 与引擎声源**：每个音频对象（voice）使用一个 SimpleST 声源，但已结束 voice 的引擎声源会
+- **voice 与引擎声源**：每个音频对象（voice）使用一个 Sound-Tracing SDK 声源，但已结束 voice 的引擎声源会
   留在预热池中，由下一个 voice 接手 — [单次音效与预热声源池](#单次音效与预热声源池)。
 - **共享核心**：与 FMOD 插件共享同一运行时层，从自己所在文件夹动态绑定 `SimpleSTRealtime`，
   游戏侧通过 `SimpleSTWwise_GetRealtimeProc` 获取同一模块的 `st_rt_*`。
-- **关闭输出限制器**：SimpleST 2.18 在创建后会开启 true-peak 限制器，但在 Wwise 中由主总线
-  负责限幅。
-- **同样关闭等响度补偿**：SimpleST 2.21 在创建后会开启输出级等响度补偿（低频搁架约 +7.2 dB @ 120 Hz），
-  但音色与电平由 Wwise 混音负责。与 FMOD 版相同的公用核心会与限制器一起将其关闭。
-- **听者方向**：把总线听者的 front·top 方向以 SimpleST 四元数传入，从而反映头部倾斜（roll）（自 SDK 发行版
-  2.22.0-jhj 起）。
+- **关闭输出限制器**：在 Wwise 中由主总线负责限幅。
+- **同样关闭等响度补偿**：音色与电平由 Wwise 混音负责。
+- **听者方向**：把总线听者的 front·top 方向以四元数传入，从而反映头部倾斜（roll）。
 - **生命周期**：运行时在声音引擎 Init 钩子（静态注册）或第一个渲染器实例创建时启动，
   在 `AK::SoundEngine::Term` 的全局回调中终止。
 
@@ -59,14 +43,10 @@ description: Sound-tracing（SimpleSTWwise）— 面向 Wwise 2025.1 的 SimpleS
 
 ![Launcher 包安装](/img/wwise/launcher-bundle.png)
 
-在 Audiokinetic Launcher › **Plug-ins › Add from directory** 中选择发行包的 `launcher` 文件夹（`bundle.json` + `*.tar.xz`），
-即可安装 **Sound-tracing**（Windows、macOS 通用）。该包包含 Authoring 插件以及 Windows（vc170）、macOS
-（Xcode 16/26）声音引擎插件。Authoring 插件在 Mac 上也是 **Windows DLL**
+从 Audiokinetic Launcher 商店获取 **Sound-Tracing SDK for Wwise**（插件名称 `Sound-tracing`）后，
+在 Launcher › **Plug-ins** 中安装到所使用的 Wwise 版本（Windows、macOS 通用）。插件包含 Authoring 插件以及
+Windows（vc170）、macOS 声音引擎插件。Authoring 插件在 Mac 上也是 **Windows DLL**
 （`Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + 引擎 + HRTF）。
-
-不使用 Launcher 安装时，可把发行文件夹覆盖到 Wwise 安装文件夹（`SDK/…`、`Authoring/…`），或使用
-`python3 install.py wwise --payload win --wwise-root "/Applications/Audiokinetic/Wwise_2025.1.11.9262"`
-（现有文件保留在 `bin/.simplest-backups` 中）。
 
 ### 游戏运行时（SoundEngine）
 
@@ -84,11 +64,11 @@ Debug 插件放到 Debug 配置，Release 插件放到 Profile/Release 配置。
 
 ![Audio Objects 总线](/img/wwise/bus-audio-objects.png)
 
-1. 创建一个总线（例如 `SimpleST`），设置 **Bus Configuration = Audio Objects**。
+1. 创建一个总线（例如 `SoundTracing`），设置 **Bus Configuration = Audio Objects**。
 2. 在该总线的 Effects 中插入 **Sound-tracing Renderer**。总线输出变为一路立体声
    （开启 HRTF 时为双耳 — 耳机）。
 3. 把 3D 声音路由到该总线：在 Positioning 中设置 **3D Spatialization = Position（或 + Orientation）**，
-   开启 Listener Relative Routing。**距离衰减（Attenuation）关闭或设为平坦** — SimpleST 自己做物理
+   开启 Listener Relative Routing。**距离衰减（Attenuation）关闭或设为平坦** — Sound-Tracing SDK 自己做物理
    距离衰减，不关闭会导致双重衰减（对象缓冲中已经乘上了 Wwise 的音量/衰减）。
 4. 如需逐声源调整，在 sound/actor-mixer/总线上添加 **Metadata › Sound-tracing Source Settings**。
 5. 创作工具中没有游戏场景，因此在 `Wwise.exe` / `WwiseConsole.exe` 中会自动铺设一个
@@ -102,12 +82,12 @@ Debug 插件放到 Debug 配置，Release 插件放到 Profile/Release 配置。
 
 | 插件 | 属性 | 含义 |
 |---|---|---|
-| Sound-tracing Renderer | Wet Level / Dry Level (dB, RTPC) | SimpleST 渲染 / 渲染器直接声像处理的对象的电平 |
+| Sound-tracing Renderer | Wet Level / Dry Level (dB, RTPC) | Sound-Tracing SDK 渲染 / 渲染器直接声像处理的对象的电平 |
 | | HRTF (Binaural) | 开启为双耳，关闭为立体声声像 |
-| Sound-tracing Source Settings | Gain / Direct / Reflections / Diffraction / Reverb Send (dB, RTPC) | 输入电平、各路径音量（SimpleST path volume） |
+| Sound-tracing Source Settings | Gain / Direct / Reflections / Diffraction / Reverb Send (dB, RTPC) | 输入电平、各路径音量（Sound-Tracing SDK path volume） |
 | | Directivity (0 omni ~ 1 cardioid, RTPC) | 以对象 front 为基准的指向性 |
 | | Stationary (never moves) | 不移动的发射器提示（创建时应用） |
-| | Bypass SimpleST (RTPC) | 不经过 SimpleST，由渲染器用 Wwise 声像混合 |
+| | Bypass SimpleST (RTPC) | 不经过 Sound-Tracing SDK，由渲染器用 Wwise 声像混合 |
 | 两者（EQ 组） | EQ / EQ Preamp (dB, RTPC) | 4 频段 EQ 开关·前级增益 — [EQ](#eq) |
 | | Band n Type / Band n Frequency (Hz, RTPC) / Band n Gain (dB, RTPC) / Band n Q (RTPC)（n = 1 ~ 4） | 各频段的滤波器类型·频率·增益·Q |
 
@@ -115,28 +95,9 @@ Debug 插件放到 Debug 配置，Release 插件放到 Profile/Release 配置。
 
 CompanyID/PluginID、属性名称、AudioEnginePropertyID 由项目和 bank 保存，因此发布后不要更改。
 
-### EQ
-
-从 SDK 发行版 2.22.0-jhj 起，两个插件都有相同的 4 频段 EQ 属性组。通过与 FMOD 版相同的公用核心应用 SimpleST
-参数 EQ。
-
-| 插件 | 属性组 | 作用点 |
-|---|---|---|
-| Sound-tracing Source Settings | `Source EQ`、`Source EQ Band 1 ~ 4` | **声源 EQ** — 对象音频进入 SimpleST 之前，位于引擎频段拆分之前。直达声·反射·绕射·混响都得到相同音色 |
-| Sound-tracing Renderer | `Output EQ`、`Output EQ Band 1 ~ 4` | **输出 EQ** — SimpleST 混音 |
-
-- `EQ` 为开关，`EQ Preamp` 为频段之前的增益（−48 ~ +12 dB）。
-- `Band n Type` 为 Off · Peaking · Low Shelf · High Shelf · High Cut（12 dB/oct）· Low Cut（12 dB/oct）· Notch。
-  它是枚举属性，不能用 RTPC 修改。
-- `Band n Frequency` 为 20 ~ 20,000 Hz，`Band n Gain` 为 ±24 dB（仅 Peaking·搁架），`Band n Q` 为 0.1 ~ 30（搁架最多 3），
-  Preamp·Frequency·Gain·Q 支持 RTPC。
-- 默认关闭，关闭时不调用引擎。只发送变化的值，引擎以 20 ms 交叉淡化过渡。
-- EQ 属性的 AudioEnginePropertyID 为 Source Settings 8 ~ 25、Renderer 3 ~ 20，在 bank 中按相同顺序追加在现有字段之后。
-  从预热池复用的引擎声源会先清除上一个 voice 的 EQ 或换成新的 EQ，然后再开始。
-
 ## 单次音效与预热声源池
 
-从 0.2.0 起加入了与 FMOD 插件 0.3.0 相同的预热声源池（共用核心）。即使每个声音
+加入了与 FMOD 插件相同的预热声源池（共用核心）。即使每个声音
 都来一个新 voice，也不会为每个 voice 新建引擎声源，因此省去了新声源 150 ms 的路径淡入和等待第一个
 IR 的过程，短音效能以应有音量准时听到。无需修改 Wwise 项目配置。
 
@@ -169,14 +130,14 @@ SimpleSTWwise_InvokeOnControlThread(
     [](STRT_Context* ctx, void* user) { /* st_rt_mesh_create / object_create / build ... */ }, user, 1);
 ```
 
-- 运行时启动：静态注册时在 `SoundEngine::Init` 内，DLL 注册时在第一个 SimpleST 总线开始播放时。
+- 运行时启动：静态注册时在 `SoundEngine::Init` 内，DLL 注册时在第一个 Sound-Tracing SDK 总线开始播放时。
   在此之前 `GetStatus` 返回 0。
 - **Unreal 坐标轴**：Wwise for Unreal 2024.1+ 会原样传递 Unreal 向量（+Z 向上），因此必须调用
   `SetWorldAxes(UNREAL)`，渲染器才会转换为 (Y, Z, X)，与游戏上传的几何体一致。不调用的话，
-  听者和声源会被错误的墙体遮挡（2026-10-15 修复）。
-- **声源上限**（自 SDK 发行版 2.18.2 起）：`SimpleSTWwise_Config.maxSources` 是引擎声源数上限（0 = 平台
+  听者和声源会被错误的墙体遮挡。
+- **声源上限**：`SimpleSTWwise_Config.maxSources` 是引擎声源数上限（0 = 平台
   默认）。超出时引擎拒绝创建声源，该 voice 以 dry 播放。这是追加在结构体末尾的字段，因此传入旧版较短
-  结构体的主机也能正常工作 — [声源内存预算](../core/simplest.md#声源内存预算)。
+  结构体的主机也能正常工作。
 
 ### 开启和关闭 Sound Tracing
 
@@ -184,12 +145,12 @@ SimpleSTWwise_InvokeOnControlThread(
 SimpleSTWwise_SetSoundTracingEnabled(0);   // 关闭。1 = 开启（默认）
 ```
 
-这是 SDK 发行版 2.18.2 中新增的游戏侧 A/B 开关。它作用于正在运行的运行时，并在控制线程上
+这是游戏侧 A/B 开关。它作用于正在运行的运行时，并在控制线程上
 异步生效。行为与 [FMOD 版](./fmod.md#开启和关闭-sound-tracing)相同。
 
-- **关闭时**，会启用 SimpleST 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空预热声源池后不再
+- **关闭时**，会启用 Sound-Tracing SDK 渲染器旁路（`st_rt_render_set_sound_tracing_enabled`），清空预热声源池后不再
   重新填充，插件也不会唤醒传播 lane。
-- **传播 lane 不会完全停止。** SimpleST 没有传播暂停，因此只要还有声源存在，lane 就会按自身周期
+- **传播 lane 不会完全停止。** 引擎没有传播暂停，因此只要还有声源存在，lane 就会按自身周期
   继续运行。
 - **开启时**，会重新应用插件的渲染选项。
 - 成功入队时返回 1，没有正在运行的运行时时返回 0。之后启动的运行时以开启状态启动，因此请在运行时
@@ -203,7 +164,7 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 Wwise 模式下会调用此函�
 - **Unreal Engine**：在 Launcher 中安装 Sound-tracing 后运行 Launcher › Unreal Engine › **Modify Wwise in Project**，
   Launcher 会把 `SimpleSTWwise`、`SimpleSTRealtime`、HRTF 复制到 `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`。SoundTracing 插件
   以 Wwise 模式构建，设置 `sceneRatio = 0.01` 和 Unreal 坐标轴，只上传几何体 — 参见
-  [Unreal Engine SDK](./ue.md)。E2E PASS（2026-10-07：对象 6 / 三角形 288 / 路径 1 → 346 → 1）。
+  [Unreal Engine SDK](./ue.md)。
 - **Unity**：在 Launcher 中安装 Sound-tracing 后运行 Launcher › Unity › **Integrate/Modify Wwise in Project**，
   Launcher 会把插件放入 Wwise Unity 集成的 DSP 文件夹。引擎共享 SoundTrace 的 `SimpleSTRealtime`，单位为米 — 参见
   [Unity SDK](./unity.md#与-wwise-配合使用)。
@@ -231,15 +192,13 @@ Android 两个 ABI 构建通过，iOS device/simulator 和 Web 最终链接通�
 
 ## 已知限制
 
-- 1 个听者（SimpleST 的限制）。如果同一总线为第二个听者再次实例化，该实例会把所有对象用
+- 1 个听者（引擎限制）。如果同一总线为第二个听者再次实例化，该实例会把所有对象用
   Wwise 声像混合。
-- 音频对象没有速度，因此没有 SimpleST Doppler。
+- 音频对象没有速度，因此没有 Doppler。
 - EQ 每个插件固定为 4 频段（UE、Unity、Web 最多 16 频段）。
 - 引擎声源数不会超过平台上限（`maxSources`）。超出的 voice 为 dry。
 - 首次看到新音频对象时，会在音频线程上分配一个小槽位。引擎声源本身在控制线程上复用预热池中的
   声源或新建。
-- Launcher 包目前包含 Authoring + Windows_vc170 + macOS（Xcode 16/26）。Linux、Android 包以及 EULA 和 logo 正在准备中；iOS 为静态链接，不通过包部署。
-- Wwise 创作工具 GUI 手动试听尚未记录。
 
 ## 日志 / 环境变量
 
@@ -253,8 +212,32 @@ Android 两个 ABI 构建通过，iOS device/simulator 和 Web 最终链接通�
 
 渲染器警告也会显示在 Wwise Capture Log 中（`PostMonitorMessage`）。
 
+## EQ
+
+Sound-Tracing SDK 的参数 EQ 可在两个位置应用。
+
+- **声源 EQ** — 在引擎频段拆分之前作用于声源信号本身。该声源的直达声、反射、绕射、混响都会得到相同的音色。
+- **输出 EQ** — 在渲染末端（主增益之前）作用于整个 Sound-Tracing SDK 混音。
+
+滤波器类型为 Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 6 种（切滤波固定为 12 dB/oct），
+范围为频率 20 ~ 20,000 Hz，增益 ±24 dB（仅 Peaking·搁架），Q 0.1 ~ 30（搁架最多 3），前级增益 −48 ~ +12 dB。
+默认关闭，关闭时不调用引擎，因此输出与没有 EQ 时相同。只发送变化的值，引擎以
+20 ms 交叉淡化过渡。
+
+两个插件都有相同的 4 频段 EQ 属性组（与 FMOD 版相同的公用核心）。
+
+| 插件 | 属性组 | 作用点 |
+|---|---|---|
+| Sound-tracing Source Settings | `Source EQ`、`Source EQ Band 1 ~ 4` | **声源 EQ** — 对象音频进入引擎之前 |
+| Sound-tracing Renderer | `Output EQ`、`Output EQ Band 1 ~ 4` | **输出 EQ** — 渲染后的混音 |
+
+- `EQ` 为开关，`EQ Preamp` 为频段之前的增益（−48 ~ +12 dB）。
+- `Band n Type` 是 Off · Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 的枚举属性，不能用 RTPC 修改。
+  Preamp · `Band n Frequency` · `Band n Gain` · `Band n Q` 支持 RTPC。
+- EQ 属性的 AudioEnginePropertyID 为 Source Settings 8 ~ 25、Renderer 3 ~ 20，在 bank 中按相同顺序追加在现有字段之后。
+  从预热池复用的引擎声源会先清除上一个 voice 的 EQ 或换成新的 EQ，然后再开始。
+
 ## 后续文档
 
 - [FMOD 插件](./fmod.md)
 - [Unreal Engine SDK](./ue.md) · [Unity SDK](./unity.md)
-- [SimpleST](../core/simplest.md)

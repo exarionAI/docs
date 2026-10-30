@@ -10,14 +10,7 @@ const sidebars = {
       items: [
         'intro/what-is-soundtracing',
         'intro/features',
-        'intro/products',
       ],
-    },
-    {
-      type: 'category',
-      label: 'Core',
-      collapsed: false,
-      items: ['core/simplest', 'core/stcorev2'],
     },
     {
       type: 'category',
@@ -36,14 +29,8 @@ const sidebars = {
         'sdk/ue',
         'sdk/fmod',
         'sdk/wwise',
-        'sdk/python',
         'sdk/performance',
       ],
-    },
-    {
-      type: 'category',
-      label: 'ExaTools',
-      items: ['exatools/overview', 'exatools/iranalyzer'],
     },
     'legal/licenses',
   ],
