@@ -25,7 +25,7 @@ npm run build:github         # GitHub Pages project URL(/docs/)용 전체 locale
 ```
 docs/                 # 한국어 정본
 ├── intro/            # 소개 (what-is-soundtracing, features)
-├── sdk/              # overview, web(+web/facade, web/native), unity, ue, fmod, wwise, performance
+├── sdk/              # overview(지원 플랫폼), native(C/C++), web(+web/facade, web/native), unity, ue, fmod, wwise, performance
 └── legal/            # licenses
 i18n/<locale>/docusaurus-plugin-content-docs/current/   # en, ja, zh-Hans, zh-Hant 번역 (같은 경로)
 static/img/           # 이미지 (아래 이미지 이력 참고)

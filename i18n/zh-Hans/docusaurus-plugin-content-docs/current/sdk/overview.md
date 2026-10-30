@@ -8,9 +8,9 @@ description: Sound-Tracing SDK 支持的平台 — C++ SDK、Android、iOS、Web
 
 | 平台 | 文档 |
 |---|---|
-| C++ SDK (Windows · macOS · Linux) | 联系 [contact@exarion.ai](mailto:contact@exarion.ai) |
-| Android | 联系 [contact@exarion.ai](mailto:contact@exarion.ai) |
-| iOS | 联系 [contact@exarion.ai](mailto:contact@exarion.ai) |
+| C++ SDK (Windows · macOS · Linux) | [C/C++ SDK](./native.md) |
+| Android | [C/C++ SDK](./native.md) |
+| iOS | [C/C++ SDK](./native.md) |
 | Web (WASM / JS) | [Web SDK](./web.md) |
 | Unity | [Unity SDK](./unity.md) |
 | Unreal Engine | [Unreal Engine SDK](./ue.md) |
@@ -24,3 +24,4 @@ description: Sound-Tracing SDK 支持的平台 — C++ SDK、Android、iOS、Web
 - [Unreal Engine SDK](./ue.md)
 - [FMOD 插件](./fmod.md)
 - [Wwise 插件](./wwise.md)
+- [C/C++ SDK](./native.md)

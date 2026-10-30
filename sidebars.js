@@ -18,6 +18,7 @@ const sidebars = {
       collapsed: false,
       items: [
         'sdk/overview',
+        'sdk/native',
         {
           type: 'category',
           label: 'Web',

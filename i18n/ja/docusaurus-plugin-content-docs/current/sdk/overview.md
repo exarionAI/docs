@@ -8,9 +8,9 @@ description: Sound-Tracing SDK の対応プラットフォーム — C++ SDK、A
 
 | プラットフォーム | ドキュメント |
 |---|---|
-| C++ SDK (Windows · macOS · Linux) | [contact@exarion.ai](mailto:contact@exarion.ai) までお問い合わせ |
-| Android | [contact@exarion.ai](mailto:contact@exarion.ai) までお問い合わせ |
-| iOS | [contact@exarion.ai](mailto:contact@exarion.ai) までお問い合わせ |
+| C++ SDK (Windows · macOS · Linux) | [C/C++ SDK](./native.md) |
+| Android | [C/C++ SDK](./native.md) |
+| iOS | [C/C++ SDK](./native.md) |
 | Web (WASM / JS) | [Web SDK](./web.md) |
 | Unity | [Unity SDK](./unity.md) |
 | Unreal Engine | [Unreal Engine SDK](./ue.md) |
@@ -24,3 +24,4 @@ description: Sound-Tracing SDK の対応プラットフォーム — C++ SDK、A
 - [Unreal Engine SDK](./ue.md)
 - [FMOD プラグイン](./fmod.md)
 - [Wwise プラグイン](./wwise.md)
+- [C/C++ SDK](./native.md)

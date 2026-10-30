@@ -8,9 +8,9 @@ description: Sound-Tracing SDK supported platforms — C++ SDK, Android, iOS, We
 
 | Platform | Documentation |
 |---|---|
-| C++ SDK (Windows · macOS · Linux) | Contact [contact@exarion.ai](mailto:contact@exarion.ai) |
-| Android | Contact [contact@exarion.ai](mailto:contact@exarion.ai) |
-| iOS | Contact [contact@exarion.ai](mailto:contact@exarion.ai) |
+| C++ SDK (Windows · macOS · Linux) | [C/C++ SDK](./native.md) |
+| Android | [C/C++ SDK](./native.md) |
+| iOS | [C/C++ SDK](./native.md) |
 | Web (WASM / JS) | [Web SDK](./web.md) |
 | Unity | [Unity SDK](./unity.md) |
 | Unreal Engine | [Unreal Engine SDK](./ue.md) |
@@ -24,3 +24,4 @@ description: Sound-Tracing SDK supported platforms — C++ SDK, Android, iOS, We
 - [Unreal Engine SDK](./ue.md)
 - [FMOD plug-in](./fmod.md)
 - [Wwise plug-in](./wwise.md)
+- [C/C++ SDK](./native.md)
