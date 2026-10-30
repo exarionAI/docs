@@ -115,24 +115,86 @@ st_rt_destroy(ctx);
 | Acoustic policy | `st_rt_set_atmosphere`, `st_rt_set_acoustic_feature_enabled`, `st_rt_set_late_coupling_preset` |
 | render | `st_rt_render_start` / `stop`, `st_rt_render_process`, `set_options` / `get_options`, `set_spatializer`, `set_speaker_layout`, `set_parametric_eq`, `set_loudness_compensation`, `set_master_gain_db`, `set_limiter_type`, `set_max_delay_seconds`, `get_latency_frames` |
 | Memory budget | `STRT_CreateOptions.maxSources`, `st_rt_set_memory_budget`, `st_rt_get_memory_stats` |
+| Threads | `STRT_CreateOptions.maxComputeThreads` / `.scheduler`, `st_rt_set_thread_attributes`, `st_rt_get_thread_inventory`, `st_rt_set_lane_update_interval` — [Thread model](#thread-model) |
 | Diagnostics | `st_rt_get_timing`, `st_rt_scene_get_stats`, `st_rt_ir_get_stats`, `st_rt_debug_copy_visual_paths` |
 
 Spatialization is selected with `st_rt_render_set_spatializer`: `0` panning · `1` MIT KEMAR (built in) · `2` SADIE II D2 KEMAR (`Resources/HRTF`);
 speaker output is enabled with `st_rt_render_set_speaker_layout` (2.0 / 2.1 / 4.1 / 5.1 / 7.1). Materials are 9-band
 (`63 Hz ~ 16 kHz`) `reflection / absorption / transmission / scattering`, and every band must satisfy `R + A + T = 1`.
 
-## Threading rules
+## Thread model
 
-Every function in the headers carries a tag naming the threads it may be called from.
+![Sound-Tracing SDK (C/C++) threads and data flow](/img/sdk/native-architecture.png)
 
-| Tag | Meaning |
-|---|---|
-| `[control]` | Control thread. May take the scene lock, so never call from the audio callback |
-| `[control, blocking]` | Long sections such as acceleration-structure builds, render start/stop and HRIR loading |
-| `[audio]` | Safe on the host audio thread — `st_rt_source_write_stream`, `st_rt_render_process` |
-| `[any]` | Any thread |
+The host provides two threads — **one control thread** (scene, source, listener and propagation calls) and the **audio thread**
+(PCM input and render output). Everything else is created by the engine inside the context.
 
-Serialize `[control]` calls onto a single dedicated control thread. Every official wrapper is built this way.
+### Callable threads
+
+Every function in the headers carries a tag.
+
+| Tag | Meaning | Representative functions |
+|---|---|---|
+| `[control]` | Control thread. May take the scene lock, so never call from the audio callback | Creation, scene, source and listener setters, `st_rt_propagate` (PIPELINED wakes the worker and returns immediately) |
+| `[control, blocking]` | Long exclusive sections — never call from the game loop or the audio thread | `st_rt_build`, `st_rt_render_start` / `stop`, HRIR loading, delay ring reallocation |
+| `[audio]` | Safe on the host audio thread — no locks, allocations or system calls | `st_rt_source_write_stream`, `st_rt_render_process` |
+| `[any]` | Any thread (atomic reads / constants) | `st_rt_get_timing`, `st_rt_get_thread_inventory`, `st_rt_get_lane_update_interval` |
+
+Serialize `[control]` calls onto **a single dedicated control thread**. Every official wrapper is built this way.
+
+### Threads created by the engine
+
+| Type (`STThreadType`) | Count | Role |
+|---|---|---|
+| `ST_THREAD_COMPUTE_POOL` | PIPELINED: N − 1 (1 dedicated to Direct + N − 2 general), N = max(3, budget) · SYNCHRONOUS: N (inline on the caller when N = 1) | Propagation lanes, IR conversion and IR preparation tasks all run on this pool |
+| `ST_THREAD_AUDIO_RENDER` | 1 (DEVICE · HOST_PULL_BUFFERED) / 0 (HOST_PULL) | Block rendering. In BUFFERED it fills the ring and the callback only copies |
+| Device thread | 1 (DEVICE only) | OS output device (WASAPI · CoreAudio · AAudio) driver. Not included in the inventory |
+| `ST_THREAD_FILE_DECODER` | ≤ 1 | Only when there is `st_rt_source_set_audio_file` input. Absent for host stream input |
+
+- **Budget**: `STRT_CreateOptions.maxComputeThreads` — `0` = auto = min(performance cores, 6). No environment variable influence.
+- **Scheduler**: `STRT_CreateOptions.scheduler` — `ST_RT_SCHEDULER_PIPELINED` (default; lanes run on workers at independent intervals) /
+  `ST_RT_SCHEDULER_SYNCHRONOUS` (`st_rt_propagate` finishes propagation on the calling thread before returning).
+- **Total (DEVICE mode)**: PIPELINED = N + 1 (+ 1 file decoder) · SYNCHRONOUS = N + 2 (+ 1). HOST_PULL drops the render and device threads,
+  HOST_PULL_BUFFERED keeps only 1 render thread. Measure the actual count with `st_rt_get_thread_inventory` (`[any]`, atomic counters per type).
+- Acceleration-structure (TinyBVH) builds run on the calling thread and create no separate worker.
+
+### Propagation lane intervals
+
+The three geometry lanes of PIPELINED change their interval **at any time at runtime** via `st_rt_set_lane_update_interval(ctx, lane, ms)`
+(`[0, 60000]` ms; out-of-range values are rejected).
+
+| `STPropagationLane` | Default | Meaning |
+|---|---|---|
+| `DIRECT` (0) | 10 ms | Minimum gap between the starts of consecutive runs |
+| `REFLECTION_DIFFRACTION` (1) | 0 ms | Minimum gap between two consecutive runs. Most of the propagation cost — raise this first to buy back CPU (the price is early reflections following the listener later; no silence or dropouts) |
+| `REVERB` (2) | 4 ms | Minimum gap from the completion of a run to the next run |
+
+### Thread attributes
+
+`st_rt_set_thread_attributes(threadType, &attr)` is set per type **before the context is created** (not retroactive for threads
+already running, process-global, same place as FMOD `Thread_SetAttributes`). The logical roles (`LANE_*` · `IR_CONVERTER` ·
+`AU_PREPARE` · `SCENE_INPUT`) have no dedicated thread, so apply the pool policy to `ST_THREAD_COMPUTE_POOL`.
+
+```c
+STThreadAttributes attr = { sizeof attr, ST_ABI_VERSION };
+attr.priority = ST_THREAD_PRIORITY_ABOVE_NORMAL;            // DEFAULT · LOW · BELOW_NORMAL · NORMAL · ABOVE_NORMAL · HIGH · TIME_CRITICAL
+attr.flags    = ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES;    // or PREFER_EFFICIENCY_CORES (setting both is rejected)
+attr.affinityMask = 0;                                      // logical processor bitmask, honored on Windows only. 0 = unspecified
+st_rt_set_thread_attributes(ST_THREAD_COMPUTE_POOL, &attr);
+st_rt_set_thread_attributes(ST_THREAD_AUDIO_RENDER, &attr);
+```
+
+### Output modes and latency
+
+| `renderOutputMode` | Engine threads | What the host callback does | Latency |
+|---|---|---|---|
+| `DEVICE` (0) | 1 render + 1 device | Nothing — the engine opens the device itself | Device buffer |
+| `HOST_PULL` (1) | None | `st_rt_render_process` renders the block inside the callback | 0 blocks (render cost lands on the callback) |
+| `HOST_PULL_BUFFERED` (2) | 1 render | Copy from the ring only (≈ memcpy) | Ring ≈ 3 blocks (`st_rt_render_get_latency_frames`) |
+
+All three modes require calling `st_rt_render_start(useHrtf)` (in the HOST_PULL family it creates no thread or device and only sets the
+render-enable flag and the binaural/speaker choice). When `hostSampleRate ≠ 0`, the engine performs rate conversion on the render thread (BUFFERED) or in the callback (HOST_PULL).
+The UE · Unity · FMOD · Wwise plug-ins all use BUFFERED.
 
 ## Platform notes
 

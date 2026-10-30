@@ -115,24 +115,86 @@ st_rt_destroy(ctx);
 | 聲學策略 | `st_rt_set_atmosphere`, `st_rt_set_acoustic_feature_enabled`, `st_rt_set_late_coupling_preset` |
 | render | `st_rt_render_start` / `stop`, `st_rt_render_process`, `set_options` / `get_options`, `set_spatializer`, `set_speaker_layout`, `set_parametric_eq`, `set_loudness_compensation`, `set_master_gain_db`, `set_limiter_type`, `set_max_delay_seconds`, `get_latency_frames` |
 | 記憶體預算 | `STRT_CreateOptions.maxSources`, `st_rt_set_memory_budget`, `st_rt_get_memory_stats` |
+| 執行緒 | `STRT_CreateOptions.maxComputeThreads` / `.scheduler`, `st_rt_set_thread_attributes`, `st_rt_get_thread_inventory`, `st_rt_set_lane_update_interval` — [執行緒模型](#執行緒模型) |
 | 診斷 | `st_rt_get_timing`, `st_rt_scene_get_stats`, `st_rt_ir_get_stats`, `st_rt_debug_copy_visual_paths` |
 
 空間化透過 `st_rt_render_set_spatializer` 選擇 `0` 聲像 · `1` MIT KEMAR（內建）· `2` SADIE II D2 KEMAR（`Resources/HRTF`），
 喇叭輸出透過 `st_rt_render_set_speaker_layout`（2.0 / 2.1 / 4.1 / 5.1 / 7.1）開啟。材質為 9 頻段
 （`63 Hz ~ 16 kHz`）的 `reflection / absorption / transmission / scattering`，每個頻段必須滿足 `R + A + T = 1`。
 
-## 執行緒規則
+## 執行緒模型
 
-標頭檔中每個函式上方都標有可呼叫執行緒的標籤。
+![Sound-Tracing SDK (C/C++) 執行緒與資料流](/img/sdk/native-architecture.png)
 
-| 標籤 | 意義 |
-|---|---|
-| `[control]` | 控制執行緒。可能持有場景鎖，因此不要在音訊回呼中呼叫 |
-| `[control, blocking]` | 加速結構建置、渲染 start/stop、HRIR 載入等耗時區間 |
-| `[audio]` | 在主機音訊執行緒上安全 — `st_rt_source_write_stream`, `st_rt_render_process` |
-| `[any]` | 任意執行緒 |
+主機提供兩個執行緒 — **一個控制執行緒**（場景、音源、聆聽者、傳播呼叫）和 **音訊執行緒**
+（PCM 輸入、渲染輸出）。其餘執行緒由引擎在情境內部建立。
 
-請將 `[control]` 呼叫序列化到唯一的專用控制執行緒。所有官方包裝層都採用這一結構。
+### 可呼叫執行緒
+
+標頭檔中每個函式上方都有標籤。
+
+| 標籤 | 意義 | 代表函式 |
+|---|---|---|
+| `[control]` | 控制執行緒。可能持有場景鎖，因此不要在音訊回呼中呼叫 | 建立、場景、音源、聆聽者 setter，`st_rt_propagate`（PIPELINED 喚醒工作執行緒後立即返回） |
+| `[control, blocking]` | 較長的獨佔區間 — 不要在遊戲迴圈、音訊執行緒中呼叫 | `st_rt_build`、`st_rt_render_start` / `stop`、HRIR 載入、延遲環重新配置 |
+| `[audio]` | 在主機音訊執行緒上安全 — 無鎖、無配置、無系統呼叫 | `st_rt_source_write_stream`、`st_rt_render_process` |
+| `[any]` | 任意執行緒（atomic 讀取 / 常數） | `st_rt_get_timing`、`st_rt_get_thread_inventory`、`st_rt_get_lane_update_interval` |
+
+請將 `[control]` 呼叫序列化到 **唯一的專用控制執行緒**。所有官方包裝層都採用這一結構。
+
+### 引擎建立的執行緒
+
+| 類型 (`STThreadType`) | 數量 | 作用 |
+|---|---|---|
+| `ST_THREAD_COMPUTE_POOL` | PIPELINED: N − 1（Direct 專用 1 + 一般 N − 2），N = max(3, 預算) · SYNCHRONOUS: N（N = 1 時在呼叫端內嵌） | 傳播通道、IR 轉換、IR 準備 task 全部在此集區中執行 |
+| `ST_THREAD_AUDIO_RENDER` | 1 (DEVICE · HOST_PULL_BUFFERED) / 0 (HOST_PULL) | 區塊渲染。BUFFERED 下填充環形緩衝區，回呼只做複製 |
+| 裝置執行緒 | 1 (僅 DEVICE) | OS 輸出裝置（WASAPI · CoreAudio · AAudio）驅動程式。不計入清單 |
+| `ST_THREAD_FILE_DECODER` | ≤ 1 | 僅當有 `st_rt_source_set_audio_file` 輸入時存在。主機串流輸入下沒有 |
+
+- **預算**: `STRT_CreateOptions.maxComputeThreads` — `0` = auto = min(效能核心數, 6)。不受環境變數影響。
+- **排程器**: `STRT_CreateOptions.scheduler` — `ST_RT_SCHEDULER_PIPELINED`（預設，各通道在工作執行緒上以獨立週期執行）/
+  `ST_RT_SCHEDULER_SYNCHRONOUS`（`st_rt_propagate` 在呼叫執行緒上完成傳播後返回）。
+- **合計 (DEVICE 模式)**: PIPELINED = N + 1（+ 檔案解碼器 1）· SYNCHRONOUS = N + 2（+ 1）。HOST_PULL 去掉渲染、裝置執行緒，
+  HOST_PULL_BUFFERED 只保留渲染 1。實測用 `st_rt_get_thread_inventory`（`[any]`，依類型的 atomic 計數器）查看。
+- 加速結構（TinyBVH）建置在呼叫執行緒上執行，不會建立額外的工作執行緒。
+
+### 傳播通道週期
+
+PIPELINED 的 3 種幾何通道可透過 `st_rt_set_lane_update_interval(ctx, lane, ms)` 在 **執行期間隨時** 更改週期
+（`[0, 60000]` ms，超出範圍則拒絕）。
+
+| `STPropagationLane` | 預設 | 意義 |
+|---|---|---|
+| `DIRECT` (0) | 10 ms | 連續執行開始之間的最小間隔 |
+| `REFLECTION_DIFFRACTION` (1) | 0 ms | 連續兩次執行之間的最小間隔。佔傳播成本的大部分 — 要收回 CPU 先調高這裡（代價是早期反射跟隨聆聽者變慢，不會出現靜音或掉音） |
+| `REVERB` (2) | 4 ms | 執行完成後到下一次執行的最小間隔 |
+
+### 執行緒屬性
+
+`st_rt_set_thread_attributes(threadType, &attr)` 須在 **建立情境之前** 依類型指定（對已在執行的執行緒不追溯，
+處理程序全域，與 FMOD `Thread_SetAttributes` 處於同一位置）。邏輯角色（`LANE_*` · `IR_CONVERTER` ·
+`AU_PREPARE` · `SCENE_INPUT`）沒有專用執行緒，因此集區策略設定在 `ST_THREAD_COMPUTE_POOL` 上。
+
+```c
+STThreadAttributes attr = { sizeof attr, ST_ABI_VERSION };
+attr.priority = ST_THREAD_PRIORITY_ABOVE_NORMAL;            // DEFAULT · LOW · BELOW_NORMAL · NORMAL · ABOVE_NORMAL · HIGH · TIME_CRITICAL
+attr.flags    = ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES;    // 或 PREFER_EFFICIENCY_CORES（兩者同時開啟則拒絕）
+attr.affinityMask = 0;                                      // 邏輯處理器位元遮罩，僅 Windows 遵守。0 = 不指定
+st_rt_set_thread_attributes(ST_THREAD_COMPUTE_POOL, &attr);
+st_rt_set_thread_attributes(ST_THREAD_AUDIO_RENDER, &attr);
+```
+
+### 輸出模式與延遲
+
+| `renderOutputMode` | 引擎執行緒 | 主機回呼所做的事 | 延遲 |
+|---|---|---|---|
+| `DEVICE` (0) | 渲染 1 + 裝置 1 | 無 — 引擎直接開啟裝置 | 裝置緩衝區 |
+| `HOST_PULL` (1) | 無 | `st_rt_render_process` 在回呼內渲染區塊 | 0 區塊（渲染成本落在回呼上） |
+| `HOST_PULL_BUFFERED` (2) | 渲染 1 | 僅從環形緩衝區複製（≈ memcpy） | 環 ≈ 3 區塊（`st_rt_render_get_latency_frames`） |
+
+三種模式都必須呼叫 `st_rt_render_start(useHrtf)`（HOST_PULL 系列不建立執行緒、裝置，只設定渲染允許旗標和
+雙耳/喇叭選擇）。`hostSampleRate ≠ 0` 時，取樣率轉換由引擎在渲染執行緒（BUFFERED）或回呼（HOST_PULL）中完成。
+UE · Unity · FMOD · Wwise 外掛全部使用 BUFFERED。
 
 ## 平台備註
 

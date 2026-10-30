@@ -115,24 +115,86 @@ st_rt_destroy(ctx);
 | 声学策略 | `st_rt_set_atmosphere`, `st_rt_set_acoustic_feature_enabled`, `st_rt_set_late_coupling_preset` |
 | render | `st_rt_render_start` / `stop`, `st_rt_render_process`, `set_options` / `get_options`, `set_spatializer`, `set_speaker_layout`, `set_parametric_eq`, `set_loudness_compensation`, `set_master_gain_db`, `set_limiter_type`, `set_max_delay_seconds`, `get_latency_frames` |
 | 内存预算 | `STRT_CreateOptions.maxSources`, `st_rt_set_memory_budget`, `st_rt_get_memory_stats` |
+| 线程 | `STRT_CreateOptions.maxComputeThreads` / `.scheduler`, `st_rt_set_thread_attributes`, `st_rt_get_thread_inventory`, `st_rt_set_lane_update_interval` — [线程模型](#线程模型) |
 | 诊断 | `st_rt_get_timing`, `st_rt_scene_get_stats`, `st_rt_ir_get_stats`, `st_rt_debug_copy_visual_paths` |
 
 空间化通过 `st_rt_render_set_spatializer` 选择 `0` 声像 · `1` MIT KEMAR（内置）· `2` SADIE II D2 KEMAR（`Resources/HRTF`），
 扬声器输出通过 `st_rt_render_set_speaker_layout`（2.0 / 2.1 / 4.1 / 5.1 / 7.1）开启。材质为 9 频段
 （`63 Hz ~ 16 kHz`）的 `reflection / absorption / transmission / scattering`，每个频段必须满足 `R + A + T = 1`。
 
-## 线程规则
+## 线程模型
 
-头文件中每个函数上方都标有可调用线程的标签。
+![Sound-Tracing SDK (C/C++) 线程与数据流](/img/sdk/native-architecture.png)
 
-| 标签 | 含义 |
-|---|---|
-| `[control]` | 控制线程。可能持有场景锁，因此不要在音频回调中调用 |
-| `[control, blocking]` | 加速结构构建、渲染 start/stop、HRIR 加载等耗时区间 |
-| `[audio]` | 在宿主音频线程上安全 — `st_rt_source_write_stream`, `st_rt_render_process` |
-| `[any]` | 任意线程 |
+宿主提供两个线程 — **一个控制线程**（场景、声源、听者、传播调用）和 **音频线程**
+（PCM 输入、渲染输出）。其余线程由引擎在上下文内部创建。
 
-请将 `[control]` 调用串行化到唯一的专用控制线程。所有官方包装层都采用这一结构。
+### 可调用线程
+
+头文件中每个函数上方都有标签。
+
+| 标签 | 含义 | 代表函数 |
+|---|---|---|
+| `[control]` | 控制线程。可能持有场景锁，因此不要在音频回调中调用 | 创建、场景、声源、听者 setter，`st_rt_propagate`（PIPELINED 唤醒工作线程后立即返回） |
+| `[control, blocking]` | 较长的独占区间 — 不要在游戏循环、音频线程中调用 | `st_rt_build`、`st_rt_render_start` / `stop`、HRIR 加载、延迟环重新分配 |
+| `[audio]` | 在宿主音频线程上安全 — 无锁、无分配、无系统调用 | `st_rt_source_write_stream`、`st_rt_render_process` |
+| `[any]` | 任意线程（atomic 读取 / 常量） | `st_rt_get_timing`、`st_rt_get_thread_inventory`、`st_rt_get_lane_update_interval` |
+
+请将 `[control]` 调用串行化到 **唯一的专用控制线程**。所有官方包装层都采用这一结构。
+
+### 引擎创建的线程
+
+| 类型 (`STThreadType`) | 数量 | 作用 |
+|---|---|---|
+| `ST_THREAD_COMPUTE_POOL` | PIPELINED: N − 1（Direct 专用 1 + 通用 N − 2），N = max(3, 预算) · SYNCHRONOUS: N（N = 1 时在调用方内联） | 传播通道、IR 转换、IR 准备 task 全部在此池中运行 |
+| `ST_THREAD_AUDIO_RENDER` | 1 (DEVICE · HOST_PULL_BUFFERED) / 0 (HOST_PULL) | 块渲染。BUFFERED 下填充环形缓冲区，回调只做复制 |
+| 设备线程 | 1 (仅 DEVICE) | OS 输出设备（WASAPI · CoreAudio · AAudio）驱动。不计入清单 |
+| `ST_THREAD_FILE_DECODER` | ≤ 1 | 仅当有 `st_rt_source_set_audio_file` 输入时存在。宿主流输入下没有 |
+
+- **预算**: `STRT_CreateOptions.maxComputeThreads` — `0` = auto = min(性能核心数, 6)。不受环境变量影响。
+- **调度器**: `STRT_CreateOptions.scheduler` — `ST_RT_SCHEDULER_PIPELINED`（默认，各通道在工作线程上以独立周期运行）/
+  `ST_RT_SCHEDULER_SYNCHRONOUS`（`st_rt_propagate` 在调用线程上完成传播后返回）。
+- **合计 (DEVICE 模式)**: PIPELINED = N + 1（+ 文件解码器 1）· SYNCHRONOUS = N + 2（+ 1）。HOST_PULL 去掉渲染、设备线程，
+  HOST_PULL_BUFFERED 只保留渲染 1。实测用 `st_rt_get_thread_inventory`（`[any]`，按类型的 atomic 计数器）查看。
+- 加速结构（TinyBVH）构建在调用线程上执行，不会创建单独的工作线程。
+
+### 传播通道周期
+
+PIPELINED 的 3 种几何通道可通过 `st_rt_set_lane_update_interval(ctx, lane, ms)` 在 **运行时随时** 更改周期
+（`[0, 60000]` ms，超出范围则拒绝）。
+
+| `STPropagationLane` | 默认 | 含义 |
+|---|---|---|
+| `DIRECT` (0) | 10 ms | 连续执行开始之间的最小间隔 |
+| `REFLECTION_DIFFRACTION` (1) | 0 ms | 连续两次执行之间的最小间隔。占传播开销的大部分 — 要收回 CPU 先调高这里（代价是早期反射跟随听者变慢，不会出现静音或丢音） |
+| `REVERB` (2) | 4 ms | 执行完成后到下一次执行的最小间隔 |
+
+### 线程属性
+
+`st_rt_set_thread_attributes(threadType, &attr)` 须在 **创建上下文之前** 按类型指定（对已在运行的线程不追溯，
+进程全局，与 FMOD `Thread_SetAttributes` 处于同一位置）。逻辑角色（`LANE_*` · `IR_CONVERTER` ·
+`AU_PREPARE` · `SCENE_INPUT`）没有专用线程，因此池策略设置在 `ST_THREAD_COMPUTE_POOL` 上。
+
+```c
+STThreadAttributes attr = { sizeof attr, ST_ABI_VERSION };
+attr.priority = ST_THREAD_PRIORITY_ABOVE_NORMAL;            // DEFAULT · LOW · BELOW_NORMAL · NORMAL · ABOVE_NORMAL · HIGH · TIME_CRITICAL
+attr.flags    = ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES;    // 或 PREFER_EFFICIENCY_CORES（两者同时开启则拒绝）
+attr.affinityMask = 0;                                      // 逻辑处理器位掩码，仅 Windows 遵守。0 = 不指定
+st_rt_set_thread_attributes(ST_THREAD_COMPUTE_POOL, &attr);
+st_rt_set_thread_attributes(ST_THREAD_AUDIO_RENDER, &attr);
+```
+
+### 输出模式与延迟
+
+| `renderOutputMode` | 引擎线程 | 宿主回调所做的事 | 延迟 |
+|---|---|---|---|
+| `DEVICE` (0) | 渲染 1 + 设备 1 | 无 — 引擎直接打开设备 | 设备缓冲区 |
+| `HOST_PULL` (1) | 无 | `st_rt_render_process` 在回调内渲染块 | 0 块（渲染开销落在回调上） |
+| `HOST_PULL_BUFFERED` (2) | 渲染 1 | 仅从环形缓冲区复制（≈ memcpy） | 环 ≈ 3 块（`st_rt_render_get_latency_frames`） |
+
+三种模式都必须调用 `st_rt_render_start(useHrtf)`（HOST_PULL 系列不创建线程、设备，只设置渲染允许标志和
+双耳/扬声器选择）。`hostSampleRate ≠ 0` 时，采样率转换由引擎在渲染线程（BUFFERED）或回调（HOST_PULL）中完成。
+UE · Unity · FMOD · Wwise 插件全部使用 BUFFERED。
 
 ## 平台说明
 

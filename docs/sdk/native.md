@@ -115,24 +115,86 @@ st_rt_destroy(ctx);
 | 음향 정책 | `st_rt_set_atmosphere`, `st_rt_set_acoustic_feature_enabled`, `st_rt_set_late_coupling_preset` |
 | render | `st_rt_render_start` / `stop`, `st_rt_render_process`, `set_options` / `get_options`, `set_spatializer`, `set_speaker_layout`, `set_parametric_eq`, `set_loudness_compensation`, `set_master_gain_db`, `set_limiter_type`, `set_max_delay_seconds`, `get_latency_frames` |
 | 메모리 예산 | `STRT_CreateOptions.maxSources`, `st_rt_set_memory_budget`, `st_rt_get_memory_stats` |
+| 스레드 | `STRT_CreateOptions.maxComputeThreads` / `.scheduler`, `st_rt_set_thread_attributes`, `st_rt_get_thread_inventory`, `st_rt_set_lane_update_interval` — [스레드 모델](#스레드-모델) |
 | 진단 | `st_rt_get_timing`, `st_rt_scene_get_stats`, `st_rt_ir_get_stats`, `st_rt_debug_copy_visual_paths` |
 
 공간화는 `st_rt_render_set_spatializer`로 `0` 패닝 · `1` MIT KEMAR(내장) · `2` SADIE II D2 KEMAR(`Resources/HRTF`)를
 고르고, 스피커 출력은 `st_rt_render_set_speaker_layout`(2.0 / 2.1 / 4.1 / 5.1 / 7.1)로 켭니다. 재질은 9밴드
 (`63 Hz ~ 16 kHz`) `reflection / absorption / transmission / scattering`이며 밴드마다 `R + A + T = 1`이어야 합니다.
 
-## 스레드 규칙
+## 스레드 모델
 
-헤더의 모든 함수 위에 호출 가능한 스레드 태그가 있습니다.
+![Sound-Tracing SDK (C/C++) 스레드와 데이터 흐름](/img/sdk/native-architecture.png)
 
-| 태그 | 의미 |
-|---|---|
-| `[control]` | 제어 스레드. 씬 락을 잡을 수 있으므로 오디오 콜백에서 부르지 않습니다 |
-| `[control, blocking]` | 가속구조 빌드, 렌더 start/stop, HRIR 로드처럼 긴 구간 |
-| `[audio]` | 호스트 오디오 스레드에서 안전 — `st_rt_source_write_stream`, `st_rt_render_process` |
-| `[any]` | 어느 스레드에서나 |
+호스트가 제공하는 스레드는 둘입니다 — **제어 스레드 하나**(씬·음원·리스너·전파 호출)와 **오디오 스레드**
+(PCM 입력·렌더 출력). 나머지는 엔진이 컨텍스트 안에서 만듭니다.
 
-`[control]` 호출은 전용 컨트롤 스레드 하나로 직렬화하십시오. 모든 공식 래퍼가 이 구조입니다.
+### 호출 가능한 스레드
+
+헤더의 모든 함수 위에 태그가 있습니다.
+
+| 태그 | 의미 | 대표 함수 |
+|---|---|---|
+| `[control]` | 제어 스레드. 씬 락을 잡을 수 있으므로 오디오 콜백에서 부르지 않습니다 | 생성·씬·음원·리스너 setter, `st_rt_propagate`(PIPELINED는 워커를 깨우고 즉시 반환) |
+| `[control, blocking]` | 긴 배타 구간 — 게임 루프·오디오 스레드에서 부르지 않습니다 | `st_rt_build`, `st_rt_render_start` / `stop`, HRIR 로드, 지연 링 재할당 |
+| `[audio]` | 호스트 오디오 스레드에서 안전 — 락·할당·시스템콜 없음 | `st_rt_source_write_stream`, `st_rt_render_process` |
+| `[any]` | 어느 스레드에서나 (atomic 읽기 / 상수) | `st_rt_get_timing`, `st_rt_get_thread_inventory`, `st_rt_get_lane_update_interval` |
+
+`[control]` 호출은 **전용 컨트롤 스레드 하나**로 직렬화하십시오. 모든 공식 래퍼가 이 구조입니다.
+
+### 엔진이 만드는 스레드
+
+| 종류 (`STThreadType`) | 개수 | 역할 |
+|---|---|---|
+| `ST_THREAD_COMPUTE_POOL` | PIPELINED: N − 1 (Direct 전용 1 + 일반 N − 2), N = max(3, 예산) · SYNCHRONOUS: N (N = 1이면 호출자 인라인) | 전파 레인·IR 변환·IR 준비 task가 모두 이 풀에서 돕니다 |
+| `ST_THREAD_AUDIO_RENDER` | 1 (DEVICE · HOST_PULL_BUFFERED) / 0 (HOST_PULL) | 블록 렌더. BUFFERED에서는 링을 채우고 콜백은 복사만 합니다 |
+| 장치 스레드 | 1 (DEVICE만) | OS 출력 장치(WASAPI · CoreAudio · AAudio) 드라이버. 인벤토리에는 포함되지 않습니다 |
+| `ST_THREAD_FILE_DECODER` | ≤ 1 | `st_rt_source_set_audio_file` 입력이 있을 때만. 호스트 스트림 입력에는 없습니다 |
+
+- **예산**: `STRT_CreateOptions.maxComputeThreads` — `0` = auto = min(퍼포먼스 코어, 6). 환경변수 영향 없음.
+- **스케줄러**: `STRT_CreateOptions.scheduler` — `ST_RT_SCHEDULER_PIPELINED`(기본, 레인이 워커에서 독립 주기로 돕니다) /
+  `ST_RT_SCHEDULER_SYNCHRONOUS`(`st_rt_propagate`가 호출 스레드에서 전파를 끝내고 반환).
+- **합계 (DEVICE 모드)**: PIPELINED = N + 1 (+ 파일 디코더 1) · SYNCHRONOUS = N + 2 (+ 1). HOST_PULL은 렌더·장치 스레드가 빠지고,
+  HOST_PULL_BUFFERED는 렌더 1만 남습니다. 실측은 `st_rt_get_thread_inventory`(`[any]`, 종류별 atomic 카운터)로 봅니다.
+- 가속구조(TinyBVH) 빌드는 호출 스레드에서 실행되며 별도 워커를 만들지 않습니다.
+
+### 전파 레인 주기
+
+PIPELINED의 기하 레인 3종은 `st_rt_set_lane_update_interval(ctx, lane, ms)`로 **런타임에 언제든** 주기를 바꿉니다
+(`[0, 60000]` ms, 범위 밖은 거절).
+
+| `STPropagationLane` | 기본 | 의미 |
+|---|---|---|
+| `DIRECT` (0) | 10 ms | 연속 실행 시작 사이 최소 간격 |
+| `REFLECTION_DIFFRACTION` (1) | 0 ms | 연속 두 실행 사이 최소 간격. 전파 비용의 대부분 — CPU를 되사려면 여기를 먼저 올립니다(초기 반사가 리스너를 늦게 따라오는 대가, 무음·드롭아웃은 없음) |
+| `REVERB` (2) | 4 ms | 실행 완료 후 다음 실행까지 최소 간격 |
+
+### 스레드 속성
+
+`st_rt_set_thread_attributes(threadType, &attr)`는 **컨텍스트 생성 전에** 종류별로 지정합니다(이미 도는 스레드에는
+소급되지 않음, 프로세스 전역, FMOD `Thread_SetAttributes`와 같은 자리). 논리 역할(`LANE_*` · `IR_CONVERTER` ·
+`AU_PREPARE` · `SCENE_INPUT`)은 전용 스레드가 없으므로 풀 정책은 `ST_THREAD_COMPUTE_POOL`에 겁니다.
+
+```c
+STThreadAttributes attr = { sizeof attr, ST_ABI_VERSION };
+attr.priority = ST_THREAD_PRIORITY_ABOVE_NORMAL;            // DEFAULT · LOW · BELOW_NORMAL · NORMAL · ABOVE_NORMAL · HIGH · TIME_CRITICAL
+attr.flags    = ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES;    // 또는 PREFER_EFFICIENCY_CORES (둘 다 켜면 거절)
+attr.affinityMask = 0;                                      // 논리 프로세서 비트마스크, Windows만 존중. 0 = 지정 없음
+st_rt_set_thread_attributes(ST_THREAD_COMPUTE_POOL, &attr);
+st_rt_set_thread_attributes(ST_THREAD_AUDIO_RENDER, &attr);
+```
+
+### 출력 모드와 지연
+
+| `renderOutputMode` | 엔진 스레드 | 호스트 콜백이 하는 일 | 지연 |
+|---|---|---|---|
+| `DEVICE` (0) | 렌더 1 + 장치 1 | 없음 — 엔진이 장치를 직접 엽니다 | 장치 버퍼 |
+| `HOST_PULL` (1) | 없음 | `st_rt_render_process`가 콜백 안에서 블록을 렌더 | 0 블록 (렌더 비용이 콜백에 실림) |
+| `HOST_PULL_BUFFERED` (2) | 렌더 1 | 링에서 복사만 (≈ memcpy) | 링 ≈ 3 블록 (`st_rt_render_get_latency_frames`) |
+
+세 모드 모두 `st_rt_render_start(useHrtf)`는 불러야 합니다(HOST_PULL 계열에서는 스레드·장치를 만들지 않고 렌더 허용 플래그와
+바이노럴/스피커 선택만 합니다). `hostSampleRate ≠ 0`이면 레이트 변환은 렌더 스레드(BUFFERED) 또는 콜백(HOST_PULL)에서 엔진이 합니다.
+UE · Unity · FMOD · Wwise 플러그인은 모두 BUFFERED를 씁니다.
 
 ## 플랫폼 메모
 

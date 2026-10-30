@@ -52,7 +52,7 @@ FMOD Studio 2.04 마스터 버스 Listener·이벤트 Source·Source 덱·플러
 새로 찍었다. `wwise/launcher-bundle.png`는 Sound-tracing이 설치된 목록으로 다시 찍었다.
 
 2026-10-30 개념도 9장(`core/pipeline-overview`·`engine-shells`·`hybrid-early-reflections`·`host-pull-render`, `intro/pipeline-concept`,
-`web/architecture`, `ue/integration-mode`, `fmod/structure`, `wwise/structure`)을 HTML→PNG(Playwright, 1280×720 @2x, 영문 라벨)로
+`web/architecture`, `ue/integration-mode`, `fmod/structure`, `wwise/structure`, `sdk/native-architecture`)을 HTML→PNG(Playwright, 1280×720 @2x, 영문 라벨)로
 그려 넣었다. `ue/path-visualizer.png`는 2026-10-30 Lyra Mac Shipping 패키지(Expanse, F6 경로 시각화)에서 캡처했다. `fmod/ue-plugin-files.png`는 2026-10-30 문서에서 빼고 삭제했다(FMOD for Unreal이 이 Mac에 없어 촬영 불가). 플레이스홀더는 더 없다.
 
 플레이스홀더를 다시 만들려면 `scripts/`가 아니라 세션 스크래치의 `placeholder.swift`를 썼다
