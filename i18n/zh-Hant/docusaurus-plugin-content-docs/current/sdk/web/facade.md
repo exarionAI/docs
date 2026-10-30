@@ -47,7 +47,7 @@ await sound.update(0);
 const sound = await SoundTrace.create(audioContext, {
   thread: 'mt',
   quality: 'balanced',
-  coordinateBasis: { right: [-1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }, // Three.js
+  coordinateBasis: { right: [1, 0, 0], up: [0, 1, 0], forward: [0, 0, -1] }, // Three.js
 });
 ```
 

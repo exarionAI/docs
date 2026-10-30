@@ -88,7 +88,7 @@ const sound = await SoundTrace.create(audioContext, {
   quality: 'balanced',
   earlyReflectionMode: 'hybrid',
   coordinateBasis: {         // Three.js: 카메라가 -Z를 본다
-    right: [-1, 0, 0],
+    right: [1, 0, 0],
     up: [0, 1, 0],
     forward: [0, 0, -1],
   },
