@@ -34,7 +34,9 @@ static/img/           # 이미지 (아래 이미지 이력 참고)
 문서 기준: 엔진 2.22.0 / ABI 6, SDK 릴리스 2.22.0-jhj.6. 엔진·플러그인 사실관계의 원천은
 SimpleST 저장소의 `engine/ABI/*.h`, `plugins/*/README.md`다. 문서상 제품명은 **Sound-Tracing SDK**(for Unity / for Unreal Engine /
 for FMOD / for Wwise / for Web)로 통일하고, `SimpleST*`는 바이너리·식별자·DSP 이름으로만 남긴다(2026-10-30).
-STCoreV2 대응표, Python 바인딩, ExaTools, Core(네이티브 엔진), 제품군 페이지와 릴리스 이력 서술은 2026-10-30에 제거했다. `static/img/core/*`는 페이지가 없어 현재 미사용이다.
+STCoreV2 대응표, Python 바인딩, ExaTools, Core(네이티브 엔진), 제품군 페이지와 릴리스 이력 서술은 2026-10-30에 제거했다.
+`sdk/native.md`의 "API 레퍼런스"(st_rt_* 181 + st_off_* 121 = 302 함수, 카테고리·함수별 `<details>`)는 `engine/ABI/*.h`에서
+파싱·작성한 것이다(2026-10-30). 4개 로케일 페이지에는 같은 한국어 본문을 번역 안내 note와 함께 그대로 넣었다 — 번역은 미완. `static/img/core/*`는 페이지가 없어 현재 미사용이다.
 
 ## 이미지 이력
 
