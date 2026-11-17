@@ -63,4 +63,6 @@ FMOD Studio 2.04 마스터 버스 Listener·이벤트 Source·Source 덱·플러
 (AppKit으로 텍스트를 그린 PNG). 같은 형식이 필요하면 아무 PNG나 1280×720으로 덮어쓰면 된다.
 
 2026-11-17 이름 변경(SimpleST → SoundTracing / Sound-tracing)으로 개념도 4장(`fmod/structure`, `sdk/native-architecture`, `ue/integration-mode`,
-`web/architecture`)의 이름 글자를 새로 렌더링해 바꿨다. FMOD Studio·Wwise 저작툴 스크린샷은 새 표시 이름으로 재촬영 대상이다.
+`web/architecture`)의 이름 글자를 새로 렌더링해 바꿨다. Wwise 저작툴 3장(`bus-audio-objects`·`renderer-properties`·`source-settings-metadata`), FMOD Studio 3장(`studio-event-source`·`studio-source-params`·
+`studio-master-bus-listener`), Finder 2장(`fmod/studio-plugins-folder` = 실제 설치 폴더, `wwise/ue-install` = Wwise SDK Mac 라이브러리를 넣은 프로젝트 뼈대에
+`plugins/ue5/install.py`의 Wwise 설치를 실제로 돌린 결과)을 새 이름으로 다시 찍었다.
