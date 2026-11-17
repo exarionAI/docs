@@ -33,10 +33,12 @@ static/img/           # 이미지 (아래 이미지 이력 참고)
 
 문서 기준: 엔진 2.22.0 / ABI 6, SDK 릴리스 2.22.0-jhj.6. 엔진·플러그인 사실관계의 원천은
 SimpleST 저장소의 `engine/ABI/*.h`, `plugins/*/README.md`다. 문서상 제품명은 **Sound-Tracing SDK**(for Unity / for Unreal Engine /
-for FMOD / for Wwise / for Web)로 통일하고, `SimpleST*`는 바이너리·식별자·DSP 이름으로만 남긴다(2026-10-30).
+for FMOD / for Wwise / for Web)로 통일한다(2026-10-30). 2026-11-17부터 배포물에 `SimpleST` 이름은 없다 — 바이너리·헤더·C API·환경변수는
+`SoundTracing*`(`SoundTracingRealtime`, `SoundTracingFmod_*`, `SOUNDTRACINGWWISE_*`), 저작툴 표시 이름은 `Sound-tracing`(Sound-tracing Source / Listener / Renderer / Source Settings)이다.
 STCoreV2 대응표, Python 바인딩, ExaTools, Core(네이티브 엔진), 제품군 페이지와 릴리스 이력 서술은 2026-10-30에 제거했다.
 `sdk/native.md`의 "API 레퍼런스"(st_rt_* 181 + st_off_* 121 = 302 함수, 카테고리·함수별 `<details>`)는 `engine/ABI/*.h`에서
-파싱·작성한 것이다(2026-10-30). 4개 로케일 페이지에는 같은 한국어 본문을 번역 안내 note와 함께 그대로 넣었다 — 번역은 미완. `static/img/core/*`는 페이지가 없어 현재 미사용이다.
+파싱·작성한 것이다(2026-10-30). 4개 로케일 번역은 2026-11-17에 채웠다(한국어 본문과 줄 단위 1:1 — 한국어를 고치면 같은 줄을 4개 로케일에서 같이 고친다).
+`sdk/web.md`의 재질 별칭 표는 비한국어 로케일에서 한글 별칭을 뺐다. `static/img/core/*`는 페이지가 없어 현재 미사용이다.
 
 ## 이미지 이력
 
@@ -59,3 +61,6 @@ FMOD Studio 2.04 마스터 버스 Listener·이벤트 Source·Source 덱·플러
 
 플레이스홀더를 다시 만들려면 `scripts/`가 아니라 세션 스크래치의 `placeholder.swift`를 썼다
 (AppKit으로 텍스트를 그린 PNG). 같은 형식이 필요하면 아무 PNG나 1280×720으로 덮어쓰면 된다.
+
+2026-11-17 이름 변경(SimpleST → SoundTracing / Sound-tracing)으로 개념도 4장(`fmod/structure`, `sdk/native-architecture`, `ue/integration-mode`,
+`web/architecture`)의 이름 글자를 새로 렌더링해 바꿨다. FMOD Studio·Wwise 저작툴 스크린샷은 새 표시 이름으로 재촬영 대상이다.

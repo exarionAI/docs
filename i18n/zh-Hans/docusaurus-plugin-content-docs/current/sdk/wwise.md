@@ -1,11 +1,11 @@
 ---
 title: Wwise
-description: Sound-Tracing SDK for Wwise（SimpleSTWwise）— 面向 Wwise 2025.1 的 Object Processor + Metadata 插件的结构、安装、创作、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成、EQ。
+description: Sound-Tracing SDK for Wwise（SoundTracingWwise）— 面向 Wwise 2025.1 的 Object Processor + Metadata 插件的结构、安装、创作、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成、EQ。
 ---
 
 # Sound-Tracing SDK for Wwise
 
-**Sound-Tracing SDK for Wwise**（Launcher 插件名称 `Sound-tracing`，二进制名称 `SimpleSTWwise`）是在 Wwise 2025.1 中使用
+**Sound-Tracing SDK for Wwise**（Launcher 插件名称 `Sound-tracing`，二进制名称 `SoundTracingWwise`）是在 Wwise 2025.1 中使用
 Sound-Tracing SDK 的插件。它由两个插件 — 插到 Audio Objects 总线上的
 **Sound-tracing Renderer**（Object Processor）和附加到 sound/actor-mixer 上的
 **Sound-tracing Source Settings**（Metadata）— 以及供游戏引擎上传几何体的 C API 组成。
@@ -19,7 +19,7 @@ Sound-Tracing SDK 的插件。它由两个插件 — 插到 Audio Objects 总线
 
 ## 结构
 
-![SimpleSTWwise 结构](/img/wwise/structure.png)
+![SoundTracingWwise 结构](/img/wwise/structure.png)
 
 - **为什么是 Object Processor**：它在一个回调中接收总线上所有带位置元数据的音频对象，
   因此 push 和 render 发生在同一个 `Execute` 内。与 FMOD 版（Source push + Listener pull）不同，
@@ -29,8 +29,8 @@ Sound-Tracing SDK 的插件。它由两个插件 — 插到 Audio Objects 总线
   因此没有坐标轴转换（只有 Unreal 集成例外 — 见下文）。
 - **voice 与引擎声源**：每个音频对象（voice）使用一个 Sound-Tracing SDK 声源，但已结束 voice 的引擎声源会
   留在预热池中，由下一个 voice 接手 — [单次音效与预热声源池](#单次音效与预热声源池)。
-- **共享核心**：与 FMOD 插件共享同一运行时层，从自己所在文件夹动态绑定 `SimpleSTRealtime`，
-  游戏侧通过 `SimpleSTWwise_GetRealtimeProc` 获取同一模块的 `st_rt_*`。
+- **共享核心**：与 FMOD 插件共享同一运行时层，从自己所在文件夹动态绑定 `SoundTracingRealtime`，
+  游戏侧通过 `SoundTracingWwise_GetRealtimeProc` 获取同一模块的 `st_rt_*`。
 - **关闭输出限制器**：在 Wwise 中由主总线负责限幅。
 - **同样关闭等响度补偿**：音色与电平由 Wwise 混音负责。
 - **听者方向**：把总线听者的 front·top 方向以四元数传入，从而反映头部倾斜（roll）。
@@ -46,19 +46,19 @@ Sound-Tracing SDK 的插件。它由两个插件 — 插到 Audio Objects 总线
 从 Audiokinetic Launcher 商店获取 **Sound-Tracing SDK for Wwise**（插件名称 `Sound-tracing`）后，
 在 Launcher › **Plug-ins** 中安装到所使用的 Wwise 版本（Windows、macOS 通用）。插件包含 Authoring 插件以及
 Windows（vc170）、macOS 声音引擎插件。Authoring 插件在 Mac 上也是 **Windows DLL**
-（`Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + 引擎 + HRTF）。
+（`Authoring/x64/Release/bin/Plugins/SoundTracingWwise.{dll,xml}` + 引擎 + HRTF）。
 
 ### 游戏运行时（SoundEngine）
 
 | 平台 | 产物 |
 |---|---|
-| Windows | `SDK/x64_vc170/<Config>/bin/SimpleSTWwise.dll`（+ `SimpleSTRealtime.dll`、`Resources/HRTF`），`lib/SimpleSTWwiseFX.lib`，`include/AK/Plugin/SimpleSTWwiseFXFactory.h` |
-| macOS / Linux / Android | `libSimpleSTWwise.{dylib,so}` + 同一构建的 `SimpleSTRealtime`（Android 按 ABI） |
-| iOS / Web | 包含引擎对象的 `libSimpleSTWwiseFX.a` — 在应用中包含 `AK/Plugin/SimpleSTWwiseFXFactory.h` 注册两个插件 |
+| Windows | `SDK/x64_vc170/<Config>/bin/SoundTracingWwise.dll`（+ `SoundTracingRealtime.dll`、`Resources/HRTF`），`lib/SoundTracingWwiseFX.lib`，`include/AK/Plugin/SoundTracingWwiseFXFactory.h` |
+| macOS / Linux / Android | `libSoundTracingWwise.{dylib,so}` + 同一构建的 `SoundTracingRealtime`（Android 按 ABI） |
+| iOS / Web | 包含引擎对象的 `libSoundTracingWwiseFX.a` — 在应用中包含 `AK/Plugin/SoundTracingWwiseFXFactory.h` 注册两个插件 |
 
 Debug 插件放到 Debug 配置，Release 插件放到 Profile/Release 配置。静态链接平台上，
-`SimpleSTWwiseFX` 一个库包含两个插件（如果 bank 的 `PluginInfo.json` 把元数据插件的 lib 名推断为
-`SimpleSTWwiseMeta`，可能需要别名）。
+`SoundTracingWwiseFX` 一个库包含两个插件（如果 bank 的 `PluginInfo.json` 把元数据插件的 lib 名推断为
+`SoundTracingWwiseMeta`，可能需要别名）。
 
 ## 在 Wwise 中使用
 
@@ -72,7 +72,7 @@ Debug 插件放到 Debug 配置，Release 插件放到 Profile/Release 配置。
    距离衰减，不关闭会导致双重衰减（对象缓冲中已经乘上了 Wwise 的音量/衰减）。
 4. 如需逐声源调整，在 sound/actor-mixer/总线上添加 **Metadata › Sound-tracing Source Settings**。
 5. 创作工具中没有游戏场景，因此在 `Wwise.exe` / `WwiseConsole.exe` 中会自动铺设一个
-   **8 × 3 × 10 m 试听房间**（`SIMPLESTWWISE_AUDITION_ROOM="W,H,D"`，`"0"` 则关闭）。
+   **8 × 3 × 10 m 试听房间**（`SOUNDTRACINGWWISE_AUDITION_ROOM="W,H,D"`，`"0"` 则关闭）。
 
 ![Positioning 设置](/img/wwise/positioning-attenuation.png)
 
@@ -87,7 +87,7 @@ Debug 插件放到 Debug 配置，Release 插件放到 Profile/Release 配置。
 | Sound-tracing Source Settings | Gain / Direct / Reflections / Diffraction / Reverb Send (dB, RTPC) | 输入电平、各路径音量（Sound-Tracing SDK path volume） |
 | | Directivity (0 omni ~ 1 cardioid, RTPC) | 以对象 front 为基准的指向性 |
 | | Stationary (never moves) | 不移动的发射器提示（创建时应用） |
-| | Bypass SimpleST (RTPC) | 不经过 Sound-Tracing SDK，由渲染器用 Wwise 声像混合 |
+| | Bypass Sound-tracing (RTPC) | 不经过 Sound-Tracing SDK，由渲染器用 Wwise 声像混合 |
 | 两者（EQ 组） | EQ / EQ Preamp (dB, RTPC) | 4 频段 EQ 开关·前级增益 — [EQ](#eq) |
 | | Band n Type / Band n Frequency (Hz, RTPC) / Band n Gain (dB, RTPC) / Band n Q (RTPC)（n = 1 ~ 4） | 各频段的滤波器类型·频率·增益·Q |
 
@@ -107,26 +107,26 @@ IR 的过程，短音效能以应有音量准时听到。无需修改 Wwise 项�
 - 像 Unreal 的 **Wwise AudioLink** 这样为每个声音注册新游戏对象的集成，也通过这一路径处理。
 
 测量值（同一位置 16 个 voice 的引擎声源创建数 16 → 4、电平 +15.7 dB、移动时 +19.3 dB 等）见
-[FMOD 插件](./fmod.md#单次音效与预热声源池)。环境变量 `SIMPLESTFMOD_WARM_SOURCES=0`（由于是共用核心，
+[FMOD 插件](./fmod.md#单次音效与预热声源池)。环境变量 `SOUNDTRACINGFMOD_WARM_SOURCES=0`（由于是共用核心，
 Wwise 版也使用同一名称）时，会像以前一样为每个 voice 新建声源（用于对比）。
 
 ## 游戏侧 C API
 
-`include/SimpleSTWwise/SimpleSTWwise.h` — 由 SoundEngine 库导出。**在 Wwise 加载的那个模块**上绑定
-（Unreal：`FAkPlatform::GetDSPPluginsDirectory()` + `SimpleSTWwise.dll`，静态平台直接调用）。
+`include/SoundTracingWwise/SoundTracingWwise.h` — 由 SoundEngine 库导出。**在 Wwise 加载的那个模块**上绑定
+（Unreal：`FAkPlatform::GetDSPPluginsDirectory()` + `SoundTracingWwise.dll`，静态平台直接调用）。
 与 FMOD 版约定相同，但没有系统索引（每个进程一个声音引擎）。
 
 ```c
-SimpleSTWwise_Config cfg; SimpleSTWwise_InitConfig(&cfg);
+SoundTracingWwise_Config cfg; SoundTracingWwise_InitConfig(&cfg);
 cfg.sceneRatio = 0.01f;                          // Wwise for Unreal（cm）。Unity 为 0（=1.0，m）
 cfg.maxSources = 0;                              // 0 = 引擎平台默认（桌面 128，Android/iOS 48，Web 32）
-SimpleSTWwise_Configure(&cfg);                   // AK::SoundEngine::Init 之前
-SimpleSTWwise_SetWorldAxes(SIMPLESTWWISE_AXES_UNREAL);   // 仅 Unreal。Unity 使用默认（WWISE）
+SoundTracingWwise_Configure(&cfg);                   // AK::SoundEngine::Init 之前
+SoundTracingWwise_SetWorldAxes(SOUNDTRACINGWWISE_AXES_UNREAL);   // 仅 Unreal。Unity 使用默认（WWISE）
 
-SimpleSTWwise_Status st = { sizeof st };
-SimpleSTWwise_GetStatus(&st);                    // 变为 READY 后上传几何体
-void* p = SimpleSTWwise_GetRealtimeProc("st_rt_mesh_create");
-SimpleSTWwise_InvokeOnControlThread(
+SoundTracingWwise_Status st = { sizeof st };
+SoundTracingWwise_GetStatus(&st);                    // 变为 READY 后上传几何体
+void* p = SoundTracingWwise_GetRealtimeProc("st_rt_mesh_create");
+SoundTracingWwise_InvokeOnControlThread(
     [](STRT_Context* ctx, void* user) { /* st_rt_mesh_create / object_create / build ... */ }, user, 1);
 ```
 
@@ -135,14 +135,14 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal 坐标轴**：Wwise for Unreal 2024.1+ 会原样传递 Unreal 向量（+Z 向上），因此必须调用
   `SetWorldAxes(UNREAL)`，渲染器才会转换为 (Y, Z, X)，与游戏上传的几何体一致。不调用的话，
   听者和声源会被错误的墙体遮挡。
-- **声源上限**：`SimpleSTWwise_Config.maxSources` 是引擎声源数上限（0 = 平台
+- **声源上限**：`SoundTracingWwise_Config.maxSources` 是引擎声源数上限（0 = 平台
   默认）。超出时引擎拒绝创建声源，该 voice 以 dry 播放。这是追加在结构体末尾的字段，因此传入旧版较短
   结构体的主机也能正常工作。
 
 ### 开启和关闭 Sound Tracing
 
 ```c
-SimpleSTWwise_SetSoundTracingEnabled(0);   // 关闭。1 = 开启（默认）
+SoundTracingWwise_SetSoundTracingEnabled(0);   // 关闭。1 = 开启（默认）
 ```
 
 这是游戏侧 A/B 开关。它作用于正在运行的运行时，并在控制线程上
@@ -162,11 +162,11 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 Wwise 模式下会调用此函�
 ## UE · Unity 集成
 
 - **Unreal Engine**：在 Launcher 中安装 Sound-tracing 后运行 Launcher › Unreal Engine › **Modify Wwise in Project**，
-  Launcher 会把 `SimpleSTWwise`、`SimpleSTRealtime`、HRTF 复制到 `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`。SoundTracing 插件
+  Launcher 会把 `SoundTracingWwise`、`SoundTracingRealtime`、HRTF 复制到 `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`。SoundTracing 插件
   以 Wwise 模式构建，设置 `sceneRatio = 0.01` 和 Unreal 坐标轴，只上传几何体 — 参见
   [Unreal Engine SDK](./ue.md)。
 - **Unity**：在 Launcher 中安装 Sound-tracing 后运行 Launcher › Unity › **Integrate/Modify Wwise in Project**，
-  Launcher 会把插件放入 Wwise Unity 集成的 DSP 文件夹。引擎共享 SoundTrace 的 `SimpleSTRealtime`，单位为米 — 参见
+  Launcher 会把插件放入 Wwise Unity 集成的 DSP 文件夹。引擎共享 SoundTrace 的 `SoundTracingRealtime`，单位为米 — 参见
   [Unity SDK](./unity.md#与-wwise-配合使用)。
 
 ![Launcher 的 Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
@@ -176,7 +176,7 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 Wwise 模式下会调用此函�
 ## 验证结果（2026-10-01 · Wwise 2025.1.11.9262）
 
 用 WwiseConsole 创建项目 → 用 WAAPI 配置总线、效果器、元数据、事件 → 生成 bank → 实际的
-`AkSoundEngine`（Profile）通过 `RegisterPluginDLL("SimpleSTWwise")` 加载发行用 DLL 进行离线渲染。
+`AkSoundEngine`（Profile）通过 `RegisterPluginDLL("SoundTracingWwise")` 加载发行用 DLL 进行离线渲染。
 
 | 阶段 | 内容 | 结果 |
 |---|---|---|
@@ -204,11 +204,11 @@ Android 两个 ABI 构建通过，iOS device/simulator 和 Web 最终链接通�
 
 | 变量 | 含义 |
 |---|---|
-| `SIMPLESTWWISE_LOG_FILE` | 日志文件路径 |
-| `SIMPLESTWWISE_LOG_STDERR` | stderr 日志 |
-| `SIMPLESTWWISE_RUNTIME_LIBRARY` | 强制指定 SimpleSTRealtime 路径 |
-| `SIMPLESTWWISE_AUDITION_ROOM` | `"W,H,D"` 试听房间（m），`"0"` 关闭 |
-| `SIMPLESTFMOD_WARM_SOURCES` | 为 `"0"` 时关闭预热声源池，每个 voice 新建引擎声源（用于对比，共用核心变量） |
+| `SOUNDTRACINGWWISE_LOG_FILE` | 日志文件路径 |
+| `SOUNDTRACINGWWISE_LOG_STDERR` | stderr 日志 |
+| `SOUNDTRACINGWWISE_RUNTIME_LIBRARY` | 强制指定 SoundTracingRealtime 路径 |
+| `SOUNDTRACINGWWISE_AUDITION_ROOM` | `"W,H,D"` 试听房间（m），`"0"` 关闭 |
+| `SOUNDTRACINGFMOD_WARM_SOURCES` | 为 `"0"` 时关闭预热声源池，每个 voice 新建引擎声源（用于对比，共用核心变量） |
 
 渲染器警告也会显示在 Wwise Capture Log 中（`PostMonitorMessage`）。
 

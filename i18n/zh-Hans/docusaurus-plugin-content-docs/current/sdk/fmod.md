@@ -1,13 +1,13 @@
 ---
 title: FMOD
-description: Sound-Tracing SDK for FMOD（SimpleSTFmod）— 面向 FMOD Studio / FMOD Engine 的 DSP 插件的结构、安装、Studio 创作、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成、EQ。
+description: Sound-Tracing SDK for FMOD（SoundTracingFmod）— 面向 FMOD Studio / FMOD Engine 的 DSP 插件的结构、安装、Studio 创作、单次音效与预热声源池、游戏侧 C API、UE/Unity 集成、EQ。
 ---
 
 # Sound-Tracing SDK for FMOD
 
-**Sound-Tracing SDK for FMOD**（二进制名称 `SimpleSTFmod`）是在 FMOD Studio / FMOD Engine 中使用
-Sound-Tracing SDK 的 DSP 插件。它由两个 DSP — 在创作工具中插到事件上的 **SimpleST Source** 和在主总线上放置一个的
-**SimpleST Listener** — 以及供游戏引擎上传几何体的 C API 组成。
+**Sound-Tracing SDK for FMOD**（二进制名称 `SoundTracingFmod`）是在 FMOD Studio / FMOD Engine 中使用
+Sound-Tracing SDK 的 DSP 插件。它由两个 DSP — 在创作工具中插到事件上的 **Sound-tracing Source** 和在主总线上放置一个的
+**Sound-tracing Listener** — 以及供游戏引擎上传几何体的 C API 组成。
 
 | 项目 | 值 |
 |---|---|
@@ -17,11 +17,11 @@ Sound-Tracing SDK 的 DSP 插件。它由两个 DSP — 在创作工具中插到
 
 ## 结构
 
-![SimpleSTFmod 结构](/img/fmod/structure.png)
+![SoundTracingFmod 结构](/img/fmod/structure.png)
 
 - 引擎是"N 个声源输入 → 1 路听者混音输出"的结构，因此 Source 只推送并输出静音，总线上的 Listener 一次性渲染。
-- 插件**从自己所在文件夹**动态绑定 `SimpleSTRealtime`，游戏侧通过插件导出的
-  `SimpleSTFmod_GetRealtimeProc` 获取**同一模块**的 `st_rt_*` — 引擎实例只有一个。
+- 插件**从自己所在文件夹**动态绑定 `SoundTracingRealtime`，游戏侧通过插件导出的
+  `SoundTracingFmod_GetRealtimeProc` 获取**同一模块**的 `st_rt_*` — 引擎实例只有一个。
 - 渲染器在每个块选出"当前正在运行 process 的 Listener"。Studio 创建的预览用虚拟实例不会抢占
   在线 Listener；如果渲染器停止 250 ms，则由其他 Listener 接管，若没有任何 Listener，
   Source 回到 dry 直通。
@@ -39,13 +39,13 @@ Sound-Tracing SDK 的 DSP 插件。它由两个 DSP — 在创作工具中插到
 
 1. **版本匹配**：Studio 2.03.x → SDK 110 构建，Studio 2.04.x → SDK 204 构建。204 插件在
    Studio 2.03 中无法加载。
-2. 把发行包 `plugins/` 文件夹的内容（`SimpleSTFmod.dll` · `SimpleSTFmod.plugin.js` · `SimpleSTRealtime.dll` ·
+2. 把发行包 `plugins/` 文件夹的内容（`SoundTracingFmod.dll` · `SoundTracingFmod.plugin.js` · `SoundTracingRealtime.dll` ·
    `Resources/HRTF/`）复制到 **Studio 项目的 `Plugins/`**（利于版本控制）或用户插件文件夹，
    然后重启 Studio。
    - Windows：`%localappdata%/FMOD Studio/Plugins`
-   - macOS：`~/Library/Preferences/FMOD Studio/Plugins/SimpleST`
-3. Studio 日志中的 `No FMOD symbols found in dynamic library '.../SimpleSTRealtime.dll'` 是无害的
-   （Studio 会把文件夹中的所有 DLL 当作插件候选打开。引擎 DLL 由 SimpleSTFmod 直接加载）。
+   - macOS：`~/Library/Preferences/FMOD Studio/Plugins/SoundTracing`
+3. Studio 日志中的 `No FMOD symbols found in dynamic library '.../SoundTracingRealtime.dll'` 是无害的
+   （Studio 会把文件夹中的所有 DLL 当作插件候选打开。引擎 DLL 由 SoundTracingFmod 直接加载）。
 
 没有 HRTF 资源时回退到引擎内置的 MIT KEMAR。
 
@@ -53,44 +53,44 @@ Sound-Tracing SDK 的 DSP 插件。它由两个 DSP — 在创作工具中插到
 
 | 平台 | 链接 | 产物 |
 |---|---|---|
-| win / mac / linux | 动态 | `SimpleSTFmod.{dll,dylib,so}` + 旁边的 `SimpleSTRealtime.*` + `Resources/HRTF` |
-| android | 动态 | `<abi>/plugins/libSimpleSTFmod.so` + `libSimpleSTRealtime.so`（应用库文件夹） |
-| ios | 静态 | `SimpleSTFmod.xcframework`（包含引擎对象） |
-| web | 静态 | `libSimpleSTFmod.a`（包含引擎）— FMOD HTML5 pthreads 构建 + 以 `-pthread` 链接 |
+| win / mac / linux | 动态 | `SoundTracingFmod.{dll,dylib,so}` + 旁边的 `SoundTracingRealtime.*` + `Resources/HRTF` |
+| android | 动态 | `<abi>/plugins/libSoundTracingFmod.so` + `libSoundTracingRealtime.so`（应用库文件夹） |
+| ios | 静态 | `SoundTracingFmod.xcframework`（包含引擎对象） |
+| web | 静态 | `libSoundTracingFmod.a`（包含引擎）— FMOD HTML5 pthreads 构建 + 以 `-pthread` 链接 |
 
 动态平台上，FMOD 加载插件后，插件会在旁边查找引擎。静态平台（iOS/Web）在加载 bank 之前直接注册。
 
 ```cpp
-studioSystem->registerPlugin(FMOD_SimpleST_Source_GetDSPDescription());
-studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
+studioSystem->registerPlugin(FMOD_SoundTracing_Source_GetDSPDescription());
+studioSystem->registerPlugin(FMOD_SoundTracing_Listener_GetDSPDescription());
 ```
 
 ## 在 FMOD Studio 中使用
 
-![主总线上的 SimpleST Listener](/img/fmod/studio-master-bus-listener.png)
+![主总线上的 Sound-tracing Listener](/img/fmod/studio-master-bus-listener.png)
 
-1. 在主总线上添加 **Exarion › SimpleST Listener**（每个项目 1 个。如果同时有 2 个在运行，
+1. 在主总线上添加 **Exarion › Sound-tracing Listener**（每个项目 1 个。如果同时有 2 个在运行，
    只有一个渲染，其余直通）。
-2. 在 3D 事件的主轨道上**删除或 bypass FMOD Spatializer**，并添加 **Exarion › SimpleST Source**
+2. 在 3D 事件的主轨道上**删除或 bypass FMOD Spatializer**，并添加 **Exarion › Sound-tracing Source**
    （不删除会导致双重空间化）。
 3. Studio 中没有游戏场景，因此在创作工具中运行时会自动铺设一个 **8 × 3 × 10 m 试听房间**
-   （用 `SIMPLESTFMOD_AUDITION_ROOM="W,H,D"` 改变尺寸，`"0"` 则关闭）。在预览中把声源移出房间，
+   （用 `SOUNDTRACINGFMOD_AUDITION_ROOM="W,H,D"` 改变尺寸，`"0"` 则关闭）。在预览中把声源移出房间，
    就能听到墙体遮挡。
 
-![3D 事件上的 SimpleST Source](/img/fmod/studio-event-source.png)
+![3D 事件上的 Sound-tracing Source](/img/fmod/studio-event-source.png)
 
 ### DSP 参数
 
-![SimpleST Source 面板 UI](/img/fmod/studio-source-params.png)
+![Sound-tracing Source 面板 UI](/img/fmod/studio-source-params.png)
 
 | DSP | 参数 | 含义 |
 |---|---|---|
-| SimpleST Source | Gain / Direct / Reflections / Diffraction / Reverb Send (dB) | 输入电平、各路径音量（Sound-Tracing SDK path volume） |
+| Sound-tracing Source | Gain / Direct / Reflections / Diffraction / Reverb Send (dB) | 输入电平、各路径音量（Sound-Tracing SDK path volume） |
 | | Directivity (0 ~ 1) | 0 全指向 ~ 1 心形（以事件 forward 为基准） |
 | | Stationary | 不移动的发射器提示（创建时应用） |
 | | Bypass | 不经过 Sound-Tracing SDK，dry 直通 |
 | | 3D Attributes / Overall Gain / Atten Range | FMOD 特殊 data 参数（自动） |
-| SimpleST Listener | Wet Level / Dry Level (dB) | Sound-Tracing SDK 渲染 / 总线上其他音频的电平 |
+| Sound-tracing Listener | Wet Level / Dry Level (dB) | Sound-Tracing SDK 渲染 / 总线上其他音频的电平 |
 | | HRTF | 开启为双耳（耳机），关闭为立体声声像 |
 | 两者（EQ 块） | EQ / EQ Preamp (dB) | 4 频段 EQ 开关·前级增益 — [EQ](#eq) |
 | | EQn Type / EQn Freq (Hz) / EQn Gain (dB) / EQn Q（n = 1 ~ 4） | 各频段的滤波器类型·频率·增益·Q |
@@ -120,46 +120,46 @@ studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
 | voice 开始 → 首次出声 | 92 ms | 69 ms |
 | 350 ms voice 的可听时长 | 275 ms | 350 ms |
 
-环境变量 `SIMPLESTFMOD_WARM_SOURCES=0` 时，会像以前一样为每个 voice 新建声源（用于对比）。
+环境变量 `SOUNDTRACINGFMOD_WARM_SOURCES=0` 时，会像以前一样为每个 voice 新建声源（用于对比）。
 
 ## 游戏侧 C API
 
-`include/SimpleSTFmod/SimpleSTFmod.h` — 由插件库导出。**在 FMOD 加载的那个模块**上绑定。
+`include/SoundTracingFmod/SoundTracingFmod.h` — 由插件库导出。**在 FMOD 加载的那个模块**上绑定。
 所有调用都在游戏线程进行，Sound-Tracing SDK `[control]` 调用必须放在
-`SimpleSTFmod_InvokeOnControlThread` 内。
+`SoundTracingFmod_InvokeOnControlThread` 内。
 
 ```c
-SimpleSTFmod_Config cfg; SimpleSTFmod_InitConfig(&cfg);
-cfg.renderMode = SIMPLESTFMOD_RENDER_BUFFERED;   // 默认。IN_CALLBACK = 在 FMOD 混音器回调内渲染
+SoundTracingFmod_Config cfg; SoundTracingFmod_InitConfig(&cfg);
+cfg.renderMode = SOUNDTRACINGFMOD_RENDER_BUFFERED;   // 默认。IN_CALLBACK = 在 FMOD 混音器回调内渲染
 cfg.sceneRatio = 0.f;                            // 0 = 1.0（FMOD UE/Unity 集成的单位是米）
 cfg.maxSources = 0;                              // 0 = 引擎平台默认（桌面 128，Android/iOS 48，Web 32）
-SimpleSTFmod_Configure(&cfg);                    // 运行时启动前（第一个 Sound-Tracing SDK DSP 创建前）
+SoundTracingFmod_Configure(&cfg);                    // 运行时启动前（第一个 Sound-Tracing SDK DSP 创建前）
 
-SimpleSTFmod_Status st = { sizeof st };
-SimpleSTFmod_GetStatus(SIMPLESTFMOD_SYSTEM_LATEST, &st);   // state READY, boundSources, latency, defaultMaterialId
+SoundTracingFmod_Status st = { sizeof st };
+SoundTracingFmod_GetStatus(SOUNDTRACINGFMOD_SYSTEM_LATEST, &st);   // state READY, boundSources, latency, defaultMaterialId
 
 typedef STMeshId (*mesh_create_fn)(STRT_Context*, const STMesh*, STMaterialId, const int32_t*);
-mesh_create_fn meshCreate = (mesh_create_fn)SimpleSTFmod_GetRealtimeProc("st_rt_mesh_create");
+mesh_create_fn meshCreate = (mesh_create_fn)SoundTracingFmod_GetRealtimeProc("st_rt_mesh_create");
 
-SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
+SoundTracingFmod_InvokeOnControlThread(SOUNDTRACINGFMOD_SYSTEM_LATEST,
     [](STRT_Context* ctx, void* user) {
         /* st_rt_mesh_create / st_rt_object_create_q / st_rt_build ... */
     }, user, /*wait=*/1);
 ```
 
 - 系统索引 = `FMOD_DSP_STATE::systemobject`（进程中最先创建的 FMOD::System 为 0）。
-  编辑器集成会创建多个 System，因此 `SIMPLESTFMOD_SYSTEM_LATEST(-1)` = 最新的运行时。
+  编辑器集成会创建多个 System，因此 `SOUNDTRACINGFMOD_SYSTEM_LATEST(-1)` = 最新的运行时。
 - FMOD 与 Sound-Tracing SDK 的坐标系相同（左手系，+Y up，+Z forward）。FMOD UE 集成的 `(UE.Y, UE.Z, UE.X)/100`
   转换与 SoundTracing UE 插件的转换一致。
 - 插件上下文中已预先注册默认材质库。请从 `defaultMaterialId` 开始加上 preset index 使用。
-- **声源上限**：`SimpleSTFmod_Config.maxSources` 是引擎声源数上限（0 = 平台
+- **声源上限**：`SoundTracingFmod_Config.maxSources` 是引擎声源数上限（0 = 平台
   默认）。超出时引擎拒绝创建声源，该 voice 以 dry 播放。这是追加在结构体末尾的字段，因此传入旧版较短
   结构体的主机也能正常工作。
 
 ### 开启和关闭 Sound Tracing
 
 ```c
-SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // 关闭。1 = 开启（默认）
+SoundTracingFmod_SetSoundTracingEnabled(SOUNDTRACINGFMOD_SYSTEM_LATEST, 0);   // 关闭。1 = 开启（默认）
 ```
 
 这是游戏侧 A/B 开关。它作用于一个运行时（`systemIndex < 0` = 最新的运行时），
@@ -179,9 +179,9 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 FMOD 模式下会调用此函�
 
 - **Unreal Engine**：把发行包中的 `Unreal/SoundTracing`（FMOD 版）放入项目的 `Plugins/` 并构建，
   构建会把插件、引擎、HRTF 放入 `Plugins/FMODStudio/Binaries/<Plat>/`，并在 `DefaultEngine.ini` 中加入
-  `+PluginFiles=SimpleSTFmod`。
+  `+PluginFiles=SoundTracingFmod`。
   SoundTracing 插件以 FMOD 模式构建，只上传几何体 — 参见 [Unreal Engine SDK](./ue.md)。
-- **Unity**：拖放 FMOD 版包（`SoundTrace-SimpleST-FMOD-release.unitypackage`）后，编辑器加载时
+- **Unity**：拖放 FMOD 版包（`SoundTracing-Unity-FMOD-release.unitypackage`）后，编辑器加载时
   SoundTrace 会把 DLL/bundle 复制到 FMOD 插件文件夹并注册到 Dynamic Plugins — 参见
   [Unity SDK](./unity.md#与-fmod-配合使用)。
 
@@ -213,14 +213,14 @@ UE SoundTracing 的 `SetSoundTracingEnabled` 在 FMOD 模式下会调用此函�
 
 | 变量 | 含义 |
 |---|---|
-| `SIMPLESTFMOD_LOG_FILE` | 日志文件路径 |
-| `SIMPLESTFMOD_LOG_STDERR` | stderr 日志 |
-| `SIMPLESTFMOD_RUNTIME_LIBRARY` | 强制指定 SimpleSTRealtime 路径 |
-| `SIMPLESTFMOD_AUDITION_ROOM` | `"W,H,D"` 试听房间（m），`"0"` 关闭 |
-| `SIMPLESTFMOD_WARM_SOURCES` | 为 `"0"` 时关闭预热声源池，每个 voice 新建引擎声源（用于对比） |
+| `SOUNDTRACINGFMOD_LOG_FILE` | 日志文件路径 |
+| `SOUNDTRACINGFMOD_LOG_STDERR` | stderr 日志 |
+| `SOUNDTRACINGFMOD_RUNTIME_LIBRARY` | 强制指定 SoundTracingRealtime 路径 |
+| `SOUNDTRACINGFMOD_AUDITION_ROOM` | `"W,H,D"` 试听房间（m），`"0"` 关闭 |
+| `SOUNDTRACINGFMOD_WARM_SOURCES` | 为 `"0"` 时关闭预热声源池，每个 voice 新建引擎声源（用于对比） |
 
 在 Windows 上始终也会通过 `OutputDebugString` 输出。渲染器状态每次变化时，控制线程都会记录
-`SimpleST Listener rendering` / `no SimpleST Listener rendering`。
+`Sound-tracing Listener rendering` / `no Sound-tracing Listener rendering`。
 
 ## EQ
 
@@ -238,8 +238,8 @@ Sound-Tracing SDK 的参数 EQ 可在两个位置应用。
 
 | DSP | 作用点 |
 |---|---|
-| SimpleST Source | **声源 EQ** — 进入引擎的事件信号 |
-| SimpleST Listener | **输出 EQ** — 渲染后的混音，位于 Wet Level 之前 |
+| Sound-tracing Source | **声源 EQ** — 进入引擎的事件信号 |
+| Sound-tracing Listener | **输出 EQ** — 渲染后的混音，位于 Wet Level 之前 |
 
 - `EQ` 为开关，`EQ Preamp` 为频段之前的增益（−48 ~ +12 dB，提升时用负值留出余量）。
 - `EQn Type`（n = 1 ~ 4）是 Off · Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch 的整数参数（0 = Off），

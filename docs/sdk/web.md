@@ -50,7 +50,7 @@ Web Audio graph에 공간화된 스테레오 출력을 제공합니다.
 import { SoundTrace } from '@exarionai/soundtrace.js';
 ```
 
-패키지는 WASM 코어(`core/SimpleSTRealtime.mjs/.wasm`, `core/SimpleSTOffline.mjs`)와 재질·HRTF
+패키지는 WASM 코어(`core/SoundTracingRealtime.mjs/.wasm`, `core/SoundTracingOffline.mjs`)와 재질·HRTF
 asset을 함께 담고 런타임에 fetch합니다. 번들러가 이 모듈 그래프를 사전 번들링하면 Worker와
 WASM 로딩이 깨지므로 Vite에서는 사전 번들링 대상에서 제외하고 정적 vendor 트리로 제공합니다.
 
@@ -234,9 +234,9 @@ await audioContext.close();
 
 ```ts
 const snap = await sound.debugSnapshot();
-snap.simplest.timing;   // { propagationMs, directMs, reflectionDiffractionMs, reverbMs, irMs, renderMs }
-snap.simplest.scene;    // { meshes, objects, sources, triangles }
-snap.simplest.render;   // { blockSequence, activeSources, exactTaps, sendTaps, totalUs }
+snap.soundtracing.timing;   // { propagationMs, directMs, reflectionDiffractionMs, reverbMs, irMs, renderMs }
+snap.soundtracing.scene;    // { meshes, objects, sources, triangles }
+snap.soundtracing.render;   // { blockSequence, activeSources, exactTaps, sendTaps, totalUs }
 
 const irs = await sound.getIRs();                               // 9밴드 early path IR
 const h = await sound.renderMonoImpulseResponse(source, 2.0);   // 44.1 kHz 모노 압력 IR (최대 30 s)
@@ -301,7 +301,7 @@ sound.setOutputEq(null);   // 출력 EQ 끔
 - 범위 밖 값은 `RangeError`로 거절하고 명령을 보내지 않습니다. `{ enabled: false }`는 밴드를 보관한 채 통과시킵니다.
 - EQ를 부르지 않으면 엔진 EQ를 호출하지 않으므로 출력은 EQ가 없을 때와 비트 동일합니다. 같은 값은 다시 보내지 않고,
   바뀐 값은 엔진이 20 ms 크로스페이드로 넘깁니다.
-- EQ를 지원하지 않는 이전 코어에서는 엔진 버전을 밝혀 실패합니다. 적용된 출력 EQ는 `debugSnapshot().simplest.output.eq`에
+- EQ를 지원하지 않는 이전 코어에서는 엔진 버전을 밝혀 실패합니다. 적용된 출력 EQ는 `debugSnapshot().soundtracing.output.eq`에
   있습니다.
 
 ## 다음 문서

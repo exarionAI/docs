@@ -14,7 +14,7 @@ Unity のコンポーネントパターン、マネージャースクリプト�
 | 項目 | 値 |
 |---|---|
 | Unity | 2022.3 LTS 以降（Unity 6 で検証） |
-| パッケージ | `SoundTrace-SimpleST-release.unitypackage`（基本・Wwise 用）/ `SoundTrace-SimpleST-FMOD-release.unitypackage`（FMOD エディション）→ `Assets/SoundTrace` |
+| パッケージ | `SoundTracing-Unity-release.unitypackage`（基本・Wwise 用）/ `SoundTracing-Unity-FMOD-release.unitypackage`（FMOD エディション）→ `Assets/SoundTrace` |
 | プラットフォーム | Windows x64 · macOS Universal · Linux x86_64 · Android（ARMv7/ARM64/x86_64、API 28+）· iOS 15+ |
 | WebGL | 非対応 — Unity WebGL はオーディオフィルター（`OnAudioFilterRead`）をサポートしません。Web では C SDK の WASM ビルドである [Web SDK](./web.md) を使ってください |
 
@@ -28,35 +28,35 @@ FMOD は FMOD エディションパッケージを入れるだけで済み、Wwi
 
 ## FMODと併用する
 
-プロジェクトに Sound-Tracing SDK FMOD プラグイン（`SimpleSTFmod`）があると、SoundTrace は自動的に **FMOD 統合**として
-動作します。空間音響レンダーは FMOD Studio の SimpleST Source / Listener DSP が行い、SoundTrace は
+プロジェクトに Sound-Tracing SDK FMOD プラグイン（`SoundTracingFmod`）があると、SoundTrace は自動的に **FMOD 統合**として
+動作します。空間音響レンダーは FMOD Studio の Sound-tracing Source / Listener DSP が行い、SoundTrace は
 `SoundTraceManager` + `SoundTraceObject` でジオメトリ・材質だけをプラグインのコンテキストに登録します。
 `SoundTraceListener` / `SoundTraceSource` は警告を出して無効になります。
 
 ![FMOD エディションパッケージのインポート](/img/fmod/unity-fmod-edition-import.png)
 
 1. FMOD for Unity 2.04 をプロジェクトに入れます（`Assets/Plugins/FMOD`。tgz でインストールした場合は `Packages/` に embed）。
-2. **FMOD エディション**パッケージ `SoundTrace-SimpleST-FMOD-release.unitypackage` を Project ウィンドウにドラッグ＆ドロップします。
-   専用のメニューはありません。パッケージの `Runtime/Plugins/FMOD` に `SimpleSTFmod`（Windows x64・macOS）が入っており、
+2. **FMOD エディション**パッケージ `SoundTracing-Unity-FMOD-release.unitypackage` を Project ウィンドウにドラッグ＆ドロップします。
+   専用のメニューはありません。パッケージの `Runtime/Plugins/FMOD` に `SoundTracingFmod`（Windows x64・macOS）が入っており、
    エディターのロード時に SoundTrace がこれを FMOD プラグインフォルダーにコピーし、FMOD Settings › Dynamic Plugins に
    登録します。FMOD を後から入れても、次のロード時に同じ処理を行います。
-3. FMOD Studio でマスターバスに **SimpleST Listener** を、3D イベントのマスタートラックに FMOD Spatializer の代わりに
-   **SimpleST Source** を入れます — [FMOD プラグイン](./fmod.md)。
+3. FMOD Studio でマスターバスに **Sound-tracing Listener** を、3D イベントのマスタートラックに FMOD Spatializer の代わりに
+   **Sound-tracing Source** を入れます — [FMOD プラグイン](./fmod.md)。
 4. シーンには `SoundTraceManager` とジオメトリ用の `SoundTraceObject`、FMOD の `StudioListener` を置きます。
 
-エンジンインスタンスは 1 つです。SimpleSTFmod が、SoundTrace が P/Invoke するのと同じ `SimpleSTRealtime` を
+エンジンインスタンスは 1 つです。SoundTracingFmod が、SoundTrace が P/Invoke するのと同じ `SoundTracingRealtime` を
 ロードし、すべての制御呼び出しはプラグインのコントロールスレッドで実行されます。
 
 ## Wwiseと併用する
 
-Wwise Unity 統合の DSP フォルダーに `SimpleSTWwise` があると **Wwise 統合**として動作します（FMOD が
+Wwise Unity 統合の DSP フォルダーに `SoundTracingWwise` があると **Wwise 統合**として動作します（FMOD が
 一緒にある場合は FMOD 優先）。
 
 SoundTrace は基本パッケージを使い、Wwise プラグインは他の Wwise プラグインと同様に Audiokinetic Launcher がインストールします。
 
 ![ランチャーにインストールされた Sound-tracing](/img/wwise/launcher-bundle.png)
 
-1. 基本パッケージ `SoundTrace-SimpleST-release.unitypackage` を Project ウィンドウにドラッグ＆ドロップします。
+1. 基本パッケージ `SoundTracing-Unity-release.unitypackage` を Project ウィンドウにドラッグ＆ドロップします。
 2. Audiokinetic Launcher ストアで入手した **Sound-Tracing SDK for Wwise**（プラグイン名 `Sound-tracing`）を
    Wwise にインストールします。
 3. Launcher › **Unity › Integrate（または Modify）Wwise in Project** を実行します。ランチャーが Wwise SDK にインストールされた

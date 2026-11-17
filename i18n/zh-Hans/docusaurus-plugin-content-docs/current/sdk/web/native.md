@@ -7,15 +7,15 @@ description: soundtrace.js 的低层入口 `@exarionai/soundtrace.js/native` —
 
 `@exarionai/soundtrace.js/native` 公开了 facade 在内部使用的 Sound-Tracing SDK 模块加载器和适配器。
 普通应用请使用 [Facade API](./facade.md)。这一层直接遵循 Sound-Tracing SDK C ABI 约定
-（包内随附的 `core/Include/SimpleST/ABI/*.h`），版本间兼容性保证弱于 facade。
+（包内随附的 `core/Include/SoundTracing/ABI/*.h`），版本间兼容性保证弱于 facade。
 
 ```ts
 import {
-  SimpleSTRealtime,
+  SoundTracingRealtime,
   loadRealtimeModule, loadOfflineModule, analyzeScene,
   Heap, packMaterial, validateMaterial,
   ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
-  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTFeatures, type SimpleSTSceneSnapshot,
+  type SoundTracingModule, type SoundTracingMaterial, type SoundTracingDiagnostics, type SoundTracingFeatures, type SoundTracingSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
@@ -29,22 +29,22 @@ import {
 
 | 名称 | 作用 |
 |---|---|
-| `loadRealtimeModule(baseUrl)` | 加载 `SimpleSTRealtime.mjs` + `.wasm`（pthreads）并返回 `SimpleSTModule` |
-| `loadOfflineModule(baseUrl)` | 加载 `SimpleSTOffline.mjs`（单线程）。仅用于 IR 分析 |
+| `loadRealtimeModule(baseUrl)` | 加载 `SoundTracingRealtime.mjs` + `.wasm`（pthreads）并返回 `SoundTracingModule` |
+| `loadOfflineModule(baseUrl)` | 加载 `SoundTracingOffline.mjs`（单线程）。仅用于 IR 分析 |
 | `Heap` | 向 WASM 堆读写 POD 的辅助工具。包含带 `structSize`/`apiVersion` 戳的结构体分配（`stamped`） |
 | `layout` | `STRT_CreateOptions`、`STMaterial`、`STRenderOptions`、`STTiming`、`STSceneStats`、`STProcessStats`、`STIrStats` 等的偏移/大小 |
 | `packMaterial` / `validateMaterial` | 把 9 频段 R/A/T/scattering 打包为 `STMaterial` 并校验 `R+A+T=1` |
-| `SimpleSTRealtime` | 拥有一个听者和共享渲染器的适配器。把 facade 命令转换为 `st_rt_*` 调用。`features`表示引擎同时具备 capability 位和 export 的可选功能（剪辑、trigger、播放控制、true-peak 限制器、主增益） |
+| `SoundTracingRealtime` | 拥有一个听者和共享渲染器的适配器。把 facade 命令转换为 `st_rt_*` 调用。`features`表示引擎同时具备 capability 位和 export 的可选功能（剪辑、trigger、播放控制、true-peak 限制器、主增益） |
 | `analyzeScene(module, snapshot, …)` | 把场景快照复制到 Offline 上下文并计算 Raw IR / 压力 IR |
 | `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
-## `SimpleSTRealtime`
+## `SoundTracingRealtime`
 
 这是 facade 的 control Worker 所使用的适配器。直接使用时，在 Worker 内按以下顺序调用。
 
 ```ts
 const M = await loadRealtimeModule(coreBaseUrl);
-const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create、关闭等响度补偿、注册材质表、应用 Hybrid
+const rt = new SoundTracingRealtime(M, startupOptions);   // st_rt_create、关闭等响度补偿、注册材质表、应用 Hybrid
 
 rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
 rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + 应用质量预设
@@ -55,7 +55,7 @@ const validPaths = rt.frame();                         // st_rt_build[_dynamic] 
 rt.writeStream(handle, monoSamples);                   // [audio] st_rt_source_write_stream
 const stereo = rt.render(frames);                      // [audio] st_rt_render_process
 
-const diag = rt.diagnostics();                         // SimpleSTDiagnostics
+const diag = rt.diagnostics();                         // SoundTracingDiagnostics
 rt.reset(); rt.dispose();
 ```
 
@@ -72,7 +72,7 @@ rt.reset(); rt.dispose();
 ## 诊断快照
 
 ```ts
-interface SimpleSTDiagnostics {
+interface SoundTracingDiagnostics {
   engine: 'Sound-Tracing SDK'; abiVersion: number; version: string;
   scheduler: 'synchronous' | 'pipelined'; earlyReflectionMode: 'hybrid'; spatializer: number;
   scene:  { meshes; objects; sources; triangles };
@@ -80,13 +80,13 @@ interface SimpleSTDiagnostics {
   render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
-  features?: SimpleSTFeatures;
+  features?: SoundTracingFeatures;
   output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // 已应用的输出级（eq = 输出 EQ）
   inputs?: { live; clip };                                                       // 实时/剪辑声源数
 }
 ```
 
-facade 的 `debugSnapshot().simplest` 和 `getStatistics().simplest` 返回同一个对象。
+facade 的 `debugSnapshot().soundtracing` 和 `getStatistics().soundtracing` 返回同一个对象。
 
 ## 音频约定
 
@@ -113,7 +113,7 @@ Sound-Tracing SDK 的参数 EQ 可在两个位置应用。
 | 声源 EQ | `st_rt_source_set_parametric_eq`（清除用 `st_rt_source_set_eq(ctx, id, NULL)`） | `features.sourceParametricEq` |
 | 输出 EQ | `st_rt_render_set_parametric_eq`（关闭用 `enabled = 0`） | `features.outputParametricEq` |
 
-`SimpleSTRealtime` 适配器把 facade 的 `source.setEq` / `sound.setOutputEq` 命令转换为这两个调用，在没有这两个 feature 的
+`SoundTracingRealtime` 适配器把 facade 的 `source.setEq` / `sound.setOutputEq` 命令转换为这两个调用，在没有这两个 feature 的
 内核上会拒绝。已应用的输出 EQ 位于 `diagnostics().output.eq`。
 
 ## 相关文档

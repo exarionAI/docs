@@ -15,7 +15,7 @@ plugin + submix and through Actor Components.
 | Engine | Unreal Engine 5.6 (verified on 5.7) |
 | Plugin | `Plugins/SoundTracing` (`SoundTracing` runtime + `SoundTracingEditor` modules, depends on Niagara) |
 | Supported platforms | Win64, Mac, Linux, Android, IOS |
-| Engine binaries | `ThirdParty/SimpleST/Binaries/<Plat>/<Config>/` — only UE Debug uses the SDK Debug build, everything else uses Release |
+| Engine binaries | `ThirdParty/SoundTracing/Binaries/<Plat>/<Config>/` — only UE Debug uses the SDK Debug build, everything else uses Release |
 
 ## Installation
 
@@ -30,8 +30,8 @@ YourProject/
    └─ SoundTracing/
       ├─ Content/           Niagara path visualization, Material Preset Library
       ├─ Source/            SoundTracing · SoundTracingEditor
-      └─ ThirdParty/SimpleST/
-         ├─ Include/SimpleST/ABI/
+      └─ ThirdParty/SoundTracing/
+         ├─ Include/SoundTracing/ABI/
          ├─ Binaries/<Plat>/<Config>/
          └─ Resources/HRTF/
 ```
@@ -50,9 +50,9 @@ in all three modes.
 
 | | Native | FMOD | Wwise |
 |---|---|---|---|
-| Sound-Tracing SDK context and render | SoundTracing (UE Audio Mixer Spatialization + submix) | `SimpleSTFmod` (Source/Listener DSP) | `SimpleSTWwise` (Sound-tracing Renderer) |
+| Sound-Tracing SDK context and render | SoundTracing (UE Audio Mixer Spatialization + submix) | `SoundTracingFmod` (Source/Listener DSP) | `SoundTracingWwise` (Sound-tracing Renderer) |
 | Listener | UE listener / `ListenerComponent` | FMOD listener | Wwise listener |
-| Engine DLL location | `ThirdParty/SimpleST/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
+| Engine DLL location | `ThirdParty/SoundTracing/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
 
 In FMOD and Wwise modes, the output settings of `ListenerComponent` (HRTF, output mode) and the
 Source Settings assets are not used — the middleware plug-in's parameters take over that role.
@@ -63,15 +63,15 @@ Source Settings assets are not used — the middleware plug-in's parameters take
 
 ### FMOD mode installation
 
-`Unreal/SoundTracing` in the FMOD distribution (`SimpleST-fmod-release.zip`) is the **FMOD edition**.
-`ThirdParty/SimpleSTFmod/<Plat>/` contains `SimpleSTFmod`, `SimpleSTRealtime`, and the HRTF.
+`Unreal/SoundTracing` in the FMOD distribution (`SoundTracing-fmod-release.zip`) is the **FMOD edition**.
+`ThirdParty/SoundTracingFmod/<Plat>/` contains `SoundTracingFmod`, `SoundTracingRealtime`, and the HRTF.
 
 1. Put FMOD for Unreal into the project's `Plugins/FMODStudio`.
 2. Put `Unreal/SoundTracing` into the project's `Plugins/` and build. During the build, SoundTracing copies
-   the files above into `Plugins/FMODStudio/Binaries/<Plat>/` and adds `+PluginFiles=SimpleSTFmod` to
+   the files above into `Plugins/FMODStudio/Binaries/<Plat>/` and adds `+PluginFiles=SoundTracingFmod` to
    `Config/DefaultEngine.ini` (= Project Settings › FMOD Studio › Plugin Files). Files that are already
    there are skipped. Win64 · Mac.
-3. Then, in FMOD Studio, put SimpleST Listener on the master bus and Sound-Tracing SDK Source on
+3. Then, in FMOD Studio, put Sound-tracing Listener on the master bus and Sound-Tracing SDK Source on
 the master track of 3D events — see [FMOD plug-in](./fmod.md).
 
 ### Wwise mode installation
@@ -86,7 +86,7 @@ The Wwise plug-in is installed by the Audiokinetic Launcher, like any other Wwis
 ![Modify Wwise in Project in the Launcher](/img/wwise/launcher-modify-project.png)
 
 At module startup SoundTracing grabs the plug-in, sets `sceneRatio = 0.01` (Wwise Unreal units = cm),
-and notifies it of the Unreal axes (+Z up) with `SimpleSTWwise_SetWorldAxes(UNREAL)`, because Wwise
+and notifies it of the Unreal axes (+Z up) with `SoundTracingWwise_SetWorldAxes(UNREAL)`, because Wwise
 for Unreal 2024.1+ passes positions without an axis conversion — see [Wwise plug-in](./wwise.md).
 
 ![UE Wwise install result](/img/wwise/ue-install.png)
@@ -257,18 +257,18 @@ counts, valid path count, per-lane propagation/IR/render time (ms), and render b
 While it is off, moving the listener or sources does not wake the propagation lanes, and
 visualization paths are not collected either, so no stale paths remain. In FMOD and Wwise modes,
 this switch is passed on to the middleware plug-in
-(`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`). The engine has no
+(`SoundTracingFmod_SetSoundTracingEnabled` / `SoundTracingWwise_SetSoundTracingEnabled`). The engine has no
 propagation pause, so while sources remain the lanes keep running at their own cadence.
 
 ## Platform link contract
 
 | UE platform | SDK path (under `Binaries/`) | Linking |
 |---|---|---|
-| Win64 | `Win64/<Config>/SimpleSTRealtime.dll` | Runtime export binding |
-| Mac | `Mac/<Config>/libSimpleSTRealtime.dylib` | Universal, runtime binding |
-| Linux | `Linux/<Config>/libSimpleSTRealtime.so` | x86_64, runtime binding |
-| Android | `Android/<ABI>/<Config>/libSimpleSTRealtime.so` | Copied into the per-ABI APK folder via UPL. HRTF extracted from the UFS |
-| IOS | `<Config>/libsimplest_static.a` under `IOS/device` or `IOS/simulator` | Static link, direct function-pointer binding |
+| Win64 | `Win64/<Config>/SoundTracingRealtime.dll` | Runtime export binding |
+| Mac | `Mac/<Config>/libSoundTracingRealtime.dylib` | Universal, runtime binding |
+| Linux | `Linux/<Config>/libSoundTracingRealtime.so` | x86_64, runtime binding |
+| Android | `Android/<ABI>/<Config>/libSoundTracingRealtime.so` | Copied into the per-ABI APK folder via UPL. HRTF extracted from the UFS |
+| IOS | `<Config>/libsoundtracing_static.a` under `IOS/device` or `IOS/simulator` | Static link, direct function-pointer binding |
 
 Only UE Debug uses the SDK Debug build; Development/DebugGame/Shipping use Release. A missing binary
 is a UBT-stage error. FMOD/Wwise modes are not yet supported on iOS and Web, where the middleware
@@ -279,13 +279,13 @@ plug-ins are statically linked (verified on desktop Win64; Mac/Linux share the s
 | Symptom | What to check |
 |---|---|
 | The plugin is not in the selection list | Plugin enabled, module compile, target platform Audio settings |
-| Native library load failure | Per-target binaries under `ThirdParty/SimpleST/Binaries`, Config (Debug/Release) matching |
+| Native library load failure | Per-target binaries under `ThirdParty/SoundTracing/Binaries`, Config (Debug/Release) matching |
 | Integration mode differs from what you expect | Wwise/FMODStudio plugin enabled state in the `.uproject`, `SOUNDTRACING_UNREAL_INTEGRATION` |
 | Sound is not spatialized in FMOD/Wwise mode | Sound-Tracing SDK DSP configuration on the FMOD Studio / Wwise project side, runtime READY state (Output Log) |
 | Source is not spatialized (Native) | A SoundTracing Source Settings asset is attached to the Audio Component |
 | Geometry is not reflected | The Object Component's immediate parent is a supported mesh component, `Acoustic Mobility` |
 | Render block overrun (audio dropouts) | `Early Reflections = Hybrid`, raise `Reflection Update Interval`, lower the Quality Preset |
-| Short sounds play quiet or late (FMOD/Wwise mode) | `SIMPLESTFMOD_WARM_SOURCES=0` is not set |
+| Short sounds play quiet or late (FMOD/Wwise mode) | `SOUNDTRACINGFMOD_WARM_SOURCES=0` is not set |
 | Some sources play dry (Native) | `ST_STATUS_BUDGET_EXCEEDED` in the Output Log — reduce the sources or raise `Max Sources` |
 | Turning on the EQ changes nothing | Whether you are in Native mode (FMOD/Wwise mode uses the middleware EQ), the EQ-unsupported warning in the Output Log |
 | Turning sound tracing off has no effect in FMOD/Wwise mode | Whether the plug-in version exports `*_SetSoundTracingEnabled` (if not, a warning appears in the Output Log) |

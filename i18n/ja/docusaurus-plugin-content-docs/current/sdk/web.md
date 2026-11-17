@@ -50,7 +50,7 @@ Web Audio graph に空間化されたステレオ出力を提供します。
 import { SoundTrace } from '@exarionai/soundtrace.js';
 ```
 
-パッケージは WASM コア（`core/SimpleSTRealtime.mjs/.wasm`、`core/SimpleSTOffline.mjs`）と材質・HRTF
+パッケージは WASM コア（`core/SoundTracingRealtime.mjs/.wasm`、`core/SoundTracingOffline.mjs`）と材質・HRTF
 asset を同梱し、ランタイムに fetch します。バンドラーがこのモジュールグラフを事前バンドルすると Worker と
 WASM のロードが壊れるため、Vite では事前バンドルの対象から除外し、静的 vendor ツリーとして提供します。
 
@@ -161,24 +161,24 @@ sound.setQuality('quality');
 
 | インデックス | 材質名 | エイリアス |
 |---:|---|---|
-| 0 | `Concrete` | `cement`、`콘크리트` |
-| 1 | `Fabric` | `cloth`、`carpet`、`curtain`、`천`、`카펫` |
-| 2 | `Wood` | `timber`、`나무`、`목재` |
-| 3 | `Brick` | `bricks`、`벽돌` |
-| 4 | `ConcreteBlock` | `concrete block`、`cinder block`、`블록` |
-| 5 | `Glass` | `window`、`유리`、`창문` |
-| 6 | `Gravel` | `자갈` |
-| 7 | `GypsumBoard` | `gypsum`、`drywall`、`석고보드` |
-| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`、`rubber`、`tile`、`vinyl`、`리놀륨`、`고무` |
-| 9 | `Marble` | `대리석` |
-| 10 | `Plaster` | `회반죽`、`플라스터` |
-| 11 | `Plywood` | `합판` |
-| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`、`woodFiberboard`、`fiberboard`、`목모보드` |
-| 13 | `Snow` | `눈` |
-| 14 | `Soil` | `dirt`、`earth`、`ground`、`흙` |
-| 15 | `Steel` | `metal`、`iron`、`철`、`금속` |
-| 16 | `Stone` | `rock`、`돌` |
-| 17 | `WaterSurface` | `water`、`물` |
+| 0 | `Concrete` | `cement` |
+| 1 | `Fabric` | `cloth`、`carpet`、`curtain` |
+| 2 | `Wood` | `timber` |
+| 3 | `Brick` | `bricks` |
+| 4 | `ConcreteBlock` | `concrete block`、`cinder block` |
+| 5 | `Glass` | `window` |
+| 6 | `Gravel` | — |
+| 7 | `GypsumBoard` | `gypsum`、`drywall` |
+| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`、`rubber`、`tile`、`vinyl` |
+| 9 | `Marble` | — |
+| 10 | `Plaster` | — |
+| 11 | `Plywood` | — |
+| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`、`woodFiberboard`、`fiberboard` |
+| 13 | `Snow` | — |
+| 14 | `Soil` | `dirt`、`earth`、`ground` |
+| 15 | `Steel` | `metal`、`iron` |
+| 16 | `Stone` | `rock` |
+| 17 | `WaterSurface` | `water` |
 | 18 | `TunableAbsorber` | `absorber` |
 | 19 | `LowVarianceTarget` | — |
 | 20 | `ConcreteBlockPainted` | `painted concrete block` |
@@ -188,7 +188,7 @@ sound.setQuality('quality');
 
 ```ts
 sound.addMesh({ vertices, indices, material: 'GypsumBoard' });
-sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
+sound.addMesh({ vertices, indices, material: 'window' });   // → Glass (5)
 ```
 
 :::warning
@@ -234,9 +234,9 @@ await audioContext.close();
 
 ```ts
 const snap = await sound.debugSnapshot();
-snap.simplest.timing;   // { propagationMs, directMs, reflectionDiffractionMs, reverbMs, irMs, renderMs }
-snap.simplest.scene;    // { meshes, objects, sources, triangles }
-snap.simplest.render;   // { blockSequence, activeSources, exactTaps, sendTaps, totalUs }
+snap.soundtracing.timing;   // { propagationMs, directMs, reflectionDiffractionMs, reverbMs, irMs, renderMs }
+snap.soundtracing.scene;    // { meshes, objects, sources, triangles }
+snap.soundtracing.render;   // { blockSequence, activeSources, exactTaps, sendTaps, totalUs }
 
 const irs = await sound.getIRs();                               // 9バンド early path IR
 const h = await sound.renderMonoImpulseResponse(source, 2.0);   // 44.1 kHz モノ圧力 IR (最大 30 s)
@@ -301,7 +301,7 @@ sound.setOutputEq(null);   // 出力 EQ を無効化
 - 範囲外の値は `RangeError` で拒否し、コマンドを送りません。`{ enabled: false }` はバンドを保持したまま素通しします。
 - EQ を呼ばなければエンジンの EQ を呼び出さないため、出力は EQ がないときとビット一致します。同じ値は再送せず、
   変更された値はエンジンが 20 ms のクロスフェードで切り替えます。
-- EQ に対応しない以前のコアでは、エンジンのバージョンを示して失敗します。適用された出力 EQ は `debugSnapshot().simplest.output.eq` に
+- EQ に対応しない以前のコアでは、エンジンのバージョンを示して失敗します。適用された出力 EQ は `debugSnapshot().soundtracing.output.eq` に
   あります。
 
 ## 次のドキュメント

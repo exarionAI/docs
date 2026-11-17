@@ -1,11 +1,11 @@
 ---
 title: Wwise
-description: Sound-Tracing SDK for Wwise(SimpleSTWwise) — Wwise 2025.1용 Object Processor + Metadata 플러그인의 구조, 설치, 저작, 원샷과 웜 음원 풀, 게임 쪽 C API, UE·Unity 통합, EQ.
+description: Sound-Tracing SDK for Wwise(SoundTracingWwise) — Wwise 2025.1용 Object Processor + Metadata 플러그인의 구조, 설치, 저작, 원샷과 웜 음원 풀, 게임 쪽 C API, UE·Unity 통합, EQ.
 ---
 
 # Sound-Tracing SDK for Wwise
 
-**Sound-Tracing SDK for Wwise**(런처 플러그인 이름 `Sound-tracing`, 바이너리 이름 `SimpleSTWwise`)는
+**Sound-Tracing SDK for Wwise**(런처 플러그인 이름 `Sound-tracing`, 바이너리 이름 `SoundTracingWwise`)는
 Sound-Tracing SDK를 Wwise 2025.1에서 쓰기 위한 플러그인입니다. Audio Objects 버스에 꽂는 **Sound-tracing Renderer**(Object Processor)와
 사운드/액터믹서에 붙이는 **Sound-tracing Source Settings**(Metadata) 두 플러그인, 그리고 게임 엔진이
 지오메트리를 올리는 C API로 구성됩니다.
@@ -19,7 +19,7 @@ Sound-Tracing SDK를 Wwise 2025.1에서 쓰기 위한 플러그인입니다. Aud
 
 ## 구조
 
-![SimpleSTWwise 구조](/img/wwise/structure.png)
+![SoundTracingWwise 구조](/img/wwise/structure.png)
 
 - **왜 Object Processor인가**: 버스의 모든 오디오 오브젝트를 위치 메타데이터와 함께 한 콜백에 받으므로
   push와 render가 같은 `Execute` 안에서 일어납니다. FMOD판(Source push + Listener pull)과 달리 블록 순서
@@ -30,8 +30,8 @@ Sound-Tracing SDK를 Wwise 2025.1에서 쓰기 위한 플러그인입니다. Aud
   +Z forward라 축 변환이 없습니다(Unreal 통합만 예외 — 아래).
 - **보이스와 엔진 음원**: 오디오 오브젝트(보이스)마다 Sound-Tracing SDK 음원을 하나 쓰지만, 끝난 보이스의 엔진
   음원은 웜 풀에 남아 다음 보이스가 이어 받습니다 — [원샷과 웜 음원 풀](#원샷과-웜-음원-풀).
-- **코어 공유**: FMOD 플러그인과 같은 런타임 계층을 공유하며, `SimpleSTRealtime`을 자기 폴더에서
-  동적 바인딩하고 게임 쪽은 `SimpleSTWwise_GetRealtimeProc`으로 같은 모듈의 `st_rt_*`를 받습니다.
+- **코어 공유**: FMOD 플러그인과 같은 런타임 계층을 공유하며, `SoundTracingRealtime`을 자기 폴더에서
+  동적 바인딩하고 게임 쪽은 `SoundTracingWwise_GetRealtimeProc`으로 같은 모듈의 `st_rt_*`를 받습니다.
 - **출력 리미터는 끕니다**: Wwise 안에서는 마스터 버스가 리미팅을 맡습니다.
 - **등라우드니스 보정도 끕니다**: 음색과 레벨은 Wwise 믹스가 맡습니다.
 - **리스너 방향**: 버스 리스너의 front·top 방향을 쿼터니언으로 넘겨 머리 기울임(roll)까지 반영합니다.
@@ -47,19 +47,19 @@ Sound-Tracing SDK를 Wwise 2025.1에서 쓰기 위한 플러그인입니다. Aud
 Audiokinetic Launcher 스토어에서 **Sound-Tracing SDK for Wwise**(플러그인 이름 `Sound-tracing`)를 획득한 뒤
 Launcher › **Plug-ins**에서 사용하는 Wwise 버전에 설치합니다(Windows·macOS 공통). 플러그인에는 Authoring 플러그인과
 Windows(vc170)·macOS 사운드엔진 플러그인이 들어 있습니다. Authoring 플러그인은 Mac에서도 **Windows DLL**
-(`Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + 엔진 + HRTF)입니다.
+(`Authoring/x64/Release/bin/Plugins/SoundTracingWwise.{dll,xml}` + 엔진 + HRTF)입니다.
 
 ### 게임 런타임 (SoundEngine)
 
 | 플랫폼 | 산출물 |
 |---|---|
-| Windows | `SDK/x64_vc170/<Config>/bin/SimpleSTWwise.dll`(+ `SimpleSTRealtime.dll`, `Resources/HRTF`), `lib/SimpleSTWwiseFX.lib`, `include/AK/Plugin/SimpleSTWwiseFXFactory.h` |
-| macOS / Linux / Android | `libSimpleSTWwise.{dylib,so}` + 같은 빌드의 `SimpleSTRealtime` (Android는 ABI별) |
-| iOS / Web | 엔진 오브젝트를 포함한 `libSimpleSTWwiseFX.a` — 앱에서 `AK/Plugin/SimpleSTWwiseFXFactory.h`를 포함해 두 플러그인을 등록 |
+| Windows | `SDK/x64_vc170/<Config>/bin/SoundTracingWwise.dll`(+ `SoundTracingRealtime.dll`, `Resources/HRTF`), `lib/SoundTracingWwiseFX.lib`, `include/AK/Plugin/SoundTracingWwiseFXFactory.h` |
+| macOS / Linux / Android | `libSoundTracingWwise.{dylib,so}` + 같은 빌드의 `SoundTracingRealtime` (Android는 ABI별) |
+| iOS / Web | 엔진 오브젝트를 포함한 `libSoundTracingWwiseFX.a` — 앱에서 `AK/Plugin/SoundTracingWwiseFXFactory.h`를 포함해 두 플러그인을 등록 |
 
 Debug 플러그인은 Debug, Release 플러그인은 Profile/Release 구성에 배치합니다. 정적 링크 플랫폼은
-`SimpleSTWwiseFX` 라이브러리 하나가 두 플러그인을 모두 담습니다(뱅크 `PluginInfo.json`이 메타데이터
-플러그인 lib 이름을 `SimpleSTWwiseMeta`로 추정하면 별칭이 필요할 수 있습니다).
+`SoundTracingWwiseFX` 라이브러리 하나가 두 플러그인을 모두 담습니다(뱅크 `PluginInfo.json`이 메타데이터
+플러그인 lib 이름을 `SoundTracingWwiseMeta`로 추정하면 별칭이 필요할 수 있습니다).
 
 ## Wwise에서 쓰기
 
@@ -73,7 +73,7 @@ Debug 플러그인은 Debug, Release 플러그인은 Profile/Release 구성에 �
    직접 하므로 안 끄면 이중 감쇠입니다(오브젝트 버퍼에는 Wwise 볼륨/감쇠가 이미 곱해져 옵니다).
 4. 음원별 조정이 필요하면 사운드/액터믹서/버스에 **Metadata › Sound-tracing Source Settings**를 추가합니다.
 5. 저작툴 안에는 게임 씬이 없으므로 `Wwise.exe` / `WwiseConsole.exe`에서는 **8 × 3 × 10 m 오디션 룸**이
-   자동으로 깔립니다(`SIMPLESTWWISE_AUDITION_ROOM="W,H,D"`, `"0"`이면 끔).
+   자동으로 깔립니다(`SOUNDTRACINGWWISE_AUDITION_ROOM="W,H,D"`, `"0"`이면 끔).
 
 ![Positioning 설정](/img/wwise/positioning-attenuation.png)
 
@@ -88,7 +88,7 @@ Debug 플러그인은 Debug, Release 플러그인은 Profile/Release 구성에 �
 | Sound-tracing Source Settings | Gain / Direct / Reflections / Diffraction / Reverb Send (dB, RTPC) | 입력 레벨, 경로별 볼륨(Sound-Tracing SDK path volume) |
 | | Directivity (0 omni ~ 1 cardioid, RTPC) | 오브젝트 front 기준 지향성 |
 | | Stationary (never moves) | 움직이지 않는 이미터 힌트(생성 시 적용) |
-| | Bypass SimpleST (RTPC) | Sound-Tracing SDK를 거치지 않고 렌더러가 Wwise 패닝으로 믹스 |
+| | Bypass Sound-tracing (RTPC) | Sound-Tracing SDK를 거치지 않고 렌더러가 Wwise 패닝으로 믹스 |
 | 둘 다 (EQ 그룹) | EQ / EQ Preamp (dB, RTPC) | 4밴드 EQ 켬·프리앰프 — [EQ](#eq) |
 | | Band n Type / Band n Frequency (Hz, RTPC) / Band n Gain (dB, RTPC) / Band n Q (RTPC) (n = 1 ~ 4) | 밴드별 필터 종류·주파수·게인·Q |
 
@@ -109,26 +109,26 @@ FMOD 플러그인과 같은 웜 음원 풀이 들어갑니다(공용 코어). �
 - Unreal의 **Wwise AudioLink**처럼 소리마다 새 게임 오브젝트를 등록하는 통합도 이 경로로 처리됩니다.
 
 측정값(같은 위치 보이스 16개의 엔진 음원 생성 16 → 4, 레벨 +15.7 dB, 이동 시 +19.3 dB 등)은
-[FMOD 플러그인](./fmod.md#원샷과-웜-음원-풀)에 있습니다. 환경 변수 `SIMPLESTFMOD_WARM_SOURCES=0`(공용
+[FMOD 플러그인](./fmod.md#원샷과-웜-음원-풀)에 있습니다. 환경 변수 `SOUNDTRACINGFMOD_WARM_SOURCES=0`(공용
 코어라 Wwise판도 같은 이름)이면 예전처럼 보이스마다 새 음원을 만듭니다(비교용).
 
 ## 게임 쪽 C API
 
-`include/SimpleSTWwise/SimpleSTWwise.h` — SoundEngine 라이브러리가 export합니다. **Wwise가 로드한 그 모듈**에서
-바인딩합니다(Unreal: `FAkPlatform::GetDSPPluginsDirectory()` + `SimpleSTWwise.dll`, 정적 플랫폼은 직접
+`include/SoundTracingWwise/SoundTracingWwise.h` — SoundEngine 라이브러리가 export합니다. **Wwise가 로드한 그 모듈**에서
+바인딩합니다(Unreal: `FAkPlatform::GetDSPPluginsDirectory()` + `SoundTracingWwise.dll`, 정적 플랫폼은 직접
 호출). FMOD판과 같은 계약이지만 시스템 인덱스가 없습니다(프로세스당 사운드엔진 1개).
 
 ```c
-SimpleSTWwise_Config cfg; SimpleSTWwise_InitConfig(&cfg);
+SoundTracingWwise_Config cfg; SoundTracingWwise_InitConfig(&cfg);
 cfg.sceneRatio = 0.01f;                          // Wwise for Unreal(cm). Unity는 0(=1.0, m)
 cfg.maxSources = 0;                              // 0 = 엔진 플랫폼 기본(데스크톱 128, Android/iOS 48, 웹 32)
-SimpleSTWwise_Configure(&cfg);                   // AK::SoundEngine::Init 전
-SimpleSTWwise_SetWorldAxes(SIMPLESTWWISE_AXES_UNREAL);   // Unreal만. Unity는 기본(WWISE)
+SoundTracingWwise_Configure(&cfg);                   // AK::SoundEngine::Init 전
+SoundTracingWwise_SetWorldAxes(SOUNDTRACINGWWISE_AXES_UNREAL);   // Unreal만. Unity는 기본(WWISE)
 
-SimpleSTWwise_Status st = { sizeof st };
-SimpleSTWwise_GetStatus(&st);                    // READY가 된 뒤 지오메트리 업로드
-void* p = SimpleSTWwise_GetRealtimeProc("st_rt_mesh_create");
-SimpleSTWwise_InvokeOnControlThread(
+SoundTracingWwise_Status st = { sizeof st };
+SoundTracingWwise_GetStatus(&st);                    // READY가 된 뒤 지오메트리 업로드
+void* p = SoundTracingWwise_GetRealtimeProc("st_rt_mesh_create");
+SoundTracingWwise_InvokeOnControlThread(
     [](STRT_Context* ctx, void* user) { /* st_rt_mesh_create / object_create / build ... */ }, user, 1);
 ```
 
@@ -137,14 +137,14 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal 축**: Wwise for Unreal 2024.1+는 언리얼 벡터를 그대로 넘기므로(+Z 위) `SetWorldAxes(UNREAL)`을
   불러야 렌더러가 (Y, Z, X)로 바꿔 게임이 올린 지오메트리와 맞습니다. 안 부르면 리스너·음원이
   엉뚱한 벽에 차폐됩니다.
-- **음원 상한**: `SimpleSTWwise_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
+- **음원 상한**: `SoundTracingWwise_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
   기본). 넘으면 엔진이 음원 생성을 거절하고 그 보이스는 dry로 재생됩니다. 구조체 끝에 덧붙인 필드라 이전의 짧은
   구조체를 넘기는 호스트도 동작합니다.
 
 ### 사운드 트레이싱 켜고 끄기
 
 ```c
-SimpleSTWwise_SetSoundTracingEnabled(0);   // 끄기. 1 = 켜기(기본)
+SoundTracingWwise_SetSoundTracingEnabled(0);   // 끄기. 1 = 켜기(기본)
 ```
 
 게임 쪽 A/B 스위치입니다. 실행 중인 런타임에 적용되며 컨트롤 스레드에서
@@ -164,10 +164,10 @@ UE SoundTracing의 `SetSoundTracingEnabled`가 Wwise 모드에서 이 함수를 
 ## UE · Unity 통합
 
 - **Unreal Engine**: 런처에 Sound-tracing을 설치한 뒤 Launcher › Unreal Engine › **Modify Wwise in Project**를 실행하면
-  런처가 `SimpleSTWwise`·`SimpleSTRealtime`·HRTF를 `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`에 복사합니다. SoundTracing 플러그인은 Wwise 모드로 빌드되어
+  런처가 `SoundTracingWwise`·`SoundTracingRealtime`·HRTF를 `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`에 복사합니다. SoundTracing 플러그인은 Wwise 모드로 빌드되어
   `sceneRatio = 0.01`과 Unreal 축을 설정하고 지오메트리만 올립니다 — [Unreal Engine SDK](./ue.md).
 - **Unity**: 런처에 Sound-tracing을 설치한 뒤 Launcher › Unity › **Integrate/Modify Wwise in Project**를 실행하면
-  런처가 플러그인을 Wwise Unity 통합의 DSP 폴더에 넣습니다. 엔진은 SoundTrace의 `SimpleSTRealtime`을 공유하고 단위는 미터입니다 —
+  런처가 플러그인을 Wwise Unity 통합의 DSP 폴더에 넣습니다. 엔진은 SoundTrace의 `SoundTracingRealtime`을 공유하고 단위는 미터입니다 —
   [Unity SDK](./unity.md#wwise와-함께-쓰기).
 
 ![런처의 Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
@@ -177,7 +177,7 @@ UE SoundTracing의 `SetSoundTracingEnabled`가 Wwise 모드에서 이 함수를 
 ## 검증 결과 (2026-10-01 · Wwise 2025.1.11.9262)
 
 WwiseConsole로 프로젝트 생성 → WAAPI로 버스·이펙트·메타데이터·이벤트 구성 → 뱅크 생성 → 실제
-`AkSoundEngine`(Profile)이 `RegisterPluginDLL("SimpleSTWwise")`로 배포용 DLL을 로드해 오프라인 렌더.
+`AkSoundEngine`(Profile)이 `RegisterPluginDLL("SoundTracingWwise")`로 배포용 DLL을 로드해 오프라인 렌더.
 
 | 단계 | 내용 | 결과 |
 |---|---|---|
@@ -205,11 +205,11 @@ WwiseConsole로 프로젝트 생성 → WAAPI로 버스·이펙트·메타데이
 
 | 변수 | 의미 |
 |---|---|
-| `SIMPLESTWWISE_LOG_FILE` | 로그 파일 경로 |
-| `SIMPLESTWWISE_LOG_STDERR` | stderr 로그 |
-| `SIMPLESTWWISE_RUNTIME_LIBRARY` | SimpleSTRealtime 경로 강제 |
-| `SIMPLESTWWISE_AUDITION_ROOM` | `"W,H,D"` 오디션 룸(m), `"0"` 끔 |
-| `SIMPLESTFMOD_WARM_SOURCES` | `"0"`이면 웜 음원 풀을 끄고 보이스마다 새 엔진 음원(비교용, 공용 코어 변수) |
+| `SOUNDTRACINGWWISE_LOG_FILE` | 로그 파일 경로 |
+| `SOUNDTRACINGWWISE_LOG_STDERR` | stderr 로그 |
+| `SOUNDTRACINGWWISE_RUNTIME_LIBRARY` | SoundTracingRealtime 경로 강제 |
+| `SOUNDTRACINGWWISE_AUDITION_ROOM` | `"W,H,D"` 오디션 룸(m), `"0"` 끔 |
+| `SOUNDTRACINGFMOD_WARM_SOURCES` | `"0"`이면 웜 음원 풀을 끄고 보이스마다 새 엔진 음원(비교용, 공용 코어 변수) |
 
 렌더러 경고는 Wwise Capture Log에도 뜹니다(`PostMonitorMessage`).
 

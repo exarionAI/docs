@@ -50,7 +50,7 @@ description: Sound-Tracing SDK for Web（soundtrace.js）— WebAssembly SDK 的
 import { SoundTrace } from '@exarionai/soundtrace.js';
 ```
 
-套件同時包含 WASM 核心（`core/SimpleSTRealtime.mjs/.wasm`、`core/SimpleSTOffline.mjs`）與材質、HRTF
+套件同時包含 WASM 核心（`core/SoundTracingRealtime.mjs/.wasm`、`core/SoundTracingOffline.mjs`）與材質、HRTF
 資源，並於執行期 fetch。若打包工具對這段模組圖做預先打包，Worker 與 WASM 載入會失效，
 因此在 Vite 中要將它排除在預先打包之外，改以靜態 vendor 樹提供。
 
@@ -159,24 +159,24 @@ sound.setQuality('quality');
 
 | 索引 | 材質名稱 | 別名 |
 |---:|---|---|
-| 0 | `Concrete` | `cement`、`콘크리트` |
-| 1 | `Fabric` | `cloth`、`carpet`、`curtain`、`천`、`카펫` |
-| 2 | `Wood` | `timber`、`나무`、`목재` |
-| 3 | `Brick` | `bricks`、`벽돌` |
-| 4 | `ConcreteBlock` | `concrete block`、`cinder block`、`블록` |
-| 5 | `Glass` | `window`、`유리`、`창문` |
-| 6 | `Gravel` | `자갈` |
-| 7 | `GypsumBoard` | `gypsum`、`drywall`、`석고보드` |
-| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`、`rubber`、`tile`、`vinyl`、`리놀륨`、`고무` |
-| 9 | `Marble` | `대리석` |
-| 10 | `Plaster` | `회반죽`、`플라스터` |
-| 11 | `Plywood` | `합판` |
-| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`、`woodFiberboard`、`fiberboard`、`목모보드` |
-| 13 | `Snow` | `눈` |
-| 14 | `Soil` | `dirt`、`earth`、`ground`、`흙` |
-| 15 | `Steel` | `metal`、`iron`、`철`、`금속` |
-| 16 | `Stone` | `rock`、`돌` |
-| 17 | `WaterSurface` | `water`、`물` |
+| 0 | `Concrete` | `cement` |
+| 1 | `Fabric` | `cloth`、`carpet`、`curtain` |
+| 2 | `Wood` | `timber` |
+| 3 | `Brick` | `bricks` |
+| 4 | `ConcreteBlock` | `concrete block`、`cinder block` |
+| 5 | `Glass` | `window` |
+| 6 | `Gravel` | — |
+| 7 | `GypsumBoard` | `gypsum`、`drywall` |
+| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`、`rubber`、`tile`、`vinyl` |
+| 9 | `Marble` | — |
+| 10 | `Plaster` | — |
+| 11 | `Plywood` | — |
+| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`、`woodFiberboard`、`fiberboard` |
+| 13 | `Snow` | — |
+| 14 | `Soil` | `dirt`、`earth`、`ground` |
+| 15 | `Steel` | `metal`、`iron` |
+| 16 | `Stone` | `rock` |
+| 17 | `WaterSurface` | `water` |
 | 18 | `TunableAbsorber` | `absorber` |
 | 19 | `LowVarianceTarget` | — |
 | 20 | `ConcreteBlockPainted` | `painted concrete block` |
@@ -186,7 +186,7 @@ sound.setQuality('quality');
 
 ```ts
 sound.addMesh({ vertices, indices, material: 'GypsumBoard' });
-sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
+sound.addMesh({ vertices, indices, material: 'window' });   // → Glass (5)
 ```
 
 :::warning
@@ -231,9 +231,9 @@ await audioContext.close();
 
 ```ts
 const snap = await sound.debugSnapshot();
-snap.simplest.timing;   // { propagationMs, directMs, reflectionDiffractionMs, reverbMs, irMs, renderMs }
-snap.simplest.scene;    // { meshes, objects, sources, triangles }
-snap.simplest.render;   // { blockSequence, activeSources, exactTaps, sendTaps, totalUs }
+snap.soundtracing.timing;   // { propagationMs, directMs, reflectionDiffractionMs, reverbMs, irMs, renderMs }
+snap.soundtracing.scene;    // { meshes, objects, sources, triangles }
+snap.soundtracing.render;   // { blockSequence, activeSources, exactTaps, sendTaps, totalUs }
 
 const irs = await sound.getIRs();                               // 9 頻段 early path IR
 const h = await sound.renderMonoImpulseResponse(source, 2.0);   // 44.1 kHz 單聲道壓力 IR（最長 30 s）
@@ -298,7 +298,7 @@ sound.setOutputEq(null);   // 關閉輸出 EQ
 - 超出範圍的值會以 `RangeError` 拒絕，不會送出指令。`{ enabled: false }` 會保留頻段並直通。
 - 未呼叫 EQ 時不會呼叫引擎 EQ，因此輸出與沒有 EQ 時位元相同。相同的值不會重複送出，
   變更的值由引擎以 20 ms 交叉淡化切換。
-- 在不支援 EQ 的舊版核心上會指明引擎版本並失敗。已套用的輸出 EQ 位於 `debugSnapshot().simplest.output.eq`。
+- 在不支援 EQ 的舊版核心上會指明引擎版本並失敗。已套用的輸出 EQ 位於 `debugSnapshot().soundtracing.output.eq`。
 
 ## 下一篇
 

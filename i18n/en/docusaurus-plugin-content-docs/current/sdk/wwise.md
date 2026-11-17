@@ -1,11 +1,11 @@
 ---
 title: Wwise
-description: Sound-Tracing SDK for Wwise (SimpleSTWwise) — structure, installation, authoring, one-shots and the warm source pool, game-side C API, UE/Unity integration, and EQ of the Object Processor + Metadata plug-in for Wwise 2025.1.
+description: Sound-Tracing SDK for Wwise (SoundTracingWwise) — structure, installation, authoring, one-shots and the warm source pool, game-side C API, UE/Unity integration, and EQ of the Object Processor + Metadata plug-in for Wwise 2025.1.
 ---
 
 # Sound-Tracing SDK for Wwise
 
-**Sound-Tracing SDK for Wwise** (Launcher plug-in name `Sound-tracing`, binary name `SimpleSTWwise`) is a plug-in
+**Sound-Tracing SDK for Wwise** (Launcher plug-in name `Sound-tracing`, binary name `SoundTracingWwise`) is a plug-in
 for using the Sound-Tracing SDK in Wwise 2025.1. It consists of two plug-ins — **Sound-tracing
 Renderer** (Object Processor), inserted on an Audio Objects bus, and **Sound-tracing Source Settings** (Metadata),
 attached to sounds/actor-mixers — plus a C API through which the game engine uploads geometry.
@@ -19,7 +19,7 @@ attached to sounds/actor-mixers — plus a C API through which the game engine u
 
 ## Structure
 
-![SimpleSTWwise structure](/img/wwise/structure.png)
+![SoundTracingWwise structure](/img/wwise/structure.png)
 
 - **Why an Object Processor**: it receives every audio object on the bus, together with its position
   metadata, in one callback, so push and render happen inside the same `Execute`. Unlike the FMOD
@@ -34,8 +34,8 @@ attached to sounds/actor-mixers — plus a C API through which the game engine u
   source of a finished voice stays in a warm pool and the next voice picks it up —
   [One-shots and the warm source pool](#one-shots-and-the-warm-source-pool).
 - **Shared core**: it shares the same runtime layer as the FMOD plug-in, dynamically binds
-  `SimpleSTRealtime` from its own folder, and the game side obtains the `st_rt_*` functions of the
-  same module through `SimpleSTWwise_GetRealtimeProc`.
+  `SoundTracingRealtime` from its own folder, and the game side obtains the `st_rt_*` functions of the
+  same module through `SoundTracingWwise_GetRealtimeProc`.
 - **The output limiter is turned off**: inside Wwise the master bus handles limiting.
 - **Equal-loudness compensation is turned off too**: tone and level belong to the Wwise mix.
 - **Listener orientation**: the bus listener's front and top directions are passed as a quaternion, so head tilt
@@ -52,20 +52,20 @@ attached to sounds/actor-mixers — plus a C API through which the game engine u
 Acquire **Sound-Tracing SDK for Wwise** (plug-in name `Sound-tracing`) from the Audiokinetic Launcher store, then
 install it for the Wwise version you use under Launcher › **Plug-ins** (same on Windows and macOS). The plug-in contains
 the Authoring plug-in and the Windows (vc170) and macOS sound engine plug-ins. The Authoring plug-in is the
-**Windows DLL** on Mac as well (`Authoring/x64/Release/bin/Plugins/SimpleSTWwise.{dll,xml}` + the engine + the HRTF).
+**Windows DLL** on Mac as well (`Authoring/x64/Release/bin/Plugins/SoundTracingWwise.{dll,xml}` + the engine + the HRTF).
 
 ### Game runtime (SoundEngine)
 
 | Platform | Artifacts |
 |---|---|
-| Windows | `SDK/x64_vc170/<Config>/bin/SimpleSTWwise.dll` (+ `SimpleSTRealtime.dll`, `Resources/HRTF`), `lib/SimpleSTWwiseFX.lib`, `include/AK/Plugin/SimpleSTWwiseFXFactory.h` |
-| macOS / Linux / Android | `libSimpleSTWwise.{dylib,so}` + the `SimpleSTRealtime` of the same build (per ABI on Android) |
-| iOS / Web | `libSimpleSTWwiseFX.a` including the engine objects — include `AK/Plugin/SimpleSTWwiseFXFactory.h` in the app and register both plug-ins |
+| Windows | `SDK/x64_vc170/<Config>/bin/SoundTracingWwise.dll` (+ `SoundTracingRealtime.dll`, `Resources/HRTF`), `lib/SoundTracingWwiseFX.lib`, `include/AK/Plugin/SoundTracingWwiseFXFactory.h` |
+| macOS / Linux / Android | `libSoundTracingWwise.{dylib,so}` + the `SoundTracingRealtime` of the same build (per ABI on Android) |
+| iOS / Web | `libSoundTracingWwiseFX.a` including the engine objects — include `AK/Plugin/SoundTracingWwiseFXFactory.h` in the app and register both plug-ins |
 
 Place the Debug plug-in in the Debug configuration and the Release plug-in in the Profile/Release
-configurations. On statically linked platforms the single `SimpleSTWwiseFX` library contains both
+configurations. On statically linked platforms the single `SoundTracingWwiseFX` library contains both
 plug-ins (if the bank `PluginInfo.json` assumes the metadata plug-in's lib name is
-`SimpleSTWwiseMeta`, an alias may be needed).
+`SoundTracingWwiseMeta`, an alias may be needed).
 
 ## Using it in Wwise
 
@@ -82,7 +82,7 @@ plug-ins (if the bank `PluginInfo.json` assumes the metadata plug-in's lib name 
 4. If you need per-source adjustments, add **Metadata › Sound-tracing Source Settings** to the sound,
    actor-mixer, or bus.
 5. There is no game scene inside the authoring tool, so in `Wwise.exe` / `WwiseConsole.exe` an
-   **8 × 3 × 10 m audition room** is laid down automatically (`SIMPLESTWWISE_AUDITION_ROOM="W,H,D"`,
+   **8 × 3 × 10 m audition room** is laid down automatically (`SOUNDTRACINGWWISE_AUDITION_ROOM="W,H,D"`,
    `"0"` disables it).
 
 ![Positioning settings](/img/wwise/positioning-attenuation.png)
@@ -98,7 +98,7 @@ plug-ins (if the bank `PluginInfo.json` assumes the metadata plug-in's lib name 
 | Sound-tracing Source Settings | Gain / Direct / Reflections / Diffraction / Reverb Send (dB, RTPC) | Input level, per-path volume (Sound-Tracing SDK path volume) |
 | | Directivity (0 omni ~ 1 cardioid, RTPC) | Directivity relative to the object front |
 | | Stationary (never moves) | Hint that the emitter never moves (applied at creation) |
-| | Bypass SimpleST (RTPC) | Skips the Sound-Tracing SDK; the renderer mixes the object with Wwise panning |
+| | Bypass Sound-tracing (RTPC) | Skips the Sound-Tracing SDK; the renderer mixes the object with Wwise panning |
 | Both (EQ group) | EQ / EQ Preamp (dB, RTPC) | 4-band EQ on/off and preamp — [EQ](#eq) |
 | | Band n Type / Band n Frequency (Hz, RTPC) / Band n Gain (dB, RTPC) / Band n Q (RTPC) (n = 1 ~ 4) | Per-band filter type, frequency, gain, Q |
 
@@ -123,27 +123,27 @@ setup are needed.
 
 The measurements (engine sources created for 16 voices at one spot 16 → 4, level +15.7 dB, moving
 +19.3 dB, etc.) are on the [FMOD plug-in](./fmod.md#one-shots-and-the-warm-source-pool) page. With
-the environment variable `SIMPLESTFMOD_WARM_SOURCES=0` (the same name in the Wwise version, since the
+the environment variable `SOUNDTRACINGFMOD_WARM_SOURCES=0` (the same name in the Wwise version, since the
 core is shared), a new source is created per voice as before (for comparison).
 
 ## Game-side C API
 
-`include/SimpleSTWwise/SimpleSTWwise.h` — exported by the SoundEngine library. Bind from **the module
-Wwise loaded** (Unreal: `FAkPlatform::GetDSPPluginsDirectory()` + `SimpleSTWwise.dll`; static
+`include/SoundTracingWwise/SoundTracingWwise.h` — exported by the SoundEngine library. Bind from **the module
+Wwise loaded** (Unreal: `FAkPlatform::GetDSPPluginsDirectory()` + `SoundTracingWwise.dll`; static
 platforms call directly). Same contract as the FMOD version, but with no system index (one sound
 engine per process).
 
 ```c
-SimpleSTWwise_Config cfg; SimpleSTWwise_InitConfig(&cfg);
+SoundTracingWwise_Config cfg; SoundTracingWwise_InitConfig(&cfg);
 cfg.sceneRatio = 0.01f;                          // Wwise for Unreal (cm). Unity: 0 (= 1.0, metres)
 cfg.maxSources = 0;                              // 0 = engine platform default (desktop 128, Android/iOS 48, web 32)
-SimpleSTWwise_Configure(&cfg);                   // before AK::SoundEngine::Init
-SimpleSTWwise_SetWorldAxes(SIMPLESTWWISE_AXES_UNREAL);   // Unreal only. Unity keeps the default (WWISE)
+SoundTracingWwise_Configure(&cfg);                   // before AK::SoundEngine::Init
+SoundTracingWwise_SetWorldAxes(SOUNDTRACINGWWISE_AXES_UNREAL);   // Unreal only. Unity keeps the default (WWISE)
 
-SimpleSTWwise_Status st = { sizeof st };
-SimpleSTWwise_GetStatus(&st);                    // upload geometry once READY
-void* p = SimpleSTWwise_GetRealtimeProc("st_rt_mesh_create");
-SimpleSTWwise_InvokeOnControlThread(
+SoundTracingWwise_Status st = { sizeof st };
+SoundTracingWwise_GetStatus(&st);                    // upload geometry once READY
+void* p = SoundTracingWwise_GetRealtimeProc("st_rt_mesh_create");
+SoundTracingWwise_InvokeOnControlThread(
     [](STRT_Context* ctx, void* user) { /* st_rt_mesh_create / object_create / build ... */ }, user, 1);
 ```
 
@@ -152,7 +152,7 @@ SimpleSTWwise_InvokeOnControlThread(
 - **Unreal axes**: Wwise for Unreal 2024.1+ passes Unreal vectors unchanged (+Z up), so you must call
   `SetWorldAxes(UNREAL)` for the renderer to convert to (Y, Z, X) and match the geometry the game
   uploaded. Without it, the listener and sources are occluded by the wrong walls.
-- **Source cap**: `SimpleSTWwise_Config.maxSources` is the engine source count cap (0 = platform default).
+- **Source cap**: `SoundTracingWwise_Config.maxSources` is the engine source count cap (0 = platform default).
   Beyond it the engine rejects source creation and that voice plays dry. The field is appended to the end of
   the struct, so hosts that pass the older, shorter struct still work —
   Source memory budget.
@@ -160,7 +160,7 @@ SimpleSTWwise_InvokeOnControlThread(
 ### Turning sound tracing on and off
 
 ```c
-SimpleSTWwise_SetSoundTracingEnabled(0);   // off. 1 = on (default)
+SoundTracingWwise_SetSoundTracingEnabled(0);   // off. 1 = on (default)
 ```
 
 A game-side A/B switch. It applies to the running runtime and takes effect asynchronously on the
@@ -181,12 +181,12 @@ UE SoundTracing's `SetSoundTracingEnabled` calls this function in Wwise mode —
 ## UE and Unity integration
 
 - **Unreal Engine**: after installing Sound-tracing in the Launcher, run Launcher › Unreal Engine ›
-  **Modify Wwise in Project**; the Launcher copies `SimpleSTWwise`, `SimpleSTRealtime`, and the HRTF into
+  **Modify Wwise in Project**; the Launcher copies `SoundTracingWwise`, `SoundTracingRealtime`, and the HRTF into
   `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin`. The SoundTracing plugin builds in Wwise mode, sets
   `sceneRatio = 0.01` and the Unreal axes, and only uploads geometry — [Unreal Engine SDK](./ue.md).
 - **Unity**: after installing Sound-tracing in the Launcher, run Launcher › Unity › **Integrate/Modify Wwise
   in Project**; the Launcher puts the plug-in into the DSP folder of the Wwise Unity integration. The engine shares
-  SoundTrace's `SimpleSTRealtime` and units are metres — [Unity SDK](./unity.md#using-with-wwise).
+  SoundTrace's `SoundTracingRealtime` and units are metres — [Unity SDK](./unity.md#using-with-wwise).
 
 ![Modify Wwise in Project in the Launcher](/img/wwise/launcher-modify-project.png)
 
@@ -196,7 +196,7 @@ UE SoundTracing's `SetSoundTracingEnabled` calls this function in Wwise mode —
 
 Project created with WwiseConsole → bus, effect, metadata, and event configured via WAAPI → banks
 generated → the real `AkSoundEngine` (Profile) loads the distribution DLL with
-`RegisterPluginDLL("SimpleSTWwise")` and renders offline.
+`RegisterPluginDLL("SoundTracingWwise")` and renders offline.
 
 | Stage | Content | Result |
 |---|---|---|
@@ -225,11 +225,11 @@ linking (2026-10-06).
 
 | Variable | Meaning |
 |---|---|
-| `SIMPLESTWWISE_LOG_FILE` | Log file path |
-| `SIMPLESTWWISE_LOG_STDERR` | Log to stderr |
-| `SIMPLESTWWISE_RUNTIME_LIBRARY` | Force the SimpleSTRealtime path |
-| `SIMPLESTWWISE_AUDITION_ROOM` | `"W,H,D"` audition room (m), `"0"` disables it |
-| `SIMPLESTFMOD_WARM_SOURCES` | `"0"` disables the warm source pool and creates a new engine source per voice (for comparison; shared-core variable) |
+| `SOUNDTRACINGWWISE_LOG_FILE` | Log file path |
+| `SOUNDTRACINGWWISE_LOG_STDERR` | Log to stderr |
+| `SOUNDTRACINGWWISE_RUNTIME_LIBRARY` | Force the SoundTracingRealtime path |
+| `SOUNDTRACINGWWISE_AUDITION_ROOM` | `"W,H,D"` audition room (m), `"0"` disables it |
+| `SOUNDTRACINGFMOD_WARM_SOURCES` | `"0"` disables the warm source pool and creates a new engine source per voice (for comparison; shared-core variable) |
 
 Renderer warnings also appear in the Wwise Capture Log (`PostMonitorMessage`).
 

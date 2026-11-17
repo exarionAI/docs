@@ -91,7 +91,7 @@ PIPELINED 调度器以独立节奏运行 Direct / Reflection-Diffraction / Rever
 
 | 分组 | 指标 | 来源 |
 |---|---|---|
-| 传播 | 各 lane 的 ms（direct / reflDiff / reverb）、IR 构建 ms | `st_rt_get_timing`（Web `debugSnapshot().simplest.timing`、UE Subsystem） |
+| 传播 | 各 lane 的 ms（direct / reflDiff / reverb）、IR 构建 ms | `st_rt_get_timing`（Web `debugSnapshot().soundtracing.timing`、UE Subsystem） |
 | 渲染块 | `totalUs`、各阶段 µs（sourceInput / exactTaps / bed / send / late / output）、activeSources、exactTaps、sendTaps | `st_rt_render_get_process_stats` |
 | IR 发布 | publishSequence 节奏、bed 单元数、prepare CPU/wall 比例（抢占 vs 慢核） | `st_rt_ir_get_stats` |
 | 场景 | 网格、对象、声源、三角形数 | `st_rt_scene_get_stats` |

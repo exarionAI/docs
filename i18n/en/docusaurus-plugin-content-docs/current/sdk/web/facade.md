@@ -34,7 +34,7 @@ await sound.update(0);
 | `quality` | `'balanced'` | `'fast'`, `'balanced'`, `'quality'` |
 | `earlyReflectionMode` | `'hybrid'` | Real-time is always Hybrid. Other values are rejected |
 | `coordinateBasis` | Engine coordinate system (`+Z` forward) | Converts the renderer's coordinate system to the SDK's |
-| `coreBaseUrl` | Inside the package | URL where `SimpleSTRealtime.mjs/.wasm` and `SimpleSTOffline.mjs` live |
+| `coreBaseUrl` | Inside the package | URL where `SoundTracingRealtime.mjs/.wasm` and `SoundTracingOffline.mjs` live |
 | `assetBaseUrl` | Inside the package | URL of the material JSON and HRTF assets |
 | `propagationThreadCount` | Synchronous 1 / pipelined 3 | Compute budget 1 ~ 5 (negative = 5). Pipelined needs at least 3 |
 | `throughput` | unset | `'low'` / `'medium'` / `'max'` — shorthand for the MT worker budget |
@@ -69,8 +69,8 @@ const sound = await SoundTrace.create(audioContext, {
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'` (aliases `'convolution'` / `'steamaudio'`) |
 | `loadMaterialAssets()` | Load the material table manually (when `autoLoadMaterials: false`) |
 | `update(dt?)` | Updates the scene and runs propagation. Resolves with this frame's valid path count |
-| `debugSnapshot(options?)` | Asynchronous diagnostic snapshot. `.simplest` holds scene/timing/render/IR statistics, `features`, `output` (limiter, type, latency, master gain, output EQ `eq`), and `inputs` (live/clip source counts) |
-| `getStatistics(options?)` | Wrapper around `debugSnapshot`. `validPathCount` and `.simplest` |
+| `debugSnapshot(options?)` | Asynchronous diagnostic snapshot. `.soundtracing` holds scene/timing/render/IR statistics, `features`, `output` (limiter, type, latency, master gain, output EQ `eq`), and `inputs` (live/clip source counts) |
+| `getStatistics(options?)` | Wrapper around `debugSnapshot`. `validPathCount` and `.soundtracing` |
 | `getIRs()` | Recomputes the 9-band early path IR in a separate Offline Worker |
 | `renderMonoImpulseResponse(source, sec)` | 44.1 kHz mono pressure IR from the Offline Worker (max 30 s) |
 | `reset()` | Resets the engine state (async). Hybrid, materials, and quality are re-applied |
@@ -206,7 +206,7 @@ sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, 
 - `eq = { enabled = true, preampDb = 0, bands = [] }`, `band = { type = 'peaking', enabled = true, frequencyHz = 1000, gainDb = 0, q = 0.7071 }`
 - `type` is a Web Audio `BiquadFilterType` name: `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'`.
 - Out-of-range values are rejected with a `RangeError` and no command is sent. `{ enabled: false }` keeps the bands and passes the signal through.
-- The applied output EQ is in `debugSnapshot().simplest.output.eq`.
+- The applied output EQ is in `debugSnapshot().soundtracing.output.eq`.
 
 ## Related documents
 

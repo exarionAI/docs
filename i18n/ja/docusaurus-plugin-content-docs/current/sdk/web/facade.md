@@ -34,7 +34,7 @@ await sound.update(0);
 | `quality` | `'balanced'` | `'fast'`、`'balanced'`、`'quality'` |
 | `earlyReflectionMode` | `'hybrid'` | リアルタイムは常に Hybrid。他の値は拒否 |
 | `coordinateBasis` | エンジン座標系（`+Z` forward） | レンダラーの座標系を SDK 座標系へ変換 |
-| `coreBaseUrl` | パッケージ内部 | `SimpleSTRealtime.mjs/.wasm`、`SimpleSTOffline.mjs` がある URL |
+| `coreBaseUrl` | パッケージ内部 | `SoundTracingRealtime.mjs/.wasm`、`SoundTracingOffline.mjs` がある URL |
 | `assetBaseUrl` | パッケージ内部 | 材質 JSON と HRTF asset の URL |
 | `propagationThreadCount` | 同期 1 / パイプライン 3 | 計算予算 1 ~ 5（負数 = 5）。パイプラインは最小 3 |
 | `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT ワーカー予算の省略表記 |
@@ -69,8 +69,8 @@ const sound = await SoundTrace.create(audioContext, {
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'`（エイリアス `'convolution'` / `'steamaudio'`） |
 | `loadMaterialAssets()` | 材質テーブルの手動ロード（`autoLoadMaterials: false` のとき） |
 | `update(dt?)` | シーンを更新して伝搬を実行。このフレームの有効経路数で resolve |
-| `debugSnapshot(options?)` | 非同期の診断スナップショット。`.simplest` に scene/timing/render/IR 統計、`features`・`output`（リミッター・種類・遅延・マスターゲイン・出力 EQ `eq`）・`inputs`（ライブ/クリップ音源数） |
-| `getStatistics(options?)` | `debugSnapshot` のラッパー。`validPathCount` と `.simplest` |
+| `debugSnapshot(options?)` | 非同期の診断スナップショット。`.soundtracing` に scene/timing/render/IR 統計、`features`・`output`（リミッター・種類・遅延・マスターゲイン・出力 EQ `eq`）・`inputs`（ライブ/クリップ音源数） |
+| `getStatistics(options?)` | `debugSnapshot` のラッパー。`validPathCount` と `.soundtracing` |
 | `getIRs()` | 別の Offline Worker で 9バンド early path IR を再計算 |
 | `renderMonoImpulseResponse(source, sec)` | Offline Worker で 44.1 kHz モノ圧力 IR（最大 30 s） |
 | `reset()` | エンジン状態の初期化（async）。Hybrid・材質・品質が再適用される |
@@ -205,7 +205,7 @@ sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, 
 - `eq = { enabled = true, preampDb = 0, bands = [] }`、`band = { type = 'peaking', enabled = true, frequencyHz = 1000, gainDb = 0, q = 0.7071 }`
 - `type` は Web Audio `BiquadFilterType` の名前 `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'` です。
 - 範囲外の値は `RangeError` で拒否し、コマンドを送りません。`{ enabled: false }` はバンドを保持したまま素通しします。
-- 適用された出力 EQ は `debugSnapshot().simplest.output.eq` にあります。
+- 適用された出力 EQ は `debugSnapshot().soundtracing.output.eq` にあります。
 
 ## 関連ドキュメント
 

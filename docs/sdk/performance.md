@@ -91,7 +91,7 @@ PIPELINED 스케줄러는 Direct / Reflection-Diffraction / Reverb 레인을 독
 
 | 그룹 | 지표 | 출처 |
 |---|---|---|
-| 전파 | 레인별 ms (direct / reflDiff / reverb), IR 빌드 ms | `st_rt_get_timing` (Web `debugSnapshot().simplest.timing`, UE Subsystem) |
+| 전파 | 레인별 ms (direct / reflDiff / reverb), IR 빌드 ms | `st_rt_get_timing` (Web `debugSnapshot().soundtracing.timing`, UE Subsystem) |
 | 렌더 블록 | `totalUs`, 단계별 µs(sourceInput / exactTaps / bed / send / late / output), activeSources, exactTaps, sendTaps | `st_rt_render_get_process_stats` |
 | IR 발행 | publishSequence 케이던스, bed 셀 수, prepare CPU/wall 비율(선점 vs 느린 코어) | `st_rt_ir_get_stats` |
 | 씬 | 메시·오브젝트·음원·삼각형 수 | `st_rt_scene_get_stats` |

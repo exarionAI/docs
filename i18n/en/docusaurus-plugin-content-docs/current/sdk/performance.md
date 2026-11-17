@@ -96,7 +96,7 @@ general). On hybrid CPUs, pinning to performance cores with `st_rt_set_thread_at
 
 | Group | Metric | Source |
 |---|---|---|
-| Propagation | Per-lane ms (direct / reflDiff / reverb), IR build ms | `st_rt_get_timing` (Web `debugSnapshot().simplest.timing`, UE Subsystem) |
+| Propagation | Per-lane ms (direct / reflDiff / reverb), IR build ms | `st_rt_get_timing` (Web `debugSnapshot().soundtracing.timing`, UE Subsystem) |
 | Render block | `totalUs`, per-stage µs (sourceInput / exactTaps / bed / send / late / output), activeSources, exactTaps, sendTaps | `st_rt_render_get_process_stats` |
 | IR publish | publishSequence cadence, bed cell count, prepare CPU/wall ratio (preemption vs. slow cores) | `st_rt_ir_get_stats` |
 | Scene | Mesh, object, source, triangle counts | `st_rt_scene_get_stats` |

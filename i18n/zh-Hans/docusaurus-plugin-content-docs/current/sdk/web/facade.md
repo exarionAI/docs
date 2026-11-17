@@ -33,7 +33,7 @@ await sound.update(0);
 | `quality` | `'balanced'` | `'fast'`、`'balanced'`、`'quality'` |
 | `earlyReflectionMode` | `'hybrid'` | 实时始终为 Hybrid。其他值会被拒绝 |
 | `coordinateBasis` | 引擎坐标系（`+Z` forward） | 把渲染器坐标系转换为 SDK 坐标系 |
-| `coreBaseUrl` | 包内 | 存放 `SimpleSTRealtime.mjs/.wasm`、`SimpleSTOffline.mjs` 的 URL |
+| `coreBaseUrl` | 包内 | 存放 `SoundTracingRealtime.mjs/.wasm`、`SoundTracingOffline.mjs` 的 URL |
 | `assetBaseUrl` | 包内 | 材质 JSON 与 HRTF 资源的 URL |
 | `propagationThreadCount` | 同步 1 / 管线 3 | 计算预算 1 ~ 5（负数 = 5）。管线模式至少 3 |
 | `throughput` | 未指定 | `'low'` / `'medium'` / `'max'` — MT 工作线程预算的简写 |
@@ -68,8 +68,8 @@ const sound = await SoundTrace.create(audioContext, {
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'`（别名 `'convolution'` / `'steamaudio'`） |
 | `loadMaterialAssets()` | 手动加载材质表（`autoLoadMaterials: false` 时） |
 | `update(dt?)` | 更新场景并执行传播。以本帧的有效路径数 resolve |
-| `debugSnapshot(options?)` | 异步诊断快照。`.simplest` 中包含 scene/timing/render/IR 统计、`features`、`output`（限制器、类型、延迟、主增益、输出 EQ `eq`）、`inputs`（实时/剪辑声源数） |
-| `getStatistics(options?)` | `debugSnapshot` 的封装。`validPathCount` 与 `.simplest` |
+| `debugSnapshot(options?)` | 异步诊断快照。`.soundtracing` 中包含 scene/timing/render/IR 统计、`features`、`output`（限制器、类型、延迟、主增益、输出 EQ `eq`）、`inputs`（实时/剪辑声源数） |
+| `getStatistics(options?)` | `debugSnapshot` 的封装。`validPathCount` 与 `.soundtracing` |
 | `getIRs()` | 在独立 Offline Worker 中重新计算 9 频段 early path IR |
 | `renderMonoImpulseResponse(source, sec)` | 在 Offline Worker 中生成 44.1 kHz 单声道压力 IR（最长 30 s） |
 | `reset()` | 重置引擎状态（async）。Hybrid、材质、质量会重新应用 |
@@ -204,7 +204,7 @@ sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, 
 - `eq = { enabled = true, preampDb = 0, bands = [] }`，`band = { type = 'peaking', enabled = true, frequencyHz = 1000, gainDb = 0, q = 0.7071 }`
 - `type` 为 Web Audio `BiquadFilterType` 名称 `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'`。
 - 超出范围的值以 `RangeError` 拒绝，不发送命令。`{ enabled: false }` 保留频段并直通。
-- 已应用的输出 EQ 位于 `debugSnapshot().simplest.output.eq`。
+- 已应用的输出 EQ 位于 `debugSnapshot().soundtracing.output.eq`。
 
 ## 相关文档
 

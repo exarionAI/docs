@@ -15,7 +15,7 @@ Actor Component를 통해 엔진을 연결합니다.
 | Engine | Unreal Engine 5.6 (5.7 검증) |
 | Plugin | `Plugins/SoundTracing` (`SoundTracing` 런타임 + `SoundTracingEditor` 모듈, Niagara 의존) |
 | 지원 플랫폼 | Win64, Mac, Linux, Android, IOS |
-| 엔진 바이너리 | `ThirdParty/SimpleST/Binaries/<Plat>/<Config>/` — UE Debug만 SDK Debug, 나머지는 Release |
+| 엔진 바이너리 | `ThirdParty/SoundTracing/Binaries/<Plat>/<Config>/` — UE Debug만 SDK Debug, 나머지는 Release |
 
 ## 설치
 
@@ -30,8 +30,8 @@ YourProject/
    └─ SoundTracing/
       ├─ Content/           Niagara 경로 시각화, Material Preset Library
       ├─ Source/            SoundTracing · SoundTracingEditor
-      └─ ThirdParty/SimpleST/
-         ├─ Include/SimpleST/ABI/
+      └─ ThirdParty/SoundTracing/
+         ├─ Include/SoundTracing/ABI/
          ├─ Binaries/<Plat>/<Config>/
          └─ Resources/HRTF/
 ```
@@ -48,9 +48,9 @@ YourProject/
 
 | | Native | FMOD | Wwise |
 |---|---|---|---|
-| Sound-Tracing SDK 컨텍스트·렌더 | SoundTracing(UE Audio Mixer Spatialization + 서브믹스) | `SimpleSTFmod`(Source/Listener DSP) | `SimpleSTWwise`(Sound-tracing Renderer) |
+| Sound-Tracing SDK 컨텍스트·렌더 | SoundTracing(UE Audio Mixer Spatialization + 서브믹스) | `SoundTracingFmod`(Source/Listener DSP) | `SoundTracingWwise`(Sound-tracing Renderer) |
 | 리스너 | UE 리스너 / `ListenerComponent` | FMOD 리스너 | Wwise 리스너 |
-| 엔진 DLL 위치 | `ThirdParty/SimpleST/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
+| 엔진 DLL 위치 | `ThirdParty/SoundTracing/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
 
 FMOD·Wwise 모드에서는 `ListenerComponent`의 출력 설정(HRTF·출력 모드)과 Source Settings 에셋이
 쓰이지 않습니다 — 미들웨어 플러그인의 파라미터가 그 역할입니다.
@@ -61,14 +61,14 @@ FMOD·Wwise 모드에서는 `ListenerComponent`의 출력 설정(HRTF·출력 �
 
 ### FMOD 모드 설치
 
-FMOD 배포물(`SimpleST-fmod-release.zip`)의 `Unreal/SoundTracing`은 **FMOD 에디션**입니다.
-`ThirdParty/SimpleSTFmod/<Plat>/`에 `SimpleSTFmod`·`SimpleSTRealtime`·HRTF가 들어 있습니다.
+FMOD 배포물(`SoundTracing-fmod-release.zip`)의 `Unreal/SoundTracing`은 **FMOD 에디션**입니다.
+`ThirdParty/SoundTracingFmod/<Plat>/`에 `SoundTracingFmod`·`SoundTracingRealtime`·HRTF가 들어 있습니다.
 
 1. FMOD for Unreal을 프로젝트 `Plugins/FMODStudio`에 넣습니다.
 2. `Unreal/SoundTracing`을 프로젝트 `Plugins/`에 넣고 빌드합니다. 빌드할 때 SoundTracing이 위 파일을
-   `Plugins/FMODStudio/Binaries/<Plat>/`에 복사하고 `Config/DefaultEngine.ini`에 `+PluginFiles=SimpleSTFmod`를
+   `Plugins/FMODStudio/Binaries/<Plat>/`에 복사하고 `Config/DefaultEngine.ini`에 `+PluginFiles=SoundTracingFmod`를
    넣습니다(= Project Settings › FMOD Studio › Plugin Files). 이미 같은 파일이 있으면 건너뜁니다. Win64·Mac.
-3. 이후 FMOD Studio에서 마스터 버스에 SimpleST Listener, 3D 이벤트 마스터 트랙에
+3. 이후 FMOD Studio에서 마스터 버스에 Sound-tracing Listener, 3D 이벤트 마스터 트랙에
 Sound-Tracing SDK Source를 넣습니다 — [FMOD 플러그인](./fmod.md).
 
 ### Wwise 모드 설치
@@ -83,7 +83,7 @@ Wwise 플러그인은 다른 Wwise 플러그인처럼 Audiokinetic Launcher가 �
 ![런처의 Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
 
 SoundTracing은 모듈 시작 때 플러그인을 잡아 `sceneRatio = 0.01`(Wwise Unreal 단위 = cm)로 설정하고
-`SimpleSTWwise_SetWorldAxes(UNREAL)`로 언리얼 축(+Z 위)을 알립니다. Wwise for Unreal 2024.1+는
+`SoundTracingWwise_SetWorldAxes(UNREAL)`로 언리얼 축(+Z 위)을 알립니다. Wwise for Unreal 2024.1+는
 위치를 축 변환 없이 넘기기 때문입니다 — [Wwise 플러그인](./wwise.md).
 
 ![UE Wwise 설치 결과](/img/wwise/ue-install.png)
@@ -244,18 +244,18 @@ Blueprint에서 읽을 수 있는 World Subsystem입니다 — 통합 모드, �
 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()`로 사운드 트레이싱 전체를 켜고 끕니다. 꺼져 있는
 동안에는 리스너·음원이 움직여도 전파 레인을 깨우지 않고, 시각화 경로도 모으지 않아 마지막 경로가 남지 않습니다.
 FMOD·Wwise 모드에서는 이 스위치를 미들웨어 플러그인에 넘깁니다
-(`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`). 엔진에는 전파 일시정지가 없으므로
+(`SoundTracingFmod_SetSoundTracingEnabled` / `SoundTracingWwise_SetSoundTracingEnabled`). 엔진에는 전파 일시정지가 없으므로
 음원이 남아 있는 동안 레인은 자체 주기로 계속 돕니다.
 
 ## 플랫폼 링크 계약
 
 | UE 플랫폼 | SDK 경로 (`Binaries/` 아래) | 연결 |
 |---|---|---|
-| Win64 | `Win64/<Config>/SimpleSTRealtime.dll` | 런타임 export 바인딩 |
-| Mac | `Mac/<Config>/libSimpleSTRealtime.dylib` | Universal, 런타임 바인딩 |
-| Linux | `Linux/<Config>/libSimpleSTRealtime.so` | x86_64, 런타임 바인딩 |
-| Android | `Android/<ABI>/<Config>/libSimpleSTRealtime.so` | UPL로 APK ABI별 폴더에 복사. HRTF는 UFS에서 추출 |
-| IOS | `IOS/device` 또는 `IOS/simulator` 아래 `<Config>/libsimplest_static.a` | 정적 링크, 직접 함수 포인터 바인딩 |
+| Win64 | `Win64/<Config>/SoundTracingRealtime.dll` | 런타임 export 바인딩 |
+| Mac | `Mac/<Config>/libSoundTracingRealtime.dylib` | Universal, 런타임 바인딩 |
+| Linux | `Linux/<Config>/libSoundTracingRealtime.so` | x86_64, 런타임 바인딩 |
+| Android | `Android/<ABI>/<Config>/libSoundTracingRealtime.so` | UPL로 APK ABI별 폴더에 복사. HRTF는 UFS에서 추출 |
+| IOS | `IOS/device` 또는 `IOS/simulator` 아래 `<Config>/libsoundtracing_static.a` | 정적 링크, 직접 함수 포인터 바인딩 |
 
 UE Debug만 SDK Debug를 사용하고 Development/DebugGame/Shipping은 Release를 사용합니다.
 누락은 UBT 단계에서 오류입니다. 미들웨어 플러그인이 정적 링크되는 iOS·Web에서 FMOD/Wwise
@@ -266,13 +266,13 @@ UE Debug만 SDK Debug를 사용하고 Development/DebugGame/Shipping은 Release�
 | 증상 | 확인할 것 |
 |---|---|
 | plugin이 선택 목록에 없음 | plugin enable, module compile, target platform Audio 설정 |
-| native library load 실패 | `ThirdParty/SimpleST/Binaries`의 target별 binary, Config(Debug/Release) 매칭 |
+| native library load 실패 | `ThirdParty/SoundTracing/Binaries`의 target별 binary, Config(Debug/Release) 매칭 |
 | 통합 모드가 예상과 다름 | `.uproject`의 Wwise/FMODStudio 플러그인 활성 상태, `SOUNDTRACING_UNREAL_INTEGRATION` |
 | FMOD/Wwise 모드에서 소리가 공간화되지 않음 | FMOD Studio / Wwise 프로젝트 쪽 Sound-Tracing SDK DSP 구성, 런타임 READY 상태(Output Log) |
 | source가 공간화되지 않음 (Native) | Audio Component에 SoundTracing Source Settings asset 연결 여부 |
 | geometry가 반영되지 않음 | Object Component의 immediate parent가 지원 mesh component인지, `Acoustic Mobility` |
 | 렌더 블록 초과 (오디오 끊김) | `Early Reflections = Hybrid`, `Reflection Update Interval` 상향, Quality Preset 하향 |
-| 짧은 소리가 작거나 늦게 들림 (FMOD/Wwise 모드) | `SIMPLESTFMOD_WARM_SOURCES=0`이 설정되어 있지 않은지 |
+| 짧은 소리가 작거나 늦게 들림 (FMOD/Wwise 모드) | `SOUNDTRACINGFMOD_WARM_SOURCES=0`이 설정되어 있지 않은지 |
 | 일부 음원이 dry로 재생됨 (Native) | Output Log의 `ST_STATUS_BUDGET_EXCEEDED` — 음원을 줄이거나 `Max Sources`를 올림 |
 | EQ를 켜도 소리가 그대로임 | Native 모드인지(FMOD/Wwise 모드는 미들웨어 EQ), Output Log의 EQ 미지원 경고 |
 | FMOD/Wwise 모드에서 사운드 트레이싱을 꺼도 그대로임 | 플러그인이 `*_SetSoundTracingEnabled`를 export하는 버전인지(없으면 Output Log에 경고) |

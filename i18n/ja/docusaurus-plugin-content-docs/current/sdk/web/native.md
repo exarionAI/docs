@@ -7,16 +7,16 @@ description: soundtrace.js の低レベルエントリポイント `@exarionai/s
 
 `@exarionai/soundtrace.js/native` は、facade が内部で使う Sound-Tracing SDK モジュールローダーとアダプターを
 公開します。一般的なアプリは [Facade API](./facade.md) を使ってください。この表面は Sound-Tracing SDK C ABI の
-契約（パッケージに同梱された `core/Include/SimpleST/ABI/*.h`）にそのまま従い、バージョン間の互換性保証は
+契約（パッケージに同梱された `core/Include/SoundTracing/ABI/*.h`）にそのまま従い、バージョン間の互換性保証は
 facade より弱くなります。
 
 ```ts
 import {
-  SimpleSTRealtime,
+  SoundTracingRealtime,
   loadRealtimeModule, loadOfflineModule, analyzeScene,
   Heap, packMaterial, validateMaterial,
   ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
-  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTFeatures, type SimpleSTSceneSnapshot,
+  type SoundTracingModule, type SoundTracingMaterial, type SoundTracingDiagnostics, type SoundTracingFeatures, type SoundTracingSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
@@ -30,23 +30,23 @@ import {
 
 | 名前 | 役割 |
 |---|---|
-| `loadRealtimeModule(baseUrl)` | `SimpleSTRealtime.mjs` + `.wasm`（pthreads）をロードして `SimpleSTModule` を返します |
-| `loadOfflineModule(baseUrl)` | `SimpleSTOffline.mjs`（シングルスレッド）をロードします。IR 解析専用 |
+| `loadRealtimeModule(baseUrl)` | `SoundTracingRealtime.mjs` + `.wasm`（pthreads）をロードして `SoundTracingModule` を返します |
+| `loadOfflineModule(baseUrl)` | `SoundTracingOffline.mjs`（シングルスレッド）をロードします。IR 解析専用 |
 | `Heap` | WASM ヒープに POD を書き込み・読み出すヘルパー。`structSize`/`apiVersion` のスタンプが付いた構造体の割り当て（`stamped`）を含む |
 | `layout` | `STRT_CreateOptions`、`STMaterial`、`STRenderOptions`、`STTiming`、`STSceneStats`、`STProcessStats`、`STIrStats` などのオフセット/サイズ |
 | `packMaterial` / `validateMaterial` | 9バンド R/A/T/scattering を `STMaterial` にパックし、`R+A+T=1` を検証 |
-| `SimpleSTRealtime` | リスナー 1 つと共有レンダラーを所有するアダプター。facade のコマンドを `st_rt_*` 呼び出しに変換します。`features`は、エンジンが capability ビットと export の両方を備えたオプション機能（クリップ・trigger・再生制御・true-peak リミッター・マスターゲイン）です |
+| `SoundTracingRealtime` | リスナー 1 つと共有レンダラーを所有するアダプター。facade のコマンドを `st_rt_*` 呼び出しに変換します。`features`は、エンジンが capability ビットと export の両方を備えたオプション機能（クリップ・trigger・再生制御・true-peak リミッター・マスターゲイン）です |
 | `analyzeScene(module, snapshot, …)` | Offline コンテキストにシーンスナップショットを複製して Raw IR / 圧力 IR を計算 |
 | `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
-## `SimpleSTRealtime`
+## `SoundTracingRealtime`
 
 facade の control Worker が使うアダプターです。直接使う場合は Worker 内で次の順序を
 守ります。
 
 ```ts
 const M = await loadRealtimeModule(coreBaseUrl);
-const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, 等ラウドネス補正を無効化, 材質テーブル登録, Hybrid 適用
+const rt = new SoundTracingRealtime(M, startupOptions);   // st_rt_create, 等ラウドネス補正を無効化, 材質テーブル登録, Hybrid 適用
 
 rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
 rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + 品質プリセット適用
@@ -57,7 +57,7 @@ const validPaths = rt.frame();                         // st_rt_build[_dynamic] 
 rt.writeStream(handle, monoSamples);                   // [audio] st_rt_source_write_stream
 const stereo = rt.render(frames);                      // [audio] st_rt_render_process
 
-const diag = rt.diagnostics();                         // SimpleSTDiagnostics
+const diag = rt.diagnostics();                         // SoundTracingDiagnostics
 rt.reset(); rt.dispose();
 ```
 
@@ -74,7 +74,7 @@ rt.reset(); rt.dispose();
 ## 診断スナップショット
 
 ```ts
-interface SimpleSTDiagnostics {
+interface SoundTracingDiagnostics {
   engine: 'Sound-Tracing SDK'; abiVersion: number; version: string;
   scheduler: 'synchronous' | 'pipelined'; earlyReflectionMode: 'hybrid'; spatializer: number;
   scene:  { meshes; objects; sources; triangles };
@@ -82,13 +82,13 @@ interface SimpleSTDiagnostics {
   render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
-  features?: SimpleSTFeatures;
+  features?: SoundTracingFeatures;
   output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // 適用された出力段（eq = 出力 EQ）
   inputs?: { live; clip };                                                       // ライブ/クリップ音源数
 }
 ```
 
-facade の `debugSnapshot().simplest` と `getStatistics().simplest` は同じオブジェクトを返します。
+facade の `debugSnapshot().soundtracing` と `getStatistics().soundtracing` は同じオブジェクトを返します。
 
 ## オーディオ契約
 
@@ -116,7 +116,7 @@ Sound-Tracing SDK のパラメトリック EQ を 2 か所でかけます。
 | ソース EQ | `st_rt_source_set_parametric_eq`（解除は `st_rt_source_set_eq(ctx, id, NULL)`） | `features.sourceParametricEq` |
 | 出力 EQ | `st_rt_render_set_parametric_eq`（無効化は `enabled = 0`） | `features.outputParametricEq` |
 
-`SimpleSTRealtime` アダプターは facade の `source.setEq` / `sound.setOutputEq` コマンドをこの 2 つの呼び出しに変換し、両 feature がない
+`SoundTracingRealtime` アダプターは facade の `source.setEq` / `sound.setOutputEq` コマンドをこの 2 つの呼び出しに変換し、両 feature がない
 コアでは拒否します。適用された出力 EQ は `diagnostics().output.eq` にあります。
 
 ## 関連ドキュメント

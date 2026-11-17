@@ -15,7 +15,7 @@ Actor Component を通してエンジンを接続します。
 | Engine | Unreal Engine 5.6（5.7 で検証） |
 | Plugin | `Plugins/SoundTracing`（`SoundTracing` ランタイム + `SoundTracingEditor` モジュール、Niagara 依存） |
 | 対応プラットフォーム | Win64、Mac、Linux、Android、IOS |
-| エンジンバイナリ | `ThirdParty/SimpleST/Binaries/<Plat>/<Config>/` — UE Debug のみ SDK Debug、他は Release |
+| エンジンバイナリ | `ThirdParty/SoundTracing/Binaries/<Plat>/<Config>/` — UE Debug のみ SDK Debug、他は Release |
 
 ## インストール
 
@@ -30,8 +30,8 @@ YourProject/
    └─ SoundTracing/
       ├─ Content/           Niagara 経路可視化, Material Preset Library
       ├─ Source/            SoundTracing · SoundTracingEditor
-      └─ ThirdParty/SimpleST/
-         ├─ Include/SimpleST/ABI/
+      └─ ThirdParty/SoundTracing/
+         ├─ Include/SoundTracing/ABI/
          ├─ Binaries/<Plat>/<Config>/
          └─ Resources/HRTF/
 ```
@@ -48,9 +48,9 @@ YourProject/
 
 | | Native | FMOD | Wwise |
 |---|---|---|---|
-| Sound-Tracing SDK コンテキスト・レンダー | SoundTracing（UE Audio Mixer Spatialization + サブミックス） | `SimpleSTFmod`（Source/Listener DSP） | `SimpleSTWwise`（Sound-tracing Renderer） |
+| Sound-Tracing SDK コンテキスト・レンダー | SoundTracing（UE Audio Mixer Spatialization + サブミックス） | `SoundTracingFmod`（Source/Listener DSP） | `SoundTracingWwise`（Sound-tracing Renderer） |
 | リスナー | UE リスナー / `ListenerComponent` | FMOD リスナー | Wwise リスナー |
-| エンジン DLL の位置 | `ThirdParty/SimpleST/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
+| エンジン DLL の位置 | `ThirdParty/SoundTracing/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
 
 FMOD・Wwise モードでは `ListenerComponent` の出力設定（HRTF・出力モード）と Source Settings アセットは
 使われません — ミドルウェアプラグインのパラメータがその役割を担います。
@@ -61,14 +61,14 @@ FMOD・Wwise モードでは `ListenerComponent` の出力設定（HRTF・出力
 
 ### FMOD モードのインストール
 
-FMOD 配布物（`SimpleST-fmod-release.zip`）の `Unreal/SoundTracing` は **FMOD エディション**です。
-`ThirdParty/SimpleSTFmod/<Plat>/` に `SimpleSTFmod`・`SimpleSTRealtime`・HRTF が入っています。
+FMOD 配布物（`SoundTracing-fmod-release.zip`）の `Unreal/SoundTracing` は **FMOD エディション**です。
+`ThirdParty/SoundTracingFmod/<Plat>/` に `SoundTracingFmod`・`SoundTracingRealtime`・HRTF が入っています。
 
 1. FMOD for Unreal をプロジェクトの `Plugins/FMODStudio` に入れます。
 2. `Unreal/SoundTracing` をプロジェクトの `Plugins/` に入れてビルドします。ビルド時に SoundTracing が上記のファイルを
-   `Plugins/FMODStudio/Binaries/<Plat>/` にコピーし、`Config/DefaultEngine.ini` に `+PluginFiles=SimpleSTFmod` を
+   `Plugins/FMODStudio/Binaries/<Plat>/` にコピーし、`Config/DefaultEngine.ini` に `+PluginFiles=SoundTracingFmod` を
    追加します（= Project Settings › FMOD Studio › Plugin Files）。同じファイルがすでにある場合はスキップします。Win64・Mac。
-3. その後、FMOD Studio でマスターバスに SimpleST Listener を、3D イベントのマスタートラックに
+3. その後、FMOD Studio でマスターバスに Sound-tracing Listener を、3D イベントのマスタートラックに
 Sound-Tracing SDK Source を入れます — [FMOD プラグイン](./fmod.md)。
 
 ### Wwise モードのインストール
@@ -83,7 +83,7 @@ Wwise プラグインは、他の Wwise プラグインと同様に Audiokinetic
 ![ランチャーの Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
 
 SoundTracing はモジュール起動時にプラグインを掴んで `sceneRatio = 0.01`（Wwise Unreal の単位 = cm）に設定し、
-`SimpleSTWwise_SetWorldAxes(UNREAL)` で Unreal の軸（+Z 上）を通知します。Wwise for Unreal 2024.1+ は
+`SoundTracingWwise_SetWorldAxes(UNREAL)` で Unreal の軸（+Z 上）を通知します。Wwise for Unreal 2024.1+ は
 位置を軸変換なしで渡すためです — [Wwise プラグイン](./wwise.md)。
 
 ![UE Wwise インストール結果](/img/wwise/ue-install.png)
@@ -244,18 +244,18 @@ Blueprint から読める World Subsystem です — 統合モード、シーン
 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` でサウンドトレーシング全体をオン・オフします。オフの
 間は、リスナー・音源が動いても伝搬レーンを起こさず、可視化経路も集めないため、最後の経路が残りません。
 FMOD・Wwise モードではこのスイッチをミドルウェアプラグインに渡します
-（`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`）。エンジンには伝搬の一時停止がないため、
+（`SoundTracingFmod_SetSoundTracingEnabled` / `SoundTracingWwise_SetSoundTracingEnabled`）。エンジンには伝搬の一時停止がないため、
 音源が残っている間、レーンは独自の周期で動き続けます。
 
 ## プラットフォームリンク契約
 
 | UE プラットフォーム | SDK パス（`Binaries/` 以下） | リンク |
 |---|---|---|
-| Win64 | `Win64/<Config>/SimpleSTRealtime.dll` | ランタイム export バインディング |
-| Mac | `Mac/<Config>/libSimpleSTRealtime.dylib` | Universal、ランタイムバインディング |
-| Linux | `Linux/<Config>/libSimpleSTRealtime.so` | x86_64、ランタイムバインディング |
-| Android | `Android/<ABI>/<Config>/libSimpleSTRealtime.so` | UPL で APK の ABI 別フォルダーにコピー。HRTF は UFS から抽出 |
-| IOS | `IOS/device` または `IOS/simulator` 以下の `<Config>/libsimplest_static.a` | 静的リンク、直接の関数ポインターバインディング |
+| Win64 | `Win64/<Config>/SoundTracingRealtime.dll` | ランタイム export バインディング |
+| Mac | `Mac/<Config>/libSoundTracingRealtime.dylib` | Universal、ランタイムバインディング |
+| Linux | `Linux/<Config>/libSoundTracingRealtime.so` | x86_64、ランタイムバインディング |
+| Android | `Android/<ABI>/<Config>/libSoundTracingRealtime.so` | UPL で APK の ABI 別フォルダーにコピー。HRTF は UFS から抽出 |
+| IOS | `IOS/device` または `IOS/simulator` 以下の `<Config>/libsoundtracing_static.a` | 静的リンク、直接の関数ポインターバインディング |
 
 UE Debug のみ SDK Debug を使い、Development/DebugGame/Shipping は Release を使います。
 欠落は UBT 段階でエラーになります。ミドルウェアプラグインが静的リンクされる iOS・Web では FMOD/Wwise
@@ -266,13 +266,13 @@ UE Debug のみ SDK Debug を使い、Development/DebugGame/Shipping は Release
 | 症状 | 確認すること |
 |---|---|
 | plugin が選択リストにない | plugin enable、module compile、target platform の Audio 設定 |
-| native library のロード失敗 | `ThirdParty/SimpleST/Binaries` の target 別 binary、Config（Debug/Release）の一致 |
+| native library のロード失敗 | `ThirdParty/SoundTracing/Binaries` の target 別 binary、Config（Debug/Release）の一致 |
 | 統合モードが想定と違う | `.uproject` の Wwise/FMODStudio プラグインの有効状態、`SOUNDTRACING_UNREAL_INTEGRATION` |
 | FMOD/Wwise モードで音が空間化されない | FMOD Studio / Wwise プロジェクト側の Sound-Tracing SDK DSP 構成、ランタイムの READY 状態（Output Log） |
 | source が空間化されない（Native） | Audio Component に SoundTracing Source Settings asset が接続されているか |
 | geometry が反映されない | Object Component の immediate parent が対応 mesh component か、`Acoustic Mobility` |
 | レンダーブロック超過（オーディオの途切れ） | `Early Reflections = Hybrid`、`Reflection Update Interval` の引き上げ、Quality Preset の引き下げ |
-| 短い音が小さい、または遅れて聞こえる（FMOD/Wwise モード） | `SIMPLESTFMOD_WARM_SOURCES=0` が設定されていないか |
+| 短い音が小さい、または遅れて聞こえる（FMOD/Wwise モード） | `SOUNDTRACINGFMOD_WARM_SOURCES=0` が設定されていないか |
 | 一部の音源が dry で再生される（Native） | Output Log の `ST_STATUS_BUDGET_EXCEEDED` — 音源を減らすか `Max Sources` を上げる |
 | EQ を有効にしても音が変わらない | Native モードか（FMOD/Wwise モードはミドルウェアの EQ）、Output Log の EQ 非対応警告 |
 | FMOD/Wwise モードでサウンドトレーシングをオフにしても変わらない | プラグインが `*_SetSoundTracingEnabled` を export するバージョンか（ない場合は Output Log に警告） |

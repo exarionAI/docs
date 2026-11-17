@@ -7,16 +7,16 @@ description: The low-level soundtrace.js entry point `@exarionai/soundtrace.js/n
 
 `@exarionai/soundtrace.js/native` exposes the Sound-Tracing SDK module loader and adapters the facade uses
 internally. Ordinary apps should use the [Facade API](./facade.md). This surface follows the
-Sound-Tracing SDK C ABI contract (the `core/Include/SimpleST/ABI/*.h` headers bundled in the package) as is,
+Sound-Tracing SDK C ABI contract (the `core/Include/SoundTracing/ABI/*.h` headers bundled in the package) as is,
 and its cross-version compatibility guarantee is weaker than the facade's.
 
 ```ts
 import {
-  SimpleSTRealtime,
+  SoundTracingRealtime,
   loadRealtimeModule, loadOfflineModule, analyzeScene,
   Heap, packMaterial, validateMaterial,
   ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
-  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTFeatures, type SimpleSTSceneSnapshot,
+  type SoundTracingModule, type SoundTracingMaterial, type SoundTracingDiagnostics, type SoundTracingFeatures, type SoundTracingSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
@@ -31,23 +31,23 @@ import {
 
 | Name | Role |
 |---|---|
-| `loadRealtimeModule(baseUrl)` | Loads `SimpleSTRealtime.mjs` + `.wasm` (pthreads) and returns a `SimpleSTModule` |
-| `loadOfflineModule(baseUrl)` | Loads `SimpleSTOffline.mjs` (single-threaded). IR analysis only |
+| `loadRealtimeModule(baseUrl)` | Loads `SoundTracingRealtime.mjs` + `.wasm` (pthreads) and returns a `SoundTracingModule` |
+| `loadOfflineModule(baseUrl)` | Loads `SoundTracingOffline.mjs` (single-threaded). IR analysis only |
 | `Heap` | Helper for writing and reading PODs on the WASM heap. Includes allocation of structs stamped with `structSize`/`apiVersion` (`stamped`) |
 | `layout` | Offsets/sizes of `STRT_CreateOptions`, `STMaterial`, `STRenderOptions`, `STTiming`, `STSceneStats`, `STProcessStats`, `STIrStats`, etc. |
 | `packMaterial` / `validateMaterial` | Packs 9-band R/A/T/scattering into an `STMaterial` and validates `R+A+T=1` |
-| `SimpleSTRealtime` | Adapter owning one listener and the shared renderer. Translates facade commands into `st_rt_*` calls. `features` lists the optional features for which the engine has both the capability bit and the export (clip, trigger, playback control, true-peak limiter, master gain) |
+| `SoundTracingRealtime` | Adapter owning one listener and the shared renderer. Translates facade commands into `st_rt_*` calls. `features` lists the optional features for which the engine has both the capability bit and the export (clip, trigger, playback control, true-peak limiter, master gain) |
 | `analyzeScene(module, snapshot, …)` | Clones a scene snapshot into an Offline context and computes the Raw IR / pressure IR |
 | `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
-## `SimpleSTRealtime`
+## `SoundTracingRealtime`
 
 The adapter used by the facade's control Worker. When using it directly, follow this order inside
 a Worker.
 
 ```ts
 const M = await loadRealtimeModule(coreBaseUrl);
-const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, loudness compensation off, material table registration, Hybrid applied
+const rt = new SoundTracingRealtime(M, startupOptions);   // st_rt_create, loudness compensation off, material table registration, Hybrid applied
 
 rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
 rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + quality preset applied
@@ -58,7 +58,7 @@ const validPaths = rt.frame();                         // st_rt_build[_dynamic] 
 rt.writeStream(handle, monoSamples);                   // [audio] st_rt_source_write_stream
 const stereo = rt.render(frames);                      // [audio] st_rt_render_process
 
-const diag = rt.diagnostics();                         // SimpleSTDiagnostics
+const diag = rt.diagnostics();                         // SoundTracingDiagnostics
 rt.reset(); rt.dispose();
 ```
 
@@ -79,7 +79,7 @@ rt.reset(); rt.dispose();
 ## Diagnostic snapshot
 
 ```ts
-interface SimpleSTDiagnostics {
+interface SoundTracingDiagnostics {
   engine: 'Sound-Tracing SDK'; abiVersion: number; version: string;
   scheduler: 'synchronous' | 'pipelined'; earlyReflectionMode: 'hybrid'; spatializer: number;
   scene:  { meshes; objects; sources; triangles };
@@ -87,13 +87,13 @@ interface SimpleSTDiagnostics {
   render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
-  features?: SimpleSTFeatures;
+  features?: SoundTracingFeatures;
   output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // applied output stage (eq = output EQ)
   inputs?: { live; clip };                                                       // live/clip source counts
 }
 ```
 
-The facade's `debugSnapshot().simplest` and `getStatistics().simplest` return the same object.
+The facade's `debugSnapshot().soundtracing` and `getStatistics().soundtracing` return the same object.
 
 ## Audio contract
 
@@ -121,7 +121,7 @@ are sent, and the engine crossfades to them over 20 ms.
 | Source EQ | `st_rt_source_set_parametric_eq` (cleared with `st_rt_source_set_eq(ctx, id, NULL)`) | `features.sourceParametricEq` |
 | Output EQ | `st_rt_render_set_parametric_eq` (turned off with `enabled = 0`) | `features.outputParametricEq` |
 
-The `SimpleSTRealtime` adapter translates the facade's `source.setEq` / `sound.setOutputEq` commands into these two calls,
+The `SoundTracingRealtime` adapter translates the facade's `source.setEq` / `sound.setOutputEq` commands into these two calls,
 and rejects them on a core without both features. The applied output EQ is in `diagnostics().output.eq`.
 
 ## Related documents

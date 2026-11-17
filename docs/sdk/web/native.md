@@ -7,16 +7,16 @@ description: soundtrace.js의 저수준 진입점 `@exarionai/soundtrace.js/nati
 
 `@exarionai/soundtrace.js/native`는 facade가 내부에서 쓰는 Sound-Tracing SDK 모듈 로더와 어댑터를
 공개합니다. 일반 앱은 [Facade API](./facade.md)를 사용하세요. 이 표면은 Sound-Tracing SDK C ABI
-계약(패키지에 동봉된 `core/Include/SimpleST/ABI/*.h`)을 그대로 따르며, 버전 간 호환성 보장은
+계약(패키지에 동봉된 `core/Include/SoundTracing/ABI/*.h`)을 그대로 따르며, 버전 간 호환성 보장은
 facade보다 약합니다.
 
 ```ts
 import {
-  SimpleSTRealtime,
+  SoundTracingRealtime,
   loadRealtimeModule, loadOfflineModule, analyzeScene,
   Heap, packMaterial, validateMaterial,
   ST_ABI_VERSION, ST_FREQUENCY_BANDS, ST_SAMPLE_RATE, layout,
-  type SimpleSTModule, type SimpleSTMaterial, type SimpleSTDiagnostics, type SimpleSTFeatures, type SimpleSTSceneSnapshot,
+  type SoundTracingModule, type SoundTracingMaterial, type SoundTracingDiagnostics, type SoundTracingFeatures, type SoundTracingSceneSnapshot,
 } from '@exarionai/soundtrace.js/native';
 ```
 
@@ -30,23 +30,23 @@ import {
 
 | 이름 | 역할 |
 |---|---|
-| `loadRealtimeModule(baseUrl)` | `SimpleSTRealtime.mjs` + `.wasm`(pthreads)을 로드해 `SimpleSTModule`을 돌려줍니다 |
-| `loadOfflineModule(baseUrl)` | `SimpleSTOffline.mjs`(싱글스레드)를 로드합니다. IR 분석 전용 |
+| `loadRealtimeModule(baseUrl)` | `SoundTracingRealtime.mjs` + `.wasm`(pthreads)을 로드해 `SoundTracingModule`을 돌려줍니다 |
+| `loadOfflineModule(baseUrl)` | `SoundTracingOffline.mjs`(싱글스레드)를 로드합니다. IR 분석 전용 |
 | `Heap` | WASM 힙에 POD를 쓰고 읽는 헬퍼. `structSize`/`apiVersion` 스탬프가 붙은 구조체 할당(`stamped`) 포함 |
 | `layout` | `STRT_CreateOptions`, `STMaterial`, `STRenderOptions`, `STTiming`, `STSceneStats`, `STProcessStats`, `STIrStats` 등의 오프셋/크기 |
 | `packMaterial` / `validateMaterial` | 9밴드 R/A/T/scattering을 `STMaterial`로 패킹하고 `R+A+T=1` 검증 |
-| `SimpleSTRealtime` | 리스너 하나와 공유 렌더러를 소유하는 어댑터. facade 명령을 `st_rt_*` 호출로 바꿉니다. `features`는 엔진이 능력 비트와 export를 모두 갖춘 선택 기능(클립·trigger·재생 제어·true-peak 리미터·마스터 게인)입니다 |
+| `SoundTracingRealtime` | 리스너 하나와 공유 렌더러를 소유하는 어댑터. facade 명령을 `st_rt_*` 호출로 바꿉니다. `features`는 엔진이 능력 비트와 export를 모두 갖춘 선택 기능(클립·trigger·재생 제어·true-peak 리미터·마스터 게인)입니다 |
 | `analyzeScene(module, snapshot, …)` | Offline 컨텍스트에 씬 스냅샷을 복제해 Raw IR / 압력 IR을 계산 |
 | `ST_ABI_VERSION` / `ST_FREQUENCY_BANDS` / `ST_SAMPLE_RATE` | `6` / `9` / `44100` |
 
-## `SimpleSTRealtime`
+## `SoundTracingRealtime`
 
 facade의 control Worker가 사용하는 어댑터입니다. 직접 쓸 때는 Worker 안에서 다음 순서를
 지킵니다.
 
 ```ts
 const M = await loadRealtimeModule(coreBaseUrl);
-const rt = new SimpleSTRealtime(M, startupOptions);   // st_rt_create, 등라우드니스 보정 끔, 재질 테이블 등록, Hybrid 적용
+const rt = new SoundTracingRealtime(M, startupOptions);   // st_rt_create, 등라우드니스 보정 끔, 재질 테이블 등록, Hybrid 적용
 
 rt.command({ type: 'createMesh', handle, state });     // st_rt_mesh_create + st_rt_object_create_q
 rt.command({ type: 'createSource', handle, state });   // st_rt_source_create + 품질 프리셋 적용
@@ -57,7 +57,7 @@ const validPaths = rt.frame();                         // st_rt_build[_dynamic] 
 rt.writeStream(handle, monoSamples);                   // [audio] st_rt_source_write_stream
 const stereo = rt.render(frames);                      // [audio] st_rt_render_process
 
-const diag = rt.diagnostics();                         // SimpleSTDiagnostics
+const diag = rt.diagnostics();                         // SoundTracingDiagnostics
 rt.reset(); rt.dispose();
 ```
 
@@ -74,7 +74,7 @@ rt.reset(); rt.dispose();
 ## 진단 스냅샷
 
 ```ts
-interface SimpleSTDiagnostics {
+interface SoundTracingDiagnostics {
   engine: 'Sound-Tracing SDK'; abiVersion: number; version: string;
   scheduler: 'synchronous' | 'pipelined'; earlyReflectionMode: 'hybrid'; spatializer: number;
   scene:  { meshes; objects; sources; triangles };
@@ -82,13 +82,13 @@ interface SimpleSTDiagnostics {
   render: { blockSequence; activeSources; exactTaps; sendTaps; totalUs } | null;
   ir:     { publishSequence; exactTaps; bedCells; sendTaps } | null;
   audioTransport?: { outputUnderrunFrames; inputDroppedFrames; streams: Array<{ handle; queuedFrames; capacityFrames; droppedFrames; underrunFrames }> };
-  features?: SimpleSTFeatures;
+  features?: SoundTracingFeatures;
   output?: { limiter; limiterType; limiterLatencyFrames; masterGainDb; diffuseRain; eq? };  // 적용된 출력단(eq = 출력 EQ)
   inputs?: { live; clip };                                                       // 라이브/클립 음원 수
 }
 ```
 
-facade의 `debugSnapshot().simplest`와 `getStatistics().simplest`가 같은 객체를 돌려줍니다.
+facade의 `debugSnapshot().soundtracing`와 `getStatistics().soundtracing`가 같은 객체를 돌려줍니다.
 
 ## 오디오 계약
 
@@ -116,7 +116,7 @@ Sound-Tracing SDK의 파라메트릭 EQ를 두 자리에서 겁니다.
 | 소스 EQ | `st_rt_source_set_parametric_eq` (지우기 `st_rt_source_set_eq(ctx, id, NULL)`) | `features.sourceParametricEq` |
 | 출력 EQ | `st_rt_render_set_parametric_eq` (끄기 `enabled = 0`) | `features.outputParametricEq` |
 
-`SimpleSTRealtime` 어댑터는 facade의 `source.setEq` / `sound.setOutputEq` 명령을 이 두 호출로 바꾸며, 두 feature가 없는
+`SoundTracingRealtime` 어댑터는 facade의 `source.setEq` / `sound.setOutputEq` 명령을 이 두 호출로 바꾸며, 두 feature가 없는
 코어에서는 거부합니다. 적용된 출력 EQ는 `diagnostics().output.eq`에 있습니다.
 
 ## 관련 문서

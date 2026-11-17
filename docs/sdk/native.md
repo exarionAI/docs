@@ -13,18 +13,18 @@ description: Sound-Tracing SDK (C/C++) — 모든 플랫폼 공통 코어의 바
 
 | 플랫폼 | 바이너리 (`Binaries/`) | 링크 |
 |---|---|---|
-| Windows x64 | `Win64/Release/SimpleSTRealtime.dll` + `.lib` | 동적 |
-| macOS (Universal) | `Mac/Release/libSimpleSTRealtime.dylib` | 동적 |
-| Linux x86_64 | `Linux/Release/libSimpleSTRealtime.so` | 동적 |
-| Android (arm64-v8a · armeabi-v7a · x86_64) | `Android/<ABI>/Release/libSimpleSTRealtime.so` | 동적 (API 28+) |
-| iOS (device · simulator) | `IOS/<device\|simulator>/Release/libsimplest_static.a` | 정적 |
-| Web | `Web/Release/SimpleSTRealtime.mjs` + `.wasm` (pthreads) | WASM 모듈 (COOP/COEP 필요) |
+| Windows x64 | `Win64/Release/SoundTracingRealtime.dll` + `.lib` | 동적 |
+| macOS (Universal) | `Mac/Release/libSoundTracingRealtime.dylib` | 동적 |
+| Linux x86_64 | `Linux/Release/libSoundTracingRealtime.so` | 동적 |
+| Android (arm64-v8a · armeabi-v7a · x86_64) | `Android/<ABI>/Release/libSoundTracingRealtime.so` | 동적 (API 28+) |
+| iOS (device · simulator) | `IOS/<device\|simulator>/Release/libsoundtracing_static.a` | 정적 |
+| Web | `Web/Release/SoundTracingRealtime.mjs` + `.wasm` (pthreads) | WASM 모듈 (COOP/COEP 필요) |
 
-오프라인 IR 계산용 `SimpleSTOffline`(같은 폴더, `st_off_*`)이 함께 들어 있습니다. 헤더는 모든 플랫폼 공통입니다.
+오프라인 IR 계산용 `SoundTracingOffline`(같은 폴더, `st_off_*`)이 함께 들어 있습니다. 헤더는 모든 플랫폼 공통입니다.
 
 ```text
-SimpleST/
-├─ Include/SimpleST/ABI/   STRealtime.h · STOffline.h · STTypes.h
+SoundTracing/
+├─ Include/SoundTracing/ABI/   STRealtime.h · STOffline.h · STTypes.h
 ├─ Binaries/<Plat>/Release/
 ├─ Resources/HRTF/          SADIE_D2_44K_16bit_256tap.hrtfbin
 └─ Licenses/
@@ -43,7 +43,7 @@ SimpleST/
 ## 최소 사용 흐름
 
 ```c
-#include <SimpleST/ABI/STRealtime.h>
+#include <SoundTracing/ABI/STRealtime.h>
 
 STRT_CreateOptions opt;
 st_rt_init_create_options(&opt);
@@ -115,7 +115,7 @@ st_rt_destroy(ctx);
 uint32_t st_rt_get_api_version(void);
 ```
 
-**용도** — 로드한 `SimpleSTRealtime` 라이브러리가 호스트가 컴파일한 헤더와 같은 ABI인지 판정하는 기준값입니다. 버전 문자열이 아니라 이 값으로 호환성을 판단합니다.
+**용도** — 로드한 `SoundTracingRealtime` 라이브러리가 호스트가 컴파일한 헤더와 같은 ABI인지 판정하는 기준값입니다. 버전 문자열이 아니라 이 값으로 호환성을 판단합니다.
 
 **언제·어떻게** — 라이브러리를 로드한 직후, 컨텍스트를 만들기 전에 부릅니다. 반환값을 헤더의 `ST_ABI_VERSION`과 비교해 다르면 그 라이브러리를 쓰지 않습니다. 모든 버전 스탬프 구조체의 `apiVersion` 필드에도 같은 값(`ST_ABI_VERSION`)을 넣습니다. 스레드: `[any]` — 컴파일 상수라 어느 스레드에서 불러도 되고 블록하지 않습니다.
 
@@ -897,7 +897,7 @@ void st_rt_scene_set_solid_wedge_gate(STRT_Context* context, int enabled);
 int st_rt_scene_set_accel(STRT_Context* context, int kind);
 ```
 
-**용도** — 메시 BLAS와 정적 씬 가속구조에 쓸 구조 종류를 선택합니다. 엔진은 생성 시 `SIMPLEST_ACCEL` 환경변수도 읽지만, 이 함수로 호스트가 자기 프로세스 환경을 바꾸지 않고 같은 선택을 할 수 있습니다.
+**용도** — 메시 BLAS와 정적 씬 가속구조에 쓸 구조 종류를 선택합니다. 엔진은 생성 시 `SOUNDTRACING_ACCEL` 환경변수도 읽지만, 이 함수로 호스트가 자기 프로세스 환경을 바꾸지 않고 같은 선택을 할 수 있습니다.
 
 **언제·어떻게** — 오브젝트를 추가하기 전에 호출합니다. 이후의 빌드에만 적용되며 기존 메시의 BLAS는 생성 시점의 값으로 지어진 그대로입니다. 기본값은 `2`(TinyBVH)입니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
 
@@ -2937,8 +2937,8 @@ int st_rt_render_set_spatializer(STRT_Context* context, int type);
 
 `PANNING`과 `MIT_KEMAR`는 라이브러리에 내장돼 있습니다. `SADIE_D2_KEMAR`는 외부 파일 `SADIE_D2_44K_16bit_256tap.hrtfbin`(SDK의 `Resources/HRTF/`에 라이선스 `LICENSE-SADIE-II.txt`와 함께 들어 있음)이 있어야 하며, 엔진은 다음 순서로 찾습니다.
 
-1. 환경변수 `SIMPLEST_SADIE_D2_HRTF_PATH`(파일 경로)
-2. 현재 작업 폴더, 3. 실행 파일 폴더, 4. 이 라이브러리의 폴더 — 각각 그 폴더와 상위 8단계에서 `Assets/HRTF/`, `SimpleST/Assets/HRTF/`, `Resources/HRTF/` 아래의 그 파일
+1. 환경변수 `SOUNDTRACING_SADIE_D2_HRTF_PATH`(파일 경로)
+2. 현재 작업 폴더, 3. 실행 파일 폴더, 4. 이 라이브러리의 폴더 — 각각 그 폴더와 상위 8단계에서 `Assets/HRTF/`, `SoundTracing/Assets/HRTF/`, `Resources/HRTF/` 아래의 그 파일
 
 배포에서는 라이브러리 옆(또는 상위)에 `Resources/HRTF/SADIE_D2_44K_16bit_256tap.hrtfbin`을 두는 것이 가장 간단합니다.
 
@@ -4618,7 +4618,7 @@ int st_rt_debug_build_mesh_accel_nodes(const STMesh* mesh, int accelKind, int ma
 | 파라미터 | 설명 |
 |---|---|
 | `mesh` | 입력 메시. `vertices`는 xyz 인터리브(`numVertices × 3` float), `triangles`는 정점 인덱스(`numTriangles × 3` int) |
-| `accelKind` | `st_rt_scene_set_accel`의 kind: `0` BinnedSAH / `1` HybridKD / `2` TinyBVH / `3` LBVH / `4` LBVH_Simd. `-1` = 엔진 기본(TinyBVH, 환경변수 `SIMPLEST_ACCEL`이 있으면 그 값) |
+| `accelKind` | `st_rt_scene_set_accel`의 kind: `0` BinnedSAH / `1` HybridKD / `2` TinyBVH / `3` LBVH / `4` LBVH_Simd. `-1` = 엔진 기본(TinyBVH, 환경변수 `SOUNDTRACING_ACCEL`이 있으면 그 값) |
 | `maxDepth` | `< 0` = 전 깊이. `0` 이상이면 `depth ≤ maxDepth`인 노드만 |
 | `outNodes` | 출력 배열. `NULL`이면 크기 질의 |
 | `nodeCapacity` | `outNodes` 원소 수 |
@@ -4650,7 +4650,7 @@ int st_rt_debug_build_mesh_accel_nodes(const STMesh* mesh, int accelKind, int ma
 uint32_t st_off_get_api_version(void);
 ```
 
-**용도** — 로드한 `SimpleSTOffline` 라이브러리가 어떤 ABI 버전으로 빌드됐는지 알려 줍니다. 호스트가 컴파일한 헤더(`STTypes.h`의 `ST_ABI_VERSION`)와 DLL이 같은 구조체 배치를 쓰는지 확인하는 유일한 판정 수단입니다.
+**용도** — 로드한 `SoundTracingOffline` 라이브러리가 어떤 ABI 버전으로 빌드됐는지 알려 줍니다. 호스트가 컴파일한 헤더(`STTypes.h`의 `ST_ABI_VERSION`)와 DLL이 같은 구조체 배치를 쓰는지 확인하는 유일한 판정 수단입니다.
 
 **언제·어떻게** — 라이브러리를 로드한 직후, 컨텍스트를 만들기 전에 한 번 불러 `ST_ABI_VERSION`과 비교합니다. 다르면 구조체 레이아웃이 어긋나므로 사용을 중단합니다. 모든 버전 스탬프 구조체의 `apiVersion` 필드에도 이 값(`ST_ABI_VERSION`)을 넣습니다. 스레드: `[any]` — 컴파일 상수라 어느 스레드에서나 블록 없이 부를 수 있습니다.
 
@@ -6302,7 +6302,7 @@ int st_off_render_set_spatializer(STOFF_Context* context, int type);
 
 **용도** — 오프라인 컨텍스트의 공간화 구현(패닝 / 내장 MIT KEMAR / SADIE II D2)을 고르고, 필요한 HRIR 데이터셋을 로드합니다. 실시간 `st_rt_render_set_spatializer`와 같은 값 집합을 받습니다.
 
-**언제·어떻게** — 바이노럴 IR·오디션 렌더는 요청 구조체(`STOfflineBinauralIRRequestOptions.hrtfType`)로 요청마다 공간화기를 고르므로, 그 렌더만 쓴다면 이 함수를 따로 부를 필요는 없습니다. SADIE D2는 외부 자산 파일 `SADIE_D2_44K_16bit_256tap.hrtfbin`이 있어야 합니다 — 엔진은 환경변수 `SIMPLEST_SADIE_D2_HRTF_PATH`, 현재 작업 폴더, 실행 파일 폴더, DLL 폴더(각각 그 폴더와 상위 8단계의 `Assets/HRTF/`·`SimpleST/Assets/HRTF/`·`Resources/HRTF/`) 순서로 찾습니다. 배포에서는 DLL 옆(또는 상위)의 `Resources/HRTF/`에 두는 것이 가장 간단합니다. 스레드: `[control, blocking]` — HRIR 데이터셋을 로드하는 긴 구간이 있으므로 지연에 민감한 스레드에서 부르지 않습니다.
+**언제·어떻게** — 바이노럴 IR·오디션 렌더는 요청 구조체(`STOfflineBinauralIRRequestOptions.hrtfType`)로 요청마다 공간화기를 고르므로, 그 렌더만 쓴다면 이 함수를 따로 부를 필요는 없습니다. SADIE D2는 외부 자산 파일 `SADIE_D2_44K_16bit_256tap.hrtfbin`이 있어야 합니다 — 엔진은 환경변수 `SOUNDTRACING_SADIE_D2_HRTF_PATH`, 현재 작업 폴더, 실행 파일 폴더, DLL 폴더(각각 그 폴더와 상위 8단계의 `Assets/HRTF/`·`SoundTracing/Assets/HRTF/`·`Resources/HRTF/`) 순서로 찾습니다. 배포에서는 DLL 옆(또는 상위)의 `Resources/HRTF/`에 두는 것이 가장 간단합니다. 스레드: `[control, blocking]` — HRIR 데이터셋을 로드하는 긴 구간이 있으므로 지연에 민감한 스레드에서 부르지 않습니다.
 
 | 파라미터 | 설명 |
 |---|---|
@@ -7686,8 +7686,8 @@ UE · Unity · FMOD · Wwise 플러그인은 모두 BUFFERED를 씁니다.
 ## 플랫폼 메모
 
 - **Android**: API 28 이상. ABI별 `.so`를 앱 라이브러리 폴더에 넣습니다.
-- **iOS**: 정적 라이브러리 하나(`libsimplest_static.a`)에 실시간·오프라인이 모두 들어 있습니다. device / simulator를 구분해 링크합니다.
-- **Web**: `SimpleSTRealtime.mjs/.wasm`은 pthreads 빌드라 페이지와 Worker 응답에 `Cross-Origin-Opener-Policy: same-origin`,
+- **iOS**: 정적 라이브러리 하나(`libsoundtracing_static.a`)에 실시간·오프라인이 모두 들어 있습니다. device / simulator를 구분해 링크합니다.
+- **Web**: `SoundTracingRealtime.mjs/.wasm`은 pthreads 빌드라 페이지와 Worker 응답에 `Cross-Origin-Opener-Policy: same-origin`,
   `Cross-Origin-Embedder-Policy: require-corp`가 필요합니다. `[control]` 호출은 한 Worker에서만 하고(메인 스레드의 블로킹 호출은
   `Atomics.wait` 제한으로 실패), 오디오는 AudioWorklet에서 공유 링으로 주고받습니다. TypeScript facade가 필요하면 [Web SDK](./web.md)를 쓰십시오.
 - **호스트 샘플레이트**: 엔진 내부는 44.1 kHz이고 `hostSampleRate`를 지정하면 입력·출력을 엔진이 변환합니다.

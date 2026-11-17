@@ -34,7 +34,7 @@ await sound.update(0);
 | `quality` | `'balanced'` | `'fast'`, `'balanced'`, `'quality'` |
 | `earlyReflectionMode` | `'hybrid'` | 실시간은 항상 Hybrid. 다른 값은 거부 |
 | `coordinateBasis` | 엔진 좌표계(`+Z` forward) | 렌더러 좌표계를 SDK 좌표계로 변환 |
-| `coreBaseUrl` | 패키지 내부 | `SimpleSTRealtime.mjs/.wasm`, `SimpleSTOffline.mjs`가 있는 URL |
+| `coreBaseUrl` | 패키지 내부 | `SoundTracingRealtime.mjs/.wasm`, `SoundTracingOffline.mjs`가 있는 URL |
 | `assetBaseUrl` | 패키지 내부 | 재질 JSON과 HRTF asset URL |
 | `propagationThreadCount` | 동기 1 / 파이프라인 3 | 계산 예산 1 ~ 5 (음수 = 5). 파이프라인은 최소 3 |
 | `throughput` | 미지정 | `'low'` / `'medium'` / `'max'` — MT 워커 예산 단축 표기 |
@@ -69,8 +69,8 @@ const sound = await SoundTrace.create(audioContext, {
 | `loadHrtf(mode, source?)` | `'mit-kemar'` / `'sadie-d2'` (별칭 `'convolution'` / `'steamaudio'`) |
 | `loadMaterialAssets()` | 재질 테이블 수동 로드 (`autoLoadMaterials: false`일 때) |
 | `update(dt?)` | 장면을 갱신하고 전파 실행. 이번 프레임의 유효 경로 수로 resolve |
-| `debugSnapshot(options?)` | 비동기 진단 스냅샷. `.simplest`에 scene/timing/render/IR 통계, `features`·`output`(리미터·종류·지연·마스터 게인·출력 EQ `eq`)·`inputs`(라이브/클립 음원 수) |
-| `getStatistics(options?)` | `debugSnapshot` 래퍼. `validPathCount`와 `.simplest` |
+| `debugSnapshot(options?)` | 비동기 진단 스냅샷. `.soundtracing`에 scene/timing/render/IR 통계, `features`·`output`(리미터·종류·지연·마스터 게인·출력 EQ `eq`)·`inputs`(라이브/클립 음원 수) |
+| `getStatistics(options?)` | `debugSnapshot` 래퍼. `validPathCount`와 `.soundtracing` |
 | `getIRs()` | 별도 Offline Worker에서 9밴드 early path IR 재계산 |
 | `renderMonoImpulseResponse(source, sec)` | Offline Worker에서 44.1 kHz 모노 압력 IR (최대 30 s) |
 | `reset()` | 엔진 상태 초기화 (async). Hybrid·재질·품질이 재적용됨 |
@@ -205,7 +205,7 @@ sound.setOutputEq({ preampDb: -3, bands: [{ type: 'lowshelf', frequencyHz: 120, 
 - `eq = { enabled = true, preampDb = 0, bands = [] }`, `band = { type = 'peaking', enabled = true, frequencyHz = 1000, gainDb = 0, q = 0.7071 }`
 - `type`은 Web Audio `BiquadFilterType` 이름 `'peaking'` · `'lowshelf'` · `'highshelf'` · `'lowpass'` · `'highpass'` · `'notch'`입니다.
 - 범위 밖 값은 `RangeError`로 거절하고 명령을 보내지 않습니다. `{ enabled: false }`는 밴드를 보관한 채 통과시킵니다.
-- 적용된 출력 EQ는 `debugSnapshot().simplest.output.eq`에 있습니다.
+- 적용된 출력 EQ는 `debugSnapshot().soundtracing.output.eq`에 있습니다.
 
 ## 관련 문서
 

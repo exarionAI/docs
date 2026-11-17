@@ -14,7 +14,7 @@ as they are. Demo scenes are included as well.
 | Item | Value |
 |---|---|
 | Unity | 2022.3 LTS or later (verified on Unity 6) |
-| Package | `SoundTrace-SimpleST-release.unitypackage` (default, for Wwise) / `SoundTrace-SimpleST-FMOD-release.unitypackage` (FMOD edition) → `Assets/SoundTrace` |
+| Package | `SoundTracing-Unity-release.unitypackage` (default, for Wwise) / `SoundTracing-Unity-FMOD-release.unitypackage` (FMOD edition) → `Assets/SoundTrace` |
 | Platforms | Windows x64 · macOS Universal · Linux x86_64 · Android (ARMv7/ARM64/x86_64, API 28+) · iOS 15+ |
 | WebGL | Not supported — Unity WebGL does not support audio filters (`OnAudioFilterRead`). For the web, use the [Web SDK](./web.md), the WASM build of the C SDK |
 
@@ -28,8 +28,8 @@ For FMOD, importing the FMOD edition package is all you need; the Wwise plug-in 
 
 ## Using with FMOD
 
-When the Sound-Tracing SDK FMOD plug-in (`SimpleSTFmod`) is present in the project, SoundTrace automatically
-runs in **FMOD integration** mode. Spatial audio rendering is done by the SimpleST Source / Listener
+When the Sound-Tracing SDK FMOD plug-in (`SoundTracingFmod`) is present in the project, SoundTrace automatically
+runs in **FMOD integration** mode. Spatial audio rendering is done by the Sound-tracing Source / Listener
 DSPs in FMOD Studio, and SoundTrace only uploads geometry and materials to the plug-in context via
 `SoundTraceManager` + `SoundTraceObject`. `SoundTraceListener` / `SoundTraceSource` log a warning
 and disable themselves.
@@ -37,28 +37,28 @@ and disable themselves.
 ![Importing the FMOD edition package](/img/fmod/unity-fmod-edition-import.png)
 
 1. Add FMOD for Unity 2.04 to the project (`Assets/Plugins/FMOD`; if you installed it from a tgz, embed it under `Packages/`).
-2. Drag and drop the **FMOD edition** package `SoundTrace-SimpleST-FMOD-release.unitypackage` into the Project window.
-   There is no separate menu. The package's `Runtime/Plugins/FMOD` contains `SimpleSTFmod` (Windows x64 · macOS),
+2. Drag and drop the **FMOD edition** package `SoundTracing-Unity-FMOD-release.unitypackage` into the Project window.
+   There is no separate menu. The package's `Runtime/Plugins/FMOD` contains `SoundTracingFmod` (Windows x64 · macOS),
    and when the editor loads, SoundTrace copies it into the FMOD plug-in folder and registers it under
    FMOD Settings › Dynamic Plugins. If you add FMOD later, it does the same on the next load.
-3. In FMOD Studio, put **SimpleST Listener** on the master bus and **SimpleST Source** on the master
+3. In FMOD Studio, put **Sound-tracing Listener** on the master bus and **Sound-tracing Source** on the master
    track of 3D events in place of the FMOD Spatializer — see [FMOD plug-in](./fmod.md).
 4. In the scene, place `SoundTraceManager`, `SoundTraceObject` for the geometry, and the FMOD
    `StudioListener`.
 
-There is one engine instance. SimpleSTFmod loads the same `SimpleSTRealtime` that SoundTrace
+There is one engine instance. SoundTracingFmod loads the same `SoundTracingRealtime` that SoundTrace
 P/Invokes, and every control call runs on the plug-in's control thread.
 
 ## Using with Wwise
 
-When `SimpleSTWwise` is present in the DSP folder of the Wwise Unity integration, SoundTrace runs in
+When `SoundTracingWwise` is present in the DSP folder of the Wwise Unity integration, SoundTrace runs in
 **Wwise integration** mode (FMOD takes precedence if both are present).
 
 SoundTrace uses the default package, and the Wwise plug-in is installed by the Audiokinetic Launcher like any other Wwise plug-in.
 
 ![Sound-tracing installed in the Launcher](/img/wwise/launcher-bundle.png)
 
-1. Drag and drop the default package `SoundTrace-SimpleST-release.unitypackage` into the Project window.
+1. Drag and drop the default package `SoundTracing-Unity-release.unitypackage` into the Project window.
 2. Install **Sound-Tracing SDK for Wwise** (plug-in name `Sound-tracing`), acquired from the Audiokinetic Launcher
    store, into Wwise.
 3. Run Launcher › **Unity › Integrate (or Modify) Wwise in Project**. The Launcher puts the plug-ins installed

@@ -1,13 +1,13 @@
 ---
 title: FMOD
-description: Sound-Tracing SDK for FMOD（SimpleSTFmod）— FMOD Studio / FMOD Engine 向け DSP プラグインの構造、インストール、Studio でのオーサリング、ワンショットとウォーム音源プール、ゲーム側 C API、UE・Unity 統合、EQ。
+description: Sound-Tracing SDK for FMOD（SoundTracingFmod）— FMOD Studio / FMOD Engine 向け DSP プラグインの構造、インストール、Studio でのオーサリング、ワンショットとウォーム音源プール、ゲーム側 C API、UE・Unity 統合、EQ。
 ---
 
 # Sound-Tracing SDK for FMOD
 
-**Sound-Tracing SDK for FMOD**（バイナリ名 `SimpleSTFmod`）は、Sound-Tracing SDK を
-FMOD Studio / FMOD Engine で使うための DSP プラグインです。オーサリングツールでイベントに挿して使う **SimpleST Source** と、マスターバスに 1 つ置く
-**SimpleST Listener** の 2 つの DSP、そしてゲームエンジンがジオメトリを登録する C API で構成されます。
+**Sound-Tracing SDK for FMOD**（バイナリ名 `SoundTracingFmod`）は、Sound-Tracing SDK を
+FMOD Studio / FMOD Engine で使うための DSP プラグインです。オーサリングツールでイベントに挿して使う **Sound-tracing Source** と、マスターバスに 1 つ置く
+**Sound-tracing Listener** の 2 つの DSP、そしてゲームエンジンがジオメトリを登録する C API で構成されます。
 
 | 項目 | 値 |
 |---|---|
@@ -17,11 +17,11 @@ FMOD Studio / FMOD Engine で使うための DSP プラグインです。オー�
 
 ## 構造
 
-![SimpleSTFmod の構造](/img/fmod/structure.png)
+![SoundTracingFmod の構造](/img/fmod/structure.png)
 
 - エンジンは「音源 N 個の入力 → リスナーミックス 1 つの出力」構造なので、Source は送り込んで無音、バスの Listener が一度にレンダーします。
-- プラグインが `SimpleSTRealtime` を**自分のフォルダーから**動的にバインドし、ゲーム側はプラグインが export する
-  `SimpleSTFmod_GetRealtimeProc` で**同じモジュール**の `st_rt_*` を受け取ります — エンジンインスタンスは 1 つです。
+- プラグインが `SoundTracingRealtime` を**自分のフォルダーから**動的にバインドし、ゲーム側はプラグインが export する
+  `SoundTracingFmod_GetRealtimeProc` で**同じモジュール**の `st_rt_*` を受け取ります — エンジンインスタンスは 1 つです。
 - レンダラーは「今 process が動いている Listener」がブロックごとに選出されます。Studio が作るプレビュー用のダミー
   インスタンスがライブの Listener を横取りすることはなく、レンダラーが 250 ms 停止すると別の Listener が引き継ぎ、
   誰もいなければ Source は dry に戻ります。
@@ -39,13 +39,13 @@ FMOD Studio / FMOD Engine で使うための DSP プラグインです。オー�
 
 1. **バージョンを合わせる**: Studio 2.03.x → SDK 110 ビルド、Studio 2.04.x → SDK 204 ビルド。204 プラグインは
    Studio 2.03 では読み込まれません。
-2. 配布 `plugins/` フォルダーの内容（`SimpleSTFmod.dll` · `SimpleSTFmod.plugin.js` · `SimpleSTRealtime.dll` ·
+2. 配布 `plugins/` フォルダーの内容（`SoundTracingFmod.dll` · `SoundTracingFmod.plugin.js` · `SoundTracingRealtime.dll` ·
    `Resources/HRTF/`）を **Studio プロジェクトの `Plugins/`**（バージョン管理に有利）またはユーザープラグインフォルダーに
    コピーし、Studio を再起動します。
    - Windows: `%localappdata%/FMOD Studio/Plugins`
-   - macOS: `~/Library/Preferences/FMOD Studio/Plugins/SimpleST`
-3. Studio ログの `No FMOD symbols found in dynamic library '.../SimpleSTRealtime.dll'` は無害です
-   （Studio はフォルダー内のすべての DLL をプラグイン候補として開きます。エンジン DLL は SimpleSTFmod が直接ロードします）。
+   - macOS: `~/Library/Preferences/FMOD Studio/Plugins/SoundTracing`
+3. Studio ログの `No FMOD symbols found in dynamic library '.../SoundTracingRealtime.dll'` は無害です
+   （Studio はフォルダー内のすべての DLL をプラグイン候補として開きます。エンジン DLL は SoundTracingFmod が直接ロードします）。
 
 HRTF リソースがない場合はエンジン内蔵の MIT KEMAR にフォールバックします。
 
@@ -53,45 +53,45 @@ HRTF リソースがない場合はエンジン内蔵の MIT KEMAR にフォー�
 
 | プラットフォーム | リンク | 成果物 |
 |---|---|---|
-| win / mac / linux | 動的 | `SimpleSTFmod.{dll,dylib,so}` + 隣に `SimpleSTRealtime.*` + `Resources/HRTF` |
-| android | 動的 | `<abi>/plugins/libSimpleSTFmod.so` + `libSimpleSTRealtime.so`（アプリのライブラリフォルダー） |
-| ios | 静的 | `SimpleSTFmod.xcframework`（エンジンオブジェクトを含む） |
-| web | 静的 | `libSimpleSTFmod.a`（エンジンを含む）— FMOD HTML5 pthreads ビルド + `-pthread` でリンク |
+| win / mac / linux | 動的 | `SoundTracingFmod.{dll,dylib,so}` + 隣に `SoundTracingRealtime.*` + `Resources/HRTF` |
+| android | 動的 | `<abi>/plugins/libSoundTracingFmod.so` + `libSoundTracingRealtime.so`（アプリのライブラリフォルダー） |
+| ios | 静的 | `SoundTracingFmod.xcframework`（エンジンオブジェクトを含む） |
+| web | 静的 | `libSoundTracingFmod.a`（エンジンを含む）— FMOD HTML5 pthreads ビルド + `-pthread` でリンク |
 
 動的プラットフォームでは、FMOD がプラグインをロードするとプラグインが隣のエンジンを探します。静的プラットフォーム（iOS/Web）では
 バンクロード前に直接登録します。
 
 ```cpp
-studioSystem->registerPlugin(FMOD_SimpleST_Source_GetDSPDescription());
-studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
+studioSystem->registerPlugin(FMOD_SoundTracing_Source_GetDSPDescription());
+studioSystem->registerPlugin(FMOD_SoundTracing_Listener_GetDSPDescription());
 ```
 
 ## FMOD Studio で使う
 
-![マスターバスの SimpleST Listener](/img/fmod/studio-master-bus-listener.png)
+![マスターバスの Sound-tracing Listener](/img/fmod/studio-master-bus-listener.png)
 
-1. マスターバスに **Exarion › SimpleST Listener** を追加します（プロジェクトごとに 1 個。同時に 2 個動くと 1 つだけ
+1. マスターバスに **Exarion › Sound-tracing Listener** を追加します（プロジェクトごとに 1 個。同時に 2 個動くと 1 つだけ
    レンダーし、残りは通過）。
-2. 3D イベントのマスタートラックで **FMOD Spatializer を削除するか bypass** し、**Exarion › SimpleST Source** を
+2. 3D イベントのマスタートラックで **FMOD Spatializer を削除するか bypass** し、**Exarion › Sound-tracing Source** を
    追加します（削除しないと二重空間化）。
 3. Studio 内にはゲームシーンがないため、オーサリングツールで動かす際は **8 × 3 × 10 m のオーディションルーム**が自動的に敷かれます
-   （`SIMPLESTFMOD_AUDITION_ROOM="W,H,D"` でサイズ変更、`"0"` で無効）。プレビューで音源を部屋の外へ
+   （`SOUNDTRACINGFMOD_AUDITION_ROOM="W,H,D"` でサイズ変更、`"0"` で無効）。プレビューで音源を部屋の外へ
    動かすと壁の遮蔽を聴けます。
 
-![3D イベントの SimpleST Source](/img/fmod/studio-event-source.png)
+![3D イベントの Sound-tracing Source](/img/fmod/studio-event-source.png)
 
 ### DSP パラメータ
 
-![SimpleST Source デッキ UI](/img/fmod/studio-source-params.png)
+![Sound-tracing Source デッキ UI](/img/fmod/studio-source-params.png)
 
 | DSP | パラメータ | 意味 |
 |---|---|---|
-| SimpleST Source | Gain / Direct / Reflections / Diffraction / Reverb Send (dB) | 入力レベル、経路ごとのボリューム（Sound-Tracing SDK path volume） |
+| Sound-tracing Source | Gain / Direct / Reflections / Diffraction / Reverb Send (dB) | 入力レベル、経路ごとのボリューム（Sound-Tracing SDK path volume） |
 | | Directivity (0 ~ 1) | 0 全指向 ~ 1 カーディオイド（イベントの forward 基準） |
 | | Stationary | 動かないエミッターのヒント（生成時に適用） |
 | | Bypass | Sound-Tracing SDK を経由せず dry で通過 |
 | | 3D Attributes / Overall Gain / Atten Range | FMOD 特殊 data パラメータ（自動） |
-| SimpleST Listener | Wet Level / Dry Level (dB) | Sound-Tracing SDK レンダー / バスの他のオーディオのレベル |
+| Sound-tracing Listener | Wet Level / Dry Level (dB) | Sound-Tracing SDK レンダー / バスの他のオーディオのレベル |
 | | HRTF | 有効でバイノーラル（ヘッドフォン）、無効でステレオパンニング |
 | 両方（EQ ブロック） | EQ / EQ Preamp (dB) | 4 バンド EQ の有効化・プリアンプ — [EQ](#eq) |
 | | EQn Type / EQn Freq (Hz) / EQn Gain (dB) / EQn Q (n = 1 ~ 4) | バンドごとのフィルター種類・周波数・ゲイン・Q |
@@ -121,47 +121,47 @@ Listener を **bypass** すると Source は dry 通過に戻ります（A/B 比
 | ボイス開始 → 最初の音 | 92 ms | 69 ms |
 | 350 ms ボイスの聞こえる長さ | 275 ms | 350 ms |
 
-環境変数 `SIMPLESTFMOD_WARM_SOURCES=0` にすると、以前のようにボイスごとに新しい音源を作ります（比較用）。
+環境変数 `SOUNDTRACINGFMOD_WARM_SOURCES=0` にすると、以前のようにボイスごとに新しい音源を作ります（比較用）。
 
 ## ゲーム側 C API
 
-`include/SimpleSTFmod/SimpleSTFmod.h` — プラグインライブラリが export します。**FMOD がロードしたそのモジュール**から
+`include/SoundTracingFmod/SoundTracingFmod.h` — プラグインライブラリが export します。**FMOD がロードしたそのモジュール**から
 バインドします。すべての呼び出しはゲームスレッドで行い、Sound-Tracing SDK の `[control]` 呼び出しは必ず
-`SimpleSTFmod_InvokeOnControlThread` の中で行います。
+`SoundTracingFmod_InvokeOnControlThread` の中で行います。
 
 ```c
-SimpleSTFmod_Config cfg; SimpleSTFmod_InitConfig(&cfg);
-cfg.renderMode = SIMPLESTFMOD_RENDER_BUFFERED;   // 既定。IN_CALLBACK = FMOD ミキサーコールバック内でレンダー
+SoundTracingFmod_Config cfg; SoundTracingFmod_InitConfig(&cfg);
+cfg.renderMode = SOUNDTRACINGFMOD_RENDER_BUFFERED;   // 既定。IN_CALLBACK = FMOD ミキサーコールバック内でレンダー
 cfg.sceneRatio = 0.f;                            // 0 = 1.0 (FMOD UE/Unity 統合の単位はメートル)
 cfg.maxSources = 0;                              // 0 = エンジンのプラットフォーム既定(デスクトップ 128, Android/iOS 48, Web 32)
-SimpleSTFmod_Configure(&cfg);                    // ランタイム開始前(最初の Sound-Tracing SDK DSP 生成前)
+SoundTracingFmod_Configure(&cfg);                    // ランタイム開始前(最初の Sound-Tracing SDK DSP 生成前)
 
-SimpleSTFmod_Status st = { sizeof st };
-SimpleSTFmod_GetStatus(SIMPLESTFMOD_SYSTEM_LATEST, &st);   // state READY, boundSources, latency, defaultMaterialId
+SoundTracingFmod_Status st = { sizeof st };
+SoundTracingFmod_GetStatus(SOUNDTRACINGFMOD_SYSTEM_LATEST, &st);   // state READY, boundSources, latency, defaultMaterialId
 
 typedef STMeshId (*mesh_create_fn)(STRT_Context*, const STMesh*, STMaterialId, const int32_t*);
-mesh_create_fn meshCreate = (mesh_create_fn)SimpleSTFmod_GetRealtimeProc("st_rt_mesh_create");
+mesh_create_fn meshCreate = (mesh_create_fn)SoundTracingFmod_GetRealtimeProc("st_rt_mesh_create");
 
-SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
+SoundTracingFmod_InvokeOnControlThread(SOUNDTRACINGFMOD_SYSTEM_LATEST,
     [](STRT_Context* ctx, void* user) {
         /* st_rt_mesh_create / st_rt_object_create_q / st_rt_build ... */
     }, user, /*wait=*/1);
 ```
 
 - システムインデックス = `FMOD_DSP_STATE::systemobject`（プロセスで最初に作られた FMOD::System が 0）。
-  エディター統合は System を複数作るため、`SIMPLESTFMOD_SYSTEM_LATEST(-1)` = 最新のランタイム。
+  エディター統合は System を複数作るため、`SOUNDTRACINGFMOD_SYSTEM_LATEST(-1)` = 最新のランタイム。
 - 座標系は FMOD と Sound-Tracing SDK で同じです（左手系、+Y up、+Z forward）。FMOD UE 統合の `(UE.Y, UE.Z, UE.X)/100`
   変換は SoundTracing UE プラグインの変換と同一です。
 - プラグインのコンテキストには既定材質ライブラリが先に登録されています。`defaultMaterialId` に preset
   index を加えて使ってください。
-- **音源の上限**: `SimpleSTFmod_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
+- **音源の上限**: `SoundTracingFmod_Config.maxSources` はエンジン音源数の上限です（0 = プラットフォーム
   既定）。超えるとエンジンが音源の生成を拒否し、そのボイスは dry で再生されます。構造体の末尾に追加したフィールドなので、以前の短い
   構造体を渡すホストも動作します。
 
 ### サウンドトレーシングのオンオフ
 
 ```c
-SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // オフ。1 = オン(既定)
+SoundTracingFmod_SetSoundTracingEnabled(SOUNDTRACINGFMOD_SYSTEM_LATEST, 0);   // オフ。1 = オン(既定)
 ```
 
 ゲーム側の A/B スイッチです。1 つのランタイム（`systemIndex < 0` = 最新）に適用され、
@@ -181,8 +181,8 @@ UE SoundTracing の `SetSoundTracingEnabled` が FMOD モードでこの関数�
 
 - **Unreal Engine**: 配布物の `Unreal/SoundTracing`（FMOD エディション）をプロジェクトの `Plugins/` に入れてビルドすると、
   ビルドがプラグイン・エンジン・HRTF を `Plugins/FMODStudio/Binaries/<Plat>/` に入れ、`DefaultEngine.ini` に
-  `+PluginFiles=SimpleSTFmod` を追加します。SoundTracing プラグインは FMOD モードでビルドされ、ジオメトリのみを登録します — [Unreal Engine SDK](./ue.md)。
-- **Unity**: FMOD エディションパッケージ（`SoundTrace-SimpleST-FMOD-release.unitypackage`）をドラッグ＆ドロップすると、
+  `+PluginFiles=SoundTracingFmod` を追加します。SoundTracing プラグインは FMOD モードでビルドされ、ジオメトリのみを登録します — [Unreal Engine SDK](./ue.md)。
+- **Unity**: FMOD エディションパッケージ（`SoundTracing-Unity-FMOD-release.unitypackage`）をドラッグ＆ドロップすると、
   エディターのロード時に SoundTrace が DLL/bundle を FMOD プラグインフォルダーにコピーし、Dynamic Plugins に登録します —
   [Unity SDK](./unity.md#fmodと併用する)。
 
@@ -214,14 +214,14 @@ UE SoundTracing の `SetSoundTracingEnabled` が FMOD モードでこの関数�
 
 | 変数 | 意味 |
 |---|---|
-| `SIMPLESTFMOD_LOG_FILE` | ログファイルのパス |
-| `SIMPLESTFMOD_LOG_STDERR` | stderr ログ |
-| `SIMPLESTFMOD_RUNTIME_LIBRARY` | SimpleSTRealtime のパスを強制 |
-| `SIMPLESTFMOD_AUDITION_ROOM` | `"W,H,D"` オーディションルーム（m）、`"0"` で無効 |
-| `SIMPLESTFMOD_WARM_SOURCES` | `"0"` でウォーム音源プールを無効にし、ボイスごとに新しいエンジン音源（比較用） |
+| `SOUNDTRACINGFMOD_LOG_FILE` | ログファイルのパス |
+| `SOUNDTRACINGFMOD_LOG_STDERR` | stderr ログ |
+| `SOUNDTRACINGFMOD_RUNTIME_LIBRARY` | SoundTracingRealtime のパスを強制 |
+| `SOUNDTRACINGFMOD_AUDITION_ROOM` | `"W,H,D"` オーディションルーム（m）、`"0"` で無効 |
+| `SOUNDTRACINGFMOD_WARM_SOURCES` | `"0"` でウォーム音源プールを無効にし、ボイスごとに新しいエンジン音源（比較用） |
 
 Windows では常に `OutputDebugString` にも出力されます。コントロールスレッドはレンダラーの状態が変わるたびに
-`SimpleST Listener rendering` / `no SimpleST Listener rendering` を記録します。
+`Sound-tracing Listener rendering` / `no Sound-tracing Listener rendering` を記録します。
 
 ## EQ
 
@@ -239,8 +239,8 @@ Sound-Tracing SDK のパラメトリック EQ を 2 か所でかけます。
 
 | DSP | かける場所 |
 |---|---|
-| SimpleST Source | **ソース EQ** — エンジンに入るイベント信号 |
-| SimpleST Listener | **出力 EQ** — レンダーされたミックス、Wet Level の前 |
+| Sound-tracing Source | **ソース EQ** — エンジンに入るイベント信号 |
+| Sound-tracing Listener | **出力 EQ** — レンダーされたミックス、Wet Level の前 |
 
 - `EQ` は有効/無効、`EQ Preamp` はバンド前のゲイン（−48 ~ +12 dB、ブーストするときは負の値で余裕を確保します）です。
 - `EQn Type`（n = 1 ~ 4）は Off · Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch の整数パラメータ（0 = Off）で、

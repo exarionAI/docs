@@ -50,7 +50,7 @@ agreement. It is distributed in two forms.
 import { SoundTrace } from '@exarionai/soundtrace.js';
 ```
 
-The package ships the WASM core (`core/SimpleSTRealtime.mjs/.wasm`, `core/SimpleSTOffline.mjs`)
+The package ships the WASM core (`core/SoundTracingRealtime.mjs/.wasm`, `core/SoundTracingOffline.mjs`)
 together with the material and HRTF assets, and fetches them at runtime. If a bundler pre-bundles
 this module graph, Worker and WASM loading breaks, so with Vite exclude it from dependency
 pre-bundling and serve it as a static vendor tree.
@@ -162,24 +162,24 @@ Names and aliases are case-insensitive. Material names keep their original spell
 
 | Index | Material name | Aliases |
 |---:|---|---|
-| 0 | `Concrete` | `cement`, `콘크리트` |
-| 1 | `Fabric` | `cloth`, `carpet`, `curtain`, `천`, `카펫` |
-| 2 | `Wood` | `timber`, `나무`, `목재` |
-| 3 | `Brick` | `bricks`, `벽돌` |
-| 4 | `ConcreteBlock` | `concrete block`, `cinder block`, `블록` |
-| 5 | `Glass` | `window`, `유리`, `창문` |
-| 6 | `Gravel` | `자갈` |
-| 7 | `GypsumBoard` | `gypsum`, `drywall`, `석고보드` |
-| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`, `rubber`, `tile`, `vinyl`, `리놀륨`, `고무` |
-| 9 | `Marble` | `대리석` |
-| 10 | `Plaster` | `회반죽`, `플라스터` |
-| 11 | `Plywood` | `합판` |
-| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`, `woodFiberboard`, `fiberboard`, `목모보드` |
-| 13 | `Snow` | `눈` |
-| 14 | `Soil` | `dirt`, `earth`, `ground`, `흙` |
-| 15 | `Steel` | `metal`, `iron`, `철`, `금속` |
-| 16 | `Stone` | `rock`, `돌` |
-| 17 | `WaterSurface` | `water`, `물` |
+| 0 | `Concrete` | `cement` |
+| 1 | `Fabric` | `cloth`, `carpet`, `curtain` |
+| 2 | `Wood` | `timber` |
+| 3 | `Brick` | `bricks` |
+| 4 | `ConcreteBlock` | `concrete block`, `cinder block` |
+| 5 | `Glass` | `window` |
+| 6 | `Gravel` | — |
+| 7 | `GypsumBoard` | `gypsum`, `drywall` |
+| 8 | `Linoleum,RubberOrAsphaltTile` | `linoleum`, `rubber`, `tile`, `vinyl` |
+| 9 | `Marble` | — |
+| 10 | `Plaster` | — |
+| 11 | `Plywood` | — |
+| 12 | `Sherdded-woodFiberborad` | `shreddedWoodFiberboard`, `woodFiberboard`, `fiberboard` |
+| 13 | `Snow` | — |
+| 14 | `Soil` | `dirt`, `earth`, `ground` |
+| 15 | `Steel` | `metal`, `iron` |
+| 16 | `Stone` | `rock` |
+| 17 | `WaterSurface` | `water` |
 | 18 | `TunableAbsorber` | `absorber` |
 | 19 | `LowVarianceTarget` | — |
 | 20 | `ConcreteBlockPainted` | `painted concrete block` |
@@ -190,7 +190,7 @@ The alias source of truth is the package's `assets/soundMaterialAlias.json`; mat
 
 ```ts
 sound.addMesh({ vertices, indices, material: 'GypsumBoard' });
-sound.addMesh({ vertices, indices, material: '유리' });   // → Glass (5)
+sound.addMesh({ vertices, indices, material: 'window' });   // → Glass (5)
 ```
 
 :::warning
@@ -238,9 +238,9 @@ await audioContext.close();
 
 ```ts
 const snap = await sound.debugSnapshot();
-snap.simplest.timing;   // { propagationMs, directMs, reflectionDiffractionMs, reverbMs, irMs, renderMs }
-snap.simplest.scene;    // { meshes, objects, sources, triangles }
-snap.simplest.render;   // { blockSequence, activeSources, exactTaps, sendTaps, totalUs }
+snap.soundtracing.timing;   // { propagationMs, directMs, reflectionDiffractionMs, reverbMs, irMs, renderMs }
+snap.soundtracing.scene;    // { meshes, objects, sources, triangles }
+snap.soundtracing.render;   // { blockSequence, activeSources, exactTaps, sendTaps, totalUs }
 
 const irs = await sound.getIRs();                               // nine-band early path IRs
 const h = await sound.renderMonoImpulseResponse(source, 2.0);   // 44.1 kHz mono pressure IR (max 30 s)
@@ -307,7 +307,7 @@ sound.setOutputEq(null);   // turn the output EQ off
 - If you never call the EQ, the engine EQ is not called, so the output is bit-identical to having no EQ. The same
   value is not sent again, and changed values are crossfaded by the engine over 20 ms.
 - An older core without EQ support fails with a message naming the engine version. The applied output EQ is in
-  `debugSnapshot().simplest.output.eq`.
+  `debugSnapshot().soundtracing.output.eq`.
 
 ## Next
 

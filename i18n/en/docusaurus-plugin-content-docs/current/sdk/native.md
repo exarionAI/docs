@@ -13,18 +13,18 @@ binary in each platform's own style; from native C/C++ you include the headers a
 
 | Platform | Binary (`Binaries/`) | Linking |
 |---|---|---|
-| Windows x64 | `Win64/Release/SimpleSTRealtime.dll` + `.lib` | Dynamic |
-| macOS (Universal) | `Mac/Release/libSimpleSTRealtime.dylib` | Dynamic |
-| Linux x86_64 | `Linux/Release/libSimpleSTRealtime.so` | Dynamic |
-| Android (arm64-v8a · armeabi-v7a · x86_64) | `Android/<ABI>/Release/libSimpleSTRealtime.so` | Dynamic (API 28+) |
-| iOS (device · simulator) | `IOS/<device\|simulator>/Release/libsimplest_static.a` | Static |
-| Web | `Web/Release/SimpleSTRealtime.mjs` + `.wasm` (pthreads) | WASM module (COOP/COEP required) |
+| Windows x64 | `Win64/Release/SoundTracingRealtime.dll` + `.lib` | Dynamic |
+| macOS (Universal) | `Mac/Release/libSoundTracingRealtime.dylib` | Dynamic |
+| Linux x86_64 | `Linux/Release/libSoundTracingRealtime.so` | Dynamic |
+| Android (arm64-v8a · armeabi-v7a · x86_64) | `Android/<ABI>/Release/libSoundTracingRealtime.so` | Dynamic (API 28+) |
+| iOS (device · simulator) | `IOS/<device\|simulator>/Release/libsoundtracing_static.a` | Static |
+| Web | `Web/Release/SoundTracingRealtime.mjs` + `.wasm` (pthreads) | WASM module (COOP/COEP required) |
 
-`SimpleSTOffline` for offline IR computation (same folder, `st_off_*`) is included as well. The headers are shared by all platforms.
+`SoundTracingOffline` for offline IR computation (same folder, `st_off_*`) is included as well. The headers are shared by all platforms.
 
 ```text
-SimpleST/
-├─ Include/SimpleST/ABI/   STRealtime.h · STOffline.h · STTypes.h
+SoundTracing/
+├─ Include/SoundTracing/ABI/   STRealtime.h · STOffline.h · STTypes.h
 ├─ Binaries/<Plat>/Release/
 ├─ Resources/HRTF/          SADIE_D2_44K_16bit_256tap.hrtfbin
 └─ Licenses/
@@ -43,7 +43,7 @@ Entity ids are per-type handles (`STMeshId` · `STObjectId` · `STSourceId` · `
 ## Minimal usage flow
 
 ```c
-#include <SimpleST/ABI/STRealtime.h>
+#include <SoundTracing/ABI/STRealtime.h>
 
 STRT_CreateOptions opt;
 st_rt_init_create_options(&opt);
@@ -105,159 +105,155 @@ st_rt_destroy(ctx);
 
 Every export of the realtime DLL (`st_rt_*`, `STRealtime.h`) and the offline DLL (`st_off_*`, `STOffline.h`), grouped by category. Expand a category and a function to see its signature, purpose, when/how to call it and on which thread, parameters and return value. Thread tags are explained in [Thread model](#thread-model); read the cause of a failed call with `st_rt_get_last_status` / `st_rt_get_last_error` (`st_off_*` for offline).
 
-:::note
-The per-function reference text is currently provided in Korean only; identifiers, signatures and value ranges are language-neutral.
-:::
+<details>
+<summary><strong>Context · runtime — creation, version · capabilities, status, idle/run, thread attributes · inventory, memory budget, timing</strong> — 24 functions</summary>
 
 <details>
-<summary><strong>컨텍스트 · 런타임 — 생성, 버전·capability, 상태, idle/run, 스레드 속성·인벤토리, 메모리 예산, 타이밍</strong> — 24개</summary>
-
-<details>
-<summary><code>st_rt_get_api_version</code> — 이 라이브러리의 ABI 버전 번호를 돌려준다</summary>
+<summary><code>st_rt_get_api_version</code> — Returns the ABI version number of this library</summary>
 
 ```c
 uint32_t st_rt_get_api_version(void);
 ```
 
-**용도** — 로드한 `SimpleSTRealtime` 라이브러리가 호스트가 컴파일한 헤더와 같은 ABI인지 판정하는 기준값입니다. 버전 문자열이 아니라 이 값으로 호환성을 판단합니다.
+**Purpose** — The reference value for deciding whether the loaded `SoundTracingRealtime` library has the same ABI as the headers the host was compiled against. Judge compatibility by this value, not by the version string.
 
-**언제·어떻게** — 라이브러리를 로드한 직후, 컨텍스트를 만들기 전에 부릅니다. 반환값을 헤더의 `ST_ABI_VERSION`과 비교해 다르면 그 라이브러리를 쓰지 않습니다. 모든 버전 스탬프 구조체의 `apiVersion` 필드에도 같은 값(`ST_ABI_VERSION`)을 넣습니다. 스레드: `[any]` — 컴파일 상수라 어느 스레드에서 불러도 되고 블록하지 않습니다.
+**When / how** — Call it right after loading the library, before creating a context. Compare the return value with `ST_ABI_VERSION` from the header and do not use the library if they differ. Put the same value (`ST_ABI_VERSION`) in the `apiVersion` field of every version-stamped struct. Thread: `[any]` — a compile-time constant, so it can be called from any thread and does not block.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| (없음) | |
+| (none) | |
 
-**반환** — 라이브러리의 ABI 버전(`ST_ABI_VERSION`, 현재 `6`). 실패하지 않습니다.
+**Returns** — The library's ABI version (`ST_ABI_VERSION`, currently `6`). Never fails.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_version_string</code> — 제품 릴리스 버전 문자열을 돌려준다</summary>
+<summary><code>st_rt_get_version_string</code> — Returns the product release version string</summary>
 
 ```c
 const char* st_rt_get_version_string(void);
 ```
 
-**용도** — 로그·진단 화면에 표시할 사람이 읽는 릴리스 버전입니다. 오프라인 라이브러리의 `st_off_get_version_string`과 같은 형태입니다.
+**Purpose** — A human-readable release version for logs and diagnostic screens. Same form as `st_off_get_version_string` in the offline library.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. ABI 호환성 판정에는 쓰지 말고 `st_rt_get_api_version`을 씁니다. 스레드: `[any]` — 어느 스레드에서나 블록 없이 호출할 수 있습니다.
+**When / how** — Can be called at any time. Do not use it to judge ABI compatibility; use `st_rt_get_api_version` instead. Thread: `[any]` — callable from any thread without blocking.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| (없음) | |
+| (none) | |
 
-**반환** — 라이브러리 안의 정적 NUL 종료 문자열. 호출자가 해제하지 않습니다.
+**Returns** — A static NUL-terminated string inside the library. The caller does not free it.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_capabilities</code> — 능력 워드 0(<code>ST_CAP_*</code>)을 돌려준다</summary>
+<summary><code>st_rt_get_capabilities</code> — Returns capability word 0 (<code>ST_CAP_*</code>)</summary>
 
 ```c
 uint64_t st_rt_get_capabilities(void);
 ```
 
-**용도** — 이 라이브러리가 어떤 기능 표면을 지원하는지 비트로 알려 줍니다. 호스트는 선택 기능(호스트 pull 렌더, 스레드 속성, IR 통계 등)을 쓰기 전에 해당 `ST_CAP_*` 비트를 확인해 기능 유무에 따라 분기합니다.
+**Purpose** — Reports, as bits, which feature surfaces this library supports. Before using an optional feature (host pull rendering, thread attributes, IR statistics, etc.), the host checks the corresponding `ST_CAP_*` bit and branches on whether the feature is present.
 
-**언제·어떻게** — 컨텍스트 없이 언제든 부를 수 있습니다. `st_rt_get_capability_word(0)`과 같은 값입니다. 워드 0의 비트는 `ST_CAP_*` 이름만 해당하며, `ST_CAP1_*` 비트는 반드시 `st_rt_get_capability_word(1)`로 확인합니다(같은 자리 번호라도 워드마다 뜻이 다릅니다). 다음 자리는 옛 능력의 결번이라 절대 세워지지 않습니다: `ST_CAP_RETIRED_MASK`(8·9·10·13·18·20·21·25). 스레드: `[any]` — 컴파일 상수입니다.
+**When / how** — Can be called at any time without a context. Same value as `st_rt_get_capability_word(0)`. Bits in word 0 correspond only to `ST_CAP_*` names; always check `ST_CAP1_*` bits with `st_rt_get_capability_word(1)` (the same bit position means different things in different words). The following positions are retired slots of old capabilities and are never set: `ST_CAP_RETIRED_MASK` (8 · 9 · 10 · 13 · 18 · 20 · 21 · 25). Thread: `[any]` — a compile-time constant.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| (없음) | |
+| (none) | |
 
-**반환** — 능력 워드 0의 64비트 마스크. 비트 63 `ST_CAP_CAPABILITY_WORDS`가 서 있으면 `st_rt_get_capability_word`로 워드 1 이상을 읽을 수 있습니다.
+**Returns** — The 64-bit mask of capability word 0. If bit 63 `ST_CAP_CAPABILITY_WORDS` is set, words 1 and above can be read with `st_rt_get_capability_word`.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_capability_word</code> — 지정한 번호의 능력 워드를 돌려준다</summary>
+<summary><code>st_rt_get_capability_word</code> — Returns the capability word with the given number</summary>
 
 ```c
 uint64_t st_rt_get_capability_word(uint32_t word);
 ```
 
-**용도** — 워드 0의 64자리가 모두 찼기 때문에 새 능력은 워드 1부터 `ST_CAP<n>_*` 이름으로 추가됩니다. 이 함수로 워드 번호를 지정해 읽습니다.
+**Purpose** — All 64 positions of word 0 are taken, so new capabilities are added from word 1 onward under `ST_CAP<n>_*` names. This function reads a word by its number.
 
-**언제·어떻게** — 컨텍스트 없이 언제든 부를 수 있습니다. 먼저 `st_rt_get_capabilities()`에 `ST_CAP_CAPABILITY_WORDS`(비트 63)가 있는지 확인합니다. 예를 들어 엔진 쉼(`st_rt_idle`/`st_rt_run`)은 `st_rt_get_capability_word(1) & ST_CAP1_ENGINE_IDLE`, 음원 메모리 예산은 `ST_CAP1_MEMORY_BUDGET`(워드 1의 비트 63)로 확인합니다. 서로 다른 워드의 비트를 섞어 AND 하지 않습니다. 스레드: `[any]` — 컴파일 상수입니다.
+**When / how** — Can be called at any time without a context. First check that `st_rt_get_capabilities()` has `ST_CAP_CAPABILITY_WORDS` (bit 63). For example, engine idle (`st_rt_idle`/`st_rt_run`) is checked with `st_rt_get_capability_word(1) & ST_CAP1_ENGINE_IDLE`, and the source memory budget with `ST_CAP1_MEMORY_BUDGET` (bit 63 of word 1). Do not AND bits from different words together. Thread: `[any]` — a compile-time constant.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `word` | 워드 번호. `0` = `st_rt_get_capabilities()`와 같은 값(`ST_CAP_*`), `1` = `ST_CAP1_*`. 헤더가 아는 워드 수는 `ST_CAPABILITY_WORD_COUNT`(현재 `2`) |
+| `word` | Word number. `0` = same value as `st_rt_get_capabilities()` (`ST_CAP_*`), `1` = `ST_CAP1_*`. The number of words the header knows is `ST_CAPABILITY_WORD_COUNT` (currently `2`) |
 
-**반환** — 해당 워드의 64비트 마스크. 모르는 워드(`word ≥ ST_CAPABILITY_WORD_COUNT`)는 `0`(= 그 능력 없음)입니다.
+**Returns** — The 64-bit mask of that word. An unknown word (`word ≥ ST_CAPABILITY_WORD_COUNT`) returns `0` (= no such capability).
 
 </details>
 
 <details>
-<summary><code>st_rt_get_sample_rate</code> — 엔진 내부 샘플레이트를 돌려준다</summary>
+<summary><code>st_rt_get_sample_rate</code> — Returns the engine's internal sample rate</summary>
 
 ```c
 int st_rt_get_sample_rate(void);
 ```
 
-**용도** — 엔진이 내부적으로 쓰는 고정 샘플레이트를 알려 줍니다. 호스트 오디오가 다른 레이트로 돈다면 `STRT_CreateOptions.hostSampleRate`로 엔진이 경계에서 변환하게 합니다.
+**Purpose** — Reports the fixed sample rate the engine uses internally. If the host audio runs at a different rate, use `STRT_CreateOptions.hostSampleRate` so the engine converts at the boundary.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[any]` — 컴파일 상수입니다.
+**When / how** — Can be called at any time. Thread: `[any]` — a compile-time constant.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| (없음) | |
+| (none) | |
 
-**반환** — `44100`(Hz, 고정).
+**Returns** — `44100` (Hz, fixed).
 
 </details>
 
 <details>
-<summary><code>st_rt_set_thread_attributes</code> — 엔진 스레드 종류별 우선순위·코어 선호·affinity를 지정한다</summary>
+<summary><code>st_rt_set_thread_attributes</code> — Sets priority · core preference · affinity per engine thread type</summary>
 
 ```c
 int st_rt_set_thread_attributes(int threadType, const STThreadAttributes* attributes);
 ```
 
-**용도** — 게임·미들웨어 호스트가 자기 스레드 배치 정책에 맞춰 엔진이 만드는 스레드의 우선순위·코어 선호·affinity를 종류별로 지정합니다(FMOD `Thread_SetAttributes`와 같은 역할). 컨텍스트와 무관한 **프로세스 전역** 표이며, Realtime 라이브러리와 Offline 라이브러리는 각자 자기 표를 가집니다 — 두 라이브러리를 함께 쓰면 `st_rt_`와 `st_off_` 양쪽에 같은 값을 지정해야 합니다.
+**Purpose** — Lets a game or middleware host set, per type, the priority · core preference · affinity of the threads the engine creates to match its own thread-placement policy (same role as FMOD `Thread_SetAttributes`). It is a **process-global** table independent of any context, and the Realtime and Offline libraries each have their own table — when both libraries are used together, set the same values on both `st_rt_` and `st_off_`.
 
-**언제·어떻게** — **`st_rt_create` 전에** 부르는 것이 계약입니다. 이미 시작된 스레드에는 소급되지 않고, 이후 생기는 스레드(다음 `st_rt_create`, 다음 `st_rt_render_start`, 다음 파일 입력 부착)부터 적용됩니다. 실제 OS 스레드가 있는 종류는 `ST_THREAD_COMPUTE_POOL`(계산 풀) · `ST_THREAD_AUDIO_RENDER`(렌더 스레드) · `ST_THREAD_FILE_DECODER`(파일 디코더) 셋뿐이고, 나머지 값은 공유 계산 풀 위에서 도는 논리 역할이라 저장만 되고 물리 스레드에는 적용되지 않습니다 — 계산 작업의 정책은 `ST_THREAD_COMPUTE_POOL`로 지정합니다. `ST_THREAD_PRIORITY_DEFAULT`는 플랫폼 기본표를 그대로 쓰므로, affinity나 코어 선호만 지정해도 오디오 렌더 스레드의 기본 우선순위 승격은 유지됩니다. 명시 우선순위를 주면 그 값이 대신 적용됩니다. 스레드: `[any]` — 프로세스 전역 표를 짧은 뮤텍스 하나로 갱신합니다.
+**When / how** — The contract is to call it **before `st_rt_create`**. It is not retroactive for threads already started; it applies from threads created afterwards (the next `st_rt_create`, the next `st_rt_render_start`, the next file-input attach). Only three types have real OS threads: `ST_THREAD_COMPUTE_POOL` (compute pool) · `ST_THREAD_AUDIO_RENDER` (render thread) · `ST_THREAD_FILE_DECODER` (file decoder); the other values are logical roles that run on the shared compute pool, so they are only stored and not applied to physical threads — set the policy for compute work with `ST_THREAD_COMPUTE_POOL`. `ST_THREAD_PRIORITY_DEFAULT` uses the platform default table as is, so setting only affinity or core preference keeps the default priority boost of the audio render thread. An explicit priority is applied instead when given. Thread: `[any]` — updates the process-global table under one short mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `threadType` | `STThreadType` 값 `0`~`10`(아래 표). 범위 밖이면 `0` |
-| `attributes` | 요청값. 호출자가 `structSize = sizeof(STThreadAttributes)`, `apiVersion = ST_ABI_VERSION`을 채운다. `NULL`이면 그 종류를 기본값으로 되돌린다(리셋) |
+| `threadType` | `STThreadType` value `0`–`10` (table below). Out of range returns `0` |
+| `attributes` | Requested values. The caller fills `structSize = sizeof(STThreadAttributes)`, `apiVersion = ST_ABI_VERSION`. `NULL` resets that type to the default |
 
-**구조체** `STThreadAttributes`
+**Struct** `STThreadAttributes`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` | `sizeof(STThreadAttributes)` |
 | `apiVersion` | `ST_ABI_VERSION` |
-| `priority` | `STThreadPriority`(아래 표). 기본 `ST_THREAD_PRIORITY_DEFAULT`(0) |
-| `flags` | `ST_THREAD_FLAG_*` 조합. 기본 `0` |
-| `affinityMask` | 논리 프로세서 비트마스크, `0` = 지정 없음. **Windows만 존중**합니다. 프로세스 마스크의 부분집합이 아니면 커널이 거절합니다. 64 논리 프로세서를 넘는 머신에서는 현재 프로세서 그룹 안에서만 해석됩니다 |
-| `reserved[4]` | 모두 `0`이어야 합니다 |
+| `priority` | `STThreadPriority` (table below). Default `ST_THREAD_PRIORITY_DEFAULT` (0) |
+| `flags` | Combination of `ST_THREAD_FLAG_*`. Default `0` |
+| `affinityMask` | Logical processor bitmask, `0` = unspecified. **Honored on Windows only**. The kernel rejects it if it is not a subset of the process mask. On machines with more than 64 logical processors it is interpreted only within the current processor group |
+| `reserved[4]` | Must all be `0` |
 
-모든 필드가 `0`(DEFAULT · flags 0 · affinity 0)이면 "지정 없음"과 같습니다.
+All fields `0` (DEFAULT · flags 0 · affinity 0) is the same as "unspecified".
 
-**열거형** `STThreadType`
+**Enum** `STThreadType`
 
-| 값 | 이름 | 의미 |
+| Value | Name | Meaning |
 |---|---|---|
-| `0` | `ST_THREAD_LANE_DIRECT` | 논리 역할: direct 전파 작업(전용 스레드 없음) |
-| `1` | `ST_THREAD_LANE_GUIDE` | 논리 역할: guide 작업 |
-| `2` | `ST_THREAD_LANE_REFLECTION_DIFFRACTION` | 논리 역할: 반사/회절 작업 |
-| `3` | `ST_THREAD_LANE_REVERB` | 논리 역할: 잔향 작업 |
-| `4` | `ST_THREAD_COMPUTE_POOL` | 실제 스레드: 계산 풀 워커. PIPELINED는 `max(3,N)−1`개(Direct 전용 1개 포함), SYNCHRONOUS는 `N>1`일 때 `N`개 |
-| `5` | `ST_THREAD_AUDIO_RENDER` | 실제 스레드: `st_rt_render_start`가 여는 렌더 스레드(`HOST_PULL` 모드에는 없음) |
-| `6` | `ST_THREAD_FILE_DECODER` | 실제 스레드: 파일 디코더, 엔진당 최대 1개 |
-| `7` | `ST_THREAD_ACCEL_BUILD` | 예약값. 가속구조 빌드는 호출 스레드에서 실행되어 별도 워커가 없음 |
-| `8` | `ST_THREAD_IR_CONVERTER` | 논리 역할: IR 변환 작업 |
-| `9` | `ST_THREAD_AU_PREPARE` | 논리 역할: IR 준비 작업 |
-| `10` | `ST_THREAD_SCENE_INPUT` | 논리 역할: 씬 입력 작업 |
-| `11` | `ST_THREAD_TYPE_COUNT` | 종류 수(인자로 쓰지 않음) |
+| `0` | `ST_THREAD_LANE_DIRECT` | Logical role: direct propagation work (no dedicated thread) |
+| `1` | `ST_THREAD_LANE_GUIDE` | Logical role: guide work |
+| `2` | `ST_THREAD_LANE_REFLECTION_DIFFRACTION` | Logical role: reflection/diffraction work |
+| `3` | `ST_THREAD_LANE_REVERB` | Logical role: reverb work |
+| `4` | `ST_THREAD_COMPUTE_POOL` | Real thread: compute pool workers. PIPELINED has `max(3,N)−1` (including 1 dedicated to Direct), SYNCHRONOUS has `N` when `N>1` |
+| `5` | `ST_THREAD_AUDIO_RENDER` | Real thread: the render thread opened by `st_rt_render_start` (absent in `HOST_PULL` mode) |
+| `6` | `ST_THREAD_FILE_DECODER` | Real thread: file decoder, at most 1 per engine |
+| `7` | `ST_THREAD_ACCEL_BUILD` | Reserved. Acceleration-structure builds run on the calling thread, so there is no separate worker |
+| `8` | `ST_THREAD_IR_CONVERTER` | Logical role: IR conversion work |
+| `9` | `ST_THREAD_AU_PREPARE` | Logical role: IR preparation work |
+| `10` | `ST_THREAD_SCENE_INPUT` | Logical role: scene input work |
+| `11` | `ST_THREAD_TYPE_COUNT` | Number of types (not used as an argument) |
 
-**열거형** `STThreadPriority`
+**Enum** `STThreadPriority`
 
-| 값 | 이름 | Windows | macOS QoS |
+| Value | Name | Windows | macOS QoS |
 |---|---|---|---|
-| `0` | `ST_THREAD_PRIORITY_DEFAULT` | 플랫폼 기본표 그대로 | 플랫폼 기본표 그대로 |
+| `0` | `ST_THREAD_PRIORITY_DEFAULT` | Platform default table as is | Platform default table as is |
 | `1` | `ST_THREAD_PRIORITY_LOW` | LOWEST | BACKGROUND |
 | `2` | `ST_THREAD_PRIORITY_BELOW_NORMAL` | BELOW_NORMAL | UTILITY |
 | `3` | `ST_THREAD_PRIORITY_NORMAL` | NORMAL | USER_INITIATED |
@@ -265,179 +261,179 @@ int st_rt_set_thread_attributes(int threadType, const STThreadAttributes* attrib
 | `5` | `ST_THREAD_PRIORITY_HIGH` | HIGHEST | USER_INTERACTIVE |
 | `6` | `ST_THREAD_PRIORITY_TIME_CRITICAL` | TIME_CRITICAL | USER_INTERACTIVE |
 
-**플래그** `ST_THREAD_FLAG_*`
+**Flags** `ST_THREAD_FLAG_*`
 
-| 플래그 | 의미 |
+| Flag | Meaning |
 |---|---|
-| `ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES` (`1u << 0`) | 성능 코어 선호 |
-| `ST_THREAD_FLAG_PREFER_EFFICIENCY_CORES` (`1u << 1`) | 효율 코어 선호 |
+| `ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES` (`1u << 0`) | Prefer performance cores |
+| `ST_THREAD_FLAG_PREFER_EFFICIENCY_CORES` (`1u << 1`) | Prefer efficiency cores |
 
-코어 선호는 Windows 11 EcoQoS로 적용되며 macOS에서는 무시됩니다(QoS 클래스가 클러스터 배치를 정합니다). 두 플래그를 동시에 켜면 거절됩니다.
+Core preference is applied via Windows 11 EcoQoS and ignored on macOS (the QoS class decides cluster placement). Setting both flags at once is rejected.
 
-**반환** — `1` = 성공 / `0` = 실패(`threadType` 범위 밖, `structSize`/`apiVersion` 불일치, `priority` 범위 밖, 코어 선호 플래그 상충, `reserved[]`가 0이 아님). 실패 시 표는 바뀌지 않습니다. 컨텍스트를 받지 않으므로 `st_rt_get_last_status`에는 아무것도 남지 않습니다.
+**Returns** — `1` = success / `0` = failure (`threadType` out of range, `structSize`/`apiVersion` mismatch, `priority` out of range, conflicting core-preference flags, `reserved[]` not zero). On failure the table is unchanged. It takes no context, so nothing is left in `st_rt_get_last_status`.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_thread_attributes</code> — 스레드 종류별로 저장된 속성 요청값을 읽는다</summary>
+<summary><code>st_rt_get_thread_attributes</code> — Reads the stored attribute request for a thread type</summary>
 
 ```c
 int st_rt_get_thread_attributes(int threadType, STThreadAttributes* outAttributes);
 ```
 
-**용도** — `st_rt_set_thread_attributes`로 저장한 값을 확인합니다. 실제로 OS에 적용된 값이 아니라 **요청값 그대로**를 돌려줍니다.
+**Purpose** — Checks the values stored with `st_rt_set_thread_attributes`. Returns **the requested values as is**, not the values actually applied by the OS.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 한 번도 지정하지 않은 종류는 기본값(priority `DEFAULT` · flags `0` · affinityMask `0`)을 돌려줍니다. 스레드: `[any]` — 프로세스 전역 표를 짧은 뮤텍스 하나로 읽습니다.
+**When / how** — Can be called at any time. A type that was never set returns the defaults (priority `DEFAULT` · flags `0` · affinityMask `0`). Thread: `[any]` — reads the process-global table under one short mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `threadType` | `STThreadType` 값 `0`~`10`. 범위 밖이면 `0` |
-| `outAttributes` | 출력. 호출자가 `structSize = sizeof(STThreadAttributes)`, `apiVersion = ST_ABI_VERSION`을 채운다. 성공 시 `priority`·`flags`·`affinityMask`가 채워지고 `reserved[]`는 0이 된다 |
+| `threadType` | `STThreadType` value `0`–`10`. Out of range returns `0` |
+| `outAttributes` | Output. The caller fills `structSize = sizeof(STThreadAttributes)`, `apiVersion = ST_ABI_VERSION`. On success `priority` · `flags` · `affinityMask` are filled and `reserved[]` is zeroed |
 
-`STThreadAttributes` 필드는 `st_rt_set_thread_attributes` 항목 참고.
+See the `st_rt_set_thread_attributes` entry for the `STThreadAttributes` fields.
 
-**반환** — `1` = 성공 / `0` = 거절(`outAttributes`가 `NULL`, 스탬프 불일치, `threadType` 범위 밖).
+**Returns** — `1` = success / `0` = rejected (`outAttributes` is `NULL`, stamp mismatch, `threadType` out of range).
 
 </details>
 
 <details>
-<summary><code>st_rt_init_create_options</code> — 생성 옵션 구조체를 기본값으로 채운다</summary>
+<summary><code>st_rt_init_create_options</code> — Fills the creation options struct with defaults</summary>
 
 ```c
 void st_rt_init_create_options(STRT_CreateOptions* outOptions);
 ```
 
-**용도** — `STRT_CreateOptions`를 올바른 버전 스탬프와 기본값으로 초기화합니다. 호스트는 이 함수로 채운 뒤 필요한 필드만 바꿔 `st_rt_create`에 넘깁니다. 이렇게 하면 이후 추가되는 필드도 안전한 기본값(0)으로 채워집니다.
+**Purpose** — Initializes `STRT_CreateOptions` with the correct version stamp and defaults. The host fills it with this function, changes only the fields it needs and passes it to `st_rt_create`. This way fields added later are also filled with safe defaults (0).
 
-**언제·어떻게** — `st_rt_create` 직전에 부릅니다. `structSize`와 `apiVersion`이 자동으로 채워지고, `scheduler`는 `ST_RT_SCHEDULER_PIPELINED`, 나머지 필드는 모두 `0`(각 필드의 "기본" 의미)입니다. 스레드: `[any]` — 호출자 소유 구조체만 채웁니다.
+**When / how** — Call it right before `st_rt_create`. `structSize` and `apiVersion` are filled automatically, `scheduler` is `ST_RT_SCHEDULER_PIPELINED`, and every other field is `0` (each field's "default" meaning). Thread: `[any]` — only fills a caller-owned struct.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `outOptions` | 채울 구조체. `NULL`이면 아무 일도 하지 않는다 |
+| `outOptions` | Struct to fill. `NULL` does nothing |
 
-**구조체** `STRT_CreateOptions`
+**Struct** `STRT_CreateOptions`
 
-| 필드 | 형 | 기본 | 설명 |
+| Field | Type | Default | Description |
 |---|---|---|---|
-| `structSize` | `uint32_t` | `sizeof(STRT_CreateOptions)` | 버전 스탬프. 다르면 생성 거절 |
-| `apiVersion` | `uint32_t` | `ST_ABI_VERSION` | 버전 스탬프. 다르면 생성 거절 |
-| `scheduler` | `int32_t` | `ST_RT_SCHEDULER_PIPELINED`(1) | `STRT_Scheduler`. `PIPELINED`(1) = 엔진 워커가 전파·IR을 백그라운드에서 최신 프레임 우선으로 계산하는 실시간 기본 모드. `SYNCHRONOUS`(0) = 호스트가 `st_rt_propagate`를 부르는 스레드에서 파이프라인이 도는 동기 모드(진단·호환용). 생성 후 바꿀 수 없음(`st_rt_get_scheduler`) |
-| `seedValue` | `uint32_t` | `0` | 호환용 필드. 기본 백엔드의 출력에는 영향이 없습니다 |
-| `maxDelaySeconds` | `float` | `0` | 렌더 지연 링 길이(초). `0` = 플랫폼 기본(데스크톱 2.0 s, Android·iOS 1.0 s, Emscripten 0.5 s). 그 외 값은 약 0.0118 s(한 처리 블록 + 8샘플)~60 s, 유한값이어야 함. 생성 후에는 `st_rt_render_set_max_delay_seconds`로 바꿉니다 |
-| `maxComputeThreads` | `uint32_t` | `0` | 전파·IR 계산에 쓸 스레드 수 상한 = 엔진 소유 공유 계산 풀의 폭. `0` = 자동 = `min(퍼포먼스 코어 수, 6)`, 최소 1. 환경변수의 영향을 받지 않습니다. PIPELINED에서는 예산 `N`이 최소 3으로 올려지고 오디오 슬롯 1 + Direct 전용 워커 1 + 일반 워커 `N−2`로 나뉩니다(아래 `st_rt_create`의 스레드 수 표). 지원 여부는 `ST_CAP_MAX_COMPUTE_THREADS` |
-| `sceneRatio` | `float` | `0` | 씬 단위 → 미터 변환 인자. `0` = 기본 1.0(씬 단위 = 미터). 센티미터 호스트는 `0.01f`, 피트 호스트는 `0.3048f`. **생성 전용**이라 런타임 setter가 없습니다. 비유한값·0 이하 값은 거절. 지원 여부는 `ST_CAP_SCENE_RATIO` |
-| `renderOutputMode` | `int32_t` | `ST_RT_RENDER_OUTPUT_DEVICE`(0) | `STRT_RenderOutputMode`(아래 표). 범위 밖은 거절. 지원 여부는 `ST_CAP_HOST_PULL_RENDER` / `ST_CAP_HOST_PULL_BUFFERED` |
-| `hostSampleRate` | `int32_t` | `0` | 호스트 샘플레이트. `0` = 엔진 레이트(44100) — 리샘플러를 만들지 않습니다. 그 외 값이면 엔진이 내장 윈도 sinc 변환기로 스트림 입력(`st_rt_source_write_stream`)과 pull 출력(`st_rt_render_process`)을 변환하며, 공개 API에서 "프레임" 단위로 나오는 값(`write_stream`·`render_process`·`render_get_latency_frames`·`STStreamDesc.capacityFrames`·`STStreamStatus`)이 **전부 이 레이트**가 됩니다. 허용 범위 `[8000, 384000]`. `DEVICE` 모드에서 0이 아닌 값은 거절(장치 경로는 엔진 레이트 고정). 지원 여부는 `ST_CAP_HOST_SAMPLE_RATE` |
-| `backend` | `int32_t` | `ST_BACKEND_ST`(0) | `STBackend` 파이프라인 선택. `ST_BACKEND_ST`(0)이 기본 엔진입니다. `ST_BACKEND_EXA`(1)는 라이브러리가 `ST_CAP_BACKEND_EXA`를 광고할 때만 쓸 수 있고 `SYNCHRONOUS` 스케줄러와 `maxDelaySeconds = 0`이 필요합니다. 그 밖·사용 불가 값은 거절 |
-| `startIdle` | `uint32_t` | `0` | `0` = 생성 직후 `RUNNING`, `1` = 생성 직후 `IDLE` — 호스트가 `st_rt_run`을 불러야 전파·IR·렌더가 돕니다(들려줄 것이 없을 때 계산이 공회전하지 않게). 그 밖 값은 거절. 지원 여부는 `ST_CAP1_ENGINE_IDLE` |
-| `maxSources` | `uint32_t` | `0` | 최대 음원 수. `0` = 플랫폼 기본(데스크톱 128, Android·iOS 48, Emscripten 32). 생성 후에는 `st_rt_set_memory_budget`으로 바꿉니다. 지원 여부는 `ST_CAP1_MEMORY_BUDGET` |
+| `structSize` | `uint32_t` | `sizeof(STRT_CreateOptions)` | Version stamp. Creation is rejected on mismatch |
+| `apiVersion` | `uint32_t` | `ST_ABI_VERSION` | Version stamp. Creation is rejected on mismatch |
+| `scheduler` | `int32_t` | `ST_RT_SCHEDULER_PIPELINED`(1) | `STRT_Scheduler`. `PIPELINED`(1) = the real-time default mode in which engine workers compute propagation and IRs in the background, latest frame first. `SYNCHRONOUS`(0) = synchronous mode in which the pipeline runs on the thread where the host calls `st_rt_propagate` (for diagnostics and compatibility). Cannot be changed after creation (`st_rt_get_scheduler`) |
+| `seedValue` | `uint32_t` | `0` | Compatibility field. Has no effect on the default backend's output |
+| `maxDelaySeconds` | `float` | `0` | Render delay ring length (seconds). `0` = platform default (desktop 2.0 s, Android · iOS 1.0 s, Emscripten 0.5 s). Other values range from about 0.0118 s (one processing block + 8 samples) to 60 s and must be finite. After creation, change it with `st_rt_render_set_max_delay_seconds` |
+| `maxComputeThreads` | `uint32_t` | `0` | Upper limit on threads used for propagation and IR computation = width of the engine-owned shared compute pool. `0` = auto = `min(performance cores, 6)`, at least 1. Not influenced by environment variables. In PIPELINED the budget `N` is raised to at least 3 and split into 1 audio slot + 1 worker dedicated to Direct + `N−2` general workers (thread-count table under `st_rt_create` below). Support is indicated by `ST_CAP_MAX_COMPUTE_THREADS` |
+| `sceneRatio` | `float` | `0` | Scene unit → meter conversion factor. `0` = default 1.0 (scene unit = meter). Centimeter hosts use `0.01f`, foot hosts `0.3048f`. **Creation-only**, so there is no runtime setter. Non-finite values and values ≤ 0 are rejected. Support is indicated by `ST_CAP_SCENE_RATIO` |
+| `renderOutputMode` | `int32_t` | `ST_RT_RENDER_OUTPUT_DEVICE`(0) | `STRT_RenderOutputMode` (table below). Out of range is rejected. Support is indicated by `ST_CAP_HOST_PULL_RENDER` / `ST_CAP_HOST_PULL_BUFFERED` |
+| `hostSampleRate` | `int32_t` | `0` | Host sample rate. `0` = engine rate (44100) — no resampler is created. Any other value makes the engine convert stream input (`st_rt_source_write_stream`) and pull output (`st_rt_render_process`) with its built-in windowed-sinc converter, and every value the public API expresses in "frames" (`write_stream` · `render_process` · `render_get_latency_frames` · `STStreamDesc.capacityFrames` · `STStreamStatus`) is **all at this rate**. Allowed range `[8000, 384000]`. A nonzero value is rejected in `DEVICE` mode (the device path is fixed to the engine rate). Support is indicated by `ST_CAP_HOST_SAMPLE_RATE` |
+| `backend` | `int32_t` | `ST_BACKEND_ST`(0) | `STBackend` pipeline selection. `ST_BACKEND_ST`(0) is the default engine. `ST_BACKEND_EXA`(1) is usable only when the library advertises `ST_CAP_BACKEND_EXA`, and requires the `SYNCHRONOUS` scheduler and `maxDelaySeconds = 0`. Other or unavailable values are rejected |
+| `startIdle` | `uint32_t` | `0` | `0` = `RUNNING` right after creation, `1` = `IDLE` right after creation — propagation · IR · rendering run only after the host calls `st_rt_run` (so computation does not spin when there is nothing to play). Other values are rejected. Support is indicated by `ST_CAP1_ENGINE_IDLE` |
+| `maxSources` | `uint32_t` | `0` | Maximum number of sources. `0` = platform default (desktop 128, Android · iOS 48, Emscripten 32). After creation, change it with `st_rt_set_memory_budget`. Support is indicated by `ST_CAP1_MEMORY_BUDGET` |
 
-**열거형** `STRT_RenderOutputMode`
+**Enum** `STRT_RenderOutputMode`
 
-| 값 | 이름 | 의미 |
+| Value | Name | Meaning |
 |---|---|---|
-| `0` | `ST_RT_RENDER_OUTPUT_DEVICE` | 기본. `st_rt_render_start`가 출력 장치와 엔진 렌더 스레드를 열고 엔진이 장치까지 직접 출력합니다 |
-| `1` | `ST_RT_RENDER_OUTPUT_HOST_PULL` | 호스트 pull. 엔진은 장치도 렌더 스레드도 만들지 않고, 호스트가 자기 오디오 스레드에서 `st_rt_render_process`를 불러 블록을 가져갑니다. 이 모드에서도 `st_rt_render_start(useHrtf)`는 반드시 불러야 합니다(바이노럴/스피커 선택과 "렌더 허용" 플래그를 겸함) |
-| `2` | `ST_RT_RENDER_OUTPUT_HOST_PULL_BUFFERED` | 엔진 렌더 스레드가 링(8블록 용량·3블록 목표)을 채우고 `st_rt_render_process`는 링에서 복사만 합니다. 호스트 콜백 비용이 memcpy 수준으로 내려가고 지터는 링이 흡수합니다. 블록 처리 자체가 계속 블록 시간을 넘으면 링도 막지 못하며 무음으로 채워집니다. 지연 상한 ≈ 엔진 3블록. `hostSampleRate ≠ 0`이면 변환은 렌더 스레드에서 합니다 |
+| `0` | `ST_RT_RENDER_OUTPUT_DEVICE` | Default. `st_rt_render_start` opens the output device and the engine render thread, and the engine outputs directly to the device |
+| `1` | `ST_RT_RENDER_OUTPUT_HOST_PULL` | Host pull. The engine creates neither a device nor a render thread; the host calls `st_rt_render_process` on its own audio thread to take blocks. `st_rt_render_start(useHrtf)` must still be called in this mode (it doubles as the binaural/speaker choice and the "render enabled" flag) |
+| `2` | `ST_RT_RENDER_OUTPUT_HOST_PULL_BUFFERED` | The engine render thread fills a ring (8-block capacity · 3-block target) and `st_rt_render_process` only copies from the ring. The host callback cost drops to memcpy level and the ring absorbs jitter. If block processing itself keeps exceeding the block time, the ring cannot prevent it either and silence is filled in. Latency bound ≈ 3 engine blocks. When `hostSampleRate ≠ 0`, conversion is done on the render thread |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_create</code> — 실시간 컨텍스트(엔진·워커·계산 풀)를 만든다</summary>
+<summary><code>st_rt_create</code> — Creates a real-time context (engine · workers · compute pool)</summary>
 
 ```c
 STStatus st_rt_create(const STRT_CreateOptions* options, STRT_Context** outContext);
 ```
 
-**용도** — 실시간 엔진 인스턴스 하나를 만듭니다. 씬·소스·리스너·렌더 등 다른 모든 `st_rt_*` 호출은 이 컨텍스트를 받습니다. 스케줄러·계산 스레드 폭·단위 배율·출력 모드·호스트 샘플레이트처럼 실행 중에 바꿀 수 없는 설정은 여기서 확정됩니다.
+**Purpose** — Creates one real-time engine instance. Every other `st_rt_*` call (scene, source, listener, render, etc.) takes this context. Settings that cannot change at runtime — scheduler, compute thread width, unit scale, output mode, host sample rate — are fixed here.
 
-**언제·어떻게** — 스레드 속성(`st_rt_set_thread_attributes`)을 쓰려면 그보다 먼저 지정한 뒤 부릅니다. `st_rt_init_create_options`로 옵션을 채우고 필요한 필드만 바꿔 넘깁니다. 성공하면 씬 구성(메시·오브젝트·소스·리스너) → `st_rt_build` → `st_rt_render_start` 순으로 진행하고, 끝나면 `st_rt_destroy`로 해제합니다. 생성 직후 상태는 PIPELINED 스케줄러, 샘플레이트 44100 Hz, 레인 갱신 주기 direct 10 ms / 반사·회절 0 ms / 잔향 4 ms, 엔진 쉼 `RUNNING`(`startIdle = 1`이면 `IDLE`)이며, 기본 백엔드 컨텍스트는 출력단 등라우드니스 보정이 켜진 상태로 시작합니다(`st_rt_render_set_loudness_compensation`으로 끌 수 있습니다). 스레드: `[control, blocking]` — 엔진·워커·계산 풀을 만드는 긴 구간이라 게임 루프나 오디오 스레드에서 부르지 않습니다.
+**When / how** — To use thread attributes (`st_rt_set_thread_attributes`), set them before calling this. Fill the options with `st_rt_init_create_options`, change only the fields you need and pass them in. On success proceed with scene setup (meshes · objects · sources · listener) → `st_rt_build` → `st_rt_render_start`, and release with `st_rt_destroy` when done. The state right after creation is the PIPELINED scheduler, sample rate 44100 Hz, lane update intervals direct 10 ms / reflection · diffraction 0 ms / reverb 4 ms, engine idle state `RUNNING` (`IDLE` if `startIdle = 1`), and a default-backend context starts with output-stage loudness compensation enabled (it can be disabled with `st_rt_render_set_loudness_compensation`). Thread: `[control, blocking]` — a long section that creates the engine, workers and compute pool, so do not call it from the game loop or the audio thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `options` | 생성 옵션. `NULL`이면 `st_rt_init_create_options`의 기본값으로 만든다. 직접 채울 때는 `structSize`/`apiVersion` 스탬프가 맞아야 한다 |
-| `outContext` | 출력 핸들. 성공하면 새 컨텍스트, 실패하면 `NULL`이 들어간다. `NULL`을 넘기면 `ST_STATUS_INVALID_ARGUMENT` |
+| `options` | Creation options. `NULL` creates with the defaults of `st_rt_init_create_options`. When filled manually, the `structSize`/`apiVersion` stamps must match |
+| `outContext` | Output handle. Receives the new context on success, `NULL` on failure. Passing `NULL` gives `ST_STATUS_INVALID_ARGUMENT` |
 
-`STRT_CreateOptions` 필드는 `st_rt_init_create_options` 항목 참고.
+See the `st_rt_init_create_options` entry for the `STRT_CreateOptions` fields.
 
-**엔진이 띄우는 스레드 수** — `N`은 SYNCHRONOUS에서는 해석된 `maxComputeThreads` 예산, PIPELINED에서는 `max(3, 해석된 예산)`입니다. 파일 입력(`st_rt_source_set_audio_file`)이 하나라도 있으면 파일 디코더 스레드 1개가 더해지고, 호스트 스트림 입력에는 디코더가 없습니다. 가속구조 빌드는 호출 스레드에서 실행되어 추가 스레드가 없습니다.
+**Threads the engine starts** — `N` is the resolved `maxComputeThreads` budget in SYNCHRONOUS, and `max(3, resolved budget)` in PIPELINED. If there is at least one file input (`st_rt_source_set_audio_file`), one file decoder thread is added; host stream input has no decoder. Acceleration-structure builds run on the calling thread and add no thread.
 
-| 출력 모드 | SYNCHRONOUS | PIPELINED |
+| Output mode | SYNCHRONOUS | PIPELINED |
 |---|---|---|
-| `DEVICE` | 풀 워커 `N`(N=1이면 0, 호출 스레드에서 인라인) + 렌더 1 + 장치 1 | 풀 워커 `N−1`(Direct 전용 1 + 일반 `N−2`) + 렌더 1 + 장치 1 |
-| `HOST_PULL` | 위에서 렌더·장치 스레드가 빠짐 | 위에서 렌더·장치 스레드가 빠짐 |
-| `HOST_PULL_BUFFERED` | 렌더 스레드만 있고 장치 스레드 없음 | 렌더 스레드만 있고 장치 스레드 없음 |
+| `DEVICE` | `N` pool workers (0 when N=1, inline on the calling thread) + 1 render + 1 device | `N−1` pool workers (1 dedicated to Direct + `N−2` general) + 1 render + 1 device |
+| `HOST_PULL` | Same as above minus the render and device threads | Same as above minus the render and device threads |
+| `HOST_PULL_BUFFERED` | Render thread only, no device thread | Render thread only, no device thread |
 
-PIPELINED의 렌더 스레드는 예산 `N` 안의 오디오 슬롯이며 우선순위만 승격됩니다. 실제 수는 `st_rt_get_thread_inventory`로 확인합니다.
+In PIPELINED the render thread is the audio slot within the budget `N`; only its priority is raised. Check the actual count with `st_rt_get_thread_inventory`.
 
-**반환** — `STStatus`.
-- `ST_STATUS_OK` — 성공.
-- `ST_STATUS_INVALID_ARGUMENT` — `outContext`가 `NULL`, 또는 옵션 값이 범위 밖(`scheduler`, `maxDelaySeconds`, `sceneRatio`, `renderOutputMode`, `hostSampleRate`, `backend`, `startIdle`).
-- `ST_STATUS_VERSION_MISMATCH` — `structSize`/`apiVersion` 불일치.
-- `ST_STATUS_INITIALIZATION_FAILED` / `ST_STATUS_ALLOCATION_FAILED` — 엔진 초기화·할당 실패.
+**Returns** — `STStatus`.
+- `ST_STATUS_OK` — success.
+- `ST_STATUS_INVALID_ARGUMENT` — `outContext` is `NULL`, or an option value is out of range (`scheduler`, `maxDelaySeconds`, `sceneRatio`, `renderOutputMode`, `hostSampleRate`, `backend`, `startIdle`).
+- `ST_STATUS_VERSION_MISMATCH` — `structSize`/`apiVersion` mismatch.
+- `ST_STATUS_INITIALIZATION_FAILED` / `ST_STATUS_ALLOCATION_FAILED` — engine initialization or allocation failed.
 
-실패 사유 문자열은 `st_rt_get_last_error(NULL, ...)`로 읽습니다(같은 호출 스레드의 마지막 실패한 생성).
+Read the failure reason string with `st_rt_get_last_error(NULL, ...)` (the last failed creation on the same calling thread).
 
 </details>
 
 <details>
-<summary><code>st_rt_get_backend</code> — 컨텍스트가 쓰는 파이프라인 백엔드를 돌려준다</summary>
+<summary><code>st_rt_get_backend</code> — Returns the pipeline backend the context uses</summary>
 
 ```c
 int st_rt_get_backend(const STRT_Context* context);
 ```
 
-**용도** — 생성 시 `STRT_CreateOptions.backend`로 선택된 파이프라인을 확인합니다. 실행 중 전환은 지원하지 않습니다.
+**Purpose** — Checks the pipeline selected at creation with `STRT_CreateOptions.backend`. Switching at runtime is not supported.
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있습니다. 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**When / how** — Can be called at any time after creation. Thread: `[control]` — call from the control thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STBackend` 값(`ST_BACKEND_ST` = 0 / `ST_BACKEND_EXA` = 1). `context`가 `NULL`이면 `-1`.
+**Returns** — An `STBackend` value (`ST_BACKEND_ST` = 0 / `ST_BACKEND_EXA` = 1). `-1` if `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_destroy</code> — 컨텍스트를 해제한다(워커 정지·join)</summary>
+<summary><code>st_rt_destroy</code> — Releases the context (stops and joins workers)</summary>
 
 ```c
 void st_rt_destroy(STRT_Context* context);
 ```
 
-**용도** — 컨텍스트와 엔진이 소유한 모든 자원(씬, 소스, 워커·계산 풀 스레드, 렌더 출력)을 해제합니다.
+**Purpose** — Releases the context and every resource the engine owns (scene, sources, worker and compute pool threads, render output).
 
-**언제·어떻게** — 컨텍스트 사용이 끝났을 때 한 번 부릅니다. 호출 뒤 핸들은 무효이므로 다른 스레드가 같은 컨텍스트를 쓰고 있지 않아야 합니다. 스레드: `[control, blocking]` — 워커를 멈추고 join하므로 오디오 스레드에서 부르지 않습니다.
+**When / how** — Call it once when you are done with the context. The handle is invalid after the call, so no other thread may be using the same context. Thread: `[control, blocking]` — stops and joins workers, so do not call it from the audio thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 해제할 컨텍스트 핸들 |
+| `context` | Context handle to release |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_last_status</code> — 컨텍스트에 남은 마지막 상태 코드를 읽는다</summary>
+<summary><code>st_rt_get_last_status</code> — Reads the last status code left in the context</summary>
 
 ```c
 STStatus st_rt_get_last_status(const STRT_Context* context);
 ```
 
-**용도** — `int`/`void`를 돌려주는 함수가 실패했을 때 그 사유를 `STStatus`로 확인합니다. 많은 함수가 실패 시 이 진단 필드에 상태를 남깁니다.
+**Purpose** — When a function returning `int`/`void` fails, checks the reason as an `STStatus`. Many functions leave a status in this diagnostic field on failure.
 
-**언제·어떻게** — 실패를 돌려받은 직후 같은 제어 스레드에서 부릅니다. 사람이 읽는 메시지는 `st_rt_get_last_error`로 얻습니다. 오디오 경로(`st_rt_render_process`)가 남긴 상태가 있으면 그것을 먼저 돌려주고 비웁니다. 같은 컨텍스트를 여러 스레드에서 동시에 쓰면 오류 경로의 진단 기록은 직렬화되지 않습니다. 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**When / how** — Call it on the same control thread right after receiving a failure. Get a human-readable message with `st_rt_get_last_error`. If there is a status left by the audio path (`st_rt_render_process`), that is returned first and cleared. If the same context is used from several threads at once, diagnostic recording on error paths is not serialized. Thread: `[control]` — call from the control thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 마지막 `STStatus`. `context`가 `NULL`이면 `ST_STATUS_INVALID_CONTEXT`.
+**Returns** — The last `STStatus`. `ST_STATUS_INVALID_CONTEXT` if `context` is `NULL`.
 
-| 값 | 이름 |
+| Value | Name |
 |---|---|
 | `0` | `ST_STATUS_OK` |
 | `1` | `ST_STATUS_INVALID_CONTEXT` |
@@ -450,7164 +446,7164 @@ STStatus st_rt_get_last_status(const STRT_Context* context);
 | `8` | `ST_STATUS_INVALID_MATERIAL` |
 | `9` | `ST_STATUS_STALE_SNAPSHOT` |
 | `10` | `ST_STATUS_UNAVAILABLE` |
-| `11` | `ST_STATUS_BUDGET_EXCEEDED` — 음원 메모리 예산 초과(`st_rt_source_create`, 거절 정책 `ST_MEMORY_REJECT_NEW`일 때) |
+| `11` | `ST_STATUS_BUDGET_EXCEEDED` — source memory budget exceeded (`st_rt_source_create`, when the policy is `ST_MEMORY_REJECT_NEW`) |
 
 </details>
 
 <details>
-<summary><code>st_rt_get_last_error</code> — 마지막 오류 메시지 문자열을 복사한다</summary>
+<summary><code>st_rt_get_last_error</code> — Copies the last error message string</summary>
 
 ```c
 int st_rt_get_last_error(const STRT_Context* context, char* outMessage, int capacity);
 ```
 
-**용도** — 마지막 실패의 사람이 읽는 설명을 얻어 로그에 남깁니다. `context`에 `NULL`을 넘기면 컨텍스트가 없는 `st_rt_create` 실패의 사유를 읽을 수 있습니다.
+**Purpose** — Gets a human-readable description of the last failure for logging. Passing `NULL` as `context` reads the reason for an `st_rt_create` failure, which has no context.
 
-**언제·어떻게** — 실패 직후 부릅니다. 필요한 크기를 먼저 알고 싶으면 `outMessage = NULL`로 불러 반환값만 받습니다. `context = NULL`일 때는 **이 호출 스레드**에서 마지막으로 실패한 `st_rt_create`의 메시지이며, 다음 `st_rt_create` 호출이 이를 지웁니다. 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**When / how** — Call it right after a failure. To learn the required size first, call with `outMessage = NULL` and take only the return value. With `context = NULL` it is the message of the last failed `st_rt_create` on **this calling thread**, and the next `st_rt_create` call clears it. Thread: `[control]` — call from the control thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들. `NULL`이면 이 스레드의 마지막 생성 실패 메시지 |
-| `outMessage` | 출력 버퍼. `NULL`이면 복사하지 않고 크기만 돌려준다 |
-| `capacity` | `outMessage` 바이트 수. 모자라면 `capacity − 1`바이트로 잘라 NUL로 끝낸다 |
+| `context` | Context handle. `NULL` = this thread's last creation-failure message |
+| `outMessage` | Output buffer. `NULL` copies nothing and returns only the size |
+| `capacity` | Bytes in `outMessage`. If too small, truncates to `capacity − 1` bytes and NUL-terminates |
 
-**반환** — 메시지 전체를 담는 데 필요한 바이트 수(NUL 포함). 반환값이 `capacity`보다 크면 잘린 것입니다.
+**Returns** — Bytes needed to hold the whole message (including NUL). If the return value is larger than `capacity`, the message was truncated.
 
 </details>
 
 <details>
-<summary><code>st_rt_is_acoustic_feature_enabled</code> — 개별 음향 기능(공기흡수·전파지연·직접음 차폐)이 켜져 있는지 읽는다</summary>
+<summary><code>st_rt_is_acoustic_feature_enabled</code> — Reads whether an individual acoustic feature (air absorption · propagation delay · direct occlusion) is enabled</summary>
 
 ```c
 int st_rt_is_acoustic_feature_enabled(const STRT_Context* context, int feature);
 ```
 
-**용도** — `st_rt_set_acoustic_feature_enabled`로 켜고 끈 음향 기능의 현재 상태를 확인합니다. 경로 종류 게이트와 함께 청취 A/B 비교(무엇이 소리에 기여하는지 하나씩 분리)에 씁니다.
+**Purpose** — Checks the current state of an acoustic feature toggled with `st_rt_set_acoustic_feature_enabled`. Used together with the path-type gates for listening A/B comparisons (isolating one by one what contributes to the sound).
 
-**언제·어떻게** — 생성 후 언제든 부릅니다. 기본은 세 기능 모두 켜짐입니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽지만 제어 스레드에서 부릅니다.
+**When / how** — Call it at any time after creation. All three features are enabled by default. Thread: `[control]` — reads engine state without a lock but is called from the control thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION`(0, 대기 감쇠·고역 손실) / `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY`(1, 경로 길이 기반 전파 지연) / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION`(2, 직접음 차폐) |
+| `context` | Context handle |
+| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION` (0, atmospheric attenuation · high-frequency loss) / `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY` (1, propagation delay from path length) / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION` (2, direct-sound occlusion) |
 
-**반환** — `1` = 켜짐 / `0` = 꺼짐 / `-1` = `context`가 `NULL`.
+**Returns** — `1` = enabled / `0` = disabled / `-1` = `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_idle</code> — 엔진 전체를 쉬게 한다(계산 정지 후 렌더가 꼬리를 낸 뒤 무음)</summary>
+<summary><code>st_rt_idle</code> — Idles the whole engine (computation stops, render plays out the tail, then silence)</summary>
 
 ```c
 int st_rt_idle(STRT_Context* context);
 ```
 
-**용도** — 들려줄 것이 없을 때(재생 정지·일시정지·방 없음) 전파·IR 계산과 렌더 처리를 멈춰 CPU를 돌려받습니다. 캐시와 평활 이력은 보존되므로 `st_rt_run`으로 깨우면 이어서 계산합니다.
+**Purpose** — When there is nothing to play (playback stopped · paused · no room), stops propagation · IR computation and render processing to give CPU back. Caches and smoothing history are preserved, so waking with `st_rt_run` resumes computation where it left off.
 
-**언제·어떻게** — 렌더 중 언제든 부를 수 있고 완료를 기다리지 않습니다. 호출하면 전파 레인·IR 조립·IR 준비 작업의 새 실행이 멈춥니다(이미 돌던 1회는 끝까지 갑니다). 렌더는 채택된 IR로 입력과 꼬리를 계속 내다가 다음 조건이 모두 맞으면 처리를 멈추고 0만 냅니다(`DRAINING` → `IDLE`): 재생 중인 입력에 아직 꺼내지 않은 소리가 없음, 모든 소스 입력이 지연선 길이 + 1 s 동안 무음, 출력이 −80 dBFS 아래로 0.5 s 지속. 입력이 계속 소리를 내면 상한(5 s와 "입력 무음 길이 + 2 s" 중 큰 값)에서 한 블록 페이드 뒤 강제로 `IDLE`이 됩니다. 렌더가 돌지 않을 때(`st_rt_render_start` 전, `st_rt_render_stop` 뒤)는 바로 `IDLE`입니다. 쉬는 동안에도 setter는 받고, 재생 요청은 깨운 뒤 반영됩니다. 호스트 스트림·스피커 세트 링은 소비되지 않습니다(쓰기는 링이 찰 때까지 받음). 출력 장치는 그대로 열려 있으므로 오래 쉴 때는 `IDLE`을 확인한 뒤 `st_rt_render_stop`을 부릅니다. SYNCHRONOUS 스케줄러는 계산이 `st_rt_propagate`에서만 돌므로 렌더 쪽만 쉽니다. 지원 여부는 `ST_CAP1_ENGINE_IDLE`. 스레드: `[control]` — 짧은 잠금만 잡습니다.
+**When / how** — Can be called at any time during rendering and does not wait for completion. Calling it stops new runs of the propagation lanes · IR assembly · IR preparation work (a run already in progress finishes). The render keeps outputting input and tail with the adopted IR, and stops processing and outputs only zeros (`DRAINING` → `IDLE`) once all of the following hold: playing input has no sound left to pull, every source input has been silent for the delay-line length + 1 s, and the output has stayed below −80 dBFS for 0.5 s. If the input keeps producing sound, it is forced to `IDLE` after a one-block fade at the upper bound (the larger of 5 s and "input silence length + 2 s"). When the render is not running (before `st_rt_render_start`, after `st_rt_render_stop`) it is `IDLE` immediately. Setters are still accepted while idle, and play requests take effect after waking. Host stream and speaker-set rings are not consumed (writes are accepted until the ring is full). The output device stays open, so for long idles confirm `IDLE` and then call `st_rt_render_stop`. With the SYNCHRONOUS scheduler computation runs only in `st_rt_propagate`, so only the render side idles. Support is indicated by `ST_CAP1_ENGINE_IDLE`. Thread: `[control]` — takes only a short lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `1` = 성공(이미 쉬는 중이면 아무 일도 하지 않음) / `0` = `context`가 `NULL`.
+**Returns** — `1` = success (does nothing if already idle) / `0` = `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_run</code> — 쉬는 엔진을 깨운다</summary>
+<summary><code>st_rt_run</code> — Wakes an idle engine</summary>
 
 ```c
 int st_rt_run(STRT_Context* context);
 ```
 
-**용도** — `st_rt_idle`로 쉬게 했거나 `startIdle = 1`로 만든 컨텍스트에서 전파·IR·렌더를 다시 돌립니다.
+**Purpose** — Restarts propagation · IR · rendering on a context idled with `st_rt_idle` or created with `startIdle = 1`.
 
-**언제·어떻게** — 재생을 다시 시작할 때 부릅니다. 바로 `RUNNING`이 되고 계산 작업을 깨우며, 쉬는 동안 받아 둔 장면·모션·정책 변경이 그때 반영됩니다. IR 조립의 시간축(평활·히스테리시스)은 쉰 시간을 건너뜁니다. 강제 `IDLE`로 멈췄던 지연선·잔향 상태는 이어서 나오며 첫 블록은 페이드인됩니다. 완료를 기다리지 않습니다. 스레드: `[control]` — 짧은 잠금과 계산 작업 깨우기만 합니다.
+**When / how** — Call it when resuming playback. It becomes `RUNNING` immediately and wakes the compute work, and scene · motion · policy changes received while idle take effect then. The IR assembly timeline (smoothing · hysteresis) skips over the idle time. Delay-line and reverb state stopped by a forced `IDLE` continues from where it was, and the first block is faded in. Does not wait for completion. Thread: `[control]` — only takes a short lock and wakes the compute work.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `1` = 성공 / `0` = `context`가 `NULL`.
+**Returns** — `1` = success / `0` = `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_idle_state</code> — 엔진 쉼 상태(RUNNING / DRAINING / IDLE)를 읽는다</summary>
+<summary><code>st_rt_get_idle_state</code> — Reads the engine idle state (RUNNING / DRAINING / IDLE)</summary>
 
 ```c
 int st_rt_get_idle_state(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_idle` 뒤 렌더가 꼬리를 다 냈는지 확인합니다. 예를 들어 `IDLE`이 된 뒤에 `st_rt_render_stop`으로 장치를 닫습니다.
+**Purpose** — Checks whether the render has finished playing out the tail after `st_rt_idle`. For example, close the device with `st_rt_render_stop` once it becomes `IDLE`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. `IDLE`은 "새 계산 없음 + 렌더 0 출력"이라는 뜻이며, 진행 중이던 계산 1회까지 끝났다는 뜻은 아닙니다. 스레드: `[any]` — atomic 하나를 읽습니다.
+**When / how** — Can be called at any time. `IDLE` means "no new computation + render outputs zeros"; it does not mean that a computation run in progress has also finished. Thread: `[any]` — reads one atomic.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STRT_IdleState`: `ST_RT_IDLE_RUNNING`(0, 도는 중) / `ST_RT_IDLE_DRAINING`(1, 쉼을 요청받았고 렌더가 남은 소리를 내는 중) / `ST_RT_IDLE_IDLE`(2, 계산 쉼 + 렌더는 0만 냄 — `startIdle = 1`이면 생성 직후 이 상태). `context`가 `NULL`이면 `-1`.
+**Returns** — `STRT_IdleState`: `ST_RT_IDLE_RUNNING` (0, running) / `ST_RT_IDLE_DRAINING` (1, idle requested and the render is playing out remaining sound) / `ST_RT_IDLE_IDLE` (2, computation idle + render outputs only zeros — the state right after creation if `startIdle = 1`). `-1` if `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_scheduler</code> — 컨텍스트의 스케줄러를 돌려준다</summary>
+<summary><code>st_rt_get_scheduler</code> — Returns the context's scheduler</summary>
 
 ```c
 int st_rt_get_scheduler(const STRT_Context* context);
 ```
 
-**용도** — 생성 시 확정된 스케줄러를 확인합니다. 레인 갱신 주기(`st_rt_set_lane_update_interval`)처럼 PIPELINED에서만 의미가 있는 API를 쓸지, `st_rt_propagate`를 직접 돌려야 하는지 판단할 때 씁니다.
+**Purpose** — Checks the scheduler fixed at creation. Used to decide whether to use APIs meaningful only in PIPELINED, such as lane update intervals (`st_rt_set_lane_update_interval`), or whether you must drive `st_rt_propagate` yourself.
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있습니다. 값은 불변입니다. 스레드: `[any]` — 생성 시 확정된 불변값을 읽습니다.
+**When / how** — Can be called at any time after creation. The value is immutable. Thread: `[any]` — reads an immutable value fixed at creation.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STRT_Scheduler`: `ST_RT_SCHEDULER_SYNCHRONOUS`(0) / `ST_RT_SCHEDULER_PIPELINED`(1).
+**Returns** — `STRT_Scheduler`: `ST_RT_SCHEDULER_SYNCHRONOUS` (0) / `ST_RT_SCHEDULER_PIPELINED` (1).
 
 </details>
 
 <details>
-<summary><code>st_rt_get_timing</code> — 파이프라인 단계별 최근 소요 시간을 한 번에 읽는다</summary>
+<summary><code>st_rt_get_timing</code> — Reads the latest duration of each pipeline stage at once</summary>
 
 ```c
 int st_rt_get_timing(const STRT_Context* context, STTiming* outTiming);
 ```
 
-**용도** — 전파(레인 3분할)·IR 변환·IR 발행·블록 렌더의 최근 1회 소요 시간을 하나의 구조체로 얻어, 호스트 프로파일러나 HUD에 엔진 부하를 표시합니다. 타이밍을 얻는 유일한 표면입니다.
+**Purpose** — Gets the latest single-run duration of propagation (split into 3 lanes) · IR conversion · IR publishing · block rendering in one struct, to show engine load in a host profiler or HUD. This is the only surface for timing.
 
-**언제·어떻게** — 언제든 폴링할 수 있습니다(예: 프레임마다). `irPublishSequence`를 두 번 읽은 값과 비교하면 그 사이에 IR이 새로 발행됐는지 알 수 있습니다. 지원 여부는 `ST_CAP_ENGINE_TIMING`(`irPublishSequence`는 `ST_CAP_IR_STATS`). 스레드: `[any]` — atomic만 읽습니다. 단, 스탬프가 틀린 오류 경로는 컨텍스트 진단 버퍼에 기록합니다.
+**When / how** — Can be polled at any time (e.g. every frame). Comparing two reads of `irPublishSequence` tells you whether a new IR was published in between. Support is indicated by `ST_CAP_ENGINE_TIMING` (`irPublishSequence` by `ST_CAP_IR_STATS`). Thread: `[any]` — reads atomics only. However, the error path for a wrong stamp writes to the context's diagnostic buffer.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outTiming` | 출력. 호출자가 `structSize = sizeof(STTiming)`, `apiVersion = ST_ABI_VERSION`을 채운다 |
+| `context` | Context handle |
+| `outTiming` | Output. The caller fills `structSize = sizeof(STTiming)`, `apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STTiming`
+**Struct** `STTiming`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `propagateTotalMs` | 전파 전체(ms). PIPELINED에서는 레인이 서로 다른 워커·주기로 돌므로 세 레인의 합이 아니라 가장 무거운 반사·회절 레인 값과 같습니다(`== propagateReflDiffMs`). SYNCHRONOUS에서는 ≈ direct + reflDiff + reverb |
-| `propagateDirectMs` | Direct 레인(직접음 + 투과) |
-| `propagateReflDiffMs` | 반사·회절 레인(guide 포함) |
-| `propagateReverbMs` | 잔향 레인(확산·소스 수송) |
-| `irBuildMs` | 기하 → IR 변환 |
-| `auralUpdateIrMs` | IR 발행(렌더 측 반영) |
-| `auralProcessMs` | 블록당 렌더 처리 시간(렌더 스레드 또는 호스트 pull 콜백) |
-| `irPublishSequence` | IR 발행 시퀀스의 하위 32비트. `st_rt_ir_get_stats`의 `publishSequence`와 같은 값, `0` = 아직 발행 없음 |
-| `reserved[7]` | 예약 |
+| `structSize` / `apiVersion` | Stamps filled by the caller |
+| `propagateTotalMs` | Whole propagation (ms). In PIPELINED the lanes run on different workers at different intervals, so this is not the sum of the three lanes but equals the heaviest, reflection · diffraction lane (`== propagateReflDiffMs`). In SYNCHRONOUS ≈ direct + reflDiff + reverb |
+| `propagateDirectMs` | Direct lane (direct sound + transmission) |
+| `propagateReflDiffMs` | Reflection · diffraction lane (including guide) |
+| `propagateReverbMs` | Reverb lane (diffuse · source transport) |
+| `irBuildMs` | Geometry → IR conversion |
+| `auralUpdateIrMs` | IR publishing (applied on the render side) |
+| `auralProcessMs` | Render processing time per block (render thread or host pull callback) |
+| `irPublishSequence` | Lower 32 bits of the IR publish sequence. Same value as `publishSequence` of `st_rt_ir_get_stats`, `0` = nothing published yet |
+| `reserved[7]` | Reserved |
 
-아직 한 번도 돌지 않은 단계는 `0`입니다.
+A stage that has never run is `0`.
 
-**반환** — `1` = 성공 / `0` = `context`·`outTiming`이 `NULL`이거나 스탬프 불일치(불일치는 `st_rt_get_last_status`에 `ST_STATUS_VERSION_MISMATCH`).
+**Returns** — `1` = success / `0` = `context` · `outTiming` is `NULL` or stamp mismatch (a mismatch leaves `ST_STATUS_VERSION_MISMATCH` in `st_rt_get_last_status`).
 
 </details>
 
 <details>
-<summary><code>st_rt_set_memory_budget</code> — 음원 메모리 예산(최대 음원 수·바이트 상한·거절 정책)을 지정한다</summary>
+<summary><code>st_rt_set_memory_budget</code> — Sets the source memory budget (maximum source count · byte limit · reject policy)</summary>
 
 ```c
 int st_rt_set_memory_budget(STRT_Context* context, const STMemoryBudget* budget);
 ```
 
-**용도** — 모바일·웹처럼 메모리가 빠듯한 플랫폼에서 음원 수와 음원별 메모리 합을 상한으로 묶습니다. 음원 하나는 고정 비용(전파·IR 사본·수송·스트림 링)과 지연 링(장면 최장 경로에 비례, 바닥 `ringFloorSeconds` ~ 천장 `st_rt_render_get_max_delay_seconds`), 경로 레인으로 메모리를 씁니다. 예산을 넘는 `st_rt_source_create`는 정책에 따라 거절되거나 가장 먼 음원을 내보내고 받아들여지므로, 생성 뒤에는 새 음원 때문에 메모리가 늘지 않습니다.
+**Purpose** — Caps the number of sources and the sum of per-source memory on memory-constrained platforms such as mobile and web. Each source uses memory for a fixed cost (propagation · IR copies · transport · stream ring), a delay ring (proportional to the longest path in the scene, from the floor `ringFloorSeconds` to the ceiling `st_rt_render_get_max_delay_seconds`) and path lanes. An `st_rt_source_create` that exceeds the budget is either rejected or accepted by evicting the farthest source, depending on the policy, so memory does not grow because of new sources after creation.
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있습니다. 최대 음원 수만 정하려면 생성 시 `STRT_CreateOptions.maxSources`로도 됩니다. 기존 값을 바탕으로 바꾸려면 `st_rt_get_memory_budget`으로 읽어 필요한 필드만 고친 뒤 set 합니다. 상한을 줄여도 이미 있는 음원은 유지되고 새 생성부터 적용됩니다. 사용량은 `st_rt_get_memory_stats`로 봅니다. 지원 여부는 `ST_CAP1_MEMORY_BUDGET`(능력 워드 1). 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**When / how** — Can be called at any time after creation. To set only the maximum source count, `STRT_CreateOptions.maxSources` at creation also works. To change it based on the existing values, read them with `st_rt_get_memory_budget`, modify only the fields you need, then set. Lowering a limit keeps existing sources and applies from the next creation. View usage with `st_rt_get_memory_stats`. Support is indicated by `ST_CAP1_MEMORY_BUDGET` (capability word 1). Thread: `[control]` — call from the control thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `budget` | 새 정책. 호출자가 `structSize = sizeof(STMemoryBudget)`, `apiVersion = ST_ABI_VERSION`을 채운다. `0`인 필드는 기본값을 뜻한다 |
+| `context` | Context handle |
+| `budget` | New policy. The caller fills `structSize = sizeof(STMemoryBudget)`, `apiVersion = ST_ABI_VERSION`. A field set to `0` means the default |
 
-**구조체** `STMemoryBudget`
+**Struct** `STMemoryBudget`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `maxSources` | 최대 음원 수. `0` = 플랫폼 기본 |
-| `rejectPolicy` | `STMemoryRejectPolicy`: `ST_MEMORY_REJECT_NEW`(0, 기본) = 넘으면 `st_rt_source_create`가 실패 핸들(`v < 0`)과 `ST_STATUS_BUDGET_EXCEEDED`를 돌려준다. `ST_MEMORY_EVICT_FARTHEST`(1) = 리스너에서 가장 먼 음원을 `st_rt_source_destroy`와 같은 경로로 내보내고 새 음원을 받는다(내보낸 id는 `STMemoryStats.lastEvictedSource`) |
-| `sourceBudgetBytes` | 음원별 가변 메모리 합의 상한(바이트) = 추적 바이트 + `fixedPerSourceBytes` × 음원 수. `0` = 무제한(관측만) |
-| `fixedPerSourceBytes` | 음원 하나의 고정 비용 추정치. `0` = 엔진 기본(2.5 MiB). 예산 추정에만 쓰인다 |
-| `ringFloorSeconds` | 입력을 붙인 직후·경로가 없는 음원의 지연 링 크기(초). `0` = 0.25 |
-| `ringGrowthHeadroom` | 링 성장 여유 배율 — 필요 지연 × 이 값(+50 ms, 125 ms 단위 올림). `0` = 1.25 |
-| `allowShrink` | `0` = 링을 줄이지 않음(세션 중 최대치 유지), `1` = 축소 허용 |
-| `reserved[5]` | 모두 `0`이어야 한다 |
+| `structSize` / `apiVersion` | Stamps filled by the caller |
+| `maxSources` | Maximum number of sources. `0` = platform default |
+| `rejectPolicy` | `STMemoryRejectPolicy`: `ST_MEMORY_REJECT_NEW` (0, default) = when exceeded, `st_rt_source_create` returns a failure handle (`v < 0`) and `ST_STATUS_BUDGET_EXCEEDED`. `ST_MEMORY_EVICT_FARTHEST` (1) = evicts the source farthest from the listener through the same path as `st_rt_source_destroy` and accepts the new source (the evicted id is in `STMemoryStats.lastEvictedSource`) |
+| `sourceBudgetBytes` | Upper limit (bytes) on the sum of variable per-source memory = tracked bytes + `fixedPerSourceBytes` × source count. `0` = unlimited (observe only) |
+| `fixedPerSourceBytes` | Estimated fixed cost of one source. `0` = engine default (2.5 MiB). Used only for budget estimation |
+| `ringFloorSeconds` | Delay ring size (seconds) of a source right after input is attached or with no paths. `0` = 0.25 |
+| `ringGrowthHeadroom` | Ring growth headroom factor — required delay × this value (+50 ms, rounded up to 125 ms units). `0` = 1.25 |
+| `allowShrink` | `0` = never shrink rings (keep the session maximum), `1` = allow shrinking |
+| `reserved[5]` | Must all be `0` |
 
-**플랫폼 기본값**
+**Platform defaults**
 
-| 빌드 타깃 | `maxSources` | `sourceBudgetBytes` | 지연 링 천장 |
+| Build target | `maxSources` | `sourceBudgetBytes` | Delay ring ceiling |
 |---|---|---|---|
-| 데스크톱 | 128 | 무제한 | 2.0 s |
+| Desktop | 128 | Unlimited | 2.0 s |
 | Android · iOS | 48 | 96 MiB | 1.0 s |
-| Emscripten(웹) | 32 | 64 MiB | 0.5 s |
+| Emscripten (web) | 32 | 64 MiB | 0.5 s |
 
-**반환** — `1` = 적용 / `0` = 거절. 거절 시 상태는 바뀌지 않으며 `st_rt_get_last_status`에 `ST_STATUS_VERSION_MISMATCH`(`budget`이 `NULL`이거나 스탬프 불일치) 또는 `ST_STATUS_INVALID_ARGUMENT`(값이 비유한·범위 밖, `reserved`가 0이 아님)가 남습니다. `context`가 `NULL`이면 `0`.
+**Returns** — `1` = applied / `0` = rejected. On rejection the state is unchanged and `st_rt_get_last_status` holds `ST_STATUS_VERSION_MISMATCH` (`budget` is `NULL` or stamp mismatch) or `ST_STATUS_INVALID_ARGUMENT` (non-finite or out-of-range value, `reserved` not zero). `0` if `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_memory_budget</code> — 현재 음원 메모리 예산 정책을 읽는다</summary>
+<summary><code>st_rt_get_memory_budget</code> — Reads the current source memory budget policy</summary>
 
 ```c
 int st_rt_get_memory_budget(const STRT_Context* context, STMemoryBudget* outBudget);
 ```
 
-**용도** — 현재 적용 중인 예산 정책(플랫폼 기본값이 채워진 실효값)을 확인하거나, 일부 필드만 바꾸기 위한 출발점으로 씁니다.
+**Purpose** — Checks the budget policy currently in effect (effective values with platform defaults filled in), or serves as the starting point for changing only some fields.
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있습니다. 읽은 구조체를 고쳐 `st_rt_set_memory_budget`에 넘기는 것이 전형적인 패턴입니다. 지원 여부는 `ST_CAP1_MEMORY_BUDGET`. 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**When / how** — Can be called at any time after creation. The typical pattern is to modify the struct you read and pass it to `st_rt_set_memory_budget`. Support is indicated by `ST_CAP1_MEMORY_BUDGET`. Thread: `[control]` — call from the control thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outBudget` | 출력. 호출자가 `structSize`/`apiVersion`을 채운다. 성공 시 `reserved[]`는 0이 된다 |
+| `context` | Context handle |
+| `outBudget` | Output. The caller fills `structSize`/`apiVersion`. On success `reserved[]` is zeroed |
 
-`STMemoryBudget` 필드는 `st_rt_set_memory_budget` 항목 참고.
+See the `st_rt_set_memory_budget` entry for the `STMemoryBudget` fields.
 
-**반환** — `1` = 성공 / `0` = `context`가 `NULL`, 또는 `outBudget`이 `NULL`이거나 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`).
+**Returns** — `1` = success / `0` = `context` is `NULL`, or `outBudget` is `NULL` or stamp mismatch (`ST_STATUS_VERSION_MISMATCH`).
 
 </details>
 
 <details>
-<summary><code>st_rt_get_memory_stats</code> — 음원 메모리 사용량·거절·퇴거 통계를 읽는다</summary>
+<summary><code>st_rt_get_memory_stats</code> — Reads source memory usage · rejection · eviction statistics</summary>
 
 ```c
 int st_rt_get_memory_stats(const STRT_Context* context, STMemoryStats* outStats);
 ```
 
-**용도** — 예산 대비 현재 사용량을 관측해 예산 값을 정하거나, 거절·퇴거가 일어났는지 확인합니다.
+**Purpose** — Observes current usage against the budget to choose budget values, or checks whether rejections or evictions have occurred.
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있습니다. 제어 쪽 기록과 풀만 읽고 오디오 스레드에는 접근하지 않습니다. 지원 여부는 `ST_CAP1_MEMORY_BUDGET`. 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**When / how** — Can be called at any time after creation. Reads only control-side records and the pool and does not touch the audio thread. Support is indicated by `ST_CAP1_MEMORY_BUDGET`. Thread: `[control]` — call from the control thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outStats` | 출력. 호출자가 `structSize = sizeof(STMemoryStats)`, `apiVersion = ST_ABI_VERSION`을 채운다 |
+| `context` | Context handle |
+| `outStats` | Output. The caller fills `structSize = sizeof(STMemoryStats)`, `apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STMemoryStats`
+**Struct** `STMemoryStats`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `sourceCount` | 현재 음원 수 |
-| `maxSources` | 적용 중인 최대 음원 수 |
-| `trackedBytes` | 추적 바이트 = 설치된 지연 링(교체 대기 링 포함) + 경로 레인 추정 + 풀에 보관 중인 링 |
-| `estimatedBytes` | `trackedBytes + fixedPerSourceBytes × sourceCount`. 예산 판정은 이 값이 넘치면 풀 보관 링을 먼저 비우고 다시 잰다 |
-| `sourceBudgetBytes` | 적용 중인 바이트 상한(`0` = 무제한) |
-| `pooledRingBytes` | 재사용을 위해 보관 중인 링 바이트(`trackedBytes`에 포함). 상한 데스크톱 16 MiB · 모바일 8 MiB · 웹 4 MiB, 10 s 미사용 시 해제 |
-| `rejectedCreates` | 예산 초과로 거절된 `st_rt_source_create` 누계 |
-| `evictions` | `ST_MEMORY_EVICT_FARTHEST`로 내보낸 음원 누계 |
-| `lastEvictedSource` | 마지막으로 내보낸 음원 id, `-1` = 없음 |
-| `ringBytesPerSourceMax` | 가장 큰 음원 지연 링 바이트 |
-| `reserved[6]` | 예약 |
+| `structSize` / `apiVersion` | Stamps filled by the caller |
+| `sourceCount` | Current number of sources |
+| `maxSources` | Maximum source count in effect |
+| `trackedBytes` | Tracked bytes = installed delay rings (including rings pending replacement) + path lane estimate + rings held in the pool |
+| `estimatedBytes` | `trackedBytes + fixedPerSourceBytes × sourceCount`. If this value overflows, the budget check first empties the pooled rings and measures again |
+| `sourceBudgetBytes` | Byte limit in effect (`0` = unlimited) |
+| `pooledRingBytes` | Ring bytes held for reuse (included in `trackedBytes`). Capped at 16 MiB on desktop · 8 MiB on mobile · 4 MiB on web, released after 10 s unused |
+| `rejectedCreates` | Cumulative `st_rt_source_create` calls rejected for exceeding the budget |
+| `evictions` | Cumulative sources evicted by `ST_MEMORY_EVICT_FARTHEST` |
+| `lastEvictedSource` | Id of the last evicted source, `-1` = none |
+| `ringBytesPerSourceMax` | Bytes of the largest source delay ring |
+| `reserved[6]` | Reserved |
 
-**반환** — `1` = 성공 / `0` = `context`가 `NULL`, 또는 `outStats`가 `NULL`이거나 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`).
+**Returns** — `1` = success / `0` = `context` is `NULL`, or `outStats` is `NULL` or stamp mismatch (`ST_STATUS_VERSION_MISMATCH`).
 
 </details>
 
 <details>
-<summary><code>st_rt_ir_get_stats</code> — 마지막 IR 발행 하나의 일관된 계측 스냅샷을 읽는다</summary>
+<summary><code>st_rt_ir_get_stats</code> — Reads a consistent instrumentation snapshot of the last IR publish</summary>
 
 ```c
 int st_rt_ir_get_stats(const STRT_Context* context, STIrStats* outStats);
 ```
 
-**용도** — 호스트에 임베드했을 때 "IR 굽기가 왜 느린가"를 엔진 내부를 보지 않고 가르기 위한 계측입니다. 모든 필드가 같은 발행의 값이라는 것이 계약이며, 다음 셋을 구분할 수 있습니다: ① 일이 많다 → `stagedBedCells`·`mergedBedCells`·`exactTaps`, ② 선점당한다 → `prepareCpuUs` ≪ `prepareTotalUs`(CPU/wall 비율이 낮음), ③ 느린 코어에 있다 → `prepareCpuUs` ≈ `prepareTotalUs`인데 절대값이 큼(`prepareCpuIndex`로 논리 프로세서 확인). 호스트 프레임 사이 `publishSequence` 증가량은 발행 주기를 줍니다.
+**Purpose** — Instrumentation for telling apart, when embedded in a host, "why IR baking is slow" without looking inside the engine. The contract is that every field comes from the same publish, which lets you distinguish three cases: ① too much work → `stagedBedCells` · `mergedBedCells` · `exactTaps`, ② being preempted → `prepareCpuUs` ≪ `prepareTotalUs` (low CPU/wall ratio), ③ running on a slow core → `prepareCpuUs` ≈ `prepareTotalUs` but large in absolute terms (check the logical processor with `prepareCpuIndex`). The increase in `publishSequence` between host frames gives the publish rate.
 
-**언제·어떻게** — 언제든 폴링할 수 있습니다. PIPELINED에서는 장면이 멈추면 발행도 멈춥니다 — 레인 입력과 조립 키가 그대로이고 마지막 변화 뒤 2 s가 지나면 다시 조립하지 않습니다(레인은 계속 돕니다). 무엇이든 바뀌면 바로 조립·발행하고, 그 뒤 2 s 동안은 많아야 50 ms마다 한 번 다시 조립합니다. 그래서 정지 장면에서 "IR이 최신인가"는 `publishSequence` 대신 `settled`로 판단합니다. SYNCHRONOUS에서도 유효합니다(호출 스레드가 굽고 곧바로 채택하므로 CPU/wall 비율이 1에 가깝습니다). 지원 여부는 `ST_CAP_IR_STATS`. 스레드: `[any]` — 락 없는 일관 스냅샷이며 찢어진 값을 내보내지 않습니다.
+**When / how** — Can be polled at any time. In PIPELINED, publishing stops when the scene stops — if lane inputs and assembly keys are unchanged and 2 s have passed since the last change, it does not reassemble (the lanes keep running). Any change triggers immediate assembly and publishing, and for the following 2 s it reassembles at most once every 50 ms. So in a static scene, judge "is the IR up to date" with `settled` instead of `publishSequence`. Also valid in SYNCHRONOUS (the calling thread bakes and adopts immediately, so the CPU/wall ratio is close to 1). Support is indicated by `ST_CAP_IR_STATS`. Thread: `[any]` — a lock-free consistent snapshot that never returns torn values.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outStats` | 출력. 호출자가 `structSize = sizeof(STIrStats)`, `apiVersion = ST_ABI_VERSION`을 채운다. 거절일 때는 손대지 않는다 |
+| `context` | Context handle |
+| `outStats` | Output. The caller fills `structSize = sizeof(STIrStats)`, `apiVersion = ST_ABI_VERSION`. Left untouched on rejection |
 
-**구조체** `STIrStats`
+**Struct** `STIrStats`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `publishSequence` | 렌더가 새 IR을 채택할 때마다 +1. `0` = 아직 발행 없음 |
-| `lastPublishLaneMask` | 직전 발행 이후 기하가 전진한 레인 비트: `ST_IR_LANE_DIRECT`(`1u<<0`) · `ST_IR_LANE_REFLECTION_DIFFRACTION`(`1u<<1`) · `ST_IR_LANE_REVERB`(`1u<<2`), 그리고 기하 비트가 하나도 없을 때만 서는 `ST_IR_LANE_POLICY_ONLY`(`1u<<3`, 새 기하 없이 다시 변환 — IR 정책 변경이거나 조립이 아직 수렴 중) |
-| `stagedBedCells` | early bed 병합 입력 셀 수(소스별 합) |
-| `mergedBedCells` | early bed 병합 출력 셀 수 |
-| `activePartitions` / `maxPartitions` | bed 컨볼루션 파티션 수(활성 / 최대) |
-| `irSpanMs` | 병합 bed IR 길이(ms) |
-| `exactTaps` | exact 경로 탭 수 |
-| `sendTaps` | 잔향 send 탭 수 |
-| `rainTaps` | 1차 산란(diffuse rain) 탭 수 |
-| `prepareMergeUs` | bed 병합·밴드 정규화 시간(µs) |
-| `prepareBakeUs` | bed 시간 영역 굽기 시간(FFT 제외, µs) |
-| `prepareFftUs` | 파티션 FFT 시간(µs) |
-| `prepareTotalUs` | IR 준비 전체 wall 시간(µs). PIPELINED는 굽기 스레드의 준비만, SYNCHRONOUS는 적용까지 포함한 전체라 두 스케줄러 값을 나란히 비교하지 않습니다. 단계 µs 셋의 합은 이보다 작습니다 |
-| `prepareCpuUs` | 같은 구간의 굽기 스레드 CPU 시간(µs). Windows는 해상도가 스케줄러 틱(약 15.6 ms)이라 한 값보다 여러 발행의 비율 추세를 봅니다. POSIX는 훨씬 촘촘합니다 |
-| `prepareCpuIndex` | 준비가 끝난 순간 그 스레드가 있던 논리 프로세서 번호(힌트). 미지원 = `0xFFFFFFFF`(macOS는 항상 이 값) |
-| `directLaneFrames` / `exactLaneFrames` / `reverbLaneFrames` | IR 조립이 받은 레인 프레임 누계(direct · 반사/회절 · 잔향, uint32 순환). 변경(소스 추가·리스너 이동 등) 직후 값을 기록해 두고 +2 이상이 되면, 그 변화 뒤에 시작한 레인 실행 결과가 조립에 들어갔다는 뜻입니다 |
-| `settled` | `1` = 조립이 받은 레인 프레임을 모두 처리했고(수렴) 마지막 발행 IR을 렌더가 채택함 |
-| `reserved[2]` | 모두 0 |
+| `structSize` / `apiVersion` | Stamps filled by the caller |
+| `publishSequence` | +1 each time the render adopts a new IR. `0` = nothing published yet |
+| `lastPublishLaneMask` | Bits of lanes whose geometry advanced since the previous publish: `ST_IR_LANE_DIRECT` (`1u<<0`) · `ST_IR_LANE_REFLECTION_DIFFRACTION` (`1u<<1`) · `ST_IR_LANE_REVERB` (`1u<<2`), plus `ST_IR_LANE_POLICY_ONLY` (`1u<<3`, set only when no geometry bit is set: reconverted without new geometry — an IR policy change or assembly still converging) |
+| `stagedBedCells` | Number of early bed merge input cells (summed over sources) |
+| `mergedBedCells` | Number of early bed merge output cells |
+| `activePartitions` / `maxPartitions` | Number of bed convolution partitions (active / maximum) |
+| `irSpanMs` | Merged bed IR length (ms) |
+| `exactTaps` | Number of exact path taps |
+| `sendTaps` | Number of reverb send taps |
+| `rainTaps` | Number of first-order scattering (diffuse rain) taps |
+| `prepareMergeUs` | Bed merge · band normalization time (µs) |
+| `prepareBakeUs` | Bed time-domain bake time (excluding FFT, µs) |
+| `prepareFftUs` | Partition FFT time (µs) |
+| `prepareTotalUs` | Total IR preparation wall time (µs). PIPELINED covers only the baking thread's preparation, while SYNCHRONOUS covers everything including application, so do not compare the two schedulers' values side by side. The sum of the three stage µs values is smaller than this |
+| `prepareCpuUs` | Baking thread CPU time over the same interval (µs). On Windows the resolution is the scheduler tick (about 15.6 ms), so look at the ratio trend over several publishes rather than one value. POSIX is much finer |
+| `prepareCpuIndex` | Logical processor number the thread was on when preparation finished (hint). Unsupported = `0xFFFFFFFF` (always this value on macOS) |
+| `directLaneFrames` / `exactLaneFrames` / `reverbLaneFrames` | Cumulative lane frames received by IR assembly (direct · reflection/diffraction · reverb, uint32 wraparound). Record the value right after a change (adding a source, moving the listener, etc.); once it has advanced by +2 or more, the result of a lane run started after that change has entered assembly |
+| `settled` | `1` = assembly has processed every lane frame it received (converged) and the render has adopted the last published IR |
+| `reserved[2]` | All 0 |
 
-`directLaneFrames`~`settled`는 `ST_CAP1_ENGINE_IDLE` 표지로 PIPELINED에서만 의미가 있고(SYNCHRONOUS는 0과 `settled = 1`), 나머지 스냅샷과 따로 읽는 값입니다. bed 관련 8필드(`stagedBedCells`·`mergedBedCells`·`activePartitions`·`maxPartitions`·`irSpanMs`·`prepareMergeUs`·`prepareBakeUs`·`prepareFftUs`)는 early bed 렌더 모드(`STRenderOptions.reserved0 = 1`)에서만 0이 아닙니다 — exact objects 모드(`0`)의 0은 "굽기 단계 자체가 없음"입니다. `exactTaps`·`sendTaps`·`rainTaps`는 모드와 무관하게 채워집니다.
+`directLaneFrames`–`settled` are indicated by `ST_CAP1_ENGINE_IDLE`, are meaningful only in PIPELINED (SYNCHRONOUS gives 0 and `settled = 1`), and are read separately from the rest of the snapshot. The eight bed-related fields (`stagedBedCells` · `mergedBedCells` · `activePartitions` · `maxPartitions` · `irSpanMs` · `prepareMergeUs` · `prepareBakeUs` · `prepareFftUs`) are nonzero only in early bed render mode (`STRenderOptions.reserved0 = 1`) — a 0 in exact objects mode (`0`) means "there is no bake stage at all". `exactTaps` · `sendTaps` · `rainTaps` are filled regardless of mode.
 
-**반환** — `1` = 성공(아직 발행이 없으면 `publishSequence = 0`으로 성공) / `0` = 거절: `context`·`outStats`가 `NULL`, 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`), 스냅샷이 동시 발행과 연달아 충돌(`ST_STATUS_UNAVAILABLE` — 드물며 다시 부르면 됩니다).
+**Returns** — `1` = success (if nothing has been published yet, succeeds with `publishSequence = 0`) / `0` = rejected: `context` · `outStats` is `NULL`, stamp mismatch (`ST_STATUS_VERSION_MISMATCH`), the snapshot repeatedly collided with a concurrent publish (`ST_STATUS_UNAVAILABLE` — rare; just call again).
 
 </details>
 
 <details>
-<summary><code>st_rt_get_thread_inventory</code> — 컨텍스트가 지금 띄우고 있는 스레드 수를 종류별로 읽는다</summary>
+<summary><code>st_rt_get_thread_inventory</code> — Reads, per type, how many threads the context is currently running</summary>
 
 ```c
 int st_rt_get_thread_inventory(const STRT_Context* context, STThreadInventory* outInventory);
 ```
 
-**용도** — 스레드 속성(`STThreadAttributes`)이 "무엇을 심을지"라면 인벤토리는 "실제로 몇 개가 떠 있는지"입니다. 호스트가 자기 스레드 예산을 추측이 아니라 수치로 세울 수 있게 합니다.
+**Purpose** — If thread attributes (`STThreadAttributes`) are "what to plant", the inventory is "how many are actually running". It lets the host set its own thread budget from numbers rather than guesses.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 종류별 카운터는 각각 독립 atomic이라 같은 순간의 스냅샷은 아닙니다 — 스레드가 뜨고 지는 중이면 합이 순간적으로 어긋날 수 있으며 오류가 아닙니다. 출력 장치 스레드(오디오 드라이버)는 별도 경로로 만들어져 인벤토리에 포함되지 않습니다. 지원 여부는 `ST_CAP_THREAD_INVENTORY`. 스레드: `[any]` — 종류별 atomic 카운터만 읽습니다.
+**When / how** — Can be called at any time. Each per-type counter is an independent atomic, so the result is not a snapshot of a single instant — while threads are starting or stopping the totals may be momentarily inconsistent, which is not an error. The output device thread (audio driver) is created through a separate path and is not included in the inventory. Support is indicated by `ST_CAP_THREAD_INVENTORY`. Thread: `[any]` — reads only per-type atomic counters.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outInventory` | 출력. 호출자가 `structSize = sizeof(STThreadInventory)`, `apiVersion = ST_ABI_VERSION`을 채운다 |
+| `context` | Context handle |
+| `outInventory` | Output. The caller fills `structSize = sizeof(STThreadInventory)`, `apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STThreadInventory`
+**Struct** `STThreadInventory`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `countByRole[ST_THREAD_TYPE_COUNT]` | `STThreadType` 순서의 스레드 수(인덱스 = 종류). 논리 역할(LANE_*·IR_CONVERTER·AU_PREPARE·SCENE_INPUT)은 계산 풀 위에서 돌아 항상 `0`, `ST_THREAD_ACCEL_BUILD`도 `0` |
-| `reserved[5]` | 예약 |
+| `structSize` / `apiVersion` | Stamps filled by the caller |
+| `countByRole[ST_THREAD_TYPE_COUNT]` | Thread counts in `STThreadType` order (index = type). Logical roles (LANE_* · IR_CONVERTER · AU_PREPARE · SCENE_INPUT) run on the compute pool and are always `0`; `ST_THREAD_ACCEL_BUILD` is also `0` |
+| `reserved[5]` | Reserved |
 
-`STThreadType` 값은 `st_rt_set_thread_attributes` 항목 참고.
+See the `st_rt_set_thread_attributes` entry for `STThreadType` values.
 
-전형적인 값(PIPELINED, 계산 풀 예산 `N = max(3, 해석된 예산)`, 파일 소스 있음):
+Typical values (PIPELINED, compute pool budget `N = max(3, resolved budget)`, with a file source):
 
-| 출력 모드 | LANE_* | IR_CONVERTER · AU_PREPARE | COMPUTE_POOL | AUDIO_RENDER | FILE_DECODER |
+| Output mode | LANE_* | IR_CONVERTER · AU_PREPARE | COMPUTE_POOL | AUDIO_RENDER | FILE_DECODER |
 |---|---|---|---|---|---|
-| `DEVICE` | 0 | 0 | `N−1`(Direct 전용 1 포함) | 1 | 1 |
+| `DEVICE` | 0 | 0 | `N−1` (including 1 dedicated to Direct) | 1 | 1 |
 | `HOST_PULL` | 0 | 0 | `N−1` | 0 | 1 |
 
-SYNCHRONOUS는 LANE_* 이 모두 0이고, 파일 입력이 없으면 FILE_DECODER는 0입니다.
+In SYNCHRONOUS every LANE_* is 0, and FILE_DECODER is 0 when there is no file input.
 
-**반환** — `1` = 성공 / `0` = `context`·`outInventory`가 `NULL`이거나 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`).
+**Returns** — `1` = success / `0` = `context` · `outInventory` is `NULL` or stamp mismatch (`ST_STATUS_VERSION_MISMATCH`).
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>재질 · 메시 · 오브젝트 · 씬</strong> — 17개</summary>
+<summary><strong>Materials · meshes · objects · scene</strong> — 17 functions</summary>
 
 <details>
-<summary><code>st_rt_material_create</code> — 음향 재질 하나를 등록하고 핸들을 받는다</summary>
+<summary><code>st_rt_material_create</code> — Registers one acoustic material and returns its handle</summary>
 
 ```c
 STMaterialId st_rt_material_create(STRT_Context* context, const STMaterial* material);
 ```
 
-**용도** — 9개 옥타브 밴드의 반사·흡수·투과·산란 계수로 정의한 재질을 엔진에 등록합니다. 메시(`st_rt_mesh_create`)는 이 함수가 돌려준 재질 핸들을 참조해 표면의 음향 특성을 정합니다.
+**Purpose** — Registers with the engine a material defined by reflection · absorption · transmission · scattering coefficients over 9 octave bands. Meshes (`st_rt_mesh_create`) reference the material handle returned by this function to set the acoustic properties of their surfaces.
 
-**언제·어떻게** — 재질을 쓰는 메시를 만들기 전에 호출합니다. 여러 재질은 이 함수를 반복 호출해 등록하며, 반환 핸들의 `v`는 등록 순서대로 연속입니다. 기본 재질 라이브러리가 필요하면 `st_rt_material_load_defaults`를 함께 씁니다. 스레드: `[control]` — 제어 스레드 전용이며 워커와 배타가 되어 잠깐 블록될 수 있으니 오디오 콜백에서 부르지 마십시오.
+**When / how** — Call it before creating the meshes that use the material. Register multiple materials by calling this function repeatedly; the `v` of the returned handles is consecutive in registration order. If you need the default material library, use `st_rt_material_load_defaults` as well. Thread: `[control]` — control thread only; it is exclusive with the workers and may block briefly, so do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `material` | 등록할 재질. 호출자가 `structSize = sizeof(STMaterial)`, `apiVersion = ST_ABI_VERSION`을 채웁니다. 계수보다 스탬프를 먼저 검증합니다 |
+| `context` | Context handle |
+| `material` | Material to register. The caller fills `structSize = sizeof(STMaterial)`, `apiVersion = ST_ABI_VERSION`. The stamps are validated before the coefficients |
 
-**구조체** `STMaterial`
+**Struct** `STMaterial`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` | `sizeof(STMaterial)` — 호출자가 채움 |
-| `apiVersion` | `ST_ABI_VERSION` — 호출자가 채움 |
-| `reflection[ST_FREQUENCY_BANDS]` | 밴드별 반사 에너지 비율, `[0, 1]` |
-| `absorption[ST_FREQUENCY_BANDS]` | 밴드별 흡수 에너지 비율, `[0, 1]` |
-| `transmission[ST_FREQUENCY_BANDS]` | 밴드별 투과 에너지 비율, `[0, 1]` |
-| `scattering[ST_FREQUENCY_BANDS]` | 반사 에너지 중 확산(diffuse)으로 가는 비율, `[0, 1]`. R+A+T 합에는 들어가지 않습니다 |
-| `reserved[8]` | 예약 |
+| `structSize` | `sizeof(STMaterial)` — filled by the caller |
+| `apiVersion` | `ST_ABI_VERSION` — filled by the caller |
+| `reflection[ST_FREQUENCY_BANDS]` | Reflected energy ratio per band, `[0, 1]` |
+| `absorption[ST_FREQUENCY_BANDS]` | Absorbed energy ratio per band, `[0, 1]` |
+| `transmission[ST_FREQUENCY_BANDS]` | Transmitted energy ratio per band, `[0, 1]` |
+| `scattering[ST_FREQUENCY_BANDS]` | Fraction of reflected energy that goes diffuse, `[0, 1]`. Not part of the R+A+T sum |
+| `reserved[8]` | Reserved |
 
-- 밴드는 `ST_FREQUENCY_BANDS` = 9개(63 · 125 · 250 · 500 · 1000 · 2000 · 4000 · 8000 · 16000 Hz) 고정입니다.
-- 모든 계수는 **에너지 도메인**(무차원 에너지 비율)입니다. 압력 진폭이 아닙니다.
-- 밴드마다 `|R + A + T − 1| <= ST_MATERIAL_ENERGY_BALANCE_TOLERANCE`(0.001)를 만족해야 합니다. 엔진은 값을 유도·정규화·클램프·보간하지 않으므로, 합이 1이 되도록 호출자가 맞춰 넣어야 합니다.
+- Bands are fixed at `ST_FREQUENCY_BANDS` = 9 (63 · 125 · 250 · 500 · 1000 · 2000 · 4000 · 8000 · 16000 Hz).
+- All coefficients are in the **energy domain** (dimensionless energy ratios), not pressure amplitudes.
+- Each band must satisfy `|R + A + T − 1| <= ST_MATERIAL_ENERGY_BALANCE_TOLERANCE` (0.001). The engine does not derive, normalize, clamp or interpolate values, so the caller must supply values that sum to 1.
 
-**반환** — 재질 핸들(`STMaterialId`, `struct { int32_t v; }`). 메시·오브젝트 핸들(`STMeshId`·`STObjectId`)도 같은 꼴의 서로 다른 타입이라 섞어 넣으면 컴파일 오류가 납니다. 실패하면 `v < 0`이고 `st_rt_get_last_status`에 원인이 남습니다: `material`이 NULL이면 `ST_STATUS_INVALID_ARGUMENT`, 스탬프 불일치면 `ST_STATUS_VERSION_MISMATCH`, 비유한 값·범위 밖 값·R+A+T 합 불일치면 `ST_STATUS_INVALID_MATERIAL`.
+**Returns** — A material handle (`STMaterialId`, `struct { int32_t v; }`). Mesh and object handles (`STMeshId` · `STObjectId`) are distinct types of the same shape, so mixing them is a compile error. On failure `v < 0` and the cause is left in `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT` if `material` is NULL, `ST_STATUS_VERSION_MISMATCH` on stamp mismatch, `ST_STATUS_INVALID_MATERIAL` for non-finite values, out-of-range values or an R+A+T sum mismatch.
 
 </details>
 
 <details>
-<summary><code>st_rt_material_load_defaults</code> — 기본 재질 라이브러리를 한 번에 등록한다</summary>
+<summary><code>st_rt_material_load_defaults</code> — Registers the default material library at once</summary>
 
 ```c
 STMaterialId st_rt_material_load_defaults(STRT_Context* context);
 ```
 
-**용도** — 엔진에 내장된 기본 재질 라이브러리를 통째로 등록합니다. 재질 계수를 직접 준비하지 않고 바로 씬을 구성할 때 씁니다.
+**Purpose** — Registers the engine's built-in default material library in full. Use it to build a scene right away without preparing material coefficients yourself.
 
-**언제·어떻게** — 메시를 만들기 전에 호출합니다. 반환값은 라이브러리의 **첫 재질** 핸들이며, 나머지 재질은 `v+1`, `v+2` … 순서대로 연속입니다. `st_rt_material_create`로 등록한 재질과 함께 써도 됩니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — Call it before creating meshes. The return value is the handle of the library's **first material**, and the remaining materials follow consecutively as `v+1`, `v+2` …. Can be used together with materials registered by `st_rt_material_create`. Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 라이브러리 첫 재질의 핸들. 실패하면 `v < 0`.
+**Returns** — The handle of the library's first material. `v < 0` on failure.
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_set_edge_split_collinear_overlaps</code> — 공선으로 겹치는 음향 엣지의 분할 여부를 정한다</summary>
+<summary><code>st_rt_scene_set_edge_split_collinear_overlaps</code> — Sets whether collinearly overlapping acoustic edges are split</summary>
 
 ```c
 void st_rt_scene_set_edge_split_collinear_overlaps(STRT_Context* context, int enabled);
 ```
 
-**용도** — 메시를 만들 때 컴파일되는 음향 엣지(회절 엣지) 토폴로지에서, 한 직선 위에 겹쳐 놓인(공선 중첩) 엣지를 분할해 다룰지 정하는 씬 빌드 옵션입니다. 지원 여부는 capability 비트 `ST_CAP_ACOUSTIC_EDGE_BUILD_OPTIONS`로 확인합니다.
+**Purpose** — A scene build option that decides whether, in the acoustic edge (diffraction edge) topology compiled when a mesh is created, edges lying on top of each other along one line (collinear overlap) are split. Check support with the capability bit `ST_CAP_ACOUSTIC_EDGE_BUILD_OPTIONS`.
 
-**언제·어떻게** — 메시 생성 시점의 값이 쓰이므로 **이 호출 뒤에 만드는 메시에만** 적용됩니다. 이미 만든 메시의 토폴로지는 바뀌지 않으니 `st_rt_mesh_create` 전에 설정합니다. 기본은 꺼짐입니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — The value at mesh creation is used, so it applies **only to meshes created after this call**. The topology of meshes already created does not change, so set it before `st_rt_mesh_create`. Disabled by default. Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | `0` = 끔(기본) / 0 이외 = 켬 |
+| `context` | Context handle |
+| `enabled` | `0` = off (default) / nonzero = on |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_set_solid_wedge_gate</code> — 회절 쐐기의 오리엔티드 기각 게이트를 켜고 끈다</summary>
+<summary><code>st_rt_scene_set_solid_wedge_gate</code> — Enables or disables the oriented rejection gate for diffraction wedges</summary>
 
 ```c
 void st_rt_scene_set_solid_wedge_gate(STRT_Context* context, int enabled);
 ```
 
-**용도** — 두 면이 만나는 회절 쐐기(wedge)에서, 메시의 와인딩(법선 방향)으로 볼록·오목을 가려 쐐기의 고체 쪽으로 들어가는 회절 경로를 기각하는 게이트입니다. 지원 여부는 capability 비트 `ST_CAP_EXPERIMENTAL_SOLID_WEDGE_GATE`로 확인합니다.
+**Purpose** — A gate that, at a diffraction wedge where two faces meet, distinguishes convex from concave by the mesh winding (normal direction) and rejects diffraction paths that enter the solid side of the wedge. Check support with the capability bit `ST_CAP_EXPERIMENTAL_SOLID_WEDGE_GATE`.
 
-**언제·어떻게** — 기본은 꺼짐입니다. 전파 단계에서 판정하므로 기존 메시에도 적용됩니다. 켜면 판정이 메시 와인딩에 의존하므로, 메시 하나 안에서 와인딩을 일관되게 유지하고 법선이 공기 쪽을 향하게 해야 합니다 — 와인딩을 뒤집으면 볼록·오목이 바뀌어 기각되는 회절 경로 집합이 반대가 됩니다(`st_rt_mesh_create`의 와인딩 안내 참고). 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — Disabled by default. It is evaluated in the propagation stage, so it also applies to existing meshes. When enabled, the decision depends on mesh winding, so keep winding consistent within one mesh with normals pointing toward the air — flipping the winding swaps convex and concave and inverts the set of rejected diffraction paths (see the winding note under `st_rt_mesh_create`). Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | `0` = 끔(기본) / 0 이외 = 켬 |
+| `context` | Context handle |
+| `enabled` | `0` = off (default) / nonzero = on |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_set_accel</code> — 메시·정적 씬 가속구조 종류를 고른다</summary>
+<summary><code>st_rt_scene_set_accel</code> — Selects the acceleration-structure type for meshes and the static scene</summary>
 
 ```c
 int st_rt_scene_set_accel(STRT_Context* context, int kind);
 ```
 
-**용도** — 메시 BLAS와 정적 씬 가속구조에 쓸 구조 종류를 선택합니다. 엔진은 생성 시 `SIMPLEST_ACCEL` 환경변수도 읽지만, 이 함수로 호스트가 자기 프로세스 환경을 바꾸지 않고 같은 선택을 할 수 있습니다.
+**Purpose** — Selects the structure type used for mesh BLAS and the static scene acceleration structure. The engine also reads the `SOUNDTRACING_ACCEL` environment variable at creation, but this function lets the host make the same choice without changing its own process environment.
 
-**언제·어떻게** — 오브젝트를 추가하기 전에 호출합니다. 이후의 빌드에만 적용되며 기존 메시의 BLAS는 생성 시점의 값으로 지어진 그대로입니다. 기본값은 `2`(TinyBVH)입니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — Call it before adding objects. It applies only to later builds; the BLAS of existing meshes stays as built with the value at their creation. The default is `2` (TinyBVH). Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `kind` | `0` = BinnedSAH / `1` = HybridKD / `2` = TinyBVH(기본) / `3` = LBVH / `4` = LBVH_Simd |
+| `context` | Context handle |
+| `kind` | `0` = BinnedSAH / `1` = HybridKD / `2` = TinyBVH (default) / `3` = LBVH / `4` = LBVH_Simd |
 
-**반환** — `1` = 적용 / `0` = `kind`가 범위 밖이거나 컨텍스트가 없음.
+**Returns** — `1` = applied / `0` = `kind` out of range or no context.
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_set_triangle_intersection</code> — 삼각형 교차 커널을 고른다</summary>
+<summary><code>st_rt_scene_set_triangle_intersection</code> — Selects the triangle intersection kernel</summary>
 
 ```c
 int st_rt_scene_set_triangle_intersection(STRT_Context* context, int kind);
 ```
 
-**용도** — 레이-삼각형 교차 판정에 쓸 커널을 선택합니다. 세 커널 모두 양면 교차입니다.
+**Purpose** — Selects the kernel used for ray-triangle intersection tests. All three kernels are two-sided.
 
-**언제·어떻게** — 커널은 `st_rt_mesh_create` 시점에 메시에 고정되므로 **이 호출 뒤에 추가하는 메시에만** 적용됩니다(기존 메시 소급 없음). 메시마다 다른 커널을 쓰는 구성도 유효합니다. 기본은 `0`(MollerTrumbore)입니다. 현재 값은 `st_rt_scene_get_triangle_intersection`으로 읽습니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — The kernel is fixed to a mesh at `st_rt_mesh_create` time, so it applies **only to meshes added after this call** (not retroactive for existing meshes). A setup with different kernels per mesh is also valid. The default is `0` (MollerTrumbore). Read the current value with `st_rt_scene_get_triangle_intersection`. Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `kind` | `0` = MollerTrumbore(기본) / `1` = PluckerAdaptive / `2` = Watertight |
+| `context` | Context handle |
+| `kind` | `0` = MollerTrumbore (default) / `1` = PluckerAdaptive / `2` = Watertight |
 
-**반환** — `1` = 적용 / `0` = 잘못된 `kind` 또는 컨텍스트 없음.
+**Returns** — `1` = applied / `0` = invalid `kind` or no context.
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_get_triangle_intersection</code> — 현재 삼각형 교차 커널 설정을 읽는다</summary>
+<summary><code>st_rt_scene_get_triangle_intersection</code> — Reads the current triangle intersection kernel setting</summary>
 
 ```c
 int st_rt_scene_get_triangle_intersection(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_scene_set_triangle_intersection`으로 지정한 값, 즉 다음에 만들 메시에 적용될 교차 커널을 조회합니다.
+**Purpose** — Queries the value set with `st_rt_scene_set_triangle_intersection`, i.e. the intersection kernel that will apply to the next mesh created.
 
-**언제·어떻게** — 언제든 호출할 수 있습니다. 이미 만든 메시는 각자 생성 시점의 커널을 유지하므로, 반환값이 기존 메시의 커널과 같다는 보장은 없습니다. 스레드: `[control]` — 씬 read 락만 잡는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**When / how** — Can be called at any time. Existing meshes each keep the kernel from their creation, so there is no guarantee that the return value matches the kernel of existing meshes. Thread: `[control]` — a query that takes only the scene read lock. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `0` = MollerTrumbore / `1` = PluckerAdaptive / `2` = Watertight. 컨텍스트가 없으면 `-1`.
+**Returns** — `0` = MollerTrumbore / `1` = PluckerAdaptive / `2` = Watertight. `-1` if there is no context.
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_get_stats</code> — 라이브 메시·오브젝트·소스·삼각형 수를 조회한다</summary>
+<summary><code>st_rt_scene_get_stats</code> — Queries live mesh · object · source · triangle counts</summary>
 
 ```c
 int st_rt_scene_get_stats(STRT_Context* context, STSceneStats* outStats);
 ```
 
-**용도** — 현재 살아 있는 음향 씬의 인벤토리(메시·오브젝트·소스 개수와 삼각형 수)를 한 번의 read 락 스냅샷으로 돌려줍니다. 모든 값이 같은 시점의 씬을 기술하므로 진단·메모리 규모 파악에 씁니다. 지원 여부는 capability 비트 `ST_CAP_SCENE_STATS`로 확인합니다.
+**Purpose** — Returns the inventory of the currently live acoustic scene (mesh, object and source counts and triangle counts) as a single read-lock snapshot. Every value describes the scene at the same instant, so use it for diagnostics and gauging memory scale. Check support with the capability bit `ST_CAP_SCENE_STATS`.
 
-**언제·어떻게** — 씬 구성 중이든 렌더 중이든 제어 스레드에서 언제든 호출할 수 있습니다. 스레드: `[control]` — 씬 read 락만 잡는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**When / how** — Can be called at any time from the control thread, whether during scene setup or rendering. Thread: `[control]` — a query that takes only the scene read lock. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outStats` | 결과를 받을 구조체. 호출자가 `structSize = sizeof(STSceneStats)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | Context handle |
+| `outStats` | Struct that receives the result. The caller fills `structSize = sizeof(STSceneStats)`, `apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STSceneStats`
+**Struct** `STSceneStats`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` | `sizeof(STSceneStats)` — 호출자가 채움 |
-| `apiVersion` | `ST_ABI_VERSION` — 호출자가 채움 |
-| `meshCount` | 라이브 메시 수 |
-| `objectCount` | 라이브 오브젝트 수. destroy가 성공하는 즉시 줄어듭니다 |
-| `sourceCount` | 라이브 소스 수. 비활성(disabled) 소스도 포함하며 destroy가 성공하는 즉시 줄어듭니다 |
-| `reserved0` | 예약 |
-| `triangleCount` | 라이브 오브젝트가 참조하는 메시의 삼각형을 **인스턴스별로** 합친 값. 100개 삼각형 메시를 오브젝트 3개가 공유하면 300 |
-| `uniqueTriangleCount` | 라이브 메시 리소스를 **한 번씩만** 합친 값(위 예에서 100). 기하·가속구조 메모리 규모를 볼 때 씁니다 |
-| `reserved[4]` | 예약 |
+| `structSize` | `sizeof(STSceneStats)` — filled by the caller |
+| `apiVersion` | `ST_ABI_VERSION` — filled by the caller |
+| `meshCount` | Number of live meshes |
+| `objectCount` | Number of live objects. Decreases as soon as a destroy succeeds |
+| `sourceCount` | Number of live sources. Includes disabled sources and decreases as soon as a destroy succeeds |
+| `reserved0` | Reserved |
+| `triangleCount` | Triangles of the meshes referenced by live objects, summed **per instance**. A 100-triangle mesh shared by 3 objects counts as 300 |
+| `uniqueTriangleCount` | Live mesh resources summed **once each** (100 in the example above). Use it to gauge geometry and acceleration-structure memory |
+| `reserved[4]` | Reserved |
 
-**반환** — `1` = 성공 / `0` = `context`·`outStats`가 NULL(`ST_STATUS_INVALID_ARGUMENT`)이거나 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`).
+**Returns** — `1` = success / `0` = `context` · `outStats` is NULL (`ST_STATUS_INVALID_ARGUMENT`) or stamp mismatch (`ST_STATUS_VERSION_MISMATCH`).
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_raycast</code> — 엔진 가속구조로 최근접 히트를 질의한다</summary>
+<summary><code>st_rt_scene_raycast</code> — Queries the nearest hit using the engine's acceleration structure</summary>
 
 ```c
 int st_rt_scene_raycast(STRT_Context* context, const float origin[3], const float direction[3], float maxDistanceMeters, STRayHit* outHit);
 ```
 
-**용도** — 전파 계산이 쓰는 바로 그 가속구조(정적+동적 오브젝트 모두)에 레이를 쏘아 가장 가까운 히트 하나를 돌려줍니다. 읽기 전용 질의라 파이프라인 상태를 바꾸지 않으므로, 호스트가 엔진이 실제로 보는 음향 기하를 확인하거나 자체 로직(가림 판정·디버그 표시 등)에 쓸 수 있습니다. 지원 여부는 capability 비트 `ST_CAP_SCENE_RAYCAST`로 확인합니다.
+**Purpose** — Casts a ray into the very acceleration structure the propagation uses (both static and dynamic objects) and returns the single nearest hit. It is a read-only query that does not change pipeline state, so the host can use it to inspect the acoustic geometry the engine actually sees or for its own logic (occlusion checks, debug display, etc.). Check support with the capability bit `ST_CAP_SCENE_RAYCAST`.
 
-**언제·어떻게** — `st_rt_build`로 가속구조를 지은 뒤에 의미가 있습니다. 빌드 전이면 오류 없이 미스를 돌려줍니다. 씬 read 락만 잡으므로 `ST_RT_SCHEDULER_PIPELINED`에서도 워커와 함께 돌 수 있습니다. 스레드: `[control]` — 씬 read 락만 잡는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**When / how** — Meaningful after the acceleration structure is built with `st_rt_build`. Before a build it returns a miss without error. It takes only the scene read lock, so it can run alongside the workers under `ST_RT_SCHEDULER_PIPELINED`. Thread: `[control]` — a query that takes only the scene read lock. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `origin` | 레이 원점, 월드 좌표 3성분(씬 단위). 유한해야 합니다 |
-| `direction` | 레이 방향 3성분. 엔진이 정규화하므로 단위벡터일 필요는 없지만 유한하고 0벡터가 아니어야 합니다 |
-| `maxDistanceMeters` | 최대 거리(미터, 씬 단위 × `sceneRatio` 규약). `<= 0` 또는 비유한 값이면 무한 |
-| `outHit` | 결과를 받을 구조체. 호출자가 `structSize = sizeof(STRayHit)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | Context handle |
+| `origin` | Ray origin, 3 world-coordinate components (scene units). Must be finite |
+| `direction` | Ray direction, 3 components. The engine normalizes it, so it need not be a unit vector, but it must be finite and nonzero |
+| `maxDistanceMeters` | Maximum distance (meters, by the scene unit × `sceneRatio` convention). `<= 0` or non-finite means infinite |
+| `outHit` | Struct that receives the result. The caller fills `structSize = sizeof(STRayHit)`, `apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STRayHit`
+**Struct** `STRayHit`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` | `sizeof(STRayHit)` — 호출자가 채움 |
-| `apiVersion` | `ST_ABI_VERSION` — 호출자가 채움 |
-| `hit` | `1` = 히트 / `0` = 미스 |
-| `distanceMeters` | 원점에서 히트점까지 거리(미터). 씬 거리 × `sceneRatio`(생성 옵션, 기본 1) |
-| `point[3]` | 히트점. 씬 프레임 좌표 그대로(단위 변환 없음) |
-| `normal[3]` | 히트 삼각형의 단위 기하 법선. 항상 **레이 원점 쪽**을 향하도록 정렬되며, 메시 와인딩이 주는 부호는 유지되지 않습니다 |
-| `objectId` | 히트한 오브젝트 id(`STObjectId`의 `v` 값). 미스면 `-1` |
-| `meshId` | 그 오브젝트의 메시 id(`STMeshId`의 `v` 값). 미스면 `-1` |
-| `triangleIndex` | 메시 로컬 삼각형 인덱스. 미스면 `-1` |
-| `materialIndex` | 그 삼각형의 재질 인덱스(`STMaterialId`의 `v` 값). 미스면 `-1` |
-| `reserved[6]` | 예약 |
+| `structSize` | `sizeof(STRayHit)` — filled by the caller |
+| `apiVersion` | `ST_ABI_VERSION` — filled by the caller |
+| `hit` | `1` = hit / `0` = miss |
+| `distanceMeters` | Distance from the origin to the hit point (meters). Scene distance × `sceneRatio` (creation option, default 1) |
+| `point[3]` | Hit point, in scene-frame coordinates as is (no unit conversion) |
+| `normal[3]` | Unit geometric normal of the hit triangle. Always oriented to face **the ray origin**; the sign given by the mesh winding is not preserved |
+| `objectId` | Id of the hit object (the `v` value of `STObjectId`). `-1` on a miss |
+| `meshId` | Mesh id of that object (the `v` value of `STMeshId`). `-1` on a miss |
+| `triangleIndex` | Mesh-local triangle index. `-1` on a miss |
+| `materialIndex` | Material index of that triangle (the `v` value of `STMaterialId`). `-1` on a miss |
+| `reserved[6]` | Reserved |
 
-미스(`hit == 0`)이면 `distanceMeters`·`point`·`normal`은 0이고 네 id는 모두 `-1`입니다. `0`은 유효한 id이므로 미스 표식으로 쓰지 않습니다. id 필드는 핸들 구조체가 아닌 `int32_t`입니다.
+On a miss (`hit == 0`), `distanceMeters` · `point` · `normal` are 0 and all four ids are `-1`. `0` is a valid id, so it is not used as a miss marker. The id fields are `int32_t`, not handle structs.
 
-**반환** — `1` = 호출 성공(히트 여부는 `outHit->hit`로 판단 — 미스는 실패가 아닙니다) / `0` = 실패: `context`·포인터 NULL, 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`), `origin`·`direction` 비유한 또는 `direction`이 0벡터(`ST_STATUS_INVALID_ARGUMENT`).
+**Returns** — `1` = call succeeded (judge whether it hit by `outHit->hit` — a miss is not a failure) / `0` = failure: `context` or a pointer is NULL, stamp mismatch (`ST_STATUS_VERSION_MISMATCH`), `origin` · `direction` non-finite or `direction` is a zero vector (`ST_STATUS_INVALID_ARGUMENT`).
 
 </details>
 
 <details>
-<summary><code>st_rt_mesh_create</code> — 삼각형 메시를 등록하고 핸들을 받는다</summary>
+<summary><code>st_rt_mesh_create</code> — Registers a triangle mesh and returns its handle</summary>
 
 ```c
 STMeshId st_rt_mesh_create(STRT_Context* context, const STMesh* mesh, STMaterialId material, const int32_t* triangleMaterialIndices);
 ```
 
-**용도** — 음향 기하로 쓸 삼각형 메시를 등록합니다. 메시는 기하 리소스이고, 씬에 실제로 놓으려면 `st_rt_object_create`/`st_rt_object_create_q`로 이 메시를 참조하는 오브젝트(인스턴스)를 만듭니다. 메시 하나를 여러 오브젝트가 공유할 수 있습니다.
+**Purpose** — Registers a triangle mesh to use as acoustic geometry. A mesh is a geometry resource; to actually place it in the scene, create objects (instances) that reference this mesh with `st_rt_object_create`/`st_rt_object_create_q`. One mesh can be shared by several objects.
 
-**언제·어떻게** — 쓸 재질을 먼저 등록한 뒤 호출합니다. 재질 지정은 둘 중 하나입니다.
+**When / how** — Register the materials you will use first, then call it. Materials are assigned in one of two ways.
 
-- `triangleMaterialIndices == NULL`: 메시 전체가 `material` 하나를 씁니다.
-- `triangleMaterialIndices != NULL`: 삼각형마다 재질을 지정합니다(배열 길이 `mesh->numTriangles`). 이때 `material` 인자는 무시됩니다. 지원 여부는 `ST_CAP_PER_TRIANGLE_MATERIALS`로 확인합니다.
+- `triangleMaterialIndices == NULL`: the whole mesh uses the single `material`.
+- `triangleMaterialIndices != NULL`: a material is assigned per triangle (array length `mesh->numTriangles`). The `material` argument is then ignored. Check support with `ST_CAP_PER_TRIANGLE_MATERIALS`.
 
-교차 커널(`st_rt_scene_set_triangle_intersection`), 엣지 분할 옵션(`st_rt_scene_set_edge_split_collinear_overlaps`), 가속구조 종류(`st_rt_scene_set_accel`)는 이 호출 시점의 값으로 메시에 고정됩니다. 입력 배열은 호출 중에 복사되므로 반환 뒤 해제해도 됩니다. 스레드: `[control, blocking]` — 음향 엣지 토폴로지를 컴파일하는 긴 배타 구간이므로 게임 루프·오디오 스레드에서 부르지 마십시오.
+The intersection kernel (`st_rt_scene_set_triangle_intersection`), edge split option (`st_rt_scene_set_edge_split_collinear_overlaps`) and acceleration-structure type (`st_rt_scene_set_accel`) are fixed to the mesh with their values at the time of this call. Input arrays are copied during the call, so they may be freed after it returns. Thread: `[control, blocking]` — a long exclusive section that compiles the acoustic edge topology, so do not call it from the game loop or the audio thread.
 
-와인딩: 교차는 양면이고 반사·투과는 와인딩과 무관하지만, 회절 엣지 판정 일부(두께 0 판의 엣지 채택, `st_rt_scene_set_solid_wedge_gate`)는 와인딩에 의존합니다. 메시 하나 안에서 와인딩을 **일관되게** 유지하고, 가능하면 법선이 공기 쪽을 향하게 하십시오. 좌표계를 미러링해 가져올 때는 인덱스 순서도 함께 뒤집어야 합니다.
+Winding: intersection is two-sided and reflection · transmission are independent of winding, but some diffraction edge decisions (edge adoption on zero-thickness plates, `st_rt_scene_set_solid_wedge_gate`) depend on winding. Keep winding **consistent** within one mesh and, where possible, make normals face the air. When importing from a mirrored coordinate system, flip the index order as well.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 메시 기하(`STMesh`). NULL 불가 |
-| `material` | 메시 전체 재질 핸들. `triangleMaterialIndices`가 NULL일 때만 쓰이며 등록된 재질이어야 합니다 |
-| `triangleMaterialIndices` | 삼각형별 재질 인덱스 배열(`numTriangles`개, 각 원소는 등록된 `STMaterialId`의 `v` 값) 또는 NULL |
+| `context` | Context handle |
+| `mesh` | Mesh geometry (`STMesh`). Must not be NULL |
+| `material` | Material handle for the whole mesh. Used only when `triangleMaterialIndices` is NULL and must be a registered material |
+| `triangleMaterialIndices` | Per-triangle material index array (`numTriangles` entries, each the `v` value of a registered `STMaterialId`) or NULL |
 
-**구조체** `STMesh`
+**Struct** `STMesh`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `numVertices` | 정점 수(> 0) |
-| `vertices` | 정점 좌표 xyz 인터리브 배열, `numVertices * 3`개 float. 씬 단위(메시 로컬 프레임) |
-| `numTriangles` | 삼각형 수(> 0) |
-| `triangles` | 삼각형 정점 인덱스 배열, `numTriangles * 3`개 int. 각 값은 `[0, numVertices)` |
+| `numVertices` | Number of vertices (> 0) |
+| `vertices` | Vertex coordinates as an xyz interleaved array, `numVertices * 3` floats. Scene units (mesh-local frame) |
+| `numTriangles` | Number of triangles (> 0) |
+| `triangles` | Triangle vertex index array, `numTriangles * 3` ints. Each value is in `[0, numVertices)` |
 
-**반환** — 메시 핸들. 실패하면 `v < 0`: `mesh`·배열 포인터가 NULL이거나 개수가 0 이하면 `ST_STATUS_INVALID_ARGUMENT`, 인덱스 범위 밖·등록되지 않은 재질 등으로 메시가 거절되면 `ST_STATUS_INVALID_MATERIAL`.
+**Returns** — A mesh handle. On failure `v < 0`: `ST_STATUS_INVALID_ARGUMENT` if `mesh` or an array pointer is NULL or a count is 0 or less, `ST_STATUS_INVALID_MATERIAL` if the mesh is rejected for an out-of-range index, an unregistered material, etc.
 
 </details>
 
 <details>
-<summary><code>st_rt_object_create</code> — 메시를 행렬 변환으로 씬에 배치한다</summary>
+<summary><code>st_rt_object_create</code> — Places a mesh in the scene with a matrix transform</summary>
 
 ```c
 STObjectId st_rt_object_create(STRT_Context* context, STMeshId mesh, const STTransform* transform, int isDynamic);
 ```
 
-**용도** — 등록된 메시를 월드 변환과 함께 씬에 놓는 오브젝트(인스턴스)를 만듭니다. 전파 계산과 `st_rt_scene_raycast`는 오브젝트만 봅니다. 회전을 쿼터니언으로 주려면 `st_rt_object_create_q`를 씁니다.
+**Purpose** — Creates an object (instance) that places a registered mesh in the scene with a world transform. Propagation and `st_rt_scene_raycast` see only objects. To give the rotation as a quaternion, use `st_rt_object_create_q`.
 
-**언제·어떻게** — `st_rt_mesh_create` 뒤에 호출합니다. `isDynamic`으로 정적/동적을 정합니다.
+**When / how** — Call it after `st_rt_mesh_create`. `isDynamic` selects static or dynamic.
 
-- 정적(`0`): `st_rt_build`(정적+동적 전체 빌드)가 발행하는 정적 TLAS에 들어갑니다. 추가·제거·변환 변경은 다음 `st_rt_build` 전까지 발행된 정적 구조에 반영되지 않습니다. 움직이지 않는 벽·바닥 등 건축 기하에 씁니다.
-- 동적(`1`): 동적 오브젝트 TLAS에 들어가며, 변환 변경이 전체 빌드 없이 동적 재구축(refit, `st_rt_build_dynamic`)으로 반영됩니다. 문·차량 등 움직이는 기하에 씁니다.
+- Static (`0`): goes into the static TLAS published by `st_rt_build` (full static + dynamic build). Additions, removals and transform changes are not reflected in the published static structure until the next `st_rt_build`. Use it for architectural geometry that does not move, such as walls and floors.
+- Dynamic (`1`): goes into the dynamic object TLAS, and transform changes are reflected by a dynamic rebuild (refit, `st_rt_build_dynamic`) without a full build. Use it for moving geometry such as doors and vehicles.
 
-스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 배치할 메시 핸들 |
-| `transform` | 로컬→월드 변환(`STTransform`). NULL이면 항등 변환 |
-| `isDynamic` | `0` = 정적 / 0 이외 = 동적 |
+| `context` | Context handle |
+| `mesh` | Handle of the mesh to place |
+| `transform` | Local→world transform (`STTransform`). NULL means the identity transform |
+| `isDynamic` | `0` = static / nonzero = dynamic |
 
-**구조체** `STTransform`
+**Struct** `STTransform`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `m00, m01, m02` | 3x3 회전·스케일 행렬 1행 |
-| `m10, m11, m12` | 2행 |
-| `m20, m21, m22` | 3행 |
-| `tx, ty, tz` | 평행이동(씬 단위) |
+| `m00, m01, m02` | Row 1 of the 3x3 rotation · scale matrix |
+| `m10, m11, m12` | Row 2 |
+| `m20, m21, m22` | Row 3 |
+| `tx, ty, tz` | Translation (scene units) |
 
-행 우선(row-major)이며 점을 **열벡터로** 곱합니다: `x' = m00*x + m01*y + m02*z + tx`, `y' = m10*x + m11*y + m12*z + ty`, `z' = m20*x + m21*y + m22*z + tz` (`m00*x + m10*y + m20*z` 꼴이 아닙니다). 비균등 스케일과 행렬식이 음수인 변환(거울·음수 스케일)도 받습니다. 성분이 비유한이거나 역행렬을 만들 수 없는 변환은 거절됩니다. 좌표계는 왼손, +Y up, +Z forward, +X right입니다.
+Row-major, and points are multiplied **as column vectors**: `x' = m00*x + m01*y + m02*z + tx`, `y' = m10*x + m11*y + m12*z + ty`, `z' = m20*x + m21*y + m22*z + tz` (not the `m00*x + m10*y + m20*z` form). Non-uniform scale and transforms with a negative determinant (mirroring · negative scale) are accepted. Transforms with non-finite components or that cannot be inverted are rejected. The coordinate system is left-handed, +Y up, +Z forward, +X right.
 
-**반환** — 오브젝트 핸들. 실패하면 `v < 0`(없는 메시, 쓸 수 없는 변환 등).
+**Returns** — An object handle. `v < 0` on failure (nonexistent mesh, unusable transform, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_object_create_q</code> — 메시를 위치·쿼터니언·스케일로 씬에 배치한다</summary>
+<summary><code>st_rt_object_create_q</code> — Places a mesh in the scene with position · quaternion · scale</summary>
 
 ```c
 STObjectId st_rt_object_create_q(STRT_Context* context, STMeshId mesh, const float position[3], const float quatXYZW[4], const float scale[3], int isDynamic);
 ```
 
-**용도** — `st_rt_object_create`와 같은 오브젝트를 만들되, 변환을 위치·회전 쿼터니언·스케일(TRS)로 받습니다. 게임 엔진의 트랜스폼을 행렬로 바꾸지 않고 바로 넘길 때 씁니다.
+**Purpose** — Creates the same object as `st_rt_object_create`, but takes the transform as position · rotation quaternion · scale (TRS). Use it to pass a game engine transform directly without converting it to a matrix.
 
-**언제·어떻게** — `st_rt_mesh_create` 뒤에 호출합니다. 정적/동적의 의미와 빌드 반영 시점은 `st_rt_object_create`와 같습니다. 이후 변환은 `st_rt_object_set_transform_q`로 갱신합니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — Call it after `st_rt_mesh_create`. The meaning of static/dynamic and when changes reach the build are the same as `st_rt_object_create`. Update the transform afterwards with `st_rt_object_set_transform_q`. Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 배치할 메시 핸들 |
-| `position` | 월드 위치 xyz(씬 단위). NULL 불가 |
-| `quatXYZW` | 로컬→월드 회전 쿼터니언, **XYZW 순서**. 엔진이 정규화하며 노름이 `1e-12` 미만이면 항등 회전으로 대체합니다. NULL 불가 |
-| `scale` | 축별 스케일 xyz. 회전에 열 스케일로 합성되며(R·S) 비균등 스케일을 허용합니다. NULL 불가 |
-| `isDynamic` | `0` = 정적 / 0 이외 = 동적 |
+| `context` | Context handle |
+| `mesh` | Handle of the mesh to place |
+| `position` | World position xyz (scene units). Must not be NULL |
+| `quatXYZW` | Local→world rotation quaternion, **XYZW order**. The engine normalizes it and substitutes the identity rotation if the norm is below `1e-12`. Must not be NULL |
+| `scale` | Per-axis scale xyz. Composed with the rotation as column scale (R·S); non-uniform scale is allowed. Must not be NULL |
+| `isDynamic` | `0` = static / nonzero = dynamic |
 
-**반환** — 오브젝트 핸들. 실패하면 `v < 0`(포인터 NULL, 없는 메시, 쓸 수 없는 변환 등).
+**Returns** — An object handle. `v < 0` on failure (NULL pointer, nonexistent mesh, unusable transform, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_object_set_transform</code> — 오브젝트의 행렬 변환을 바꾼다</summary>
+<summary><code>st_rt_object_set_transform</code> — Changes an object's matrix transform</summary>
 
 ```c
 void st_rt_object_set_transform(STRT_Context* context, STObjectId object, const STTransform* transform);
 ```
 
-**용도** — 이미 배치한 오브젝트의 로컬→월드 변환을 행렬로 갱신합니다.
+**Purpose** — Updates the local→world transform of an already placed object with a matrix.
 
-**언제·어떻게** — 오브젝트를 움직일 때 호출합니다. 동적 오브젝트는 전체 빌드 없이 동적 재구축으로 반영됩니다. 정적 오브젝트의 변경은 대기 상태로 두었다가 다음 `st_rt_build`에서 반영되므로, 매 프레임 움직이는 기하는 동적(`isDynamic = 1`)으로 만드십시오. 쿼터니언으로 주려면 `st_rt_object_set_transform_q`를 씁니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — Call it when moving an object. Dynamic objects are updated by a dynamic rebuild without a full build. Changes to static objects are held pending and applied at the next `st_rt_build`, so make geometry that moves every frame dynamic (`isDynamic = 1`). To give a quaternion, use `st_rt_object_set_transform_q`. Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 대상 오브젝트 핸들 |
-| `transform` | 새 변환. `STTransform` 필드는 `st_rt_object_create` 항목 참고. NULL이면 아무것도 하지 않습니다 |
+| `context` | Context handle |
+| `object` | Target object handle |
+| `transform` | New transform. See the `st_rt_object_create` entry for the `STTransform` fields. NULL does nothing |
 
-**반환** — 없음. 없는 오브젝트나 쓸 수 없는 변환(비유한·역행렬 불가)은 무시됩니다.
+**Returns** — Nothing. Nonexistent objects and unusable transforms (non-finite · non-invertible) are ignored.
 
 </details>
 
 <details>
-<summary><code>st_rt_object_set_transform_q</code> — 오브젝트 변환을 위치·쿼터니언·스케일로 바꾼다</summary>
+<summary><code>st_rt_object_set_transform_q</code> — Changes an object's transform with position · quaternion · scale</summary>
 
 ```c
 void st_rt_object_set_transform_q(STRT_Context* context, STObjectId object, const float position[3], const float quatXYZW[4], const float scale[3]);
 ```
 
-**용도** — `st_rt_object_set_transform`의 TRS판입니다. 게임 엔진 트랜스폼(위치·쿼터니언·스케일)을 그대로 넘겨 오브젝트를 갱신합니다.
+**Purpose** — The TRS version of `st_rt_object_set_transform`. Updates the object by passing a game engine transform (position · quaternion · scale) as is.
 
-**언제·어떻게** — 정적/동적별 반영 시점은 `st_rt_object_set_transform`과 같습니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — When changes take effect for static/dynamic objects is the same as `st_rt_object_set_transform`. Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 대상 오브젝트 핸들 |
-| `position` | 월드 위치 xyz(씬 단위) |
-| `quatXYZW` | 로컬→월드 회전 쿼터니언, **XYZW 순서**. 엔진이 정규화하며 노름이 `1e-12` 미만이면 항등 회전으로 대체합니다 |
-| `scale` | 축별 스케일 xyz(R·S 합성, 비균등 허용) |
+| `context` | Context handle |
+| `object` | Target object handle |
+| `position` | World position xyz (scene units) |
+| `quatXYZW` | Local→world rotation quaternion, **XYZW order**. The engine normalizes it and substitutes the identity rotation if the norm is below `1e-12` |
+| `scale` | Per-axis scale xyz (R·S composition, non-uniform allowed) |
 
-**반환** — 없음. 포인터 중 하나라도 NULL이면 아무것도 하지 않으며, 없는 오브젝트나 쓸 수 없는 변환은 무시됩니다.
+**Returns** — Nothing. If any pointer is NULL it does nothing, and nonexistent objects or unusable transforms are ignored.
 
 </details>
 
 <details>
-<summary><code>st_rt_mesh_destroy</code> — 메시와 그 메시를 쓰는 오브젝트를 제거한다</summary>
+<summary><code>st_rt_mesh_destroy</code> — Removes a mesh and the objects that use it</summary>
 
 ```c
 int st_rt_mesh_destroy(STRT_Context* context, STMeshId mesh);
 ```
 
-**용도** — 등록한 메시 리소스를 씬에서 제거합니다. 이 메시를 참조하던 오브젝트도 함께 해제됩니다.
+**Purpose** — Removes a registered mesh resource from the scene. Objects that referenced this mesh are released as well.
 
-**언제·어떻게** — 더 이상 쓰지 않는 기하를 정리할 때 호출합니다. 정적 오브젝트가 함께 제거되면 다음 `st_rt_build` 전까지 발행된 정적 구조에 남아 있으므로, 제거 뒤 `st_rt_build`를 호출해 반영하십시오. 제거된 핸들은 다시 쓰지 않습니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — Call it to clean up geometry that is no longer used. If static objects are removed along with it, they remain in the published static structure until the next `st_rt_build`, so call `st_rt_build` after the removal to apply it. Do not reuse a removed handle. Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 제거할 메시 핸들 |
+| `context` | Context handle |
+| `mesh` | Handle of the mesh to remove |
 
-**반환** — `1` = 제거됨 / `0` = 컨텍스트가 없거나 없는 메시.
+**Returns** — `1` = removed / `0` = no context or nonexistent mesh.
 
 </details>
 
 <details>
-<summary><code>st_rt_object_destroy</code> — 오브젝트를 씬에서 제거한다</summary>
+<summary><code>st_rt_object_destroy</code> — Removes an object from the scene</summary>
 
 ```c
 int st_rt_object_destroy(STRT_Context* context, STObjectId object);
 ```
 
-**용도** — 배치한 오브젝트(인스턴스)를 씬에서 뺍니다. 참조하던 메시 리소스는 남습니다.
+**Purpose** — Takes a placed object (instance) out of the scene. The mesh resource it referenced remains.
 
-**언제·어떻게** — 성공 즉시 `st_rt_scene_get_stats`의 `objectCount`가 줄어듭니다. 정적 오브젝트는 다음 `st_rt_build` 전까지 발행된 정적 구조에 남아 있으므로, 제거 뒤 `st_rt_build`를 호출해 반영하십시오. 동적 오브젝트는 동적 재구축에서 빠집니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — `objectCount` of `st_rt_scene_get_stats` decreases as soon as it succeeds. Static objects remain in the published static structure until the next `st_rt_build`, so call `st_rt_build` after the removal to apply it. Dynamic objects drop out of the dynamic rebuild. Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 제거할 오브젝트 핸들 |
+| `context` | Context handle |
+| `object` | Handle of the object to remove |
 
-**반환** — `1` = 제거됨 / `0` = 컨텍스트가 없거나 없는(이미 제거된) 오브젝트.
+**Returns** — `1` = removed / `0` = no context or nonexistent (already removed) object.
 
 </details>
 
 <details>
-<summary><code>st_rt_mesh_set_material</code> — 메시 전체의 재질을 런타임에 바꾼다</summary>
+<summary><code>st_rt_mesh_set_material</code> — Changes the material of a whole mesh at runtime</summary>
 
 ```c
 int st_rt_mesh_set_material(STRT_Context* context, STMeshId mesh, STMaterialId material);
 ```
 
-**용도** — 이미 등록한 메시의 재질을 다른 재질 하나로 교체합니다. 메시를 다시 만들지 않고 표면 음향 특성만 바꿀 때 씁니다.
+**Purpose** — Replaces the material of an already registered mesh with a single other material. Use it to change only the surface acoustic properties without recreating the mesh.
 
-**언제·어떻게** — 씬 구성 뒤 언제든 호출할 수 있습니다. 메시의 모든 삼각형이 `material`을 쓰게 되며, 생성 시 삼각형별로 지정한 재질도 이 하나로 바뀝니다. 재질이 유효하지 않으면 기존 재질을 그대로 둡니다. 이 메시를 쓰는 모든 오브젝트에 반영됩니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**When / how** — Can be called at any time after scene setup. Every triangle of the mesh then uses `material`, and per-triangle materials assigned at creation are also replaced by this one. If the material is invalid, the existing material is kept. Applies to every object that uses this mesh. Thread: `[control]` — control thread only; do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 대상 메시 핸들 |
-| `material` | 새 재질 핸들(등록된 재질) |
+| `context` | Context handle |
+| `mesh` | Target mesh handle |
+| `material` | New material handle (a registered material) |
 
-**반환** — `1` = 변경됨 / `0` = 컨텍스트가 없거나, 없는 메시이거나, 등록되지 않은 재질.
+**Returns** — `1` = changed / `0` = no context, nonexistent mesh or unregistered material.
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>음원 — 생성, 위치·방향·속도, 지향성, 경로 게이트·볼륨, 레이 예산</strong> — 21개</summary>
+<summary><strong>Sources — creation, position · direction · velocity, directivity, path gates · volumes, ray budget</strong> — 21 functions</summary>
 
 <details>
-<summary><code>st_rt_source_create</code> — 음원을 만들고 핸들을 돌려준다</summary>
+<summary><code>st_rt_source_create</code> — Creates a source and returns its handle</summary>
 
 ```c
 STSourceId st_rt_source_create(STRT_Context* context, const STSourceDesc* source);
 ```
 
-**용도** — 씬에 음원 하나를 등록하고 이후 모든 `st_rt_source_*` 호출에 쓰는 `STSourceId` 핸들을 돌려줍니다. 위치·방향·속도·압력 배율·지향 프로필·동적/정적 여부를 한 번에 정합니다.
+**Purpose** — Registers one source in the scene and returns the `STSourceId` handle used by every subsequent `st_rt_source_*` call. Sets position · direction · velocity · pressure scale · directivity profile · dynamic/static at once.
 
-**언제·어떻게** — 컨텍스트를 만든 뒤 언제든 부릅니다. 만든 뒤 오디오 입력(`st_rt_source_set_audio_file`, `st_rt_source_attach_stream` 등)을 붙이고, 움직이는 음원은 매 프레임 `st_rt_source_set_position` / `st_rt_source_set_velocity`로 갱신합니다. 생성 직후 상태: source energy 1.0, 경로 볼륨 4종 1.0, 경로 종류 게이트 5종 모두 켜짐, 활성(enabled), 쉼 아님(`ST_RT_IDLE_RUNNING`), 지향성 테이블 없음, 수송 갱신 단계 수 0(기본), 수송 레이 격자 16 × 8, 소스별 최대 깊이 4. orientation은 `direction`에 맞는 roll 없는 최소 회전으로 맞춰집니다(`direction`이 `{0,0,1}`이면 항등). 스레드: `[control]` — 씬 락을 잡을 수 있으니 오디오 콜백에서 부르지 않습니다.
+**When / how** — Call it at any time after creating the context. After creation, attach audio input (`st_rt_source_set_audio_file`, `st_rt_source_attach_stream`, etc.), and update moving sources every frame with `st_rt_source_set_position` / `st_rt_source_set_velocity`. State right after creation: source energy 1.0, all 4 path volumes 1.0, all 5 path-type gates enabled, enabled, not idle (`ST_RT_IDLE_RUNNING`), no directivity table, transport refresh steps 0 (default), transport ray grid 16 × 8, per-source maximum depth 4. The orientation is set to the roll-free minimal rotation matching `direction` (identity if `direction` is `{0,0,1}`). Thread: `[control]` — may take the scene lock, so do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 생성 기술자 `STSourceDesc`(아래). NULL이면 실패. 이 구조체에는 `structSize` / `apiVersion` 스탬프가 없습니다 |
+| `context` | Context handle |
+| `source` | Creation descriptor `STSourceDesc` (below). Fails if NULL. This struct has no `structSize` / `apiVersion` stamps |
 
-**구조체** `STSourceDesc`
+**Struct** `STSourceDesc`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `positionX`, `positionY`, `positionZ` | 월드 위치. **씬 단위 그대로**(엔진이 `sceneRatio`로 미터 환산). 유한값이어야 합니다 |
-| `directionX`, `directionY`, `directionZ` | 소스 정면(forward) 방향. 엔진이 정규화하고, 이 방향에 맞춰 소스 orientation(로컬 forward = +Z)을 roll 없이 설정합니다. 0벡터면 +Z. 유한값이어야 합니다 |
-| `velocityX`, `velocityY`, `velocityZ` | 소스 속도, 씬 단위/초. Doppler 계산 전에 m/s로 환산됩니다. 유한값이어야 합니다 |
-| `intensity` | 무차원 **선형 압력(pressure) 배율**. 음향 인텐시티(W/m²)·SPL(dB)·보정된 Pa가 아닙니다. 유한하고 0 이상이어야 합니다. 에너지 영역 배율은 별도로 `st_rt_source_set_energy`로 줍니다 |
-| `directional` | `0` = 무지향(전 밴드 onAxis = offAxis = 1). `0` 아님 = 간이 지향 프로필(onAxis = 1, offAxis = 0). 밴드별로 세밀하게 정하려면 생성 뒤 `st_rt_source_set_axis_attenuation` 또는 `st_rt_source_set_directivity`를 씁니다 |
-| `isDynamic` | `1` = 동적 소스(잔향을 매 프레임 다시 계산), `0` = 정적 소스(잔향을 캐시해 재사용). 수송 갱신 단계 수의 기본값도 이 값으로 갈립니다(`st_rt_source_set_transport_refresh_steps` 참고) |
+| `positionX`, `positionY`, `positionZ` | World position. **In scene units as is** (the engine converts to meters with `sceneRatio`). Must be finite |
+| `directionX`, `directionY`, `directionZ` | Source front (forward) direction. The engine normalizes it and sets the source orientation (local forward = +Z) to this direction without roll. A zero vector means +Z. Must be finite |
+| `velocityX`, `velocityY`, `velocityZ` | Source velocity, scene units/second. Converted to m/s before the Doppler computation. Must be finite |
+| `intensity` | Dimensionless **linear pressure scale**. Not acoustic intensity (W/m²), SPL (dB) or calibrated Pa. Must be finite and ≥ 0. An energy-domain scale is given separately with `st_rt_source_set_energy` |
+| `directional` | `0` = omnidirectional (onAxis = offAxis = 1 in every band). Not `0` = simple directional profile (onAxis = 1, offAxis = 0). For fine per-band control, use `st_rt_source_set_axis_attenuation` or `st_rt_source_set_directivity` after creation |
+| `isDynamic` | `1` = dynamic source (reverb recomputed every frame), `0` = static source (reverb cached and reused). The default number of transport refresh steps also depends on this value (see `st_rt_source_set_transport_refresh_steps`) |
 
-**반환** — 성공 시 `v >= 0`인 `STSourceId`. 실패는 **`v < 0`**이고 `st_rt_get_last_status`로 사유를 봅니다.
-- `ST_STATUS_INVALID_ARGUMENT` — `source`가 NULL, 위치·방향·속도·`intensity`에 비유한값, `intensity < 0`, 그 밖에 엔진이 거절한 경우.
-- `ST_STATUS_BUDGET_EXCEEDED` — 음원 메모리 예산(`STRT_CreateOptions.maxSources`, `st_rt_set_memory_budget`의 `maxSources` · `sourceBudgetBytes`)을 넘었을 때. 정책이 `ST_MEMORY_REJECT_NEW`(기본)일 때만 나며, `ST_MEMORY_EVICT_FARTHEST`면 리스너에서 가장 먼 음원을 `st_rt_source_destroy`와 같은 경로로 내보내고 새 음원을 받습니다(내보낸 id는 `STMemoryStats.lastEvictedSource`). 지원 여부는 `st_rt_get_capability_word(1)`의 `ST_CAP1_MEMORY_BUDGET`으로 확인합니다.
+**Returns** — On success an `STSourceId` with `v >= 0`. Failure is **`v < 0`**; check the reason with `st_rt_get_last_status`.
+- `ST_STATUS_INVALID_ARGUMENT` — `source` is NULL, non-finite position · direction · velocity · `intensity`, `intensity < 0`, or another case the engine rejected.
+- `ST_STATUS_BUDGET_EXCEEDED` — when the source memory budget (`STRT_CreateOptions.maxSources`, `maxSources` · `sourceBudgetBytes` of `st_rt_set_memory_budget`) is exceeded. Occurs only when the policy is `ST_MEMORY_REJECT_NEW` (default); with `ST_MEMORY_EVICT_FARTHEST` the source farthest from the listener is evicted through the same path as `st_rt_source_destroy` and the new source is accepted (the evicted id is in `STMemoryStats.lastEvictedSource`). Check support with `ST_CAP1_MEMORY_BUDGET` of `st_rt_get_capability_word(1)`.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_position</code> — 음원 위치를 옮긴다</summary>
+<summary><code>st_rt_source_set_position</code> — Moves the source</summary>
 
 ```c
 void st_rt_source_set_position(STRT_Context* context, STSourceId source, float x, float y, float z);
 ```
 
-**용도** — 음원의 월드 위치를 갱신합니다. 움직이는 음원을 게임 오브젝트에 붙여 따라가게 할 때 씁니다.
+**Purpose** — Updates the source's world position. Use it to attach a moving source to a game object so it follows.
 
-**언제·어떻게** — 게임 루프에서 매 프레임 불러도 됩니다. 속도를 아는 호스트는 `st_rt_source_set_velocity`도 함께 갱신합니다. 스레드: `[control]` — `ST_RT_SCHEDULER_PIPELINED`에서는 모션 큐에 넣고 돌아오며, 오디오 콜백에서는 부르지 않습니다. 스피커 세트 멤버 소스에는 쓸 수 없습니다(무시되고 `last_status` = `ST_STATUS_INVALID_ARGUMENT`) — 세트의 포즈 갱신을 씁니다.
+**When / how** — May be called every frame from the game loop. Hosts that know the velocity also update `st_rt_source_set_velocity`. Thread: `[control]` — under `ST_RT_SCHEDULER_PIPELINED` it enqueues into the motion queue and returns; do not call it from the audio callback. It cannot be used on speaker-set member sources (ignored, with `last_status` = `ST_STATUS_INVALID_ARGUMENT`) — use the set's pose update instead.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `x`, `y`, `z` | 새 월드 위치, **씬 단위**(좌표 변환 없이 그대로) |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `x`, `y`, `z` | New world position, **in scene units** (as is, with no coordinate conversion) |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_direction</code> — 음원 정면 방향을 바꾼다</summary>
+<summary><code>st_rt_source_set_direction</code> — Changes the source's front direction</summary>
 
 ```c
 void st_rt_source_set_direction(STRT_Context* context, STSourceId source, float x, float y, float z);
 ```
 
-**용도** — 음원의 정면(forward) 방향을 바꿉니다. 콘 감쇠(`st_rt_source_set_axis_attenuation`)와 지향성 테이블(`st_rt_source_set_directivity`)이 이 방향을 기준으로 적용됩니다.
+**Purpose** — Changes the source's front (forward) direction. Cone attenuation (`st_rt_source_set_axis_attenuation`) and the directivity table (`st_rt_source_set_directivity`) are applied relative to this direction.
 
-**언제·어떻게** — 언제든 부릅니다. 이 setter는 소스 orientation을 "+Z에서 그 방향으로 가는 **roll 없는 최소 회전**"으로 함께 갱신합니다. roll이 필요한 지향성 테이블(좌우가 비대칭인 음원 등)은 이 함수 대신 `st_rt_source_set_orientation_q`를 씁니다. 스레드: `[control]`. 스피커 세트 멤버 소스에는 쓸 수 없습니다(무시, `ST_STATUS_INVALID_ARGUMENT`).
+**When / how** — Call it at any time. This setter also updates the source orientation to "the **roll-free minimal rotation** from +Z to that direction". For directivity tables that need roll (sources asymmetric left/right, etc.), use `st_rt_source_set_orientation_q` instead of this function. Thread: `[control]`. It cannot be used on speaker-set member sources (ignored, `ST_STATUS_INVALID_ARGUMENT`).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `x`, `y`, `z` | 월드 기준 정면 방향 벡터. 좌표계는 +X right · +Y up · +Z forward |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `x`, `y`, `z` | Front direction vector in world space. The coordinate system is +X right · +Y up · +Z forward |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_velocity</code> — 음원 속도를 준다</summary>
+<summary><code>st_rt_source_set_velocity</code> — Sets the source velocity</summary>
 
 ```c
 void st_rt_source_set_velocity(STRT_Context* context, STSourceId source, float x, float y, float z);
 ```
 
-**용도** — 음원의 이동 속도를 갱신합니다. 엔진은 이 값을 Doppler 계산에 씁니다.
+**Purpose** — Updates the source's movement velocity. The engine uses this value for the Doppler computation.
 
-**언제·어떻게** — 위치 갱신과 같은 주기로 부릅니다. 스레드: `[control]` — `ST_RT_SCHEDULER_PIPELINED`에서는 모션 큐에 넣고 돌아옵니다. 스피커 세트 멤버 소스에는 쓸 수 없습니다(무시, `ST_STATUS_INVALID_ARGUMENT`).
+**When / how** — Call it at the same rate as position updates. Thread: `[control]` — under `ST_RT_SCHEDULER_PIPELINED` it enqueues into the motion queue and returns. It cannot be used on speaker-set member sources (ignored, `ST_STATUS_INVALID_ARGUMENT`).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `x`, `y`, `z` | 속도 벡터, **씬 단위/초**. 엔진이 `sceneRatio`로 m/s로 환산합니다 |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `x`, `y`, `z` | Velocity vector, **scene units/second**. The engine converts to m/s with `sceneRatio` |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_destroy</code> — 음원을 지운다</summary>
+<summary><code>st_rt_source_destroy</code> — Deletes a source</summary>
 
 ```c
 int st_rt_source_destroy(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 음원을 씬에서 제거하고 그 렌더 상태를 정리합니다. 음원 메모리 예산에서 자리를 돌려받는 것도 이 호출입니다.
+**Purpose** — Removes the source from the scene and cleans up its render state. This call is also what frees its slot in the source memory budget.
 
-**언제·어떻게** — 더 쓰지 않는 음원에 부릅니다. 렌더 중이면 3 ms 램프로 소리를 내린 뒤 렌더 상태를 거둡니다. 지운 소스의 소스별 쉼(`st_rt_source_idle`) 설정도 함께 사라집니다. 스레드: `[control]`. 스피커 세트 멤버 소스는 지울 수 없습니다(`0`, `ST_STATUS_INVALID_ARGUMENT`) — 세트를 지웁니다.
+**When / how** — Call it on sources no longer in use. While rendering, it ramps the sound down over 3 ms and then reclaims the render state. The deleted source's per-source idle (`st_rt_source_idle`) setting also goes away. Thread: `[control]`. Speaker-set member sources cannot be deleted (`0`, `ST_STATUS_INVALID_ARGUMENT`) — delete the set instead.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 지울 음원 핸들 |
+| `context` | Context handle |
+| `source` | Handle of the source to delete |
 
-**반환** — `1` = 제거됨 / `0` = 실패(컨텍스트 NULL, 없는 음원, 스피커 세트 멤버).
+**Returns** — `1` = removed / `0` = failure (NULL context, nonexistent source, speaker-set member).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_path_enabled</code> — 음원 하나의 경로 종류를 켜고 끈다</summary>
+<summary><code>st_rt_source_set_path_enabled</code> — Enables or disables a path type for one source</summary>
 
 ```c
 void st_rt_source_set_path_enabled(STRT_Context* context, STSourceId source, int pathType, int enabled);
 ```
 
-**용도** — 음원 하나에 대해 특정 경로 종류(직접·투과·반사·회절·잔향)를 계산·기여에서 빼거나 다시 넣습니다. 전역 게이트 `st_rt_set_path_type_enabled`의 소스별 판입니다. 특정 음원만 잔향을 빼는 식의 연출이나 청취 A/B 비교에 씁니다.
+**Purpose** — Removes a specific path type (direct · transmission · reflection · diffraction · reverb) from the computation and contribution of one source, or puts it back. The per-source version of the global gate `st_rt_set_path_type_enabled`. Use it for effects like removing reverb from only certain sources, or for listening A/B comparisons.
 
-**언제·어떻게** — 언제든 부릅니다. 기본은 5종 모두 켜짐입니다. 경로를 완전히 빼는 대신 크기만 줄이려면 `st_rt_source_set_path_volume`(`STSourceVolumeKind`: `ST_SOURCE_VOLUME_DIRECT`(0, 투과 포함) / `REFLECTION`(1) / `DIFFRACTION`(2) / `REVERB`(3), 선형 압력 배율)을 씁니다. 스레드: `[control]`.
+**When / how** — Call it at any time. All 5 types are enabled by default. To only reduce a path's level instead of removing it entirely, use `st_rt_source_set_path_volume` (`STSourceVolumeKind`: `ST_SOURCE_VOLUME_DIRECT` (0, includes transmission) / `REFLECTION` (1) / `DIFFRACTION` (2) / `REVERB` (3), linear pressure scale). Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb. 범위 밖은 무시됩니다 |
-| `enabled` | `0` = 끔, `0` 아님 = 켬 |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb. Out of range is ignored |
+| `enabled` | `0` = off, not `0` = on |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_is_path_enabled</code> — 음원 하나의 경로 종류 게이트를 읽는다</summary>
+<summary><code>st_rt_source_is_path_enabled</code> — Reads a path-type gate of one source</summary>
 
 ```c
 int st_rt_source_is_path_enabled(STRT_Context* context, STSourceId source, int pathType);
 ```
 
-**용도** — `st_rt_source_set_path_enabled`로 정한 소스별 경로 게이트의 현재 값을 조회합니다.
+**Purpose** — Queries the current value of a per-source path gate set with `st_rt_source_set_path_enabled`.
 
-**언제·어떻게** — 언제든 부릅니다. 스레드: `[control]` — 씬 read 락만 잡는 순수 질의입니다.
+**When / how** — Call it at any time. Thread: `[control]` — a pure query that takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
+| `context` | Context handle |
+| `source` | Target source handle |
 | `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb |
 
-**반환** — `1` = 켜짐 / `0` = 꺼짐. 컨텍스트 NULL, 없는 음원, 범위 밖 `pathType`도 `0`입니다.
+**Returns** — `1` = enabled / `0` = disabled. A NULL context, nonexistent source or out-of-range `pathType` also returns `0`.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_energy</code> — 음원의 에너지 배율을 정한다</summary>
+<summary><code>st_rt_source_set_energy</code> — Sets the source's energy scale</summary>
 
 ```c
 int st_rt_source_set_energy(STRT_Context* context, STSourceId source, float energy);
 ```
 
-**용도** — 음원의 상대 방사 에너지를 **energy-domain**(무차원 에너지 비율) 배율로 정합니다. `STSourceDesc::intensity`(압력 배율)와 별개의 배율이며, 지향성 테이블을 `ST_DIRECTIVITY_POWER_MEAN`으로 정규화했을 때 총 방사 파워를 잡는 자리이기도 합니다.
+**Purpose** — Sets the source's relative radiated energy as an **energy-domain** (dimensionless energy ratio) scale. It is a separate scale from `STSourceDesc::intensity` (pressure scale), and is also where the total radiated power is set when the directivity table is normalized with `ST_DIRECTIVITY_POWER_MEAN`.
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 기본값은 1.0입니다. 에너지와 압력의 관계는 **energy = gain²**입니다 — 압력 이득 g를 원하면 `g * g`를 넣습니다(예: −6 dB, g ≈ 0.5 → energy ≈ 0.25). 엔진은 렌더 경계에서 한 번만 제곱근을 취합니다. 스레드: `[control]`.
+**When / how** — Call it at any time after creation. The default is 1.0. Energy relates to pressure as **energy = gain²** — for a pressure gain g, pass `g * g` (e.g. −6 dB, g ≈ 0.5 → energy ≈ 0.25). The engine takes the square root exactly once at the render boundary. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `energy` | 에너지 배율. 유한하고 0 이상. 기본 1.0 |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `energy` | Energy scale. Finite and ≥ 0. Default 1.0 |
 
-**반환** — `1` = 적용 / `0` = 실패(컨텍스트 NULL, 비유한값 또는 음수, 없는 음원).
+**Returns** — `1` = applied / `0` = failure (NULL context, non-finite or negative value, nonexistent source).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_energy</code> — 음원의 에너지 배율을 읽는다</summary>
+<summary><code>st_rt_source_get_energy</code> — Reads the source's energy scale</summary>
 
 ```c
 float st_rt_source_get_energy(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_set_energy`로 정한 에너지 배율(energy-domain)을 조회합니다.
+**Purpose** — Queries the energy scale (energy-domain) set with `st_rt_source_set_energy`.
 
-**언제·어떻게** — 언제든 부릅니다. 스레드: `[control]` — 씬 read 락만 잡는 순수 질의입니다.
+**When / how** — Call it at any time. Thread: `[control]` — a pure query that takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
+| `context` | Context handle |
+| `source` | Target source handle |
 
-**반환** — 현재 에너지 배율(기본 1.0). 컨텍스트 NULL이거나 없는 음원이면 `-1.0`.
+**Returns** — The current energy scale (default 1.0). `-1.0` for a NULL context or nonexistent source.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_enabled</code> — 음원 전체를 켜고 끈다</summary>
+<summary><code>st_rt_source_set_enabled</code> — Enables or disables the whole source</summary>
 
 ```c
 void st_rt_source_set_enabled(STRT_Context* context, STSourceId source, int enabled);
 ```
 
-**용도** — 음원을 지우지 않고 전파 계산에서 통째로 빼거나 다시 넣는 마스터 스위치입니다. 경로 종류별 게이트(`st_rt_source_set_path_enabled`)보다 위에 있습니다.
+**Purpose** — A master switch that takes the source out of the propagation computation entirely, or puts it back, without deleting it. It sits above the per-path-type gates (`st_rt_source_set_path_enabled`).
 
-**언제·어떻게** — 언제든 부릅니다. 생성 직후는 켜짐입니다. 클립을 트리거(`st_rt_source_trigger`)할 음원은 켜 둔 채로 씁니다. 들려줄 것이 잠시 없는 음원을 상태째 쉬게 하려면 `st_rt_source_idle`을 씁니다. 스레드: `[control]`.
+**When / how** — Call it at any time. Enabled right after creation. Keep sources that trigger clips (`st_rt_source_trigger`) enabled. To idle a source that has nothing to play for a while while keeping its state, use `st_rt_source_idle`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `enabled` | `0` = 끔, `0` 아님 = 켬 |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `enabled` | `0` = off, not `0` = on |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_ray_count</code> — 음원의 수송 레이 격자 크기를 정한다</summary>
+<summary><code>st_rt_source_set_ray_count</code> — Sets the size of the source's transport ray grid</summary>
 
 ```c
 void st_rt_source_set_ray_count(STRT_Context* context, STSourceId source, int width, int height);
 ```
 
-**용도** — 이 음원이 쏘는 수송(diffuse transport) 레이 격자 N = `width` × `height`를 정합니다. 음원별로 품질과 계산 비용을 맞추는 손잡이입니다.
+**Purpose** — Sets the transport (diffuse transport) ray grid N = `width` × `height` that this source casts. A per-source knob for balancing quality against compute cost.
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 기본 격자는 16 × 8입니다. 레이 수가 늘수록 비용이 늘며, 그 비용을 여러 전파에 나누려면 `st_rt_source_set_transport_refresh_steps`를 함께 씁니다. 값이 0 이하이거나 엔진의 수송 예산(격자·깊이에 따른 상한)을 넘으면 거절되고 `last_status`에 `ST_STATUS_INVALID_ARGUMENT`가 남습니다(사유는 `st_rt_get_last_error`). 스레드: `[control]`.
+**When / how** — Call it at any time after creation. The default grid is 16 × 8. More rays cost more; to spread that cost over several propagations, also use `st_rt_source_set_transport_refresh_steps`. A value of 0 or less, or one that exceeds the engine's transport budget (a limit depending on grid and depth), is rejected and leaves `ST_STATUS_INVALID_ARGUMENT` in `last_status` (reason via `st_rt_get_last_error`). Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `width` | 격자 가로 레이 수, 1 이상. 기본 16 |
-| `height` | 격자 세로 레이 수, 1 이상. 기본 8 |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `width` | Horizontal ray count of the grid, at least 1. Default 16 |
+| `height` | Vertical ray count of the grid, at least 1. Default 8 |
 
-**반환** — 없음. 성공 여부는 `st_rt_get_last_status`로 확인합니다.
+**Returns** — Nothing. Check success with `st_rt_get_last_status`.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_depth</code> — 음원별 최대 반사 깊이를 정한다</summary>
+<summary><code>st_rt_source_set_depth</code> — Sets the per-source maximum reflection depth</summary>
 
 ```c
 void st_rt_source_set_depth(STRT_Context* context, STSourceId source, int depth);
 ```
 
-**용도** — 이 음원 수송 레이의 최대 반사(바운스) 깊이를 정합니다. `st_rt_source_set_ray_count`와 함께 음원별 품질·비용을 정하는 손잡이입니다.
+**Purpose** — Sets the maximum reflection (bounce) depth of this source's transport rays. Together with `st_rt_source_set_ray_count`, a knob for per-source quality and cost.
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 소스별 기본값은 4입니다. 엔진의 수송 예산을 넘거나 허용 범위 밖이면 거절되고 `last_status`에 `ST_STATUS_INVALID_ARGUMENT`가 남습니다(사유는 `st_rt_get_last_error`). 스레드: `[control]`.
+**When / how** — Call it at any time after creation. The per-source default is 4. A value that exceeds the engine's transport budget or is out of the allowed range is rejected and leaves `ST_STATUS_INVALID_ARGUMENT` in `last_status` (reason via `st_rt_get_last_error`). Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `depth` | 최대 반사 깊이. 기본 4 |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `depth` | Maximum reflection depth. Default 4 |
 
-**반환** — 없음. 성공 여부는 `st_rt_get_last_status`로 확인합니다.
+**Returns** — Nothing. Check success with `st_rt_get_last_status`.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_transport_refresh_steps</code> — 수송 레이 격자를 몇 번의 전파에 나눠 갱신할지 정한다</summary>
+<summary><code>st_rt_source_set_transport_refresh_steps</code> — Sets over how many propagations the transport ray grid is refreshed</summary>
 
 ```c
 int st_rt_source_set_transport_refresh_steps(STRT_Context* context, STSourceId source, int steps);
 ```
 
-**용도** — 이 음원의 수송 레이 격자 N(= `width` × `height`)을 **n번의 전파에 걸쳐** 갱신하게 합니다. 한 전파가 교체하는 레이는 ceil(N/n)개이고 전체 비용은 Σ N/n입니다. 엔진은 전역 예산 상한을 두지 않으므로, 음원이 많을 때 비용은 호스트가 n으로 통제합니다. 지원 여부는 `ST_CAP_SOURCE_TRANSPORT_REFRESH_STEPS`로 확인합니다.
+**Purpose** — Makes this source's transport ray grid N (= `width` × `height`) refresh **over n propagations**. Each propagation replaces ceil(N/n) rays, and the total cost is Σ N/n. The engine imposes no global budget limit, so with many sources the host controls the cost through n. Check support with `ST_CAP_SOURCE_TRANSPORT_REFRESH_STEPS`.
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 격자를 나누면 갱신되지 않은 레이의 방향이 전파 사이에 유지돼 잔향 탭이 매끄럽게 이어지고, `steps = 1`은 매 전파 전 격자를 다시 깔아 그 연속성을 끊는 대신 완전히 결정적입니다. IR 재변환은 유발하지 않지만 값이 바뀌면 씬 스냅샷을 다시 발행해 워커에 전달하고, 수송 캐시는 다음 전파에서 다시 만들어집니다. 스레드: `[control]`.
+**When / how** — Call it at any time after creation. When the grid is split, the directions of rays not yet refreshed are kept between propagations so reverb taps continue smoothly; `steps = 1` re-lays the whole grid every propagation, breaking that continuity in exchange for being fully deterministic. It does not trigger IR reconversion, but when the value changes the scene snapshot is republished to the workers and the transport cache is rebuilt at the next propagation. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `steps` | `0` = 기본(스케줄러와 `isDynamic`이 정함 — `ST_RT_SCHEDULER_PIPELINED`는 동적 8 · 정적 16, `ST_RT_SCHEDULER_SYNCHRONOUS`는 동적 1 · 정적 16) / `1` = 매 전파 전량 재추적(저장소를 만들지 않는 결정적 경로) / `2` 이상 = n번으로 나눠 갱신, 사용 시 `[1, N]`으로 clamp. 음수는 거절 |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `steps` | `0` = default (decided by the scheduler and `isDynamic` — `ST_RT_SCHEDULER_PIPELINED` dynamic 8 · static 16, `ST_RT_SCHEDULER_SYNCHRONOUS` dynamic 1 · static 16) / `1` = full retrace every propagation (deterministic path with no storage) / `2` or more = refresh split over n, clamped to `[1, N]` when used. Negative values are rejected |
 
-**반환** — `1` = 성공 / `0` = 실패. 음수 `steps`는 `ST_STATUS_INVALID_ARGUMENT`, 없는 음원은 `ST_STATUS_NOT_FOUND`.
+**Returns** — `1` = success / `0` = failure. A negative `steps` gives `ST_STATUS_INVALID_ARGUMENT`, a nonexistent source `ST_STATUS_NOT_FOUND`.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_transport_refresh_steps</code> — 수송 갱신 단계 수 저장값을 읽는다</summary>
+<summary><code>st_rt_source_get_transport_refresh_steps</code> — Reads the stored transport refresh step count</summary>
 
 ```c
 int st_rt_source_get_transport_refresh_steps(const STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_set_transport_refresh_steps`로 저장한 값을 조회합니다.
+**Purpose** — Queries the value stored with `st_rt_source_set_transport_refresh_steps`.
 
-**언제·어떻게** — 언제든 부릅니다. 돌려주는 값은 **저장값 그대로**(0 포함)이며, 스케줄러 기본과 격자 clamp를 거친 실효 n이 아닙니다. 스레드: `[control]` — 씬 read 락만 잡는 순수 질의입니다.
+**When / how** — Call it at any time. The returned value is **the stored value as is** (including 0), not the effective n after the scheduler default and grid clamp. Thread: `[control]` — a pure query that takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
+| `context` | Context handle |
+| `source` | Target source handle |
 
-**반환** — 저장된 단계 수(`0` = 기본). 실패 시 `-1`.
+**Returns** — The stored step count (`0` = default). `-1` on failure.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_axis_attenuation</code> — 콘(on/off-axis) 지향 감쇠를 밴드별로 정한다</summary>
+<summary><code>st_rt_source_set_axis_attenuation</code> — Sets cone (on/off-axis) directional attenuation per band</summary>
 
 ```c
 void st_rt_source_set_axis_attenuation(STRT_Context* context, STSourceId source, const float onAxis[ST_FREQUENCY_BANDS], const float offAxis[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 음원의 정면(on-axis)과 측후면(off-axis) 방사를 9밴드별로 정하는 간단한 콘 지향성입니다. 측정 지향성 자료가 없을 때 음원의 대략적인 방향성을 줍니다.
+**Purpose** — Simple cone directivity that sets the source's front (on-axis) and side/rear (off-axis) radiation per each of the 9 bands. Gives the source a rough directionality when no measured directivity data is available.
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 기본은 무지향(전 밴드 1.0)입니다. 무지향은 `onAxis[] = offAxis[] = 1.0`, 단순 지향은 `onAxis[] = 1.0` / `offAxis[] = 0.0`을 넣습니다(`STSourceDesc::directional`의 두 프로필과 같습니다). 정면 방향은 `st_rt_source_set_direction` / `st_rt_source_set_orientation_q`가 정합니다. 지향성 테이블(`st_rt_source_set_directivity`)이 붙어 있는 동안에는 테이블이 쓰이고, 이 콘 값은 보존됐다가 테이블을 떼면 다시 쓰입니다. 스레드: `[control]`. 스피커 세트 멤버 소스에는 쓸 수 없습니다(무시, `ST_STATUS_INVALID_ARGUMENT`).
+**When / how** — Call it at any time after creation. The default is omnidirectional (1.0 in every band). For omnidirectional pass `onAxis[] = offAxis[] = 1.0`; for simple directional pass `onAxis[] = 1.0` / `offAxis[] = 0.0` (the same as the two profiles of `STSourceDesc::directional`). The front direction is set by `st_rt_source_set_direction` / `st_rt_source_set_orientation_q`. While a directivity table (`st_rt_source_set_directivity`) is attached, the table is used; these cone values are preserved and used again once the table is removed. Thread: `[control]`. It cannot be used on speaker-set member sources (ignored, `ST_STATUS_INVALID_ARGUMENT`).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `onAxis` | 정면 방사 감쇠, `ST_FREQUENCY_BANDS`(9)개, 밴드 63 Hz … 16 kHz. NULL이면 아무것도 바꾸지 않습니다 |
-| `offAxis` | 측후면 방사 감쇠, 9개. NULL이면 아무것도 바꾸지 않습니다 |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `onAxis` | Front radiation attenuation, `ST_FREQUENCY_BANDS` (9) values, bands 63 Hz … 16 kHz. NULL changes nothing |
+| `offAxis` | Side/rear radiation attenuation, 9 values. NULL changes nothing |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_orientation_q</code> — 음원 로컬 프레임을 쿼터니언으로 정한다</summary>
+<summary><code>st_rt_source_set_orientation_q</code> — Sets the source's local frame with a quaternion</summary>
 
 ```c
 int st_rt_source_set_orientation_q(STRT_Context* context, STSourceId source, const float quatXYZW[4]);
 ```
 
-**용도** — 음원 로컬 프레임을 월드에 얹는 회전을 단위 쿼터니언(로컬→월드)으로 정합니다. `st_rt_source_set_direction`과 달리 **roll까지** 표현하므로, 좌우가 비대칭인 지향성 테이블의 프레임을 정확히 정할 때 씁니다. 지원 여부는 `ST_CAP_SOURCE_DIRECTIVITY`로 확인합니다.
+**Purpose** — Sets the rotation that places the source's local frame in the world as a unit quaternion (local→world). Unlike `st_rt_source_set_direction` it expresses **roll as well**, so use it to set the frame of a left/right-asymmetric directivity table precisely. Check support with `ST_CAP_SOURCE_DIRECTIVITY`.
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 로컬축은 forward = +Z / up = +Y / right = +X입니다. `st_rt_source_set_direction`과 양방향으로 동기화됩니다 — 이 함수를 부르면 direction = forward(q)로 함께 갱신되고, `st_rt_source_set_direction`을 부르면 orientation이 roll 없는 최소 회전으로 바뀝니다(마지막에 부른 쪽이 이깁니다). 쿼터니언은 엔진이 정규화하므로 대략 정규화된 값을 넣어도 됩니다. 지향성 테이블(`st_rt_source_set_directivity`)과 짝으로 씁니다. 스레드: `[control]`. 스피커 세트 멤버 소스는 `0`(`ST_STATUS_INVALID_ARGUMENT`)입니다.
+**When / how** — Call it at any time after creation. The local axes are forward = +Z / up = +Y / right = +X. It is synchronized both ways with `st_rt_source_set_direction` — calling this function also updates direction = forward(q), and calling `st_rt_source_set_direction` changes the orientation to the roll-free minimal rotation (whichever is called last wins). The engine normalizes the quaternion, so a roughly normalized value is fine. Use it as a pair with the directivity table (`st_rt_source_set_directivity`). Thread: `[control]`. Speaker-set member sources return `0` (`ST_STATUS_INVALID_ARGUMENT`).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `quatXYZW` | 로컬→월드 회전 쿼터니언, **X, Y, Z, W 순서**(`st_rt_object_create_q`와 같은 순서) |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `quatXYZW` | Local→world rotation quaternion, **X, Y, Z, W order** (same order as `st_rt_object_create_q`) |
 
-**반환** — `1` = 성공 / `0` = 실패. `ST_STATUS_INVALID_ARGUMENT`(비유한 성분 또는 퇴화, norm &lt; 1e-12), `ST_STATUS_NOT_FOUND`(없는 음원).
+**Returns** — `1` = success / `0` = failure. `ST_STATUS_INVALID_ARGUMENT` (non-finite component or degenerate, norm &lt; 1e-12), `ST_STATUS_NOT_FOUND` (nonexistent source).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_directivity</code> — 음원에 지향성 테이블을 붙이거나 뗀다</summary>
+<summary><code>st_rt_source_set_directivity</code> — Attaches or detaches a directivity table on a source</summary>
 
 ```c
 int st_rt_source_set_directivity(STRT_Context* context, STSourceId source, const STSourceDirectivity* table);
 ```
 
-**용도** — 측정 자료 등에서 얻은 방향별·밴드별 방사 에너지 테이블을 음원에 붙입니다. 콘 공식(`st_rt_source_set_axis_attenuation`)으로 표현할 수 없는 실제 음원의 지향 패턴을 쓸 때 필요합니다. 지원 여부는 `ST_CAP_SOURCE_DIRECTIVITY`로 확인합니다.
+**Purpose** — Attaches to a source a per-direction, per-band radiated energy table obtained from measurement data or similar. Needed to use the directivity pattern of a real source that cannot be expressed with the cone formula (`st_rt_source_set_axis_attenuation`). Check support with `ST_CAP_SOURCE_DIRECTIVITY`.
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 엔진이 테이블을 **복사**하고 정규화 스칼라도 이 호출에서 한 번 계산하므로, 돌아온 뒤 호스트 버퍼는 해제해도 됩니다. 테이블이 붙어 있는 동안에는 콘 감쇠 대신 테이블이 쓰이고, `table = NULL`로 떼면 보존돼 있던 콘 값으로 돌아갑니다. 테이블 조회 방향은 소스 로컬 프레임 기준이므로 `st_rt_source_set_orientation_q`와 짝으로 씁니다. 스레드: `[control]`. 스피커 세트 멤버 소스는 `0`(`ST_STATUS_INVALID_ARGUMENT`)입니다.
+**When / how** — Call it at any time after creation. The engine **copies** the table and also computes the normalization scalar once in this call, so the host buffer may be freed after it returns. While a table is attached it is used instead of cone attenuation; detaching it with `table = NULL` returns to the preserved cone values. Table lookup directions are relative to the source local frame, so use it as a pair with `st_rt_source_set_orientation_q`. Thread: `[control]`. Speaker-set member sources return `0` (`ST_STATUS_INVALID_ARGUMENT`).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `table` | 지향성 테이블 `STSourceDirectivity`(아래). 호출자가 `structSize` / `apiVersion`을 채웁니다. NULL = 테이블 제거 |
+| `context` | Context handle |
+| `source` | Target source handle |
+| `table` | Directivity table `STSourceDirectivity` (below). The caller fills `structSize` / `apiVersion`. NULL = remove the table |
 
-**구조체** `STSourceDirectivity`
+**Struct** `STSourceDirectivity`
 
-소스 로컬 프레임(forward = +Z, up = +Y, right = +X)의 등각 방위각(az) × 고도각(el) 노드 격자 × 9밴드 **에너지** 테이블입니다. 방향 규약은 엔진 전역과 같습니다: az = atan2(x, z)(정면 0°, 오른쪽 +90°), el = asin(y)(위 = +). 노드는 az_i = i × 360/`azCount`(360°에서 wrap), el_j = −90 + j × 180/(`elCount` − 1)이고, 조회는 az wrap · el clamp 쌍선형 보간입니다. `elCount`가 홀수면 수평면(el = 0)이 노드 위에 놓이며, 권장 격자는 5° 간격(`azCount` = 72, `elCount` = 37)입니다.
+A 9-band **energy** table over an equiangular azimuth (az) × elevation (el) node grid in the source local frame (forward = +Z, up = +Y, right = +X). The direction convention is the same as engine-wide: az = atan2(x, z) (front 0°, right +90°), el = asin(y) (up = +). Nodes are az_i = i × 360/`azCount` (wrapping at 360°), el_j = −90 + j × 180/(`elCount` − 1), and lookup is bilinear interpolation with az wrap · el clamp. If `elCount` is odd the horizontal plane (el = 0) lies on a node; the recommended grid is 5° spacing (`azCount` = 72, `elCount` = 37).
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` | 호출자가 `sizeof(STSourceDirectivity)`로 채웁니다 |
-| `apiVersion` | 호출자가 `ST_ABI_VERSION`으로 채웁니다 |
-| `azCount` | 방위각 노드 수, `[3, 361]` |
-| `elCount` | 고도각 노드 수, `[2, 181]` |
-| `levelMode` | `STDirectivityLevelMode` — 테이블의 절대 레벨 해석(아래) |
-| `reserved0` | 예약 |
-| `energy` | 테이블 데이터, `elCount` × `azCount` × `ST_FREQUENCY_BANDS`개 float. 레이아웃은 `[el][az][band]`(band가 가장 빠른 축). **energy-domain**(pressure가 아님), 모든 값이 유한하고 0 이상이어야 합니다 |
-| `reserved[6]` | 예약 |
+| `structSize` | Filled by the caller with `sizeof(STSourceDirectivity)` |
+| `apiVersion` | Filled by the caller with `ST_ABI_VERSION` |
+| `azCount` | Number of azimuth nodes, `[3, 361]` |
+| `elCount` | Number of elevation nodes, `[2, 181]` |
+| `levelMode` | `STDirectivityLevelMode` — how the table's absolute level is interpreted (below) |
+| `reserved0` | Reserved |
+| `energy` | Table data, `elCount` × `azCount` × `ST_FREQUENCY_BANDS` floats. Layout is `[el][az][band]` (band is the fastest axis). **Energy-domain** (not pressure); every value must be finite and ≥ 0 |
+| `reserved[6]` | Reserved |
 
-**열거형** `STDirectivityLevelMode` — raw 테이블은 그대로 두고, 엔진이 설정 시 한 번 계산하는 밴드별 정규화 스칼라만 바꿉니다.
+**Enum** `STDirectivityLevelMode` — Leaves the raw table as is and changes only the per-band normalization scalar the engine computes once when it is set.
 
-| 값 | 설명 |
+| Value | Description |
 |---|---|
-| `ST_DIRECTIVITY_ABSOLUTE` (0) | 정규화 없음, 값을 그대로 씁니다. 절대 레벨까지 담긴 측정 테이블용 |
-| `ST_DIRECTIVITY_POWER_MEAN` (1) | 밴드별 구면 파워 평균이 1이 되도록 정규화(등방사파워). 지향 패턴만 쓰고 총 방사 파워는 `intensity` / `st_rt_source_set_energy`로 따로 잡을 때. **기본 권장** |
-| `ST_DIRECTIVITY_ON_AXIS` (2) | 정면(az = 0, el = 0) 값이 1이 되도록 정규화. 게임 툴의 콘 관례와 같은 자리 |
+| `ST_DIRECTIVITY_ABSOLUTE` (0) | No normalization; values are used as is. For measured tables that include the absolute level |
+| `ST_DIRECTIVITY_POWER_MEAN` (1) | Normalized so the per-band spherical power mean is 1 (equal radiated power). For when you use only the directivity pattern and set the total radiated power separately with `intensity` / `st_rt_source_set_energy`. **Recommended default** |
+| `ST_DIRECTIVITY_ON_AXIS` (2) | Normalized so the front (az = 0, el = 0) value is 1. Matches the cone convention of game tools |
 
-**반환** — `1` = 성공(테이블 제거 성공 포함) / `0` = 실패. `last_status`:
-- `ST_STATUS_VERSION_MISMATCH` — `table`의 `structSize` / `apiVersion` 불일치.
-- `ST_STATUS_INVALID_ARGUMENT` — `levelMode`가 `STDirectivityLevelMode` 밖, `azCount` · `elCount` 범위 밖, `energy`가 NULL, `energy`에 비유한·음수 원소(사유는 `st_rt_get_last_error`), 스피커 세트 멤버.
-- `ST_STATUS_NOT_FOUND` — 없는 음원.
+**Returns** — `1` = success (including a successful table removal) / `0` = failure. `last_status`:
+- `ST_STATUS_VERSION_MISMATCH` — `structSize` / `apiVersion` mismatch in `table`.
+- `ST_STATUS_INVALID_ARGUMENT` — `levelMode` outside `STDirectivityLevelMode`, `azCount` · `elCount` out of range, `energy` is NULL, non-finite or negative elements in `energy` (reason via `st_rt_get_last_error`), speaker-set member.
+- `ST_STATUS_NOT_FOUND` — nonexistent source.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_idle</code> — 음원 하나를 쉬게 한다</summary>
+<summary><code>st_rt_source_idle</code> — Idles one source</summary>
 
 ```c
 int st_rt_source_idle(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 엔진 전체 쉼(`st_rt_idle`)과 별개로 음원 하나만 계산·렌더를 멈춥니다. 재생이 끝났지만 곧 다시 쓸 음원을 지우지 않고 비용 없이 붙잡아 둘 때 씁니다. 지원 여부는 `st_rt_get_capability_word(1)`의 `ST_CAP1_ENGINE_IDLE`로 확인합니다.
+**Purpose** — Stops computation and rendering for a single source, independently of whole-engine idle (`st_rt_idle`). Use it to hold a source that has finished playing but will be used again soon, at no cost, without deleting it. Check support with `ST_CAP1_ENGINE_IDLE` of `st_rt_get_capability_word(1)`.
 
-**언제·어떻게** — 그 음원이 들려줄 것을 멈춘 뒤(stop · pause · 0 쓰기) 부릅니다. 만든 직후 음원은 RUNNING입니다(엔진 전체가 IDLE이어도).
-- 부르면 전파 레인(direct · 반사/회절 · 잔향)이 그 음원을 더 계산하지 않고 마지막 결과를 얼립니다. 쉬는 동안 리스너나 음원이 움직여도 그 음원의 전파 경로는 옛 자리 그대로이고, 방(정적·동적 기하)이 바뀌면 한 번 다시 계산해 다시 얼립니다.
-- `ST_RT_IDLE_DRAINING` 동안 렌더는 그 음원의 남은 소리(꼬리)를 냅니다. 입력이 계속 소리를 내면 DRAINING으로 계속 렌더합니다.
-- 입력이 지연선 길이(max delay) + 1 s 동안 무음이면 `ST_RT_IDLE_IDLE`이 되어, 렌더가 그 음원의 입력을 읽지도 렌더하지도 않고 IR 조립에서도 빠집니다(공유 잔향 탱크의 꼬리는 이어집니다).
-- 동시에 쉴 수 있는 음원은 128개까지입니다. 같은 값을 다시 부르면 아무 일도 하지 않습니다.
-- 전파를 얼리는 것은 `ST_RT_SCHEDULER_PIPELINED`입니다. `ST_RT_SCHEDULER_SYNCHRONOUS`에서는 `st_rt_propagate`가 쉬는 음원도 계산하고 렌더 쪽 쉼만 같습니다.
-- 스피커 세트 멤버는 세트가 쉼을 소유하므로 `st_rt_speaker_set_idle` / `_run`을 씁니다.
+**When / how** — Call it after that source has stopped producing sound (stop · pause · writing zeros). A newly created source is RUNNING (even if the whole engine is IDLE).
+- Once called, the propagation lanes (direct · reflection/diffraction · reverb) stop computing that source and freeze its last result. If the listener or source moves while idle, that source's propagation paths stay where they were; if the room (static · dynamic geometry) changes, they are recomputed once and frozen again.
+- During `ST_RT_IDLE_DRAINING` the render plays out the source's remaining sound (tail). If the input keeps producing sound, it keeps rendering as DRAINING.
+- Once the input has been silent for the delay-line length (max delay) + 1 s it becomes `ST_RT_IDLE_IDLE`: the render neither reads nor renders that source's input, and it drops out of IR assembly (the tail in the shared reverb tank continues).
+- Up to 128 sources can be idle at once. Calling again with the same value does nothing.
+- Propagation is frozen under `ST_RT_SCHEDULER_PIPELINED`. Under `ST_RT_SCHEDULER_SYNCHRONOUS`, `st_rt_propagate` also computes idle sources; only the render-side idle is the same.
+- Speaker-set members have their idle owned by the set, so use `st_rt_speaker_set_idle` / `_run`.
 
-스레드: `[control]` — 씬 락을 잡습니다.
+Thread: `[control]` — takes the scene lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 쉬게 할 음원 핸들 |
+| `context` | Context handle |
+| `source` | Handle of the source to idle |
 
-**반환** — `1` = 성공 / `0` = 실패: 컨텍스트 NULL, 없는 음원(`ST_STATUS_NOT_FOUND`), 스피커 세트 멤버(`ST_STATUS_INVALID_ARGUMENT`), 동시 쉼 표가 가득 참(`ST_STATUS_UNAVAILABLE`, 아무것도 바뀌지 않음).
+**Returns** — `1` = success / `0` = failure: NULL context, nonexistent source (`ST_STATUS_NOT_FOUND`), speaker-set member (`ST_STATUS_INVALID_ARGUMENT`), the concurrent-idle table is full (`ST_STATUS_UNAVAILABLE`, nothing changes).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_run</code> — 쉬던 음원을 다시 돌린다</summary>
+<summary><code>st_rt_source_run</code> — Restarts an idle source</summary>
 
 ```c
 int st_rt_source_run(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_idle`로 쉬게 한 음원을 다시 계산·렌더하게 합니다. 지원 여부는 `ST_CAP1_ENGINE_IDLE`로 확인합니다.
+**Purpose** — Makes a source idled with `st_rt_source_idle` compute and render again. Check support with `ST_CAP1_ENGINE_IDLE`.
 
-**언제·어떻게** — 그 음원을 다시 재생하기 직전에 부릅니다. 다음 전파부터 다시 계산하고 다음 블록부터 렌더합니다. 붙잡아 둔 IR로 바로 소리를 내고, 그 음원을 담은 다음 IR(조립 한 주기 뒤)부터 새 결과를 씁니다. 쉬는 동안 읽지 않은 호스트 스트림 프레임은 그 자리부터 이어서 나갑니다. 이미 RUNNING이면 아무 일도 하지 않습니다. 스레드: `[control]` — 씬 락을 잡습니다.
+**When / how** — Call it right before playing that source again. Computation resumes from the next propagation and rendering from the next block. It sounds immediately with the held IR, and uses new results from the next IR that includes that source (one assembly cycle later). Host stream frames not read while idle continue from where they left off. Does nothing if already RUNNING. Thread: `[control]` — takes the scene lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 깨울 음원 핸들 |
+| `context` | Context handle |
+| `source` | Handle of the source to wake |
 
-**반환** — `1` = 성공 / `0` = 실패: 컨텍스트 NULL, 없는 음원(`ST_STATUS_NOT_FOUND`), 스피커 세트 멤버(`ST_STATUS_INVALID_ARGUMENT`).
+**Returns** — `1` = success / `0` = failure: NULL context, nonexistent source (`ST_STATUS_NOT_FOUND`), speaker-set member (`ST_STATUS_INVALID_ARGUMENT`).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_idle_state</code> — 음원의 쉼 상태를 읽는다</summary>
+<summary><code>st_rt_source_get_idle_state</code> — Reads a source's idle state</summary>
 
 ```c
 int st_rt_source_get_idle_state(const STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 음원 하나의 쉼 상태를 조회합니다. `st_rt_source_idle` 뒤 꼬리가 다 나갔는지 확인할 때 씁니다.
+**Purpose** — Queries the idle state of one source. Use it to check whether the tail has fully played out after `st_rt_source_idle`.
 
-**언제·어떻게** — 언제든 부릅니다. 쉼을 부탁하지 않았으면 RUNNING, 렌더가 남은 소리를 내는 중이면 DRAINING, 다 비웠으면 IDLE입니다. 렌더가 돌지 않거나 엔진 전체가 IDLE이면 쉼을 부탁한 음원은 IDLE입니다. 스레드: `[control]` — 씬 read 락만 잡습니다.
+**When / how** — Call it at any time. It is RUNNING if idle was not requested, DRAINING while the render is playing out remaining sound, and IDLE once drained. If the render is not running or the whole engine is IDLE, a source for which idle was requested is IDLE. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
+| `context` | Context handle |
+| `source` | Target source handle |
 
-**반환** — `STRT_IdleState` 값: `ST_RT_IDLE_RUNNING`(0) / `ST_RT_IDLE_DRAINING`(1) / `ST_RT_IDLE_IDLE`(2). 없는 음원이나 컨텍스트 NULL이면 `-1`.
+**Returns** — An `STRT_IdleState` value: `ST_RT_IDLE_RUNNING` (0) / `ST_RT_IDLE_DRAINING` (1) / `ST_RT_IDLE_IDLE` (2). `-1` for a nonexistent source or NULL context.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_position_seconds</code> — 음원 입력의 재생 위치를 초로 읽는다</summary>
+<summary><code>st_rt_source_get_position_seconds</code> — Reads the playback position of the source input in seconds</summary>
 
 ```c
 double st_rt_source_get_position_seconds(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 음원에 붙인 파일 입력의 현재 재생 위치를 소스 시간(초)으로 조회합니다. 재생 UI의 진행 표시나 `st_rt_source_seek`과 짝을 맞출 때 씁니다. 지원 여부는 `ST_CAP_SOURCE_PLAYBACK_CONTROL`로 확인합니다.
+**Purpose** — Queries the current playback position of the file input attached to a source, in source time (seconds). Use it for progress display in a playback UI or to pair with `st_rt_source_seek`. Check support with `ST_CAP_SOURCE_PLAYBACK_CONTROL`.
 
-**언제·어떻게** — 오디오 입력을 붙인 뒤 언제든 부릅니다. 값은 소스 시간 기준 초이며 `hostSampleRate`나 피치와 무관합니다. 호스트 스트림 같은 라이브 PCM 입력은 타임라인을 호스트가 소유하므로 위치가 없습니다. 스레드: `[control]`.
+**When / how** — Call it at any time after attaching audio input. The value is in seconds of source time and is independent of `hostSampleRate` and pitch. Live PCM input such as a host stream has its timeline owned by the host, so it has no position. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
+| `context` | Context handle |
+| `source` | Target source handle |
 
-**반환** — 재생 위치(초). 없는 음원이거나 라이브 입력이면 `-1`.
+**Returns** — Playback position (seconds). `-1` for a nonexistent source or live input.
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>음원 — 오디오 입력(파일·클립·스트림), 재생 제어, 소스 EQ</strong> — 27개</summary>
+<summary><strong>Sources — audio input (file · clip · stream), playback control, source EQ</strong> — 27 functions</summary>
 
 <details>
-<summary><code>st_rt_source_clear_audio</code> — 소스에서 오디오 입력(파일·클립·호스트 스트림)을 떼어 냅니다</summary>
+<summary><code>st_rt_source_clear_audio</code> — Detaches the audio input (file · clip · host stream) from a source</summary>
 
 ```c
 int st_rt_source_clear_audio(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 소스에 붙은 오디오 입력을 분리합니다. 소스와 렌더 슬롯은 그대로 남고 그 소스만 무음이 됩니다. 파일 입력(`st_rt_source_set_audio_file` 계열)과 호스트 스트림(`st_rt_source_attach_stream`) 모두 "오디오 입력"이므로 둘 다 이 함수로 뗍니다.
+**Purpose** — Detaches the audio input attached to a source. The source and its render slot remain; only that source goes silent. File input (the `st_rt_source_set_audio_file` family) and host streams (`st_rt_source_attach_stream`) are both "audio input", so both are detached with this function.
 
-**언제·어떻게** — 소스를 지우지 않고 소리만 끊거나, 다른 입력으로 바꾸기 전에 비워 둘 때 씁니다. 분리는 3 ms 램프로 내려갑니다. 스트림을 분리한 뒤의 `st_rt_source_write_stream`은 아무것도 쓰지 않고 `0`을 돌려줍니다. 같은 소스에 `st_rt_source_write_stream`과 동시에 부르지 마십시오. 소스를 지우는 `st_rt_source_destroy`도 입력을 함께 분리하므로 그 전에 이 함수를 부를 필요는 없습니다. 스피커 세트 멤버 소스에는 거절됩니다(`ST_STATUS_INVALID_ARGUMENT`). 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**When / how** — Use it to cut only the sound without deleting the source, or to clear it before switching to another input. Detaching ramps down over 3 ms. After a stream is detached, `st_rt_source_write_stream` writes nothing and returns `0`. Do not call it concurrently with `st_rt_source_write_stream` on the same source. `st_rt_source_destroy`, which deletes the source, also detaches the input, so there is no need to call this function before it. Rejected for speaker-set member sources (`ST_STATUS_INVALID_ARGUMENT`). Thread: `[control]` — do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id(`STSourceId`, `st_rt_source_create`가 돌려준 값) |
+| `context` | Real-time context handle |
+| `source` | Target source id (`STSourceId`, the value returned by `st_rt_source_create`) |
 
-**반환** — `1` = 분리함 / `0` = 실패(컨텍스트 NULL, 없는 소스, 스피커 세트 멤버 등).
+**Returns** — `1` = detached / `0` = failure (NULL context, nonexistent source, speaker-set member, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_eq</code> — 소스 원음에 9밴드 그래픽 EQ를 겁니다</summary>
+<summary><code>st_rt_source_set_eq</code> — Applies a 9-band graphic EQ to the source's dry signal</summary>
 
 ```c
 int st_rt_source_set_eq(STRT_Context* context, STSourceId source, const float gainsDb[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 소스 신호에 밴드별 게인을 걸어 음색을 보정합니다. 필터는 크로스오버 앞, 즉 소스 신호 자체에 걸리므로 그 소스의 직접·투과·반사·회절·잔향 송출이 모두 같은 필터를 거칩니다(실제 스피커 신호 체인에 EQ를 단 것과 같습니다). 출력단 EQ(`st_rt_render_set_eq`)와 같은 필터 설계이고 오프라인 `st_off_source_set_eq`와 같은 구현입니다.
+**Purpose** — Applies per-band gains to the source signal to correct its timbre. The filter sits before the crossover, i.e. on the source signal itself, so the source's direct · transmission · reflection · diffraction · reverb sends all pass through the same filter (the same as putting an EQ in a real loudspeaker's signal chain). Same filter design as the output-stage EQ (`st_rt_render_set_eq`) and same implementation as offline `st_off_source_set_eq`.
 
-**언제·어떻게** — 소스를 만든 뒤 언제든, 재생 중에도 부를 수 있습니다. IR을 무효화하지 않고 렌더 스레드에 할당 없는 명령으로 전달됩니다. 재생 중에 바꾸면 필터 상태를 유지한 채 계수만 즉시 바뀝니다(매끄러운 램프는 하지 않습니다 — 클릭 없는 전환이 필요하면 `st_rt_source_set_parametric_eq`를 쓰십시오). 이 함수와 `st_rt_source_set_parametric_eq`는 **같은 소스 EQ**를 바꾸며 마지막에 부른 쪽이 이깁니다. `gainsDb = NULL`을 넘기면 EQ를 끄고 지웁니다(파라메트릭으로 건 설정도 이것으로 지웁니다). 설정은 소스를 지울 때까지 유지됩니다. 스피커 세트 멤버 소스에도 걸 수 있습니다. 지원 여부는 `ST_CAP_SOURCE_EQ`(`st_rt_get_capability_word(0)`)로 확인합니다. 스레드: `[control]` — 씬 read 락과 렌더 제어 락을 잠깐 잡으므로 오디오 콜백에서 부르지 마십시오.
+**When / how** — Can be called at any time after the source is created, including during playback. It does not invalidate the IR and is delivered to the render thread as an allocation-free command. Changing it during playback switches the coefficients immediately while keeping the filter state (no smooth ramp — if you need click-free transitions, use `st_rt_source_set_parametric_eq`). This function and `st_rt_source_set_parametric_eq` change **the same source EQ**, and whichever is called last wins. Passing `gainsDb = NULL` disables and clears the EQ (this also clears a parametric setting). The setting persists until the source is deleted. It can also be applied to speaker-set member sources. Check support with `ST_CAP_SOURCE_EQ` (`st_rt_get_capability_word(0)`). Thread: `[control]` — briefly takes the scene read lock and the render control lock, so do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `gainsDb` | `ST_FREQUENCY_BANDS`(9)개 게인(dB), 밴드 순서 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz. 각 값은 유한하고 `[-ST_SOURCE_EQ_MAX_GAIN_DB, +ST_SOURCE_EQ_MAX_GAIN_DB]`(±24 dB) 안이어야 합니다 — 밖이면 클램프하지 않고 거절합니다. `NULL` 또는 전 밴드 0 dB면 EQ를 끕니다(EQ가 없는 결과와 비트 동일) |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `gainsDb` | `ST_FREQUENCY_BANDS` (9) gains (dB), band order 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz. Each value must be finite and within `[-ST_SOURCE_EQ_MAX_GAIN_DB, +ST_SOURCE_EQ_MAX_GAIN_DB]` (±24 dB) — values outside are rejected, not clamped. `NULL` or 0 dB in every band disables the EQ (bit-identical to the result without EQ) |
 
-**필터 정의** — 밴드마다 RBJ peaking biquad 하나(Q = 1.414, 약 1옥타브)를 밴드 오름차순으로 직렬 연결합니다. 표본률은 엔진 내부 44100 Hz 고정이며 호스트 표본률(`hostSampleRate`)과 무관합니다. `|g| ≤ 1e-4 dB`인 밴드는 건너뜁니다. 이웃 밴드의 응답이 겹치므로(피킹 필터 스커트) 밴드 중심에서 정확히 지정 게인이 되게 하려면 호스트가 게인을 보정해 넣어야 합니다.
+**Filter definition** — One RBJ peaking biquad per band (Q = 1.414, about 1 octave), cascaded in ascending band order. The sample rate is fixed at the engine's internal 44100 Hz and is independent of the host sample rate (`hostSampleRate`). Bands with `|g| ≤ 1e-4 dB` are skipped. Neighboring band responses overlap (peaking filter skirts), so for the exact specified gain at a band center the host must compensate the gains it passes.
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(비유한 값 또는 `|g| > 24`, 아무것도 바꾸지 않음) / `ST_STATUS_NOT_FOUND`(소스 없음) / `ST_STATUS_UNAVAILABLE`(이 컨텍스트의 백엔드가 소스 EQ를 지원하지 않음).
+**Returns** — `1` = success / `0` = failure. On failure `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT` (non-finite value or `|g| > 24`, nothing changed) / `ST_STATUS_NOT_FOUND` (no source) / `ST_STATUS_UNAVAILABLE` (this context's backend does not support source EQ).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_eq</code> — 소스 EQ를 9밴드 게인으로 읽습니다</summary>
+<summary><code>st_rt_source_get_eq</code> — Reads the source EQ as 9-band gains</summary>
 
 ```c
 int st_rt_source_get_eq(STRT_Context* context, STSourceId source, float outGainsDb[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 현재 소스 EQ를 9밴드 그래픽 뷰로 돌려줍니다. 소스 EQ는 하나이고 이 함수는 그 밴드 목록을 9밴드 게인으로 보여 주는 호환 뷰입니다.
+**Purpose** — Returns the current source EQ as a 9-band graphic view. There is one source EQ, and this function is a compatibility view that shows its band list as 9-band gains.
 
-**언제·어떻게** — EQ가 없거나 꺼져 있으면 전부 0을 씁니다. 9밴드 모양(canonical 중심 주파수·Q 1.414 `ST_PARAMETRIC_EQ_PEAKING` 9개·프리앰프 0·켜짐)이면 그 게인을 씁니다. 그 밖의 파라메트릭 설정이면 9밴드로 표현할 수 없으므로 `0` + `ST_STATUS_UNAVAILABLE`을 돌려주고 `outGainsDb`는 건드리지 않습니다. `UNAVAILABLE`의 뜻을 가르려면 `st_rt_source_get_parametric_eq`를 부르십시오 — 성공하면 "파라메트릭 설정이라 9밴드로 못 읽음"이고(설정은 그쪽으로 읽습니다), 같은 `UNAVAILABLE`로 실패하면 백엔드가 소스 EQ를 지원하지 않는 것입니다. 스레드: `[control]`.
+**When / how** — If there is no EQ or it is disabled, writes all zeros. If it has the 9-band shape (canonical center frequencies · 9 `ST_PARAMETRIC_EQ_PEAKING` bands with Q 1.414 · preamp 0 · enabled), writes those gains. Any other parametric setting cannot be expressed as 9 bands, so it returns `0` + `ST_STATUS_UNAVAILABLE` and leaves `outGainsDb` untouched. To tell what `UNAVAILABLE` means, call `st_rt_source_get_parametric_eq` — if it succeeds, it means "a parametric setting that cannot be read as 9 bands" (read the setting that way); if it fails with the same `UNAVAILABLE`, the backend does not support source EQ. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `outGainsDb` | 호출자 소유 `float[ST_FREQUENCY_BANDS]` 출력 버퍼(63…16k Hz 순서, dB). `NULL`이면 거절 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `outGainsDb` | Caller-owned `float[ST_FREQUENCY_BANDS]` output buffer (63…16k Hz order, dB). `NULL` is rejected |
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(`outGainsDb`가 NULL) / `ST_STATUS_NOT_FOUND`(소스 없음) / `ST_STATUS_UNAVAILABLE`(위 두 경우).
+**Returns** — `1` = success / `0` = failure. On failure `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT` (`outGainsDb` is NULL) / `ST_STATUS_NOT_FOUND` (no source) / `ST_STATUS_UNAVAILABLE` (the two cases above).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_parametric_eq</code> — 소스 원음에 최대 16밴드 파라메트릭 EQ를 겁니다</summary>
+<summary><code>st_rt_source_set_parametric_eq</code> — Applies a parametric EQ of up to 16 bands to the source's dry signal</summary>
 
 ```c
 int st_rt_source_set_parametric_eq(STRT_Context* context, STSourceId source, const STParametricEqBand* bands, int32_t bandCount, float preampDb, int32_t enabled);
 ```
 
-**용도** — 소스 신호에 밴드 종류·주파수·게인·Q를 직접 정한 파라메트릭 EQ를 겁니다. 거는 자리는 `st_rt_source_set_eq`와 같고(크로스오버 앞, 그 소스의 모든 경로) **같은 EQ**입니다. 가상 스피커처럼 소스마다 다른 주파수 보정이 필요할 때 씁니다.
+**Purpose** — Applies to the source signal a parametric EQ whose band type · frequency · gain · Q you set directly. It is applied at the same place as `st_rt_source_set_eq` (before the crossover, on every path of that source) and is **the same EQ**. Use it when each source needs a different frequency correction, as with virtual speakers.
 
-**언제·어떻게** — 소스를 만든 뒤 언제든, 재생 중에도 부를 수 있습니다. IR을 무효화하지 않고 렌더 스레드에 할당 없는 명령으로 전달됩니다. 값이 바뀌면 옛 설정과 새 설정을 20 ms 동안 나란히 돌려 출력을 크로스페이드하므로 클릭이 나지 않습니다. 그 사이 또 바뀌면 가장 최근 값 하나만 기다렸다가 이어서 넘어갑니다. 이 함수와 `st_rt_source_set_eq`는 모두 소스 EQ의 목록 전체를 바꾸며 마지막 setter가 이깁니다. 꺼진 목록·효과 없는 목록도 저장되어 getter가 그대로 돌려줍니다 — 끄고 지우려면 `st_rt_source_set_eq(context, source, NULL)`을 부릅니다. 스피커 세트 멤버 소스(`st_rt_speaker_set_get_source`로 받은 id)에도 그대로 걸 수 있어 가상 스피커마다 다른 보정을 줄 수 있습니다. AutoEq `ParametricEQ.txt`는 `st_rt_render_parse_autoeq_parametric`로 읽어 결과를 그대로 넘길 수 있습니다. 설정은 소스를 지울 때까지 유지됩니다. 지원 여부는 `ST_CAP1_SOURCE_PARAMETRIC_EQ`(`st_rt_get_capability_word(1)`)로 확인합니다. 스레드: `[control]` — 씬 read 락과 렌더 제어 락을 잡습니다.
+**When / how** — Can be called at any time after the source is created, including during playback. It does not invalidate the IR and is delivered to the render thread as an allocation-free command. When the value changes, the old and new settings run side by side for 20 ms and the output is crossfaded, so there are no clicks. If it changes again in the meantime, only the most recent value waits and then follows on. This function and `st_rt_source_set_eq` both replace the entire source EQ list, and the last setter wins. Disabled lists and lists with no effect are also stored and returned as is by the getter — to disable and clear, call `st_rt_source_set_eq(context, source, NULL)`. It can be applied as is to speaker-set member sources (ids obtained with `st_rt_speaker_set_get_source`), so each virtual speaker can get a different correction. An AutoEq `ParametricEQ.txt` can be read with `st_rt_render_parse_autoeq_parametric` and its result passed straight in. The setting persists until the source is deleted. Check support with `ST_CAP1_SOURCE_PARAMETRIC_EQ` (`st_rt_get_capability_word(1)`). Thread: `[control]` — takes the scene read lock and the render control lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `bands` | `STParametricEqBand` 배열(`bandCount`개). `bandCount = 0`이면 `NULL`이어도 됩니다 |
-| `bandCount` | 밴드 수, `[0, ST_PARAMETRIC_EQ_MAX_BANDS]`(0~16). 범위 밖은 거절 |
-| `preampDb` | 밴드 앞에 거는 선형 게인(dB), `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]` = `[-48, +12]`. 주 용도는 클리핑 방지용 음수 값입니다 |
-| `enabled` | `0` = 목록은 저장하되 통과(EQ 없음과 같음) / 그 밖 = 켬 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `bands` | `STParametricEqBand` array (`bandCount` entries). May be `NULL` when `bandCount = 0` |
+| `bandCount` | Number of bands, `[0, ST_PARAMETRIC_EQ_MAX_BANDS]` (0–16). Out of range is rejected |
+| `preampDb` | Linear gain applied before the bands (dB), `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]` = `[-48, +12]`. Mainly used with negative values to prevent clipping |
+| `enabled` | `0` = store the list but bypass (same as no EQ) / anything else = on |
 
-**구조체** `STParametricEqBand` (32바이트, 배열 원소라 버전 스탬프 없음)
+**Struct** `STParametricEqBand` (32 bytes, an array element so no version stamp)
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `type` | `STParametricEqType` — `ST_PARAMETRIC_EQ_PEAKING`(0) / `LOW_SHELF`(1) / `HIGH_SHELF`(2) / `LOW_PASS`(3) / `HIGH_PASS`(4) / `NOTCH`(5). 알 수 없는 값은 거절 |
-| `enabled` | `0` = 이 밴드 건너뜀(항등) / 그 밖 = 켬 |
-| `frequencyHz` | PEAKING·NOTCH는 중심, 셸프는 중점, LP·HP는 코너 주파수. `[ST_PARAMETRIC_EQ_MIN_FREQUENCY_HZ, min(ST_PARAMETRIC_EQ_MAX_FREQUENCY_HZ, 0.49·Fs)]` = 20 Hz ~ 20 kHz(Fs = 44100) |
-| `gainDb` | PEAKING·LOW_SHELF·HIGH_SHELF만 씁니다(LP·HP·NOTCH는 값만 저장). `[-ST_PARAMETRIC_EQ_MAX_GAIN_DB, +ST_PARAMETRIC_EQ_MAX_GAIN_DB]` = ±24 dB |
-| `q` | `[ST_PARAMETRIC_EQ_MIN_Q, ST_PARAMETRIC_EQ_MAX_Q]` = 0.1 ~ 30. LOW_SHELF·HIGH_SHELF는 `[0.1, ST_PARAMETRIC_EQ_MAX_SHELF_Q]` = 0.1 ~ 3 — 큰 게인의 셸프에 큰 Q를 주면 모서리에 큰 공진 피크가 생기고, 소스 EQ는 리미터 앞이라 막을 것이 없습니다 |
-| `reserved[3]` | 반드시 0(아니면 거절) |
+| `type` | `STParametricEqType` — `ST_PARAMETRIC_EQ_PEAKING` (0) / `LOW_SHELF` (1) / `HIGH_SHELF` (2) / `LOW_PASS` (3) / `HIGH_PASS` (4) / `NOTCH` (5). Unknown values are rejected |
+| `enabled` | `0` = skip this band (identity) / anything else = on |
+| `frequencyHz` | Center frequency for PEAKING · NOTCH, midpoint for shelves, corner frequency for LP · HP. `[ST_PARAMETRIC_EQ_MIN_FREQUENCY_HZ, min(ST_PARAMETRIC_EQ_MAX_FREQUENCY_HZ, 0.49·Fs)]` = 20 Hz – 20 kHz (Fs = 44100) |
+| `gainDb` | Used only by PEAKING · LOW_SHELF · HIGH_SHELF (LP · HP · NOTCH only store the value). `[-ST_PARAMETRIC_EQ_MAX_GAIN_DB, +ST_PARAMETRIC_EQ_MAX_GAIN_DB]` = ±24 dB |
+| `q` | `[ST_PARAMETRIC_EQ_MIN_Q, ST_PARAMETRIC_EQ_MAX_Q]` = 0.1 – 30. LOW_SHELF · HIGH_SHELF use `[0.1, ST_PARAMETRIC_EQ_MAX_SHELF_Q]` = 0.1 – 3 — a large Q on a high-gain shelf produces a large resonant peak at the corner, and the source EQ sits before the limiter, so nothing stops it |
+| `reserved[3]` | Must be 0 (otherwise rejected) |
 
-**필터 정의** — 밴드마다 RBJ Audio EQ Cookbook 2차 섹션 하나이고, 체인은 프리앰프 → 밴드 0…`bandCount-1` 직렬입니다. 표본률은 엔진 내부 44100 Hz입니다. `enabled = 0`인 밴드와 `|gainDb| ≤ 1e-4`인 PEAKING·셸프 밴드는 정확히 항등입니다. 전체가 꺼져 있거나 효과가 없으면(전 밴드 항등 + 프리앰프 0 dB) 전환 램프가 끝난 뒤부터 EQ가 없는 결과와 비트 동일합니다.
+**Filter definition** — One RBJ Audio EQ Cookbook second-order section per band, and the chain is preamp → bands 0…`bandCount-1` in series. The sample rate is the engine's internal 44100 Hz. Bands with `enabled = 0` and PEAKING · shelf bands with `|gainDb| ≤ 1e-4` are exactly identity. If the whole EQ is disabled or has no effect (every band identity + preamp 0 dB), the result is bit-identical to having no EQ once the transition ramp ends.
 
-**값 검증** — 비유한 값·알 수 없는 `type`·`reserved ≠ 0`·`bandCount` 범위 밖·(`bandCount > 0`인데) `bands` NULL은 거절하고 아무것도 바꾸지 않습니다. 유한한 값이 범위를 벗어나면 **클램프**하고, getter는 클램프된 실효값을 돌려줍니다(9밴드 `st_rt_source_set_eq`는 클램프하지 않고 거절하는 것과 다릅니다).
+**Value validation** — Non-finite values · unknown `type` · `reserved ≠ 0` · `bandCount` out of range · `bands` NULL (when `bandCount > 0`) are rejected and nothing changes. Finite values out of range are **clamped**, and the getter returns the clamped effective values (unlike the 9-band `st_rt_source_set_eq`, which rejects instead of clamping).
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(위 검증) / `ST_STATUS_NOT_FOUND`(소스 없음) / `ST_STATUS_UNAVAILABLE`(이 컨텍스트의 백엔드가 소스 EQ를 지원하지 않음).
+**Returns** — `1` = success / `0` = failure. On failure `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT` (validation above) / `ST_STATUS_NOT_FOUND` (no source) / `ST_STATUS_UNAVAILABLE` (this context's backend does not support source EQ).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_parametric_eq</code> — 소스 EQ의 밴드 목록·프리앰프·켜짐을 읽습니다</summary>
+<summary><code>st_rt_source_get_parametric_eq</code> — Reads the source EQ's band list · preamp · enabled state</summary>
 
 ```c
 int st_rt_source_get_parametric_eq(STRT_Context* context, STSourceId source, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outEnabled);
 ```
 
-**용도** — 소스 EQ의 현재 설정을 클램프된 실효값으로 돌려줍니다. `st_rt_source_set_eq`(9밴드)로 건 설정도 9개 `ST_PARAMETRIC_EQ_PEAKING` 밴드로 읽힙니다. EQ가 없으면 0밴드·꺼짐입니다.
+**Purpose** — Returns the current source EQ setting as clamped effective values. A setting applied with `st_rt_source_set_eq` (9 bands) is also read as 9 `ST_PARAMETRIC_EQ_PEAKING` bands. With no EQ it is 0 bands · disabled.
 
-**언제·어떻게** — 출력 규약은 `st_rt_render_get_parametric_eq`와 같습니다. `outBands = NULL`이면 크기 질의로 동작해 밴드는 쓰지 않고 개수·프리앰프·켜짐만 채운 뒤 `1`을 돌려줍니다. `bandCapacity`를 `ST_PARAMETRIC_EQ_MAX_BANDS`(16)로 주면 늘 들어갑니다. 반환된 밴드의 `reserved`는 0으로 채워집니다. 스레드: `[control]` — 씬 read 락과 렌더 제어 락을 잡습니다.
+**When / how** — The output convention is the same as `st_rt_render_get_parametric_eq`. `outBands = NULL` acts as a size query: it writes no bands, fills only the count · preamp · enabled state and returns `1`. Passing `bandCapacity` as `ST_PARAMETRIC_EQ_MAX_BANDS` (16) always fits. The `reserved` of returned bands is filled with 0. Thread: `[control]` — takes the scene read lock and the render control lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `outBands` | 호출자 소유 `STParametricEqBand` 배열. `NULL`이면 크기 질의. 필드는 `st_rt_source_set_parametric_eq` 항목 참고 |
-| `bandCapacity` | `outBands` 원소 수. 음수면 거절. 밴드 수보다 작으면 `0` + `ST_STATUS_BUFFER_TOO_SMALL`(개수·프리앰프·켜짐은 씀) |
-| `outBandCount` | 밴드 수를 받을 포인터. `NULL`이면 건너뜀 |
-| `outPreampDb` | 프리앰프(dB)를 받을 포인터. `NULL`이면 건너뜀 |
-| `outEnabled` | 켜짐(`0`/`1`)을 받을 포인터. `NULL`이면 건너뜀 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `outBands` | Caller-owned `STParametricEqBand` array. `NULL` = size query. See the `st_rt_source_set_parametric_eq` entry for the fields |
+| `bandCapacity` | Number of `outBands` elements. Negative is rejected. If smaller than the band count, `0` + `ST_STATUS_BUFFER_TOO_SMALL` (count · preamp · enabled are still written) |
+| `outBandCount` | Pointer that receives the band count. Skipped if `NULL` |
+| `outPreampDb` | Pointer that receives the preamp (dB). Skipped if `NULL` |
+| `outEnabled` | Pointer that receives the enabled state (`0`/`1`). Skipped if `NULL` |
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(`bandCapacity < 0`) / `ST_STATUS_BUFFER_TOO_SMALL` / `ST_STATUS_NOT_FOUND`(소스 없음) / `ST_STATUS_UNAVAILABLE`(이 컨텍스트의 백엔드가 소스 EQ를 지원하지 않음).
+**Returns** — `1` = success / `0` = failure. On failure `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT` (`bandCapacity < 0`) / `ST_STATUS_BUFFER_TOO_SMALL` / `ST_STATUS_NOT_FOUND` (no source) / `ST_STATUS_UNAVAILABLE` (this context's backend does not support source EQ).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_path_volume</code> — 소스의 경로 종류별 볼륨을 정합니다</summary>
+<summary><code>st_rt_source_set_path_volume</code> — Sets a source's volume per path type</summary>
 
 ```c
 int st_rt_source_set_path_volume(STRT_Context* context, STSourceId source, int volumeKind, float volume);
 ```
 
-**용도** — 한 소스의 직접음·반사·회절·잔향 기여를 따로 키우거나 줄입니다. 값은 선형 압력 배율입니다. 직접음 볼륨은 투과 경로도 포함하고, 잔향 볼륨은 리스너가 공유하는 후기 잔향에 **이 소스가 보내는 양**만 조절합니다.
+**Purpose** — Raises or lowers a source's direct · reflection · diffraction · reverb contributions separately. The value is a linear pressure scale. The direct volume also covers transmission paths, and the reverb volume adjusts only **the amount this source sends** into the late reverb shared by the listener.
 
-**언제·어떻게** — 소스를 만든 뒤 언제든 부릅니다. 생성 직후 4종 모두 `1.0`입니다. 경로를 완전히 빼려면 `st_rt_source_set_path_enabled`를, 소스 전체 레벨은 `st_rt_source_set_volume`을 씁니다. 스피커 세트 멤버 소스에도 걸 수 있습니다. 지원 여부는 `ST_CAP_SOURCE_PATH_VOLUME`으로 확인합니다. 스레드: `[control]` — 씬 read 락만 잡습니다.
+**When / how** — Call it at any time after the source is created. All 4 are `1.0` right after creation. To remove a path entirely use `st_rt_source_set_path_enabled`; for the whole source level use `st_rt_source_set_volume`. It can also be applied to speaker-set member sources. Check support with `ST_CAP_SOURCE_PATH_VOLUME`. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `volumeKind` | `STSourceVolumeKind` — `ST_SOURCE_VOLUME_DIRECT`(0, 투과 포함) / `ST_SOURCE_VOLUME_REFLECTION`(1) / `ST_SOURCE_VOLUME_DIFFRACTION`(2) / `ST_SOURCE_VOLUME_REVERB`(3, 공유 후기 잔향으로의 송출). 그 밖은 거절 |
-| `volume` | 선형 압력 배율, 유한한 `0` 이상. 기본 `1.0` |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `volumeKind` | `STSourceVolumeKind` — `ST_SOURCE_VOLUME_DIRECT` (0, includes transmission) / `ST_SOURCE_VOLUME_REFLECTION` (1) / `ST_SOURCE_VOLUME_DIFFRACTION` (2) / `ST_SOURCE_VOLUME_REVERB` (3, send into the shared late reverb). Anything else is rejected |
+| `volume` | Linear pressure scale, finite and ≥ `0`. Default `1.0` |
 
-**반환** — `1` = 적용 / `0` = 실패(알 수 없는 `volumeKind`, 비유한·음수 `volume`, 없는 소스).
+**Returns** — `1` = applied / `0` = failure (unknown `volumeKind`, non-finite or negative `volume`, nonexistent source).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_path_volume</code> — 소스의 경로 종류별 볼륨을 읽습니다</summary>
+<summary><code>st_rt_source_get_path_volume</code> — Reads a source's volume per path type</summary>
 
 ```c
 float st_rt_source_get_path_volume(STRT_Context* context, STSourceId source, int volumeKind);
 ```
 
-**용도** — `st_rt_source_set_path_volume`으로 정한 경로 종류별 선형 볼륨을 돌려줍니다.
+**Purpose** — Returns the per-path-type linear volume set with `st_rt_source_set_path_volume`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]` — 씬 read 락만 잡습니다.
+**When / how** — Can be called at any time. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | Real-time context handle |
+| `source` | Target source id |
 | `volumeKind` | `STSourceVolumeKind` — `DIRECT`(0) / `REFLECTION`(1) / `DIFFRACTION`(2) / `REVERB`(3) |
 
-**반환** — 선형 볼륨(기본 `1.0`). 알 수 없는 `volumeKind`나 컨텍스트 NULL이면 `-1`.
+**Returns** — Linear volume (default `1.0`). `-1` for an unknown `volumeKind` or NULL context.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_audio_file</code> — 오디오 파일을 열어 소스의 입력으로 붙입니다</summary>
+<summary><code>st_rt_source_set_audio_file</code> — Opens an audio file and attaches it as the source's input</summary>
 
 ```c
 int st_rt_source_set_audio_file(STRT_Context* context, STSourceId source, const char* audioPath, int loop);
 ```
 
-**용도** — 엔진이 파일을 직접 열고 디코드해 소스 입력으로 씁니다. 호스트가 PCM을 다루지 않아도 되는 가장 간단한 입력 방식입니다.
+**Purpose** — The engine opens and decodes the file itself and uses it as the source input. The soundtracing input method, since the host does not need to handle PCM.
 
-**언제·어떻게** — 소스를 만든 뒤 부르고, 붙인 직후는 정지 상태라 `st_rt_source_play`부터 소리가 납니다. 채널은 모노로 섞이고(스테레오 = 1/√2·L + 1/√2·R) 엔진 레이트 44.1 kHz로 변환됩니다. 같은 소스에 호스트 스트림이 붙어 있으면 파일 입력이 스트림을 밀어냅니다(이후 `st_rt_source_write_stream`은 `0`). 반복 횟수는 나중에 `st_rt_source_set_loop_count`로 바꿀 수 있습니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control, blocking]` — 파일 열기와 디코더 생성을 하므로 게임 루프·오디오 스레드에서 부르지 마십시오.
+**When / how** — Call it after creating the source; right after attaching it is stopped, so sound starts with `st_rt_source_play`. Channels are mixed to mono (stereo = 1/√2·L + 1/√2·R) and converted to the engine rate of 44.1 kHz. If a host stream is attached to the same source, the file input displaces it (`st_rt_source_write_stream` then returns `0`). The repeat count can be changed later with `st_rt_source_set_loop_count`. Rejected for speaker-set member sources. Thread: `[control, blocking]` — opens the file and creates a decoder, so do not call it from the game loop or the audio thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `audioPath` | 파일 경로, **UTF-8**(Windows에서도 — 한글 경로 가능). 지원: WAV(PCM·float·ADPCM·µ-law·A-law, RF64·W64), FLAC, MP3, Ogg Vorbis. Ogg Opus·AAC/M4A·ALAC·WMA는 열지 못해 실패합니다 |
-| `loop` | `0` = 한 번 재생 / 그 밖 = 무한 반복 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `audioPath` | File path, **UTF-8** (on Windows too — non-ASCII paths such as Korean work). Supported: WAV (PCM · float · ADPCM · µ-law · A-law, RF64 · W64), FLAC, MP3, Ogg Vorbis. Ogg Opus · AAC/M4A · ALAC · WMA cannot be opened and fail |
+| `loop` | `0` = play once / anything else = loop forever |
 
-**반환** — `1` = 입력을 붙임 / `0` = 실패(경로 NULL, 열 수 없는 파일·지원하지 않는 포맷, 없는 소스, 스피커 세트 멤버 등).
+**Returns** — `1` = input attached / `0` = failure (NULL path, unopenable file · unsupported format, nonexistent source, speaker-set member, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_audio_asset</code> — 호스트 에셋 시스템의 인코딩 파일을 스트리밍 입력으로 붙입니다</summary>
+<summary><code>st_rt_source_set_audio_asset</code> — Attaches an encoded file from the host asset system as streaming input</summary>
 
 ```c
 int st_rt_source_set_audio_asset(STRT_Context* context, STSourceId source, const char* assetName, const STAudioAssetIO* io, int repeatCount);
 ```
 
-**용도** — 게임 엔진의 팩 파일·가상 파일 시스템처럼 OS 경로로 열 수 없는 오디오를 호스트 콜백으로 읽게 합니다. `st_rt_source_set_audio_file`과 같은 디코더(WAV/FLAC/MP3/Vorbis)를 쓰며, 파일 전체를 미리 읽지 않고 탐색 가능한 스트림으로 디코드합니다.
+**Purpose** — Lets audio that cannot be opened by an OS path, such as a game engine's pack files or virtual file system, be read through host callbacks. Uses the same decoders as `st_rt_source_set_audio_file` (WAV/FLAC/MP3/Vorbis) and decodes as a seekable stream without reading the whole file up front.
 
-**언제·어떻게** — 재생 규약은 `st_rt_source_set_audio_file`과 같습니다(붙인 직후 정지, `st_rt_source_play`로 시작). 콜백 표는 복사되지만, `userData`와 호스트 에셋 시스템은 입력이 붙어 있는 동안 살아 있어야 합니다. `open`/`close`는 제어 스레드에서, `read`/`seek`은 이 호출 중의 탐색 과정과 단일 디코더 워커 스레드에서 불립니다. 콜백은 예외를 던지거나 엔진 API를 다시 부르면 안 됩니다. `close`는 성공한 `open`마다 한 번 불립니다(디코더 초기화 실패 포함). 서로 다른 컨텍스트는 동시에 디코드할 수 있습니다. 붙이기에 실패하면 이전 입력이 유지됩니다. 지원 여부는 `ST_CAP_AUDIO_ASSET_IO`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control, blocking]`.
+**When / how** — The playback convention is the same as `st_rt_source_set_audio_file` (stopped right after attaching, started with `st_rt_source_play`). The callback table is copied, but `userData` and the host asset system must stay alive while the input is attached. `open`/`close` are called on the control thread, and `read`/`seek` during probing within this call and on the single decoder worker thread. Callbacks must not throw exceptions or call back into the engine API. `close` is called once for every successful `open` (including when decoder initialization fails). Different contexts can decode concurrently. If attaching fails, the previous input is kept. Check support with `ST_CAP_AUDIO_ASSET_IO`. Rejected for speaker-set member sources. Thread: `[control, blocking]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `assetName` | `io->open`에 그대로 넘길 에셋 이름 |
-| `io` | `STAudioAssetIO` 콜백 표. 호출자가 `structSize = sizeof(STAudioAssetIO)`, `apiVersion = ST_ABI_VERSION`을 채우고 `reserved`는 0 |
-| `repeatCount` | 추가 반복 횟수 — `0` = 한 번 / `-1` = 무한 / 양수 N = N번 더 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `assetName` | Asset name passed as is to `io->open` |
+| `io` | `STAudioAssetIO` callback table. The caller fills `structSize = sizeof(STAudioAssetIO)`, `apiVersion = ST_ABI_VERSION`, with `reserved` set to 0 |
+| `repeatCount` | Additional repeats — `0` = once / `-1` = forever / positive N = N more times |
 
-**구조체** `STAudioAssetIO`
+**Struct** `STAudioAssetIO`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` | `sizeof(STAudioAssetIO)` |
 | `apiVersion` | `ST_ABI_VERSION` |
-| `userData` | 모든 콜백의 첫 인자로 전달되는 호스트 포인터 |
-| `open` | `void* open(void* userData, const char* assetName)` — 에셋을 열고 핸들을 돌려줍니다 |
-| `read` | `uint64_t read(void* userData, void* handle, void* output, uint64_t bytes)` — 읽은 바이트 수를 돌려줍니다(`0` = EOF, 요청보다 크면 안 됨) |
-| `seek` | `int seek(void* userData, void* handle, int64_t offset, int origin)` — `origin` `0` = 처음 기준 / `1` = 현재 위치 기준. `1` = 성공 / `0` = 오류 |
-| `close` | `void close(void* userData, void* handle)` — 핸들을 닫습니다 |
+| `userData` | Host pointer passed as the first argument of every callback |
+| `open` | `void* open(void* userData, const char* assetName)` — opens the asset and returns a handle |
+| `read` | `uint64_t read(void* userData, void* handle, void* output, uint64_t bytes)` — returns the number of bytes read (`0` = EOF, must not exceed the request) |
+| `seek` | `int seek(void* userData, void* handle, int64_t offset, int origin)` — `origin` `0` = from the start / `1` = from the current position. `1` = success / `0` = error |
+| `close` | `void close(void* userData, void* handle)` — closes the handle |
 | `reserved[2]` | 0 |
 
-**반환** — `1` = 입력을 붙임 / `0` = 실패(이전 입력 유지).
+**Returns** — `1` = input attached / `0` = failure (previous input kept).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_audio_clip</code> — 짧은 파일을 통째로 디코드해 캐시 클립으로 붙입니다</summary>
+<summary><code>st_rt_source_set_audio_clip</code> — Decodes a short file in full and attaches it as a cached clip</summary>
 
 ```c
 int st_rt_source_set_audio_clip(STRT_Context* context, STSourceId source, const char* audioPath);
 ```
 
-**용도** — 짧은 소리를 한 번만 44.1 kHz 모노 PCM으로 전부 디코드해 소스에 캐시합니다. 같은 소리를 반복해서 낼 때 소스를 새로 만들거나 다시 디코드하지 않고, 살아 있는 소스에서 `st_rt_source_trigger`(한 번씩) 또는 `st_rt_source_set_retrigger_interval`(일정 간격)로 다시 시작하기 위한 입력입니다.
+**Purpose** — Decodes a short sound in full, once, to 44.1 kHz mono PCM and caches it on the source. An input for replaying the same sound repeatedly from a live source with `st_rt_source_trigger` (one shot at a time) or `st_rt_source_set_retrigger_interval` (fixed interval), without creating a new source or decoding again.
 
-**언제·어떻게** — 포맷·다운믹스는 `st_rt_source_set_audio_file`과 같고, 디코드된 길이는 최대 60초입니다. 붙이기에 실패하면 이전 입력이 유지됩니다. 성공하면 클립은 일시정지 상태로 시작하고 재시작 간격 `0`, EOF 반복 횟수 `0`이 되며, 소스의 볼륨·피치는 그대로 유지됩니다. 지원 여부는 `ST_CAP_SOURCE_RETRIGGER`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control, blocking]` — 파일 전체를 디코드하므로 게임 루프·오디오 스레드에서 부르지 마십시오.
+**When / how** — Formats and downmix are the same as `st_rt_source_set_audio_file`, and the decoded length is at most 60 seconds. If attaching fails, the previous input is kept. On success the clip starts paused with retrigger interval `0` and EOF repeat count `0`, and the source's volume · pitch are kept. Check support with `ST_CAP_SOURCE_RETRIGGER`. Rejected for speaker-set member sources. Thread: `[control, blocking]` — decodes the whole file, so do not call it from the game loop or the audio thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `audioPath` | 파일 경로(UTF-8). 지원 포맷은 `st_rt_source_set_audio_file` 항목 참고 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `audioPath` | File path (UTF-8). See the `st_rt_source_set_audio_file` entry for supported formats |
 
-**반환** — `1` = 클립을 붙임 / `0` = 실패(이전 입력 유지).
+**Returns** — `1` = clip attached / `0` = failure (previous input kept).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_audio_clip_asset</code> — 호스트 에셋을 통째로 디코드해 캐시 클립으로 붙입니다</summary>
+<summary><code>st_rt_source_set_audio_clip_asset</code> — Decodes a host asset in full and attaches it as a cached clip</summary>
 
 ```c
 int st_rt_source_set_audio_clip_asset(STRT_Context* context, STSourceId source, const char* assetName, const STAudioAssetIO* io);
 ```
 
-**용도** — `st_rt_source_set_audio_clip`의 에셋 버전입니다. 호스트 콜백(`STAudioAssetIO`)으로 읽은 인코딩 데이터를 44.1 kHz 모노 PCM으로 전부 디코드해 캐시합니다.
+**Purpose** — The asset version of `st_rt_source_set_audio_clip`. Decodes encoded data read through host callbacks (`STAudioAssetIO`) in full to 44.1 kHz mono PCM and caches it.
 
-**언제·어떻게** — 동작·제약(최대 60초, 일시정지로 시작, 간격 `0`·EOF 반복 `0`, 볼륨·피치 유지, 실패 시 이전 입력 유지)은 `st_rt_source_set_audio_clip`과 같습니다. 캐시 클립이므로 콜백은 이 호출 안에서 모두 불리고 닫힙니다 — `userData`는 이 함수가 반환할 때까지만 유효하면 됩니다. 지원 여부는 `ST_CAP_SOURCE_RETRIGGER`와 `ST_CAP_AUDIO_ASSET_IO`로 확인합니다. 스레드: `[control, blocking]`.
+**When / how** — Behavior and constraints (at most 60 seconds, starts paused, interval `0` · EOF repeat `0`, volume · pitch kept, previous input kept on failure) are the same as `st_rt_source_set_audio_clip`. Since it is a cached clip, every callback is called and closed within this call — `userData` only needs to be valid until this function returns. Check support with `ST_CAP_SOURCE_RETRIGGER` and `ST_CAP_AUDIO_ASSET_IO`. Thread: `[control, blocking]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `assetName` | `io->open`에 넘길 에셋 이름 |
-| `io` | `STAudioAssetIO` 콜백 표(호출자가 `structSize`/`apiVersion`을 채움). 필드는 `st_rt_source_set_audio_asset` 항목 참고 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `assetName` | Asset name passed to `io->open` |
+| `io` | `STAudioAssetIO` callback table (the caller fills `structSize`/`apiVersion`). See the `st_rt_source_set_audio_asset` entry for the fields |
 
-**반환** — `1` = 클립을 붙임 / `0` = 실패(이전 입력 유지).
+**Returns** — `1` = clip attached / `0` = failure (previous input kept).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_retrigger_interval</code> — 캐시 클립을 일정 간격으로 다시 시작하게 합니다</summary>
+<summary><code>st_rt_source_set_retrigger_interval</code> — Makes a cached clip restart at a fixed interval</summary>
 
 ```c
 int st_rt_source_set_retrigger_interval(STRT_Context* context, STSourceId source, double seconds);
 ```
 
-**용도** — 같은 캐시 클립을 시작-시작 간격 `seconds`마다 출력 시각 기준으로 다시 시작합니다. 제어 스레드의 호출 타이밍에 흔들리지 않는 규칙적인 반복음이 필요할 때 씁니다. 재시작해도 음향 경로·지연·잔향 상태는 유지됩니다.
+**Purpose** — Restarts the same cached clip every `seconds` start-to-start interval, measured on the output timeline. Use it when you need a regular repeating sound that is not jittered by the timing of control-thread calls. Acoustic paths · delay · reverb state are kept across restarts.
 
-**언제·어떻게** — `st_rt_source_set_audio_clip`/`_clip_asset`으로 붙인 캐시 클립에만 쓸 수 있습니다. 간격은 가장 가까운 44.1 kHz 출력 표본으로 반올림되며 피치는 간격을 바꾸지 않습니다. 변경은 다음 입력 읽기 경계에서 적용되고 새 간격 하나를 온전히 시작합니다. EOF 뒤에 켜면 클립이 다시 시작됩니다. 같은 (양자화된) 간격을 다시 걸면 진행 중인 클럭은 그대로입니다. `0`을 주면 이후 재시작을 취소하고 지금 울리는 샷은 끝까지 냅니다. `st_rt_source_play`가 시작·재개, `st_rt_source_pause`가 클럭을 멈추고, `st_rt_source_stop`은 일시정지·되감기를 하되 간격 설정은 유지합니다. EOF 반복(`st_rt_source_set_loop_count`)과 양수 간격은 함께 쓸 수 없습니다. 재시작 시 커서 리셋은 3 ms 전환으로 이어지고, 끝나지 않은 이전 샷은 섞이지 않고 교체됩니다. 지원 여부는 `ST_CAP_SOURCE_RETRIGGER`로 확인합니다. 스레드: `[control]`.
+**When / how** — Usable only with a cached clip attached by `st_rt_source_set_audio_clip`/`_clip_asset`. The interval is rounded to the nearest 44.1 kHz output sample, and pitch does not change the interval. A change takes effect at the next input read boundary and starts one full new interval. Enabling it after EOF restarts the clip. Setting the same (quantized) interval again leaves the running clock as is. `0` cancels further restarts and lets the currently sounding shot finish. `st_rt_source_play` starts · resumes, `st_rt_source_pause` stops the clock, and `st_rt_source_stop` pauses and rewinds but keeps the interval setting. EOF repeat (`st_rt_source_set_loop_count`) and a positive interval cannot be used together. On restart the cursor reset continues through a 3 ms transition, and an unfinished previous shot is replaced rather than mixed. Check support with `ST_CAP_SOURCE_RETRIGGER`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id(캐시 클립이 붙은 소스) |
-| `seconds` | 시작-시작 간격(초). 양수 범위는 출력 1표본 ~ 3600 s. `0` = 끔(기본) |
+| `context` | Real-time context handle |
+| `source` | Target source id (a source with a cached clip attached) |
+| `seconds` | Start-to-start interval (seconds). The positive range is 1 output sample – 3600 s. `0` = off (default) |
 
-**반환** — `1` = 성공 / `0` = 실패(잘못된 값, 없는 소스, 캐시 클립이 아닌 입력 등).
+**Returns** — `1` = success / `0` = failure (invalid value, nonexistent source, input that is not a cached clip, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_retrigger_interval</code> — 캐시 클립의 재시작 간격을 읽습니다</summary>
+<summary><code>st_rt_source_get_retrigger_interval</code> — Reads the cached clip's retrigger interval</summary>
 
 ```c
 double st_rt_source_get_retrigger_interval(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_set_retrigger_interval`로 건 간격을 양자화된 실효값(초)으로 돌려줍니다.
+**Purpose** — Returns the interval set with `st_rt_source_set_retrigger_interval` as its quantized effective value (seconds).
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]`.
+**When / how** — Can be called at any time. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | Real-time context handle |
+| `source` | Target source id |
 
-**반환** — 양자화된 간격(초). `0` = 꺼짐 / `-1` = 소스 없음 또는 캐시 클립이 아님.
+**Returns** — The quantized interval (seconds). `0` = off / `-1` = no source or not a cached clip.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_trigger</code> — 캐시 클립을 한 번 처음부터 울리도록 요청합니다</summary>
+<summary><code>st_rt_source_trigger</code> — Requests that the cached clip play once from the start</summary>
 
 ```c
 int st_rt_source_trigger(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 살아 있는 소스의 캐시 클립을 외부 이벤트 한 번에 맞춰 처음부터 다시 시작합니다. 디코드도 소스 생성도 하지 않으므로 짧은 소리를 자주 낼 때 소스를 새로 만드는 대신 씁니다. 재시작해도 음향 지연·반사·잔향 이력은 그대로 이어집니다.
+**Purpose** — Restarts a live source's cached clip from the start, timed to a single external event. It neither decodes nor creates a source, so use it instead of creating a new source when playing short sounds frequently. Acoustic delay · reflection · reverb history continue across the restart.
 
-**언제·어떻게** — 캐시 클립이 붙어 있고 재시작 간격 `0`, EOF 반복 횟수 `0`이어야 합니다. 별도의 `st_rt_source_play`는 필요 없습니다. 요청은 컨텍스트의 초기 음장이 소비된 뒤 다음 엔진 블록에서 시작되며, 그 전에 여러 번 요청하면 한 번으로 합쳐집니다. `st_rt_source_pause`/`st_rt_source_stop`, 성공한 `st_rt_source_seek`, 간격·반복 설정 변경은 대기 중인 요청을 취소합니다. 렌더되도록 소스를 켜 둔 상태(`st_rt_source_set_enabled`)로 유지하십시오. 커서는 입력 읽기 경계에서 3 ms 전환으로 리셋되고 끝나지 않은 이전 샷은 교체됩니다. `1`은 큐에 들어갔다는 뜻이지 장치에서 이미 재생됐다는 뜻이 아닙니다. 지원 여부는 `ST_CAP_SOURCE_TRIGGER`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control]`.
+**When / how** — A cached clip must be attached, with retrigger interval `0` and EOF repeat count `0`. No separate `st_rt_source_play` is needed. The request starts at the next engine block after the context's initial sound field has been consumed, and multiple requests before that are merged into one. `st_rt_source_pause`/`st_rt_source_stop`, a successful `st_rt_source_seek`, and changes to the interval or repeat settings cancel a pending request. Keep the source enabled (`st_rt_source_set_enabled`) so it renders. The cursor resets at the input read boundary with a 3 ms transition, and an unfinished previous shot is replaced. `1` means it was queued, not that it has already played on the device. Check support with `ST_CAP_SOURCE_TRIGGER`. Rejected for speaker-set member sources. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id(캐시 클립이 붙은 소스) |
+| `context` | Real-time context handle |
+| `source` | Target source id (a source with a cached clip attached) |
 
-**반환** — `1` = 큐에 넣음 / `0` = 거절(캐시 클립이 아님, 간격·반복이 0이 아님, 없는 소스 등).
+**Returns** — `1` = queued / `0` = rejected (not a cached clip, interval or repeat not zero, nonexistent source, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_seek</code> — 파일 입력의 재생 위치를 옮깁니다</summary>
+<summary><code>st_rt_source_seek</code> — Moves the playback position of the file input</summary>
 
 ```c
 int st_rt_source_seek(STRT_Context* context, STSourceId source, double seconds);
 ```
 
-**용도** — 파일·에셋·클립 입력의 재생 커서를 소스 시간 기준 `seconds`로 옮깁니다.
+**Purpose** — Moves the playback cursor of a file · asset · clip input to `seconds` in source time.
 
-**언제·어떻게** — 위치는 원본 파일 프레임 단위로 내림되며, 재생/일시정지 상태는 유지됩니다. 디코더·피치 선읽기를 버리고 설정된 반복 횟수를 새로 채웁니다. 압축 포맷의 탐색 정확도는 코덱에 따라 제한됩니다. 호스트 스트림(라이브 PCM)은 호스트가 타임라인을 소유하므로 거절됩니다. 현재 위치는 `st_rt_source_get_position_seconds`로 읽습니다(초 단위, `hostSampleRate`·피치와 무관). 성공한 탐색은 대기 중인 `st_rt_source_trigger` 요청을 취소합니다. 지원 여부는 `ST_CAP_SOURCE_PLAYBACK_CONTROL`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control, blocking]`.
+**When / how** — The position is rounded down to source file frames, and the play/pause state is kept. It discards decoder and pitch lookahead and refills the configured repeat count. Seek accuracy in compressed formats is limited by the codec. Host streams (live PCM) are rejected because the host owns their timeline. Read the current position with `st_rt_source_get_position_seconds` (in seconds, independent of `hostSampleRate` and pitch). A successful seek cancels a pending `st_rt_source_trigger` request. Check support with `ST_CAP_SOURCE_PLAYBACK_CONTROL`. Rejected for speaker-set member sources. Thread: `[control, blocking]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `seconds` | 소스 시간 위치(초). 유한한 `0` 이상 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `seconds` | Position in source time (seconds). Finite and ≥ `0` |
 
-**반환** — `1` = 성공 / `0` = 실패(잘못된 값, 없는 소스, 파일 입력이 아님 등).
+**Returns** — `1` = success / `0` = failure (invalid value, nonexistent source, not a file input, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_loop_count</code> — 파일 입력의 반복 횟수를 정합니다</summary>
+<summary><code>st_rt_source_set_loop_count</code> — Sets the repeat count of the file input</summary>
 
 ```c
 int st_rt_source_set_loop_count(STRT_Context* context, STSourceId source, int repeatCount);
 ```
 
-**용도** — 파일·에셋·클립 입력이 끝에 닿았을 때 처음으로 돌아가 몇 번 더 재생할지 정합니다.
+**Purpose** — Sets how many more times a file · asset · clip input returns to the start and plays again when it reaches the end.
 
-**언제·어떻게** — 현재 커서 위치에서 반복 예산을 새로 채웁니다. `st_rt_source_stop`은 되감으면서 이 예산을 복원합니다. 호스트 스트림(라이브 PCM)은 거절됩니다. 캐시 클립에서는 양수 재시작 간격(`st_rt_source_set_retrigger_interval`)과 함께 쓸 수 없고, 반복 설정을 바꾸면 대기 중인 `st_rt_source_trigger` 요청이 취소됩니다(트리거는 반복 횟수 `0`을 요구합니다). 지원 여부는 `ST_CAP_SOURCE_PLAYBACK_CONTROL`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control, blocking]`.
+**When / how** — Refills the repeat budget from the current cursor position. `st_rt_source_stop` restores this budget as it rewinds. Host streams (live PCM) are rejected. On a cached clip it cannot be combined with a positive retrigger interval (`st_rt_source_set_retrigger_interval`), and changing the repeat setting cancels a pending `st_rt_source_trigger` request (trigger requires a repeat count of `0`). Check support with `ST_CAP_SOURCE_PLAYBACK_CONTROL`. Rejected for speaker-set member sources. Thread: `[control, blocking]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `repeatCount` | 추가 반복 횟수 — `0` = 한 번 / `-1` = 무한 / 양수 N = N번 더. `-1` 미만은 거절 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `repeatCount` | Additional repeats — `0` = once / `-1` = forever / positive N = N more times. Values below `-1` are rejected |
 
-**반환** — `1` = 성공 / `0` = 실패(잘못된 값, 없는 소스, 파일 입력이 아님 등).
+**Returns** — `1` = success / `0` = failure (invalid value, nonexistent source, not a file input, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_loop_count</code> — 파일 입력의 반복 횟수를 읽습니다</summary>
+<summary><code>st_rt_source_get_loop_count</code> — Reads the repeat count of the file input</summary>
 
 ```c
 int st_rt_source_get_loop_count(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 설정된 추가 반복 횟수를 돌려줍니다.
+**Purpose** — Returns the configured additional repeat count.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]`.
+**When / how** — Can be called at any time. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | Real-time context handle |
+| `source` | Target source id |
 
-**반환** — 반복 횟수(`0` 이상). `-1` = 무한 / `-2` = 소스 없음 또는 지원하지 않는 입력.
+**Returns** — Repeat count (≥ `0`). `-1` = forever / `-2` = no source or unsupported input.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_volume</code> — 소스 입력의 볼륨을 정합니다</summary>
+<summary><code>st_rt_source_set_volume</code> — Sets the volume of the source input</summary>
 
 ```c
 int st_rt_source_set_volume(STRT_Context* context, STSourceId source, float volume);
 ```
 
-**용도** — 소스 입력 신호에 선형 압력 게인을 겁니다. 음향 경로·DSP 처리 **앞**에 걸리므로 그 소스의 모든 경로(직접·반사·회절·잔향 송출)가 함께 바뀝니다.
+**Purpose** — Applies a linear pressure gain to the source input signal. It is applied **before** the acoustic paths and DSP processing, so every path of that source (direct · reflection · diffraction · reverb send) changes together.
 
-**언제·어떻게** — 오디오 입력이 붙은 소스에 언제든, 재생 중에도 부를 수 있습니다. 바뀐 값은 3 ms 램프로 넘어갑니다. 경로 종류별 비율은 `st_rt_source_set_path_volume`으로 따로 정합니다. 지원 여부는 `ST_CAP_SOURCE_PLAYBACK_CONTROL`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다(멤버 레벨은 스피커 세트 API가 정합니다). 스레드: `[control]`.
+**When / how** — Can be called at any time on a source with audio input attached, including during playback. A changed value transitions with a 3 ms ramp. Set per-path-type ratios separately with `st_rt_source_set_path_volume`. Check support with `ST_CAP_SOURCE_PLAYBACK_CONTROL`. Rejected for speaker-set member sources (member levels are set by the speaker set API). Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `volume` | 선형 압력 게인, `[0, 16]`, 기본 `1`. 범위 밖·비유한 값은 거절 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `volume` | Linear pressure gain, `[0, 16]`, default `1`. Out-of-range or non-finite values are rejected |
 
-**반환** — `1` = 성공 / `0` = 실패(범위 밖 값, 없는 소스 또는 오디오 입력 없음 등).
+**Returns** — `1` = success / `0` = failure (out-of-range value, nonexistent source or no audio input, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_volume</code> — 소스 입력의 볼륨을 읽습니다</summary>
+<summary><code>st_rt_source_get_volume</code> — Reads the volume of the source input</summary>
 
 ```c
 float st_rt_source_get_volume(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_set_volume`으로 정한 선형 볼륨을 돌려줍니다. 램프 중이면 램프의 목표값입니다.
+**Purpose** — Returns the linear volume set with `st_rt_source_set_volume`. During a ramp it is the ramp's target value.
 
-**언제·어떻게** — 언제든 부를 수 있고, 스피커 세트 멤버 소스에도 쓸 수 있습니다. 스레드: `[control]`.
+**When / how** — Can be called at any time, and also works on speaker-set member sources. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | Real-time context handle |
+| `source` | Target source id |
 
-**반환** — 선형 볼륨(기본 `1`). `-1` = 소스 없음.
+**Returns** — Linear volume (default `1`). `-1` = no source.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_pitch</code> — 소스 입력의 재생 속도(피치)를 정합니다</summary>
+<summary><code>st_rt_source_set_pitch</code> — Sets the playback rate (pitch) of the source input</summary>
 
 ```c
 int st_rt_source_set_pitch(STRT_Context* context, STSourceId source, float ratio);
 ```
 
-**용도** — 입력을 재생 속도 비율로 빠르게/느리게 읽어 피치를 바꿉니다. 시간 늘이기는 하지 않으므로 파일의 재생 길이나 호스트 스트림 링의 소비 속도가 함께 바뀝니다.
+**Purpose** — Changes pitch by reading the input faster or slower by a playback rate ratio. No time stretching is done, so the playback length of a file or the consumption rate of a host stream ring changes along with it.
 
-**언제·어떻게** — 오디오 입력이 붙은 소스에 언제든 부를 수 있습니다. 호스트가 이미 자체적으로 피치를 바꾼 신호를 넣는다면 이중으로 걸리지 않게 하십시오. 1이 아닌 비율은 대역 제한 sinc 보간을 쓰며 최대 67프레임의 선읽기가 생깁니다. 캐시 클립의 재시작 간격은 피치의 영향을 받지 않습니다. 지원 여부는 `ST_CAP_SOURCE_PLAYBACK_CONTROL`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control]` — 필터 계수를 만들므로 오디오 콜백에서 부르지 마십시오.
+**When / how** — Can be called at any time on a source with audio input attached. If the host already feeds a signal it has pitch-shifted itself, avoid applying it twice. Ratios other than 1 use band-limited sinc interpolation and introduce up to 67 frames of lookahead. A cached clip's retrigger interval is not affected by pitch. Check support with `ST_CAP_SOURCE_PLAYBACK_CONTROL`. Rejected for speaker-set member sources. Thread: `[control]` — builds filter coefficients, so do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `ratio` | 재생 속도 비율, `[0.25, 4]`, 기본 `1`. 범위 밖·비유한 값은 거절 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `ratio` | Playback rate ratio, `[0.25, 4]`, default `1`. Out-of-range or non-finite values are rejected |
 
-**반환** — `1` = 성공 / `0` = 실패(범위 밖 값, 없는 소스 또는 오디오 입력 없음 등).
+**Returns** — `1` = success / `0` = failure (out-of-range value, nonexistent source or no audio input, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_pitch</code> — 소스 입력의 재생 속도 비율을 읽습니다</summary>
+<summary><code>st_rt_source_get_pitch</code> — Reads the playback rate ratio of the source input</summary>
 
 ```c
 float st_rt_source_get_pitch(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_set_pitch`로 정한 재생 속도 비율을 돌려줍니다.
+**Purpose** — Returns the playback rate ratio set with `st_rt_source_set_pitch`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]`.
+**When / how** — Can be called at any time. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | Real-time context handle |
+| `source` | Target source id |
 
-**반환** — 재생 속도 비율(기본 `1`). `-1` = 소스 없음.
+**Returns** — Playback rate ratio (default `1`). `-1` = no source.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_attach_stream</code> — 호스트가 PCM을 밀어 넣는 스트림 입력을 소스에 붙입니다</summary>
+<summary><code>st_rt_source_attach_stream</code> — Attaches a stream input into which the host pushes PCM</summary>
 
 ```c
 int st_rt_source_attach_stream(STRT_Context* context, STSourceId source, const STStreamDesc* desc);
 ```
 
-**용도** — 음성 채팅·합성음·외부 미들웨어 출력처럼 호스트가 실시간으로 만드는 모노 PCM을 소스 입력으로 씁니다. 파일 입력이 "엔진이 파일을 연다"라면 이쪽은 "호스트가 PCM을 민다"입니다. 렌더 주도권과 오디오 장치는 그대로 엔진이 쥐며, 엔진 렌더 스레드가 512프레임 블록을 당길 때 소스별 링버퍼에서 읽어 갑니다(호스트 푸시 렌더가 아닙니다).
+**Purpose** — Uses mono PCM the host produces in real time, such as voice chat, synthesized sound or external middleware output, as the source input. Where file input is "the engine opens a file", this is "the host pushes PCM". The engine still owns render control and the audio device; the engine render thread reads from the per-source ring buffer when it pulls 512-frame blocks (this is not host push rendering).
 
-**언제·어떻게** — 소스를 만든 뒤 부르고, 이어서 `st_rt_source_write_stream`으로 PCM을 공급합니다. 수명·재생 규약은 파일 입력과 같습니다: 붙인 직후는 정지 상태이고 `st_rt_source_play`부터 소리가 나며, `st_rt_source_pause`/`st_rt_source_stop`도 그대로 먹습니다(`stop`은 링에 쌓인 프레임을 버립니다 — 라이브 스트림에 "처음으로 되감기"는 없습니다). 분리는 `st_rt_source_clear_audio`가 하고, `st_rt_source_destroy`도 스트림을 분리해 슬롯을 반납합니다. 같은 소스에 파일 입력을 붙이면 파일이 스트림을 밀어내고, 반대로 이 함수는 파일 입력을 밀어냅니다. 동시에 붙어 있을 수 있는 스트림은 64개이며, 반납된 슬롯은 다음 attach가 재사용합니다(누적 카운터는 attach마다 0에서 다시 셉니다). 링 할당은 이 호출에서 한 번만 일어납니다. 스트림에서는 `st_rt_source_seek`·`st_rt_source_set_loop_count`가 거절됩니다. 지원 여부는 `ST_CAP_SOURCE_STREAM_INPUT`(실시간 전용)으로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control]` — 씬 read 락과 재생 뮤텍스를 잡습니다. 같은 소스에 대해 `st_rt_source_write_stream`과 동시에 부르지 마십시오(다른 소스끼리는 무관).
+**When / how** — Call it after creating the source, then supply PCM with `st_rt_source_write_stream`. Lifetime and playback conventions are the same as file input: right after attaching it is stopped, sound starts with `st_rt_source_play`, and `st_rt_source_pause`/`st_rt_source_stop` work as usual (`stop` discards frames queued in the ring — a live stream has no "rewind to start"). `st_rt_source_clear_audio` detaches it, and `st_rt_source_destroy` also detaches the stream and returns the slot. Attaching a file input to the same source displaces the stream, and conversely this function displaces a file input. Up to 64 streams can be attached at once, and a returned slot is reused by the next attach (cumulative counters restart from 0 on each attach). Ring allocation happens only once, in this call. `st_rt_source_seek` · `st_rt_source_set_loop_count` are rejected on streams. Check support with `ST_CAP_SOURCE_STREAM_INPUT` (real-time only). Rejected for speaker-set member sources. Thread: `[control]` — takes the scene read lock and the playback mutex. Do not call it concurrently with `st_rt_source_write_stream` on the same source (different sources are independent).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `desc` | `STStreamDesc`. 호출자가 `structSize = sizeof(STStreamDesc)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | Real-time context handle |
+| `source` | Target source id |
+| `desc` | `STStreamDesc`. The caller fills `structSize = sizeof(STStreamDesc)`, `apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STStreamDesc`
+**Struct** `STStreamDesc`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` | `sizeof(STStreamDesc)` |
 | `apiVersion` | `ST_ABI_VERSION` |
-| `sampleRate` | 입력 표본률. 엔진 레이트(`st_rt_get_sample_rate`, 44100)여야 합니다. 단, `STRT_CreateOptions.hostSampleRate`를 지정한 컨텍스트에서는 그 값이어야 하며, 엔진이 소스마다 호스트→엔진 변환기를 링 앞단에 겁니다 |
-| `channels` | `1`만 허용(모노 전용) |
-| `capacityFrames` | 링 크기, **호스트 프레임**(= `sampleRate` 기준). `0` = 기본 8192 호스트 프레임(엔진 레이트에서 약 186 ms), 그 밖은 `[512, 1048576]`. 엔진은 이를 엔진 프레임으로 환산(반올림)한 뒤 2의 거듭제곱으로 올려 잡으므로 실제 용량은 요청보다 큽니다 — `STStreamStatus.capacityFrames`로 확인하십시오 |
+| `sampleRate` | Input sample rate. Must be the engine rate (`st_rt_get_sample_rate`, 44100). However, in a context that set `STRT_CreateOptions.hostSampleRate` it must be that value, and the engine puts a host→engine converter in front of the ring for each source |
+| `channels` | Only `1` allowed (mono only) |
+| `capacityFrames` | Ring size in **host frames** (= relative to `sampleRate`). `0` = default 8192 host frames (about 186 ms at the engine rate); otherwise `[512, 1048576]`. The engine converts this to engine frames (rounded) and then rounds up to a power of two, so the actual capacity is larger than requested — check it with `STStreamStatus.capacityFrames` |
 | `reserved[5]` | 0 |
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_VERSION_MISMATCH`(`desc` 스탬프 불일치) / `ST_STATUS_INVALID_ARGUMENT`(`sampleRate`가 위 규칙과 다름, `channels ≠ 1`, `capacityFrames`가 0도 `[512, 1048576]`도 아님) / `ST_STATUS_NOT_FOUND`(소스 없음) / `ST_STATUS_UNAVAILABLE`(동시 스트림 슬롯 64개 소진).
+**Returns** — `1` = success / `0` = failure. On failure `st_rt_get_last_status`: `ST_STATUS_VERSION_MISMATCH` (`desc` stamp mismatch) / `ST_STATUS_INVALID_ARGUMENT` (`sampleRate` does not follow the rule above, `channels ≠ 1`, `capacityFrames` is neither 0 nor in `[512, 1048576]`) / `ST_STATUS_NOT_FOUND` (no source) / `ST_STATUS_UNAVAILABLE` (all 64 concurrent stream slots in use).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_write_stream</code> — 스트림 입력 링에 모노 PCM을 씁니다</summary>
+<summary><code>st_rt_source_write_stream</code> — Writes mono PCM into the stream input ring</summary>
 
 ```c
 int st_rt_source_write_stream(STRT_Context* context, STSourceId source, const float* mono, int frames);
 ```
 
-**용도** — `st_rt_source_attach_stream`으로 붙인 소스의 링버퍼에 모노 float PCM을 넣습니다. 블로킹하지 않으며 락도 할당도 하지 않으므로 호스트 오디오 스레드에서 직접 부를 수 있습니다.
+**Purpose** — Puts mono float PCM into the ring buffer of a source attached with `st_rt_source_attach_stream`. It does not block and takes no locks or allocations, so it can be called directly from the host audio thread.
 
-**언제·어떻게** — 소스당 **단일 생산자**를 전제로 렌더 스레드와 SPSC로 만납니다 — 한 소스에는 한 스레드만 쓰십시오. 같은 소스에 대해 `st_rt_source_attach_stream`/`st_rt_source_clear_audio`와 동시에 부르지 마십시오(다른 소스끼리는 무관). 실패해도 진단 버퍼(`st_rt_get_last_status`)를 건드리지 않고 `0`으로만 알립니다. 비유한 샘플(NaN/Inf)은 검사하지 않으므로 유한성 보장은 호스트 책임입니다. 반환값의 뜻이 `hostSampleRate` 지정 여부에 따라 다르니 아래를 구분해 읽으십시오. 스레드: `[any]` — 어느 스레드에서 불러도 되고 블록하지 않습니다.
+**When / how** — It meets the render thread as SPSC, assuming a **single producer** per source — write to one source from only one thread. Do not call it concurrently with `st_rt_source_attach_stream`/`st_rt_source_clear_audio` on the same source (different sources are independent). On failure it does not touch the diagnostic buffer (`st_rt_get_last_status`) and reports only through `0`. Non-finite samples (NaN/Inf) are not checked, so guaranteeing finiteness is the host's responsibility. The meaning of the return value depends on whether `hostSampleRate` is set, so read the cases below carefully. Thread: `[any]` — callable from any thread and does not block.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 스트림이 붙은 소스 id |
-| `mono` | 모노 float PCM 버퍼(`frames`개) |
-| `frames` | 쓸 프레임 수, **호스트 프레임**(`STStreamDesc.sampleRate` 기준) |
+| `context` | Real-time context handle |
+| `source` | Id of the source with a stream attached |
+| `mono` | Mono float PCM buffer (`frames` samples) |
+| `frames` | Number of frames to write, in **host frames** (relative to `STStreamDesc.sampleRate`) |
 
-**반환** — 쓴 프레임 수. 스트림이 붙어 있지 않거나 분리된 뒤면 `0`.
+**Returns** — Number of frames written. `0` if no stream is attached or after it was detached.
 
-- `hostSampleRate == 0`(변환 없음): 실제로 링에 들어간 프레임 수(`0`…`frames`). 링이 가득 차면 나머지는 버려지고 `droppedFrames`에 누적됩니다. 반환이 `frames`보다 작으면 남은 몫을 다음 호출에 다시 밀어도 되므로 백프레셔 신호로 쓸 수 있습니다.
-- `hostSampleRate ≠ 0`(리샘플 경로): 항상 `frames`. 변환기가 입력을 전부 소비하므로 같은 프레임을 다시 밀면 안 됩니다(신호가 겹칩니다). 넘쳐 버려진 몫은 `droppedFrames`로만 보고되며 반환값에는 백프레셔 신호가 없습니다 — `st_rt_source_get_stream_status`의 `queuedFrames`/`capacityFrames`를 보고 공급량을 조절하십시오(예: `queuedFrames`가 용량의 3/4을 넘으면 미는 양을 줄임).
+- `hostSampleRate == 0` (no conversion): the number of frames actually put into the ring (`0`…`frames`). When the ring is full the rest is discarded and accumulated in `droppedFrames`. If the return is smaller than `frames`, the remainder may be pushed again on the next call, so it can be used as a backpressure signal.
+- `hostSampleRate ≠ 0` (resampling path): always `frames`. The converter consumes all the input, so do not push the same frames again (the signal would overlap). The portion discarded on overflow is reported only through `droppedFrames`, and the return value carries no backpressure signal — throttle the supply by looking at `queuedFrames`/`capacityFrames` of `st_rt_source_get_stream_status` (e.g. push less once `queuedFrames` exceeds 3/4 of capacity).
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_stream_status</code> — 스트림 입력 링의 잔량·언더런·드롭 통계를 읽습니다</summary>
+<summary><code>st_rt_source_get_stream_status</code> — Reads fill level · underrun · drop statistics of the stream input ring</summary>
 
 ```c
 int st_rt_source_get_stream_status(const STRT_Context* context, STSourceId source, STStreamStatus* outStatus);
 ```
 
-**용도** — 스트림 링에 쌓인 양과 누적 언더런·드롭·기록량을 돌려줍니다. 리샘플 경로(`hostSampleRate ≠ 0`)에서는 `st_rt_source_write_stream` 반환값에 백프레셔 신호가 없으므로 `queuedFrames`와 `capacityFrames`의 비가 유일한 공급 조절 신호입니다.
+**Purpose** — Returns the amount queued in the stream ring and the cumulative underrun · drop · written amounts. On the resampling path (`hostSampleRate ≠ 0`) the return value of `st_rt_source_write_stream` carries no backpressure signal, so the ratio of `queuedFrames` to `capacityFrames` is the only supply-throttling signal.
 
-**언제·어떻게** — 정상 경로는 atomic 읽기만 하므로 오디오 스레드를 포함한 어느 스레드에서든 부를 수 있습니다. 단, 스탬프가 틀리거나 스트림이 없는 오류 경로는 컨텍스트의 진단 버퍼에 쓰며 이 쓰기는 스레드 간에 직렬화되지 않습니다 — 인자를 올바르게 채우면 닿지 않습니다. 스레드: `[any]`.
+**When / how** — The normal path only does atomic reads, so it can be called from any thread, including the audio thread. However, error paths (wrong stamp or no stream) write to the context's diagnostic buffer, and this write is not serialized across threads — it is never reached if the arguments are filled correctly. Thread: `[any]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 스트림이 붙은 소스 id |
-| `outStatus` | `STStreamStatus` 출력. 호출자가 `structSize = sizeof(STStreamStatus)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | Real-time context handle |
+| `source` | Id of the source with a stream attached |
+| `outStatus` | `STStreamStatus` output. The caller fills `structSize = sizeof(STStreamStatus)`, `apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STStreamStatus`
+**Struct** `STStreamStatus`
 
-프레임 필드 다섯 개는 모두 **호스트 프레임**(`STStreamDesc.sampleRate` = `hostSampleRate`, 지정하지 않았으면 44100 기준)입니다. 환산은 조회 시점에 한 번 반올림하므로 오차가 누적되지 않습니다. 48 kHz 호스트에서는 `capacityFrames`가 2의 거듭제곱이 아니니(예: 엔진 8192 → 호스트 8916) 링 크기를 2의 거듭제곱으로 가정하지 마십시오. 누적 카운터 3개는 attach 시점부터의 합이고, 다시 attach하면 0에서 셉니다.
+All five frame fields are in **host frames** (relative to `STStreamDesc.sampleRate` = `hostSampleRate`, or 44100 if not set). Conversion rounds once at query time, so errors do not accumulate. On a 48 kHz host `capacityFrames` is not a power of two (e.g. engine 8192 → host 8916), so do not assume the ring size is a power of two. The three cumulative counters are totals since attach, and restart from 0 on re-attach.
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` | `sizeof(STStreamStatus)` |
 | `apiVersion` | `ST_ABI_VERSION` |
-| `queuedFrames` | 지금 링에 쌓여 있는 프레임 |
-| `capacityFrames` | 엔진이 실제로 잡은 링 용량 |
-| `underrunFrames` | 누계: 링이 비어 무음으로 채운 프레임 |
-| `droppedFrames` | 누계: 링이 가득 차 버린 프레임 |
-| `totalWrittenFrames` | 누계: 실제로 링에 들어간 프레임 |
-| `reserved[6]` | 예약 |
+| `queuedFrames` | Frames currently queued in the ring |
+| `capacityFrames` | Ring capacity the engine actually allocated |
+| `underrunFrames` | Cumulative: frames filled with silence because the ring was empty |
+| `droppedFrames` | Cumulative: frames discarded because the ring was full |
+| `totalWrittenFrames` | Cumulative: frames actually put into the ring |
+| `reserved[6]` | Reserved |
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_VERSION_MISMATCH`(스탬프 불일치) / `ST_STATUS_NOT_FOUND`(스트림이 붙어 있지 않음). `outStatus`나 컨텍스트가 NULL이어도 `0`.
+**Returns** — `1` = success / `0` = failure. On failure `st_rt_get_last_status`: `ST_STATUS_VERSION_MISMATCH` (stamp mismatch) / `ST_STATUS_NOT_FOUND` (no stream attached). Also `0` if `outStatus` or the context is NULL.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_play</code> — 소스 입력의 재생을 시작하거나 재개합니다</summary>
+<summary><code>st_rt_source_play</code> — Starts or resumes playback of the source input</summary>
 
 ```c
 void st_rt_source_play(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 파일·에셋·클립·스트림 입력의 재생을 시작합니다. 입력을 붙인 직후는 정지 상태이므로 소리를 내려면 이 함수를 불러야 합니다.
+**Purpose** — Starts playback of a file · asset · clip · stream input. Right after attaching, the input is stopped, so this function must be called to produce sound.
 
-**언제·어떻게** — 오디오 입력을 붙인 뒤 부릅니다. 실제 소리는 그 소스의 첫 IR이 렌더러에 닿은 뒤부터 납니다. 일시정지 상태면 그 위치에서 재개하고, 캐시 클립의 재시작 간격 클럭도 시작·재개합니다. `st_rt_source_trigger`로만 울리는 클립에는 필요 없습니다. 스피커 세트 멤버 소스에는 무시됩니다. 스레드: `[control]` — 재생 뮤텍스를 잡습니다.
+**When / how** — Call it after attaching audio input. Actual sound starts after that source's first IR reaches the renderer. If paused it resumes from that position, and it also starts or resumes a cached clip's retrigger interval clock. Not needed for clips sounded only with `st_rt_source_trigger`. Ignored for speaker-set member sources. Thread: `[control]` — takes the playback mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | Real-time context handle |
+| `source` | Target source id |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_pause</code> — 소스 입력의 재생을 일시정지합니다</summary>
+<summary><code>st_rt_source_pause</code> — Pauses playback of the source input</summary>
 
 ```c
 void st_rt_source_pause(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 현재 커서 위치를 유지한 채 재생을 멈춥니다. `st_rt_source_play`로 같은 위치에서 재개합니다.
+**Purpose** — Stops playback while keeping the current cursor position. `st_rt_source_play` resumes from the same position.
 
-**언제·어떻게** — 커서는 즉시 멈추고, 출력은 마지막 파형 끝점을 3 ms 램프로 0까지 내려 클릭 없이 끊깁니다. 이미 방에 퍼진 잔향은 계속 울릴 수 있습니다. 캐시 클립의 재시작 클럭도 멈추며, 대기 중인 `st_rt_source_trigger` 요청은 취소됩니다. 스피커 세트 멤버 소스에는 무시됩니다. 스레드: `[control]` — 재생 뮤텍스를 잡습니다.
+**When / how** — The cursor stops immediately, and the output ramps the last waveform endpoint down to 0 over 3 ms so it cuts without a click. Reverb already spread through the room may keep ringing. A cached clip's retrigger clock also stops, and a pending `st_rt_source_trigger` request is canceled. Ignored for speaker-set member sources. Thread: `[control]` — takes the playback mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | Real-time context handle |
+| `source` | Target source id |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_source_stop</code> — 소스 입력의 재생을 멈추고 처음으로 되돌립니다</summary>
+<summary><code>st_rt_source_stop</code> — Stops playback of the source input and rewinds to the start</summary>
 
 ```c
 void st_rt_source_stop(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 재생을 멈추고 커서를 처음으로 되감습니다. 다음 `st_rt_source_play`는 처음부터 재생합니다.
+**Purpose** — Stops playback and rewinds the cursor to the start. The next `st_rt_source_play` plays from the beginning.
 
-**언제·어떻게** — 출력은 `st_rt_source_pause`와 같이 3 ms 램프로 끊기고, 이미 방에 퍼진 잔향은 계속 울릴 수 있습니다. 파일 입력은 되감기와 함께 설정된 반복 횟수를 복원합니다. 캐시 클립은 재시작 간격 설정을 유지하고, 대기 중인 `st_rt_source_trigger` 요청은 취소됩니다. 호스트 스트림은 되감을 처음이 없으므로 링에 쌓인 프레임을 버립니다. 스피커 세트 멤버 소스에는 무시됩니다. 스레드: `[control]` — 재생 뮤텍스를 잡습니다.
+**When / how** — The output cuts with a 3 ms ramp as with `st_rt_source_pause`, and reverb already spread through the room may keep ringing. File input restores the configured repeat count along with the rewind. A cached clip keeps its retrigger interval setting, and a pending `st_rt_source_trigger` request is canceled. A host stream has no start to rewind to, so it discards the frames queued in the ring. Ignored for speaker-set member sources. Thread: `[control]` — takes the playback mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | Real-time context handle |
+| `source` | Target source id |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>리스너 · 전파 · 음향 정책</strong> — 27개</summary>
+<summary><strong>Listener · propagation · acoustic policy</strong> — 27 functions</summary>
 
 <details>
-<summary><code>st_rt_listener_set_position</code> — 리스너 위치를 설정한다</summary>
+<summary><code>st_rt_listener_set_position</code> — Sets the listener position</summary>
 
 ```c
 void st_rt_listener_set_position(STRT_Context* context, float x, float y, float z);
 ```
 
-**용도** — 리스너(청취자)의 월드 위치를 바꿉니다. 모든 소스의 직접음·반사·회절·잔향 경로가 이 위치를 끝점으로 계산됩니다.
+**Purpose** — Changes the listener's world position. The direct · reflection · diffraction · reverb paths of every source are computed with this position as their endpoint.
 
-**언제·어떻게** — 게임 루프에서 카메라나 플레이어 머리 위치가 바뀔 때마다 부릅니다. 방향은 `st_rt_listener_set_rotation` / `st_rt_listener_set_rotation_ypr` / `st_rt_listener_set_orientation_q`로 따로 주며, 위치를 바꿔도 방향은 유지됩니다. 좌표는 **씬 단위 그대로** 넣습니다(`STRT_CreateOptions.sceneRatio`로 미터 변환은 엔진이 합니다). 스레드: `[control]` — 제어 스레드에서 부르고 오디오 콜백에서는 부르지 마십시오. `ST_RT_SCHEDULER_PIPELINED`에서는 씬을 직접 잠그지 않고 모션 큐에 넣고 돌아오며, 전파 워커가 다음 사이클에 가장 최근 값을 반영합니다. `ST_RT_SCHEDULER_SYNCHRONOUS`에서는 다음 `st_rt_propagate`가 새 위치를 봅니다.
+**When / how** — Call it from the game loop whenever the camera or the player's head position changes. Orientation is given separately with `st_rt_listener_set_rotation` / `st_rt_listener_set_rotation_ypr` / `st_rt_listener_set_orientation_q`, and changing the position keeps the orientation. Pass coordinates **in scene units as is** (the engine converts to meters with `STRT_CreateOptions.sceneRatio`). Thread: `[control]` — call from the control thread, not from the audio callback. Under `ST_RT_SCHEDULER_PIPELINED` it does not lock the scene directly but enqueues into the motion queue and returns, and the propagation worker applies the most recent value in its next cycle. Under `ST_RT_SCHEDULER_SYNCHRONOUS` the next `st_rt_propagate` sees the new position.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `x` | 월드 X 좌표(씬 단위, +X = right) |
-| `y` | 월드 Y 좌표(씬 단위, +Y = up) |
-| `z` | 월드 Z 좌표(씬 단위, +Z = forward) |
+| `context` | Context handle |
+| `x` | World X coordinate (scene units, +X = right) |
+| `y` | World Y coordinate (scene units, +Y = up) |
+| `z` | World Z coordinate (scene units, +Z = forward) |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_velocity</code> — 리스너 속도를 설정한다(도플러용)</summary>
+<summary><code>st_rt_listener_set_velocity</code> — Sets the listener velocity (for Doppler)</summary>
 
 ```c
 void st_rt_listener_set_velocity(STRT_Context* context, float x, float y, float z);
 ```
 
-**용도** — 리스너의 이동 속도 벡터를 알려 줍니다. 엔진은 소스·리스너 속도로 경로별 도플러 슬로프를 계산합니다.
+**Purpose** — Tells the engine the listener's velocity vector. The engine computes the per-path Doppler slope from the source and listener velocities.
 
-**언제·어떻게** — 위치와 함께 매 프레임 갱신하는 것이 일반적입니다. 속도는 **씬 단위/초**로 넣으며, 엔진이 `sceneRatio`를 곱해 m/s로 바꾼 뒤 음속으로 나눕니다. 정지한 리스너는 `(0, 0, 0)`입니다. 도플러 피치 렌더 자체는 `STRenderOptions.useDoppler`, 움직이는 소스의 방사 이득은 `st_rt_set_doppler_gain_mode`가 담당합니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오. `PIPELINED`에서는 모션 큐에 들어가 다음 전파 사이클에 반영됩니다.
+**When / how** — It is usual to update it every frame along with the position. Pass the velocity in **scene units/second**; the engine multiplies by `sceneRatio` to get m/s and divides by the speed of sound. A stationary listener is `(0, 0, 0)`. Doppler pitch rendering itself is handled by `STRenderOptions.useDoppler`, and the radiation gain of moving sources by `st_rt_set_doppler_gain_mode`. Thread: `[control]` — do not call it from the audio callback. Under `PIPELINED` it goes into the motion queue and is applied in the next propagation cycle.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `x` | 속도 X 성분(씬 단위/초) |
-| `y` | 속도 Y 성분(씬 단위/초) |
-| `z` | 속도 Z 성분(씬 단위/초) |
+| `context` | Context handle |
+| `x` | Velocity X component (scene units/second) |
+| `y` | Velocity Y component (scene units/second) |
+| `z` | Velocity Z component (scene units/second) |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_rotation</code> — 리스너 방향을 yaw·pitch(라디안)로 설정한다</summary>
+<summary><code>st_rt_listener_set_rotation</code> — Sets the listener orientation as yaw · pitch (radians)</summary>
 
 ```c
 void st_rt_listener_set_rotation(STRT_Context* context, float yaw, float pitch);
 ```
 
-**용도** — 리스너의 머리 방향을 yaw·pitch로 정합니다. 공간화(패닝·HRTF·스피커 디코딩)의 방위각·고도각이 이 방향을 기준으로 계산됩니다. roll(머리 기울임)은 표현하지 않습니다.
+**Purpose** — Sets the listener's head orientation as yaw · pitch. The azimuth and elevation for spatialization (panning · HRTF · speaker decoding) are computed relative to this orientation. Roll (head tilt) is not expressed.
 
-**언제·어떻게** — 카메라 회전이 바뀔 때마다 부릅니다. 각도는 **라디안**입니다. 회전 행렬은 `R = Ry(yaw)·Rx(pitch)`이고, `yaw = 0, pitch = 0`이면 forward = +Z, up = +Y, right = +X(항등)입니다. **yaw 양수 = 오른쪽으로 돈다**(위에서 내려다봐서 시계 방향), **pitch 양수 = 아래를 본다**. 방향 벡터 `d`에서 역으로 구하려면 `yaw = atan2f(d.x, d.z); pitch = -asinf(d.y);`를 씁니다. 엔진 좌표계는 Unity와 같으므로 Unity 호스트는 변환 없이 넣으면 되고, forward를 −Z로 두는 호스트(OpenGL식 카메라)는 Z를 뒤집거나 yaw에 180도를 더해 넣어야 합니다. 리스너 방향 setter 세 개(`st_rt_listener_set_rotation`, `st_rt_listener_set_rotation_ypr`, `st_rt_listener_set_orientation_q`)는 같은 방향 값을 덮어쓰며 **마지막에 부른 쪽이 이깁니다**. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오. `PIPELINED`에서는 모션 큐로 들어갑니다.
+**When / how** — Call it whenever the camera rotation changes. Angles are in **radians**. The rotation matrix is `R = Ry(yaw)·Rx(pitch)`, and `yaw = 0, pitch = 0` gives forward = +Z, up = +Y, right = +X (identity). **Positive yaw = turn right** (clockwise seen from above), **positive pitch = look down**. To derive them from a direction vector `d`, use `yaw = atan2f(d.x, d.z); pitch = -asinf(d.y);`. The engine coordinate system is the same as Unity's, so Unity hosts can pass values without conversion; hosts with forward at −Z (OpenGL-style cameras) must flip Z or add 180 degrees to yaw. The three listener orientation setters (`st_rt_listener_set_rotation`, `st_rt_listener_set_rotation_ypr`, `st_rt_listener_set_orientation_q`) overwrite the same orientation value, and **whichever is called last wins**. Thread: `[control]` — do not call it from the audio callback. Under `PIPELINED` it goes into the motion queue.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `yaw` | +Y축 회전(라디안). 양수 = 오른쪽으로 돈다 |
-| `pitch` | +X축 회전(라디안). 양수 = 아래를 본다 |
+| `context` | Context handle |
+| `yaw` | Rotation about the +Y axis (radians). Positive = turn right |
+| `pitch` | Rotation about the +X axis (radians). Positive = look down |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_orientation_q</code> — 리스너 방향을 쿼터니언(XYZW)으로 설정한다(roll 포함)</summary>
+<summary><code>st_rt_listener_set_orientation_q</code> — Sets the listener orientation as a quaternion (XYZW), including roll</summary>
 
 ```c
 int st_rt_listener_set_orientation_q(STRT_Context* context, const float quatXYZW[4]);
 ```
 
-**용도** — 리스너 방향을 로컬→월드 단위 쿼터니언으로 줍니다. yaw·pitch로는 표현할 수 없는 roll(머리 기울임)까지 담을 수 있어, VR 헤드 트래킹처럼 호스트가 이미 쿼터니언을 가진 경우에 그대로 넘길 수 있습니다.
+**Purpose** — Gives the listener orientation as a local→world unit quaternion. It can also carry roll (head tilt), which yaw · pitch cannot express, so when the host already has a quaternion, as with VR head tracking, it can be passed as is.
 
-**언제·어떻게** — 로컬 축은 forward = +Z · up = +Y · right = +X입니다. 성분 순서는 **XYZW**이고 정규화는 엔진이 하므로 호스트가 미리 정규화할 필요는 없습니다. 검증은 `st_rt_source_set_orientation_q`와 같습니다. `st_rt_listener_set_rotation(yaw, pitch)`는 `q = q_y(yaw) · q_x(pitch)`인 roll 0 경우와 같습니다. 리스너 방향 setter 세 개는 **마지막에 부른 쪽이 이깁니다**. 지원 여부는 `st_rt_get_capability_word(1)`의 `ST_CAP1_LISTENER_ORIENTATION_Q` 비트로 확인합니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오. `PIPELINED`에서는 모션 큐로 들어갑니다.
+**When / how** — The local axes are forward = +Z · up = +Y · right = +X. The component order is **XYZW** and the engine normalizes, so the host need not normalize beforehand. Validation is the same as `st_rt_source_set_orientation_q`. `st_rt_listener_set_rotation(yaw, pitch)` equals the roll-0 case `q = q_y(yaw) · q_x(pitch)`. Among the three listener orientation setters, **whichever is called last wins**. Check support with the `ST_CAP1_LISTENER_ORIENTATION_Q` bit of `st_rt_get_capability_word(1)`. Thread: `[control]` — do not call it from the audio callback. Under `PIPELINED` it goes into the motion queue.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `quatXYZW` | 로컬→월드 회전 쿼터니언 `[x, y, z, w]`. 비유한 성분이 있거나 노름이 퇴화(`norm < 1e-12`)하면 거절 |
+| `context` | Context handle |
+| `quatXYZW` | Local→world rotation quaternion `[x, y, z, w]`. Rejected if any component is non-finite or the norm is degenerate (`norm < 1e-12`) |
 
-**반환** — `1` = 적용 / `0` = 실패. 비유한·퇴화 쿼터니언이면 아무것도 바꾸지 않고 `st_rt_get_last_status`에 `ST_STATUS_INVALID_ARGUMENT`를 남깁니다.
+**Returns** — `1` = applied / `0` = failure. A non-finite or degenerate quaternion changes nothing and leaves `ST_STATUS_INVALID_ARGUMENT` in `st_rt_get_last_status`.
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_rotation_ypr</code> — 리스너 방향을 yaw·pitch·roll(라디안)로 설정한다</summary>
+<summary><code>st_rt_listener_set_rotation_ypr</code> — Sets the listener orientation as yaw · pitch · roll (radians)</summary>
 
 ```c
 int st_rt_listener_set_rotation_ypr(STRT_Context* context, float yaw, float pitch, float roll);
 ```
 
-**용도** — `st_rt_listener_set_rotation`에 roll을 더한 오일러 각 버전입니다. 머리 기울임을 오일러 각으로 다루는 호스트용입니다.
+**Purpose** — The Euler-angle version of `st_rt_listener_set_rotation` with roll added. For hosts that handle head tilt as Euler angles.
 
-**언제·어떻게** — 회전 행렬은 `R = Ry(yaw)·Rx(pitch)·Rz(roll)`이며, Unity `Quaternion.Euler(pitch, yaw, roll)`(도를 라디안으로 바꾼 값)과 같은 순서입니다. yaw·pitch의 뜻은 `st_rt_listener_set_rotation`과 같고(yaw 양수 = 오른쪽으로 돈다, pitch 양수 = 아래를 본다), **roll 양수 = right 축이 위로 기운다**(머리가 왼쪽으로 기울고 오른쪽 귀가 올라간다). `roll = 0`이면 `st_rt_listener_set_rotation(yaw, pitch)`와 같은 행렬입니다. 리스너 방향 setter 세 개는 **마지막에 부른 쪽이 이깁니다**. 지원 여부는 `ST_CAP1_LISTENER_ORIENTATION_Q`(능력 워드 1)로 확인합니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오. `PIPELINED`에서는 모션 큐로 들어갑니다.
+**When / how** — The rotation matrix is `R = Ry(yaw)·Rx(pitch)·Rz(roll)`, the same order as Unity `Quaternion.Euler(pitch, yaw, roll)` (with degrees converted to radians). Yaw · pitch mean the same as in `st_rt_listener_set_rotation` (positive yaw = turn right, positive pitch = look down), and **positive roll = the right axis tilts up** (the head tilts left and the right ear rises). With `roll = 0` it is the same matrix as `st_rt_listener_set_rotation(yaw, pitch)`. Among the three listener orientation setters, **whichever is called last wins**. Check support with `ST_CAP1_LISTENER_ORIENTATION_Q` (capability word 1). Thread: `[control]` — do not call it from the audio callback. Under `PIPELINED` it goes into the motion queue.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `yaw` | +Y축 회전(라디안). 양수 = 오른쪽으로 돈다 |
-| `pitch` | +X축 회전(라디안). 양수 = 아래를 본다 |
-| `roll` | +Z축 회전(라디안). 양수 = right 축이 위로(머리가 왼쪽으로 기움) |
+| `context` | Context handle |
+| `yaw` | Rotation about the +Y axis (radians). Positive = turn right |
+| `pitch` | Rotation about the +X axis (radians). Positive = look down |
+| `roll` | Rotation about the +Z axis (radians). Positive = right axis up (head tilts left) |
 
-**반환** — `1` = 적용 / `0` = 실패. 비유한 값이 있으면 아무것도 바꾸지 않고 `ST_STATUS_INVALID_ARGUMENT`를 남깁니다.
+**Returns** — `1` = applied / `0` = failure. Any non-finite value changes nothing and leaves `ST_STATUS_INVALID_ARGUMENT`.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_path_type_enabled</code> — 경로 종류별 전파를 전역으로 켜고 끈다</summary>
+<summary><code>st_rt_set_path_type_enabled</code> — Enables or disables propagation per path type globally</summary>
 
 ```c
 void st_rt_set_path_type_enabled(STRT_Context* context, int pathType, int enabled);
 ```
 
-**용도** — 직접음·투과·반사·회절·잔향 중 특정 종류의 경로를 엔진 전체에서 계산하지 않게 합니다. 어떤 성분이 소리에 얼마나 기여하는지 하나씩 분리해 들어 보거나, 필요 없는 종류를 빼서 비용을 줄일 때 씁니다.
+**Purpose** — Stops the whole engine from computing a specific path type among direct · transmission · reflection · diffraction · reverb. Use it to listen to how much each component contributes by isolating them one by one, or to cut cost by dropping types you do not need.
 
-**언제·어떻게** — 기본값은 5종 전부 켜짐입니다. 전파 단계의 게이트이므로 끈 종류는 경로 자체가 만들어지지 않습니다(렌더 단계 게이트인 `STRenderOptions.render*`와 다릅니다). 소스 하나에만 적용하려면 `st_rt_source_set_path_enabled`를 씁니다. `st_rt_set_acoustic_feature_enabled`와 조합하면 "사운드 트레이싱 끔" 기준선을 설정만으로 만들 수 있습니다 — 반사·회절·잔향을 끄고 음향 기능 세 가지를 모두 끄면 거리 감쇠와 패닝만 남습니다. 스레드: `[control]` — 씬 write 락을 잡으므로 워커와 잠깐 경합할 수 있습니다. 오디오 콜백에서 부르지 마십시오.
+**When / how** — By default all 5 types are enabled. It is a propagation-stage gate, so for a disabled type the paths themselves are never created (unlike `STRenderOptions.render*`, which are render-stage gates). To apply it to a single source, use `st_rt_source_set_path_enabled`. Combined with `st_rt_set_acoustic_feature_enabled`, a "sound tracing off" baseline can be built from settings alone — disabling reflection · diffraction · reverb and all three acoustic features leaves only distance attenuation and panning. Thread: `[control]` — takes the scene write lock, so it may briefly contend with the workers. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb. 범위 밖 값은 무시 |
-| `enabled` | `0` = 끔, 그 외 = 켬 |
+| `context` | Context handle |
+| `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb. Out-of-range values are ignored |
+| `enabled` | `0` = off, anything else = on |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_acoustic_feature_enabled</code> — 공기 흡수·전파 지연·직접음 차폐를 개별로 켜고 끈다</summary>
+<summary><code>st_rt_set_acoustic_feature_enabled</code> — Enables or disables air absorption · propagation delay · direct occlusion individually</summary>
 
 ```c
 int st_rt_set_acoustic_feature_enabled(STRT_Context* context, int feature, int enabled);
 ```
 
-**용도** — 개별 음향 기능을 끄고 켜서 청취 A/B 비교를 할 수 있게 합니다. 경로 종류 게이트(`st_rt_set_path_type_enabled`)와 함께 "무엇이 소리에 기여하는지"를 하나씩 분리해 들려주기 위한 표면입니다.
+**Purpose** — Toggles individual acoustic features to enable listening A/B comparisons. Together with the path-type gates (`st_rt_set_path_type_enabled`), a surface for isolating and playing "what contributes to the sound" one by one.
 
-**언제·어떻게** — 기본값은 세 기능 모두 켜짐(물리 그대로)입니다. 반사·회절·잔향 경로를 끄고 세 기능을 모두 끄면 거리 감쇠와 스테레오 패닝만 남는 기준선이 됩니다. 현재 값은 `st_rt_is_acoustic_feature_enabled`로 읽습니다. 이 함수는 **IR 재변환 유발** setter입니다 — 호출만으로 IR 변환 파이프라인이 다시 돌아 새 IR이 발행되므로(`PIPELINED`는 워커를 깨움), 값이 바뀔 때만 부르십시오. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**When / how** — By default all three features are enabled (physics as is). Disabling the reflection · diffraction · reverb paths and all three features gives a baseline with only distance attenuation and stereo panning. Read the current value with `st_rt_is_acoustic_feature_enabled`. This function is an **IR-reconversion-triggering** setter — calling it reruns the IR conversion pipeline and publishes a new IR (`PIPELINED` wakes the workers), so call it only when the value changes. Thread: `[control]` — do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION`(0) = 대기 감쇠(고역 손실) / `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY`(1) = 경로 길이 기반 전파 지연 / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION`(2) = 직접음 차폐(가시성 검사) |
-| `enabled` | `0` = 끔, 그 외 = 켬 |
+| `context` | Context handle |
+| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION` (0) = atmospheric attenuation (high-frequency loss) / `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY` (1) = propagation delay from path length / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION` (2) = direct-sound occlusion (visibility test) |
+| `enabled` | `0` = off, anything else = on |
 
-**반환** — `1` = 적용 / `0` = `feature`가 범위 밖이거나 실패.
+**Returns** — `1` = applied / `0` = `feature` out of range or failure.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_late_coupling</code> — 리스너–소스 확산장 결합에 따른 잔향 감쇠를 세부 설정한다</summary>
+<summary><code>st_rt_set_late_coupling</code> — Fine-tunes reverb attenuation from listener–source diffuse-field coupling</summary>
 
 ```c
 int st_rt_set_late_coupling(STRT_Context* context, float floorDb, float visibleLow, float visibleHigh, float sendNormalizeTrim, int rainDirectionWalk);
 ```
 
-**용도** — 리스너가 소스의 확산장에 얼마나 결합돼 있는지에 따라 late reverb(FDN) 주입을 감쇠합니다. 잔향 탱크는 완전히 섞인 단일 공간이라 기본적으로 어디서든 같은 크기로 들리는데, ㄷ자·ㅁ자처럼 모퉁이 너머로 갈라진 공간에서 "소스에서 멀어졌는데 잔향이 그대로이거나 오히려 커지는" 문제를 고치기 위한 옵션입니다.
+**Purpose** — Attenuates late reverb (FDN) injection according to how strongly the listener is coupled to the source's diffuse field. The reverb tank is a single fully mixed space, so by default it sounds equally loud everywhere; this option fixes the problem in spaces split around corners, such as U-shaped or ring-shaped layouts, where "the reverb stays the same or even gets louder as you move away from the source".
 
-**언제·어떻게** — 대부분은 `st_rt_set_late_coupling_preset`으로 충분하고, 세부 조정이 필요할 때만 이 함수를 씁니다. 결합 감쇠(`floorDb`)·send 평탄화(`sendNormalizeTrim`)·방향 표본 수집(`rainDirectionWalk`)은 함께 쓰도록 설계됐습니다 — 평탄화 없이 결합만 켜면 멀어질수록 잔향 주입이 커지는 역전이 남고, 방향 표본 수집을 끄면 갈라진 공간 건너편의 잔향 방향 정보가 부족해집니다. 개별 파라미터 구성은 앞으로 바뀔 수 있으므로 가능하면 프리셋을 쓰십시오. 현재 값은 `st_rt_get_late_coupling`으로 읽습니다. **IR 재변환 유발** setter입니다(호출하면 IR이 다시 변환·발행됨). 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**When / how** — `st_rt_set_late_coupling_preset` is enough in most cases; use this function only when fine-tuning is needed. Coupling attenuation (`floorDb`), send flattening (`sendNormalizeTrim`) and direction sample collection (`rainDirectionWalk`) are designed to be used together — enabling only coupling without flattening leaves an inversion where reverb injection grows with distance, and disabling direction sample collection leaves too little reverb direction information from across the split space. The individual parameter set may change in the future, so use the presets where possible. Read the current values with `st_rt_get_late_coupling`. It is an **IR-reconversion-triggering** setter (calling it reconverts and republishes the IR). Thread: `[control]` — do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `floorDb` | 완전 차단 시 감쇠 깊이(dB, 0 이상). `0` = 결합 감쇠 끔. 기본 `9` |
-| `visibleLow` | 가시 비율이 이 값 아래면 완전 차단으로 보고 `floorDb`만큼 감쇠. `[0, 1)`. `0` → 기본 `0.05` |
-| `visibleHigh` | 가시 비율이 이 값 위면 같은 공간으로 보고 **정확히 0 dB**. `[0, 1]`. `0` → 기본 `0.60` |
-| `sendNormalizeTrim` | 잔향 send 총합 평탄화 트림(0 이상). `0` = 평탄화 안 함. 기본 `0.75` |
-| `rainDirectionWalk` | `1`(기본) = 잔향 방향 표본을 계속 모은다(에너지는 나르지 않음) / `0` = 끔 |
+| `context` | Context handle |
+| `floorDb` | Attenuation depth at full blockage (dB, ≥ 0). `0` = coupling attenuation off. Default `9` |
+| `visibleLow` | If the visible ratio is below this, it is treated as fully blocked and attenuated by `floorDb`. `[0, 1)`. `0` → default `0.05` |
+| `visibleHigh` | If the visible ratio is above this, it is treated as the same space and gets **exactly 0 dB**. `[0, 1]`. `0` → default `0.60` |
+| `sendNormalizeTrim` | Flattening trim for the total reverb send (≥ 0). `0` = no flattening. Default `0.75` |
+| `rainDirectionWalk` | `1` (default) = keep collecting reverb direction samples (carries no energy) / `0` = off |
 
-**반환** — `1` = 적용 / `0` = 범위 밖(비유한·음수, `visibleLow >= 1`, `visibleHigh > 1`) 또는 실패. 실패하면 값은 바뀌지 않습니다.
+**Returns** — `1` = applied / `0` = out of range (non-finite or negative, `visibleLow >= 1`, `visibleHigh > 1`) or failure. On failure the values are unchanged.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_late_coupling</code> — 현재 late 결합 감쇠 설정을 읽는다</summary>
+<summary><code>st_rt_get_late_coupling</code> — Reads the current late coupling attenuation settings</summary>
 
 ```c
 int st_rt_get_late_coupling(const STRT_Context* context, float* outFloorDb, float* outVisibleLow, float* outVisibleHigh, float* outSendNormalizeTrim, int* outRainDirectionWalk);
 ```
 
-**용도** — `st_rt_set_late_coupling` / `st_rt_set_late_coupling_preset`으로 걸린 현재 값을 돌려줍니다. 프리셋이 실제로 어떤 값을 채웠는지 확인하거나 UI에 표시할 때 씁니다.
+**Purpose** — Returns the current values applied by `st_rt_set_late_coupling` / `st_rt_set_late_coupling_preset`. Use it to check which values a preset actually filled in, or to display them in a UI.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 필요 없는 출력 인자는 `NULL`로 넘기면 건너뜁니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**When / how** — Can be called at any time. Output arguments you do not need can be passed as `NULL` and are skipped. Thread: `[control]` — a query that reads engine state without a lock. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outFloorDb` | 완전 차단 감쇠 깊이(dB)를 받을 포인터. `NULL` 허용 |
-| `outVisibleLow` | 완전 차단 무릎점을 받을 포인터. `NULL` 허용 |
-| `outVisibleHigh` | 같은 공간(0 dB) 무릎점을 받을 포인터. `NULL` 허용 |
-| `outSendNormalizeTrim` | send 평탄화 트림을 받을 포인터. `NULL` 허용 |
-| `outRainDirectionWalk` | 방향 표본 수집 여부(`1`/`0`)를 받을 포인터. `NULL` 허용 |
+| `context` | Context handle |
+| `outFloorDb` | Pointer that receives the full-blockage attenuation depth (dB). `NULL` allowed |
+| `outVisibleLow` | Pointer that receives the full-blockage knee point. `NULL` allowed |
+| `outVisibleHigh` | Pointer that receives the same-space (0 dB) knee point. `NULL` allowed |
+| `outSendNormalizeTrim` | Pointer that receives the send flattening trim. `NULL` allowed |
+| `outRainDirectionWalk` | Pointer that receives whether direction samples are collected (`1`/`0`). `NULL` allowed |
 
-**반환** — `1` = 성공(출력 포인터에 현재 값을 씀) / `0` = 컨텍스트가 없음.
+**Returns** — `1` = success (current values written to the output pointers) / `0` = no context.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_late_coupling_preset</code> — late 결합 감쇠를 권장 프리셋으로 한 번에 설정한다</summary>
+<summary><code>st_rt_set_late_coupling_preset</code> — Sets late coupling attenuation at once from a recommended preset</summary>
 
 ```c
 int st_rt_set_late_coupling_preset(STRT_Context* context, int preset);
 ```
 
-**용도** — `st_rt_set_late_coupling`의 다섯 값을 권장 조합으로 한 번에 채웁니다. 프리셋은 감쇠 바닥 깊이만 다르고 나머지(무릎 두 점·평탄화 트림·방향 표본 수집)는 같은 권장값입니다.
+**Purpose** — Fills the five values of `st_rt_set_late_coupling` at once with a recommended combination. Presets differ only in the attenuation floor depth; the rest (the two knee points · flattening trim · direction sample collection) are the same recommended values.
 
-**언제·어떻게** — 엔진 기본 상태는 `ST_LATE_COUPLING_DEFAULT`와 같습니다. 어느 프리셋이든 리스너가 소스와 같은 공간에 있으면 감쇠는 정확히 0 dB이고, 단일 방에서는 사실상 차이가 나지 않습니다 — 차이는 모퉁이 너머로 갈라진 공간에서만 나므로 선택은 청감의 문제입니다. 개별 조정이 필요하면 `st_rt_set_late_coupling`을 씁니다. **IR 재변환 유발** setter입니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**When / how** — The engine default state equals `ST_LATE_COUPLING_DEFAULT`. With any preset, attenuation is exactly 0 dB when the listener is in the same space as the source, and in a single room there is practically no difference — differences appear only in spaces split around corners, so the choice is a matter of listening taste. If individual adjustment is needed, use `st_rt_set_late_coupling`. It is an **IR-reconversion-triggering** setter. Thread: `[control]` — do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `preset` | `ST_LATE_COUPLING_OFF`(0) = 결합 감쇠·평탄화·방향 표본 수집 전부 끔 / `ST_LATE_COUPLING_SUBTLE`(1) = 바닥 6 dB / `ST_LATE_COUPLING_DEFAULT`(2) = 바닥 9 dB(엔진 기본) / `ST_LATE_COUPLING_STRONG`(3) = 바닥 12 dB |
+| `context` | Context handle |
+| `preset` | `ST_LATE_COUPLING_OFF` (0) = coupling attenuation · flattening · direction sample collection all off / `ST_LATE_COUPLING_SUBTLE` (1) = 6 dB floor / `ST_LATE_COUPLING_DEFAULT` (2) = 9 dB floor (engine default) / `ST_LATE_COUPLING_STRONG` (3) = 12 dB floor |
 
-**반환** — `1` = 적용 / `0` = `preset`이 범위 밖이거나 실패.
+**Returns** — `1` = applied / `0` = `preset` out of range or failure.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_physical_distance_attenuation</code> — 물리 거리 감쇠의 기준 거리·최소 거리를 설정한다</summary>
+<summary><code>st_rt_set_physical_distance_attenuation</code> — Sets the reference distance · minimum distance of physical distance attenuation</summary>
 
 ```c
 void st_rt_set_physical_distance_attenuation(STRT_Context* context, float referenceDistanceMeters, float minDistanceMeters);
 ```
 
-**용도** — 경로 길이에 따른 거리 감쇠(구면 확산)의 기준점을 정합니다. 엔진의 거리 감쇠 법칙은 물리적 압력 확산 하나이며, 압력 이득은 `referenceDistanceMeters / max(거리, minDistanceMeters)`입니다. 즉 기준 거리에서 이득 1(0 dB)이 됩니다.
+**Purpose** — Sets the reference point for distance attenuation (spherical spreading) by path length. The engine has a single distance attenuation law, physical pressure spreading, and the pressure gain is `referenceDistanceMeters / max(distance, minDistanceMeters)`. That is, the gain is 1 (0 dB) at the reference distance.
 
-**언제·어떻게** — 기본값은 기준 거리 1.0 m · 최소 거리 1.0 m입니다(1 m 안쪽에서는 더 커지지 않음). `minDistanceMeters`를 기준 거리보다 작게 주면 근접장 부스트가 생깁니다(예: 기준 1, 최소 0.25 → 최대 이득 4배). 두 값은 **미터**로 주며 `sceneRatio`가 적용되지 않습니다(비교 대상인 경로 길이가 이미 미터로 변환되어 있기 때문). **IR 재변환 유발** setter입니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**When / how** — The defaults are reference distance 1.0 m · minimum distance 1.0 m (it gets no louder inside 1 m). Setting `minDistanceMeters` below the reference distance produces a near-field boost (e.g. reference 1, minimum 0.25 → up to 4× gain). Both values are given in **meters** and `sceneRatio` is not applied (because the path lengths they are compared with are already converted to meters). It is an **IR-reconversion-triggering** setter. Thread: `[control]` — do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `referenceDistanceMeters` | 이득 1이 되는 기준 거리(m). 기본 `1.0` |
-| `minDistanceMeters` | 거리 하한(m). 이보다 가까워도 이 거리로 계산. 기본 `1.0` |
+| `context` | Context handle |
+| `referenceDistanceMeters` | Reference distance (m) at which the gain is 1. Default `1.0` |
+| `minDistanceMeters` | Lower distance bound (m). Closer distances are computed as this distance. Default `1.0` |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_atmosphere</code> — 대기 조건(온도·습도·기압)을 설정한다</summary>
+<summary><code>st_rt_set_atmosphere</code> — Sets atmospheric conditions (temperature · humidity · pressure)</summary>
 
 ```c
 void st_rt_set_atmosphere(STRT_Context* context, float temperatureC, float relativeHumidityPercent, float pressureKPa);
 ```
 
-**용도** — 공기 흡수와 음속 계산에 쓰는 대기 상태를 정합니다. 음속은 고정 상수가 아니라 이 대기 값에서 유도되며, 밴드별 공기 흡수(고역 손실)는 ISO 9613-1 순음 흡수 공식으로 계산됩니다. 덥고 건조한 사막, 춥고 습한 실외처럼 환경에 따라 원거리 고역 감쇠와 지연이 달라지는 것을 표현할 수 있습니다.
+**Purpose** — Sets the atmospheric state used for air absorption and speed-of-sound computation. The speed of sound is not a fixed constant but is derived from these atmospheric values, and per-band air absorption (high-frequency loss) is computed with the ISO 9613-1 pure-tone absorption formula. It can express how long-distance high-frequency attenuation and delay vary with the environment, such as a hot, dry desert or a cold, humid outdoor scene.
 
-**언제·어떻게** — 기본값은 20.0 °C · 50.0 % RH · 101.325 kPa입니다. 레벨 로드나 날씨 변경처럼 값이 바뀔 때만 부릅니다. 공기 흡수 자체를 끄려면 `st_rt_set_acoustic_feature_enabled(ST_ACOUSTIC_FEATURE_AIR_ABSORPTION, 0)`을 씁니다. **IR 재변환 유발** setter입니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**When / how** — The defaults are 20.0 °C · 50.0 % RH · 101.325 kPa. Call it only when the values change, such as on level load or a weather change. To disable air absorption itself, use `st_rt_set_acoustic_feature_enabled(ST_ACOUSTIC_FEATURE_AIR_ABSORPTION, 0)`. It is an **IR-reconversion-triggering** setter. Thread: `[control]` — do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `temperatureC` | 기온(°C). 기본 `20.0` |
-| `relativeHumidityPercent` | 상대 습도(%, 0~100). 기본 `50.0` |
-| `pressureKPa` | 대기압(kPa). 기본 `101.325` |
+| `context` | Context handle |
+| `temperatureC` | Air temperature (°C). Default `20.0` |
+| `relativeHumidityPercent` | Relative humidity (%, 0–100). Default `50.0` |
+| `pressureKPa` | Atmospheric pressure (kPa). Default `101.325` |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_doppler_gain_mode</code> — 움직이는 소스의 도플러 방사 이득 모드를 설정한다</summary>
+<summary><code>st_rt_set_doppler_gain_mode</code> — Sets the Doppler radiation gain mode for moving sources</summary>
 
 ```c
 int st_rt_set_doppler_gain_mode(STRT_Context* context, int mode);
 ```
 
-**용도** — 소스가 움직일 때 진행 방향 쪽으로 소리가 더 크게, 반대쪽으로 더 작게 방사되는 효과(이동 단극자 근사)를 켜고 끕니다. 가변 지연에 의한 도플러 **피치** 변화(`STRenderOptions.useDoppler`)와는 별개의 스위치입니다.
+**Purpose** — Enables or disables the effect whereby a moving source radiates louder toward its direction of travel and quieter away from it (moving monopole approximation). It is a separate switch from the Doppler **pitch** change caused by variable delay (`STRenderOptions.useDoppler`).
 
-**언제·어떻게** — 기본값은 `ST_DOPPLER_GAIN_MOVING_MONOPOLE`입니다. 정지한 소스에서는 이득이 1이라 영향이 없고, IR 변환 때 경로마다 한 번 계산하므로 렌더 비용은 들지 않습니다. 현재 값은 `st_rt_get_doppler_gain_mode`로 읽습니다. 지원 여부는 `ST_CAP_DOPPLER_GAIN_MODE`로 확인합니다. **IR 재변환 유발** setter입니다(같은 값을 다시 넣으면 아무 일도 하지 않습니다). 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**When / how** — The default is `ST_DOPPLER_GAIN_MOVING_MONOPOLE`. For a stationary source the gain is 1, so it has no effect, and it is computed once per path during IR conversion, so it adds no render cost. Read the current value with `st_rt_get_doppler_gain_mode`. Check support with `ST_CAP_DOPPLER_GAIN_MODE`. It is an **IR-reconversion-triggering** setter (setting the same value again does nothing). Thread: `[control]` — do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mode` | `STDopplerGainMode` — `ST_DOPPLER_GAIN_OFF`(0) = 방사 이득 없음 / `ST_DOPPLER_GAIN_MOVING_MONOPOLE`(1) = 이동 단극자 근사: 압력 `D^2`, 에너지 `D^4`, `D = 1/(1 - Mr)`(소스 속도의 방사 방향 마하 수 `Mr`), 경로의 방사 방향마다 따로 계산 |
+| `context` | Context handle |
+| `mode` | `STDopplerGainMode` — `ST_DOPPLER_GAIN_OFF` (0) = no radiation gain / `ST_DOPPLER_GAIN_MOVING_MONOPOLE` (1) = moving monopole approximation: pressure `D^2`, energy `D^4`, `D = 1/(1 - Mr)` (`Mr` = Mach number of the source velocity along the radiation direction), computed separately for each path's radiation direction |
 
-**반환** — `1` = 적용 / `0` = `mode`가 범위 밖이거나 실패.
+**Returns** — `1` = applied / `0` = `mode` out of range or failure.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_doppler_gain_mode</code> — 현재 도플러 방사 이득 모드를 읽는다</summary>
+<summary><code>st_rt_get_doppler_gain_mode</code> — Reads the current Doppler radiation gain mode</summary>
 
 ```c
 int st_rt_get_doppler_gain_mode(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_set_doppler_gain_mode`로 설정된 현재 모드를 돌려줍니다.
+**Purpose** — Returns the current mode set with `st_rt_set_doppler_gain_mode`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**When / how** — Can be called at any time. Thread: `[control]` — a query that reads engine state without a lock. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STDopplerGainMode` 값(`0` = `ST_DOPPLER_GAIN_OFF`, `1` = `ST_DOPPLER_GAIN_MOVING_MONOPOLE`).
+**Returns** — An `STDopplerGainMode` value (`0` = `ST_DOPPLER_GAIN_OFF`, `1` = `ST_DOPPLER_GAIN_MOVING_MONOPOLE`).
 
 </details>
 
 <details>
-<summary><code>st_rt_set_early_late_band_energy_targets</code> — 초기 반사·잔향의 밴드별 에너지 배율을 따로 설정한다</summary>
+<summary><code>st_rt_set_early_late_band_energy_targets</code> — Sets per-band energy scales for early reflections and reverb separately</summary>
 
 ```c
 int st_rt_set_early_late_band_energy_targets(STRT_Context* context, const float earlyBandEnergy[ST_FREQUENCY_BANDS], const float lateBandEnergy[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 초기(early) 성분과 잔향(late) 성분의 주파수 밴드별 에너지를 서로 독립적으로 조정합니다. 예를 들어 잔향의 고역만 줄이거나 초기 반사의 저역만 키우는 식의 음색 보정을 재질을 건드리지 않고 할 수 있습니다.
+**Purpose** — Adjusts the per-frequency-band energy of the early component and the late (reverb) component independently. For example, it allows tonal corrections such as reducing only the highs of the reverb or boosting only the lows of the early reflections, without touching materials.
 
-**언제·어떻게** — 두 배열을 **한 번에 교체**합니다(한쪽만 바꾸려면 다른 쪽에 현재 값을 다시 넣습니다). 배열은 63, 125, 250, 500, 1k, 2k, 4k, 8k, 16k Hz 순서의 9개 값이며 **energy-domain** 배율입니다(`2.0` ≈ +3 dB, `0.5` ≈ −3 dB). early 배열은 개별 경로(exact/early tap)에만, late 배열은 잔향 send·탱크 구동에만 적용되며 둘이 서로 곱해지지 않습니다. 기본값은 전부 `1.0`(중립)입니다. 지원 여부는 `ST_CAP_EARLY_LATE_BAND_ENERGY`로 확인합니다. **IR 재변환 유발** setter입니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**When / how** — **Replaces both arrays at once** (to change only one, pass the current values for the other again). Each array is 9 values in the order 63, 125, 250, 500, 1k, 2k, 4k, 8k, 16k Hz, and they are **energy-domain** scales (`2.0` ≈ +3 dB, `0.5` ≈ −3 dB). The early array applies only to individual paths (exact/early taps) and the late array only to reverb sends · tank drive; the two are not multiplied together. The defaults are all `1.0` (neutral). Check support with `ST_CAP_EARLY_LATE_BAND_ENERGY`. It is an **IR-reconversion-triggering** setter. Thread: `[control]` — do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `earlyBandEnergy` | 초기 성분 밴드별 에너지 배율 9개. 비유한 값은 `1.0`으로, 나머지는 `[0, 16]`으로 정규화. `NULL` 불가 |
-| `lateBandEnergy` | 잔향 성분 밴드별 에너지 배율 9개. 정규화 규칙 동일. `NULL` 불가 |
+| `context` | Context handle |
+| `earlyBandEnergy` | 9 per-band energy scales for the early component. Non-finite values are normalized to `1.0`, the rest to `[0, 16]`. Must not be `NULL` |
+| `lateBandEnergy` | 9 per-band energy scales for the reverb component. Same normalization rule. Must not be `NULL` |
 
-**반환** — `1` = 적용 / `0` = 배열 중 하나가 `NULL`이거나 실패.
+**Returns** — `1` = applied / `0` = one of the arrays is `NULL` or failure.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_max_depth</code> — 반사·회절 경로의 전역 최대 차수를 설정한다</summary>
+<summary><code>st_rt_set_max_depth</code> — Sets the global maximum order of reflection · diffraction paths</summary>
 
 ```c
 void st_rt_set_max_depth(STRT_Context* context, int depth);
 ```
 
-**용도** — 반사·회절 경로 탐색이 따라갈 최대 경계면 상호작용 횟수(차수)를 엔진 전체에 대해 정합니다. 값을 올리면 고차 반사까지 정확히 추적하는 대신 전파 비용이 늘어납니다.
+**Purpose** — Sets, for the whole engine, the maximum number of boundary interactions (order) that the reflection · diffraction path search follows. Raising it traces higher-order reflections accurately at the cost of more propagation work.
 
-**언제·어떻게** — 기본값은 전역 8입니다. 소스별 깊이(기본 4)는 `st_rt_source_set_depth`로 따로 정합니다. 보통 씬을 만든 뒤 품질 설정 단계에서 한 번 부릅니다. 스레드: `[control]` — 씬 write 락을 잡으므로 워커와 잠깐 경합할 수 있습니다. 오디오 콜백에서 부르지 마십시오.
+**When / how** — The global default is 8. Per-source depth (default 4) is set separately with `st_rt_source_set_depth`. Usually called once at the quality-settings stage after building the scene. Thread: `[control]` — takes the scene write lock, so it may briefly contend with the workers. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `depth` | 최대 차수, `[1, 64]`. 기본 `8`. 범위 밖 값은 무시(이전 값 유지) |
+| `context` | Context handle |
+| `depth` | Maximum order, `[1, 64]`. Default `8`. Out-of-range values are ignored (previous value kept) |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_transmission_max_depth</code> — 직접음·투과 경로가 통과할 최대 면 수를 설정한다</summary>
+<summary><code>st_rt_set_transmission_max_depth</code> — Sets the maximum number of faces direct · transmission paths can pass through</summary>
 
 ```c
 void st_rt_set_transmission_max_depth(STRT_Context* context, int depth);
 ```
 
-**용도** — 소스→리스너 직선이 가려졌을 때 투과 경로가 몇 개의 면까지 통과할 수 있는지 정합니다. 벽 여러 겹을 넘어오는 소리를 어디까지 계산할지 정하는 값입니다.
+**Purpose** — Sets how many faces a transmission path can pass through when the source→listener line is occluded. This value decides how far sound coming through several layers of walls is computed.
 
-**언제·어떻게** — 기본값은 64입니다. `0`이면 투과 면을 통과하지 않습니다. 투과 경로 자체를 끄려면 `st_rt_set_path_type_enabled`(Transmission = 1)를 씁니다. 스레드: `[control]` — 씬 write 락을 잡습니다. 오디오 콜백에서 부르지 마십시오.
+**When / how** — The default is 64. `0` passes through no transmission faces. To disable transmission paths entirely, use `st_rt_set_path_type_enabled` (Transmission = 1). Thread: `[control]` — takes the scene write lock. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `depth` | 통과 가능한 최대 면 수, `[0, 64]`. 기본 `64`. 범위 밖 값은 무시(이전 값 유지) |
+| `context` | Context handle |
+| `depth` | Maximum number of faces that can be passed through, `[0, 64]`. Default `64`. Out-of-range values are ignored (previous value kept) |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_ray_count</code> — 리스너 탐색(guide) 광선 수를 설정한다</summary>
+<summary><code>st_rt_listener_set_ray_count</code> — Sets the number of listener search (guide) rays</summary>
 
 ```c
 void st_rt_listener_set_ray_count(STRT_Context* context, int width, int height);
 ```
 
-**용도** — 리스너에서 쏘는 탐색(guide/probe) 광선의 개수를 `width × height`로 정합니다. 이 광선이 반사·회절 경로 후보를 찾으므로, 늘리면 작은 반사면을 놓칠 확률이 줄고 전파 비용이 늘어납니다.
+**Purpose** — Sets the number of search (guide/probe) rays cast from the listener as `width × height`. These rays find reflection · diffraction path candidates, so increasing them lowers the chance of missing small reflecting surfaces and raises propagation cost.
 
-**언제·어떻게** — 기본값은 16 × 16(256개)입니다. 소스 쪽 수송 광선은 `st_rt_source_set_ray_count`로 따로 정합니다. 광선 방향 분포는 `st_rt_listener_set_ray_sampling_method`가 정합니다. 스레드: `[control]` — 씬 write 락을 잡습니다. 오디오 콜백에서 부르지 마십시오.
+**When / how** — The default is 16 × 16 (256 rays). Source-side transport rays are set separately with `st_rt_source_set_ray_count`. The ray direction distribution is set by `st_rt_listener_set_ray_sampling_method`. Thread: `[control]` — takes the scene write lock. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `width` | 격자 가로 수, `[1, 4096]`. 기본 `16` |
-| `height` | 격자 세로 수, `[1, 4096]`. 기본 `16`. 둘 중 하나라도 범위 밖이면 호출 전체를 무시 |
+| `context` | Context handle |
+| `width` | Grid width, `[1, 4096]`. Default `16` |
+| `height` | Grid height, `[1, 4096]`. Default `16`. If either is out of range, the whole call is ignored |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_ray_sampling_method</code> — 리스너 탐색 광선의 방향 분포를 설정한다</summary>
+<summary><code>st_rt_listener_set_ray_sampling_method</code> — Sets the direction distribution of listener search rays</summary>
 
 ```c
 int st_rt_listener_set_ray_sampling_method(STRT_Context* context, int method);
 ```
 
-**용도** — 리스너 탐색 광선을 구면에 어떻게 분포시킬지 고릅니다. 현재 선택할 수 있는 분포는 `ST_RAY_SAMPLING_FIBONACCI_SPHERE` 하나이며, 이 함수는 그 값을 명시적으로 확인·설정하는 용도로 남아 있습니다.
+**Purpose** — Chooses how listener search rays are distributed over the sphere. The only distribution currently selectable is `ST_RAY_SAMPLING_FIBONACCI_SPHERE`, and this function remains for explicitly checking and setting that value.
 
-**언제·어떻게** — 기본값이자 유일하게 받는 값이 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)입니다. 피보나치 분포는 결정적이고 시드를 쓰지 않습니다. 나머지 `STRaySamplingMethod` 값은 번호 호환을 위해 열거형에만 남아 있고 거절됩니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**When / how** — `ST_RAY_SAMPLING_FIBONACCI_SPHERE` (1) is both the default and the only accepted value. The Fibonacci distribution is deterministic and uses no seed. The other `STRaySamplingMethod` values remain in the enum only for numbering compatibility and are rejected. Thread: `[control]` — do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `method` | `STRaySamplingMethod`. `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)만 허용. `ST_RAY_SAMPLING_LEGACY_GRID`(0) / `ST_RAY_SAMPLING_EQUAL_AREA_GRID`(2) / `ST_RAY_SAMPLING_SOBOL_SPHERE`(3) / `ST_RAY_SAMPLING_ICOSAHEDRAL`(4)는 거절 |
+| `context` | Context handle |
+| `method` | `STRaySamplingMethod`. Only `ST_RAY_SAMPLING_FIBONACCI_SPHERE` (1) is allowed. `ST_RAY_SAMPLING_LEGACY_GRID` (0) / `ST_RAY_SAMPLING_EQUAL_AREA_GRID` (2) / `ST_RAY_SAMPLING_SOBOL_SPHERE` (3) / `ST_RAY_SAMPLING_ICOSAHEDRAL` (4) are rejected |
 
-**반환** — `1` = 적용 / `0` = 거절(상태는 바뀌지 않고 `ST_STATUS_INVALID_ARGUMENT`를 남김).
+**Returns** — `1` = applied / `0` = rejected (state unchanged, leaves `ST_STATUS_INVALID_ARGUMENT`).
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_get_ray_sampling_method</code> — 리스너 탐색 광선의 방향 분포를 읽는다</summary>
+<summary><code>st_rt_listener_get_ray_sampling_method</code> — Reads the direction distribution of listener search rays</summary>
 
 ```c
 int st_rt_listener_get_ray_sampling_method(const STRT_Context* context);
 ```
 
-**용도** — 현재 리스너 탐색 광선 분포를 돌려줍니다.
+**Purpose** — Returns the current listener search ray distribution.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 선택 가능한 분포가 피보나치 하나이므로 정상 컨텍스트에서는 항상 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`입니다. 스레드: `[control]` — 씬 read 락만 잡는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**When / how** — Can be called at any time. Since Fibonacci is the only selectable distribution, it is always `ST_RAY_SAMPLING_FIBONACCI_SPHERE` on a valid context. Thread: `[control]` — a query that takes only the scene read lock. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STRaySamplingMethod` 값(항상 `1` = `ST_RAY_SAMPLING_FIBONACCI_SPHERE`) / `-1` = 컨텍스트가 없음.
+**Returns** — An `STRaySamplingMethod` value (always `1` = `ST_RAY_SAMPLING_FIBONACCI_SPHERE`) / `-1` = no context.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_source_ray_sampling_method</code> — 소스 수송 광선의 방향 분포를 설정한다</summary>
+<summary><code>st_rt_set_source_ray_sampling_method</code> — Sets the direction distribution of source transport rays</summary>
 
 ```c
 int st_rt_set_source_ray_sampling_method(STRT_Context* context, int method);
 ```
 
-**용도** — 소스에서 쏘는 수송(잔향·확산 에너지용) 광선의 구면 분포를 고릅니다. 리스너 쪽과 마찬가지로 현재 선택할 수 있는 값은 `ST_RAY_SAMPLING_FIBONACCI_SPHERE` 하나입니다.
+**Purpose** — Chooses the spherical distribution of transport rays (for reverb · diffuse energy) cast from sources. As on the listener side, the only value currently selectable is `ST_RAY_SAMPLING_FIBONACCI_SPHERE`.
 
-**언제·어떻게** — 기본값이자 유일하게 받는 값이 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)입니다. 소스 수송 광선 수는 `st_rt_source_set_ray_count`로 정합니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**When / how** — `ST_RAY_SAMPLING_FIBONACCI_SPHERE` (1) is both the default and the only accepted value. The number of source transport rays is set with `st_rt_source_set_ray_count`. Thread: `[control]` — do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `method` | `STRaySamplingMethod`. `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)만 허용, 나머지 값은 거절 |
+| `context` | Context handle |
+| `method` | `STRaySamplingMethod`. Only `ST_RAY_SAMPLING_FIBONACCI_SPHERE` (1) is allowed; other values are rejected |
 
-**반환** — `1` = 적용 / `0` = 거절(상태는 바뀌지 않고 `ST_STATUS_INVALID_ARGUMENT`를 남김).
+**Returns** — `1` = applied / `0` = rejected (state unchanged, leaves `ST_STATUS_INVALID_ARGUMENT`).
 
 </details>
 
 <details>
-<summary><code>st_rt_get_source_ray_sampling_method</code> — 소스 수송 광선의 방향 분포를 읽는다</summary>
+<summary><code>st_rt_get_source_ray_sampling_method</code> — Reads the direction distribution of source transport rays</summary>
 
 ```c
 int st_rt_get_source_ray_sampling_method(const STRT_Context* context);
 ```
 
-**용도** — 현재 소스 수송 광선 분포를 돌려줍니다.
+**Purpose** — Returns the current source transport ray distribution.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 정상 컨텍스트에서는 항상 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`입니다. 스레드: `[control]` — 씬 read 락만 잡는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**When / how** — Can be called at any time. It is always `ST_RAY_SAMPLING_FIBONACCI_SPHERE` on a valid context. Thread: `[control]` — a query that takes only the scene read lock. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STRaySamplingMethod` 값(항상 `1` = `ST_RAY_SAMPLING_FIBONACCI_SPHERE`) / `-1` = 컨텍스트가 없음.
+**Returns** — An `STRaySamplingMethod` value (always `1` = `ST_RAY_SAMPLING_FIBONACCI_SPHERE`) / `-1` = no context.
 
 </details>
 
 <details>
-<summary><code>st_rt_build</code> — 정적·동적 가속구조를 전부 빌드한다</summary>
+<summary><code>st_rt_build</code> — Builds all static and dynamic acceleration structures</summary>
 
 ```c
 void st_rt_build(STRT_Context* context);
 ```
 
-**용도** — 메시·오브젝트 배치로 정적 TLAS와 동적 TLAS를 모두 새로 짓습니다. 전파와 `st_rt_scene_raycast`가 이 가속구조를 사용하므로, 씬을 구성한 뒤 한 번은 반드시 불러야 합니다.
+**Purpose** — Rebuilds both the static TLAS and the dynamic TLAS from the mesh and object placement. Propagation and `st_rt_scene_raycast` use these acceleration structures, so it must be called at least once after building the scene.
 
-**언제·어떻게** — 메시·오브젝트를 만든 뒤, 첫 `st_rt_propagate` 전에 부릅니다. 이후 **정적** 오브젝트를 추가·삭제·이동하는 등 정적 구성이 바뀌면 다시 불러야 합니다 — 정적 TLAS는 `st_rt_build` 전까지 이전에 발행된 것이 그대로 쓰이고, 그 사이의 정적 변경은 보이지 않습니다. 동적 오브젝트(`isDynamic = 1`)의 이동만 반영하려면 더 가벼운 `st_rt_build_dynamic`을 씁니다. 스레드: `[control, blocking]` — 가속구조 전체 빌드라 긴 배타 구간입니다. 게임 루프의 매 프레임 경로나 오디오 스레드에서 부르지 말고, 로딩 단계에서 부르십시오.
+**When / how** — Call it after creating meshes and objects, before the first `st_rt_propagate`. Afterwards, call it again whenever the static setup changes, such as adding, deleting or moving **static** objects — the previously published static TLAS is used as is until `st_rt_build`, and static changes in between are not visible. To apply only the movement of dynamic objects (`isDynamic = 1`), use the lighter `st_rt_build_dynamic`. Thread: `[control, blocking]` — a full acceleration-structure build and a long exclusive section. Do not call it on the per-frame game loop path or the audio thread; call it during loading.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_build_dynamic</code> — 동적 오브젝트 가속구조만 다시 맞춘다</summary>
+<summary><code>st_rt_build_dynamic</code> — Refits only the dynamic object acceleration structure</summary>
 
 ```c
 void st_rt_build_dynamic(STRT_Context* context);
 ```
 
-**용도** — 동적 오브젝트(`isDynamic = 1`)로 이루어진 동적 TLAS만 갱신(refit)합니다. 문·엘리베이터처럼 움직이는 기하가 있을 때, 전체 빌드 없이 그 변화를 전파에 반영하기 위한 가벼운 경로입니다.
+**Purpose** — Updates (refits) only the dynamic TLAS made of dynamic objects (`isDynamic = 1`). A lightweight path for reflecting the changes of moving geometry, such as doors and elevators, in propagation without a full build.
 
-**언제·어떻게** — 동적 오브젝트의 변환(`st_rt_object_set_transform` 등)을 바꾼 뒤 부릅니다. 정적 TLAS는 건드리지 않으므로 정적 구성 변경에는 `st_rt_build`가 필요합니다. 스레드: `[control]` — 씬 write 락을 잡으므로 워커와 잠깐 경합할 수 있습니다. 오디오 콜백에서 부르지 마십시오.
+**When / how** — Call it after changing the transforms of dynamic objects (`st_rt_object_set_transform`, etc.). It does not touch the static TLAS, so static setup changes require `st_rt_build`. Thread: `[control]` — takes the scene write lock, so it may briefly contend with the workers. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_set_lane_update_interval</code> — 전파 레인별 갱신 주기를 설정한다</summary>
+<summary><code>st_rt_set_lane_update_interval</code> — Sets the update interval per propagation lane</summary>
 
 ```c
 int st_rt_set_lane_update_interval(STRT_Context* context, int lane, float milliseconds);
 ```
 
-**용도** — `PIPELINED` 스케줄러에서 직접음·반사/회절·잔향 세 전파 레인이 얼마나 자주 다시 계산될지 정합니다. CPU 사용량과 반응성 사이의 균형을 호스트가 조절하는 손잡이입니다. 반사/회절 레인이 전파 비용의 대부분을 쓰므로, CPU를 아끼고 싶다면 이 레인의 주기를 먼저 올리십시오. 그 대가로 초기 반사가 리스너 움직임을 조금 늦게 따라오지만, 직접음 레인의 주기는 그대로라 무음이나 끊김은 생기지 않습니다.
+**Purpose** — Under the `PIPELINED` scheduler, sets how often the three propagation lanes — direct · reflection/diffraction · reverb — are recomputed. A knob for the host to balance CPU usage against responsiveness. The reflection/diffraction lane accounts for most of the propagation cost, so if you want to save CPU, raise this lane's interval first. The price is that early reflections follow listener movement slightly later, but the direct lane's interval is unchanged, so there is no silence or dropout.
 
-**언제·어떻게** — **런타임에 언제든** 부를 수 있습니다(스레드 속성과 달리 `st_rt_create` 전 제약이 없음). 워커가 도는 중에 바꿔도 다음 사이클부터 새 값으로 돌며, 이미 대기에 들어간 마감은 유지되고 다음 실행부터 새 값을 씁니다. 각 레인은 Guide나 호스트의 새 요청이 없어도 독립적으로 반복 실행됩니다. 주기의 의미는 레인마다 다릅니다(아래 표). `ST_RT_SCHEDULER_SYNCHRONOUS`에는 레인이 없어 실패합니다. 지원 여부는 `ST_CAP_LANE_UPDATE_INTERVAL`로 확인합니다. 스레드: `[control]` — 값을 atomic으로 저장하고 워커에 전달합니다. 오디오 콜백에서는 부르지 마십시오.
+**When / how** — Can be called **at any time at runtime** (unlike thread attributes, there is no before-`st_rt_create` constraint). Changing it while the workers are running takes effect from the next cycle; a deadline already being waited on is kept, and the new value is used from the next run. Each lane runs repeatedly on its own even without a new request from the Guide or the host. The meaning of the interval differs per lane (table below). `ST_RT_SCHEDULER_SYNCHRONOUS` has no lanes, so it fails. Check support with `ST_CAP_LANE_UPDATE_INTERVAL`. Thread: `[control]` — stores the value atomically and passes it to the workers. Do not call it from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `lane` | `STPropagationLane` — `ST_PROPAGATION_LANE_DIRECT`(0): 연속 실행 **시작** 사이 최소 간격, 기본 10 ms / `ST_PROPAGATION_LANE_REFLECTION_DIFFRACTION`(1): 연속 두 실행 사이 최소 간격, 기본 0 ms(제한 없음). 대기 중 도착한 요청은 마감까지 하나로 접혀 굶지 않음 / `ST_PROPAGATION_LANE_REVERB`(2): 실행 **완료 후** 다음 실행까지 최소 간격, 기본 4 ms |
-| `milliseconds` | 최소 간격(ms), `[0, 60000]`. `0` = 추가 대기 없음. 음수·NaN·무한대·60000 초과는 clamp하지 않고 거절 |
+| `context` | Context handle |
+| `lane` | `STPropagationLane` — `ST_PROPAGATION_LANE_DIRECT` (0): minimum gap between the **starts** of consecutive runs, default 10 ms / `ST_PROPAGATION_LANE_REFLECTION_DIFFRACTION` (1): minimum gap between two consecutive runs, default 0 ms (no limit). Requests arriving while waiting are folded into one until the deadline, so they never starve / `ST_PROPAGATION_LANE_REVERB` (2): minimum gap from the **completion** of a run to the next run, default 4 ms |
+| `milliseconds` | Minimum gap (ms), `[0, 60000]`. `0` = no extra wait. Negative, NaN, infinite or values above 60000 are rejected, not clamped |
 
-**반환** — `1` = 적용 / `0` = 거절. `lane`이 범위 밖이거나 `milliseconds`가 허용 범위 밖이면 `ST_STATUS_INVALID_ARGUMENT`, `SYNCHRONOUS` 스케줄러면 `ST_STATUS_UNAVAILABLE`을 `st_rt_get_last_status`에 남깁니다.
+**Returns** — `1` = applied / `0` = rejected. Leaves `ST_STATUS_INVALID_ARGUMENT` in `st_rt_get_last_status` if `lane` is out of range or `milliseconds` is outside the allowed range, and `ST_STATUS_UNAVAILABLE` with the `SYNCHRONOUS` scheduler.
 
 </details>
 
 <details>
-<summary><code>st_rt_get_lane_update_interval</code> — 전파 레인의 갱신 주기를 읽는다</summary>
+<summary><code>st_rt_get_lane_update_interval</code> — Reads a propagation lane's update interval</summary>
 
 ```c
 float st_rt_get_lane_update_interval(const STRT_Context* context, int lane);
 ```
 
-**용도** — 레인에 저장된 갱신 주기를 ms 단위로 돌려줍니다.
+**Purpose** — Returns the update interval stored for a lane, in ms.
 
-**언제·어떻게** — 마지막 `st_rt_set_lane_update_interval`이 거절됐더라도 현재 **저장된 값**을 돌려주므로, 넣은 값이 실제로 적용됐는지 확인할 때 씁니다. 스레드: `[any]` — atomic 하나만 읽으므로 어느 스레드에서 불러도 되고 블록하지 않습니다.
+**When / how** — Returns the currently **stored value** even if the last `st_rt_set_lane_update_interval` was rejected, so use it to check whether the value you set actually took effect. Thread: `[any]` — reads a single atomic, so it can be called from any thread and does not block.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 | `lane` | `STPropagationLane` — `DIRECT`(0) / `REFLECTION_DIFFRACTION`(1) / `REVERB`(2) |
 
-**반환** — 저장된 주기(ms). `lane`이 범위 밖이거나 컨텍스트가 없으면 `0`.
+**Returns** — The stored interval (ms). `0` if `lane` is out of range or there is no context.
 
 </details>
 
 <details>
-<summary><code>st_rt_propagate</code> — 전파를 실행하거나(SYNCHRONOUS) 전파 워커를 깨운다(PIPELINED)</summary>
+<summary><code>st_rt_propagate</code> — Runs propagation (SYNCHRONOUS) or wakes the propagation workers (PIPELINED)</summary>
 
 ```c
 int st_rt_propagate(STRT_Context* context);
 ```
 
-**용도** — 현재 씬·소스·리스너 상태로 음향 전파와 IR 변환을 진행시킵니다. 스케줄러에 따라 동작이 다릅니다.
+**Purpose** — Advances acoustic propagation and IR conversion with the current scene · source · listener state. Its behavior depends on the scheduler.
 
-**언제·어떻게** — `st_rt_build` 뒤에 부릅니다.
+**When / how** — Call it after `st_rt_build`.
 
-- `ST_RT_SCHEDULER_SYNCHRONOUS`: 전파·IR 파이프라인이 **호출 스레드에서 실제로 돕니다**. 호스트가 이 함수를 불러야만 계산이 진행되므로 게임 루프에서 주기적으로(예: 매 프레임) 부릅니다. 이 스케줄러에서는 쉬게 한 소스(`st_rt_source_idle`)도 계산됩니다.
-- `ST_RT_SCHEDULER_PIPELINED`(기본): 워커를 깨우고 **즉시 돌아옵니다**. 레인은 호스트 요청 없이도 `st_rt_set_lane_update_interval` 주기에 따라 반복 실행되므로, 이 호출은 "변경이 있으니 바로 돌아라"라는 신호입니다.
+- `ST_RT_SCHEDULER_SYNCHRONOUS`: the propagation · IR pipeline **actually runs on the calling thread**. Computation advances only when the host calls this function, so call it periodically from the game loop (e.g. every frame). Under this scheduler, idled sources (`st_rt_source_idle`) are also computed.
+- `ST_RT_SCHEDULER_PIPELINED` (default): wakes the workers and **returns immediately**. Lanes run repeatedly at the `st_rt_set_lane_update_interval` intervals even without host requests, so this call is a signal meaning "something changed, run now".
 
-스레드: `[control, runs-here]` — `SYNCHRONOUS`에서는 호출 스레드가 전파 비용을 그대로 부담하므로 오디오 스레드에서 부르지 마십시오.
+Thread: `[control, runs-here]` — under `SYNCHRONOUS` the calling thread bears the full propagation cost, so do not call it from the audio thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 전파된 경로 수(`PIPELINED`에서는 워커가 가장 최근에 낸 값). `PIPELINED`에서 워커 오류가 있으면 `-1`, 컨텍스트가 없으면 `0`.
+**Returns** — Number of propagated paths (under `PIPELINED`, the value most recently produced by the workers). `-1` if a worker error occurred under `PIPELINED`, `0` if there is no context.
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>렌더 · 출력단 · 스피커 세트</strong> — 56개</summary>
+<summary><strong>Rendering · output stage · speaker sets</strong> — 56 functions</summary>
 
 <details>
-<summary><code>st_rt_render_set_spatializer</code> — 공간화 방식(패닝 / HRIR 데이터셋)을 고른다</summary>
+<summary><code>st_rt_render_set_spatializer</code> — Selects the spatialization method (panning / HRIR dataset)</summary>
 
 ```c
 int st_rt_render_set_spatializer(STRT_Context* context, int type);
 ```
 
-**용도** — 렌더 경로의 공간화 구현을 고릅니다. `PANNING`은 HRIR 데이터 없이 스테레오 패닝으로, `MIT_KEMAR`와 `SADIE_D2_KEMAR`는 측정 HRIR 컨볼루션으로 바이노럴 출력을 만듭니다. SADIE II D2는 데이터셋의 측정 ITD·위상까지 담은 기준 HRTF입니다.
+**Purpose** — Selects the spatialization implementation of the render path. `PANNING` produces stereo panning without HRIR data, while `MIT_KEMAR` and `SADIE_D2_KEMAR` produce binaural output by convolution with measured HRIRs. SADIE II D2 is the reference HRTF that includes the dataset's measured ITD and phase.
 
-**언제·어떻게** — HRIR 공간화(1·2)는 헤드폰 바이노럴 출력, 즉 `st_rt_render_start(context, 1)`로 시작한 렌더에서 쓰입니다. 보통 `st_rt_render_start` 전에 한 번 고릅니다. 스레드: `[control, blocking]` — HRIR 데이터셋을 읽어 들이는 긴 구간이라 게임 루프·오디오 스레드에서 부르지 않습니다. 지원 여부는 `ST_CAP_HRTF`, `ST_CAP_SADIE_D2_HRTF`(능력 워드 0)로 확인합니다.
+**When / how** — HRIR spatialization (1 · 2) is used for headphone binaural output, i.e. a render started with `st_rt_render_start(context, 1)`. Usually choose it once before `st_rt_render_start`. Thread: `[control, blocking]` — a long section that loads the HRIR dataset, so do not call it from the game loop or the audio thread. Check support with `ST_CAP_HRTF`, `ST_CAP_SADIE_D2_HRTF` (capability word 0).
 
-`PANNING`과 `MIT_KEMAR`는 라이브러리에 내장돼 있습니다. `SADIE_D2_KEMAR`는 외부 파일 `SADIE_D2_44K_16bit_256tap.hrtfbin`(SDK의 `Resources/HRTF/`에 라이선스 `LICENSE-SADIE-II.txt`와 함께 들어 있음)이 있어야 하며, 엔진은 다음 순서로 찾습니다.
+`PANNING` and `MIT_KEMAR` are built into the library. `SADIE_D2_KEMAR` requires the external file `SADIE_D2_44K_16bit_256tap.hrtfbin` (included in the SDK's `Resources/HRTF/` together with the license `LICENSE-SADIE-II.txt`), which the engine searches for in this order.
 
-1. 환경변수 `SIMPLEST_SADIE_D2_HRTF_PATH`(파일 경로)
-2. 현재 작업 폴더, 3. 실행 파일 폴더, 4. 이 라이브러리의 폴더 — 각각 그 폴더와 상위 8단계에서 `Assets/HRTF/`, `SimpleST/Assets/HRTF/`, `Resources/HRTF/` 아래의 그 파일
+1. Environment variable `SOUNDTRACING_SADIE_D2_HRTF_PATH` (file path)
+2. The current working folder, 3. the executable's folder, 4. this library's folder — in each case that file under `Assets/HRTF/`, `SoundTracing/Assets/HRTF/`, `Resources/HRTF/` in that folder and up to 8 parent levels
 
-배포에서는 라이브러리 옆(또는 상위)에 `Resources/HRTF/SADIE_D2_44K_16bit_256tap.hrtfbin`을 두는 것이 가장 간단합니다.
+For distribution, the soundtracing approach is to place `Resources/HRTF/SADIE_D2_44K_16bit_256tap.hrtfbin` next to (or above) the library.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `type` | `STSpatializerType` — `ST_SPATIALIZER_PANNING`(0, 기본) / `ST_SPATIALIZER_MIT_KEMAR`(1) / `ST_SPATIALIZER_SADIE_D2_KEMAR`(2) |
+| `context` | Context handle |
+| `type` | `STSpatializerType` — `ST_SPATIALIZER_PANNING` (0, default) / `ST_SPATIALIZER_MIT_KEMAR` (1) / `ST_SPATIALIZER_SADIE_D2_KEMAR` (2) |
 
-**반환** — `1` = 적용 / `0` = 실패. 범위 밖 `type`이면 `0`입니다. SADIE D2 자산 파일을 찾지 못하면 `0`이고 `st_rt_get_last_status`에 `ST_STATUS_UNAVAILABLE`("SADIE D2 HRTF asset not found ...")이 남습니다.
+**Returns** — `1` = applied / `0` = failure. An out-of-range `type` gives `0`. If the SADIE D2 asset file cannot be found it returns `0` and leaves `ST_STATUS_UNAVAILABLE` ("SADIE D2 HRTF asset not found ...") in `st_rt_get_last_status`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_spatializer</code> — 현재 공간화 방식을 읽는다</summary>
+<summary><code>st_rt_render_get_spatializer</code> — Reads the current spatialization method</summary>
 
 ```c
 int st_rt_render_get_spatializer(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_render_set_spatializer`로 고른 공간화 방식을 돌려줍니다.
+**Purpose** — Returns the spatialization method selected with `st_rt_render_set_spatializer`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[any]` — atomic 읽기라 어느 스레드에서 불러도 블록하지 않습니다.
+**When / how** — Can be called at any time. Thread: `[any]` — an atomic read, so it does not block from any thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STSpatializerType` 값(`0` PANNING / `1` MIT_KEMAR / `2` SADIE_D2_KEMAR). 기본은 `0`. 컨텍스트가 `NULL`이면 `-1`.
+**Returns** — An `STSpatializerType` value (`0` PANNING / `1` MIT_KEMAR / `2` SADIE_D2_KEMAR). The default is `0`. `-1` if the context is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_limiter_type</code> — 출력 리미터 종류를 고른다</summary>
+<summary><code>st_rt_render_set_limiter_type</code> — Selects the output limiter type</summary>
 
 ```c
 void st_rt_render_set_limiter_type(STRT_Context* context, int type);
 ```
 
-**용도** — 최종 믹스(마스터 버스)의 마지막 단계인 출력 리미터의 알고리즘을 고릅니다. 리미터는 스테레오(헤드폰·패닝)와 스피커 레이아웃 출력 모두에 걸리며, N채널 출력에는 모든 채널에 같은 이득을 거는 채널 링크로 동작합니다. 32채널을 넘는 커스텀 레이아웃에서는 리미터를 통과시킵니다.
+**Purpose** — Selects the algorithm of the output limiter, the last stage of the final mix (master bus). The limiter applies to both stereo (headphones · panning) and speaker layout outputs, and for N-channel output it operates as a channel link applying the same gain to every channel. Custom layouts with more than 32 channels bypass the limiter.
 
-**언제·어떻게** — 렌더 중에도 바꿀 수 있습니다. 리미터를 켜고 끄는 것은 이 함수가 아니라 `STRenderOptions.useLimiter`(기본 `1`, `st_rt_render_set_options`)입니다. 종류를 바꾸면 리미터 지연이 달라지므로 `st_rt_render_get_limiter_latency_samples`를 다시 읽습니다. 스레드: `[control]` — 렌더 스테이지를 바꾸는 제어 스레드 호출이라 오디오 콜백에서 부르지 않습니다. true-peak 종류 지원은 `ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER`(능력 워드 1), 룩어헤드 리미터는 `ST_CAP_LOOKAHEAD_OUTPUT_LIMITER`(능력 워드 0)로 확인합니다.
+**When / how** — Can be changed during rendering. Turning the limiter on and off is done not by this function but by `STRenderOptions.useLimiter` (default `1`, `st_rt_render_set_options`). Changing the type changes the limiter latency, so read `st_rt_render_get_limiter_latency_samples` again. Thread: `[control]` — a control-thread call that changes a render stage, so do not call it from the audio callback. Check support for the true-peak type with `ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER` (capability word 1) and for the lookahead limiter with `ST_CAP_LOOKAHEAD_OUTPUT_LIMITER` (capability word 0).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `type` | `STOutputLimiterType`. `0`·`1`·`2` 밖의 값은 `LEGACY_ENVELOPE`로 처리됩니다 |
+| `context` | Context handle |
+| `type` | `STOutputLimiterType`. Values other than `0` · `1` · `2` are treated as `LEGACY_ENVELOPE` |
 
-**`STOutputLimiterType` 값**
+**`STOutputLimiterType` values**
 
-| 값 | 동작 |
+| Value | Behavior |
 |---|---|
-| `ST_OUTPUT_LIMITER_LEGACY_ENVELOPE`(0) | 룩어헤드 없음, 2 ms attack, −0.2 dBFS 샘플 피크 + ±1 하드 클립(참조용). 지연 0 |
-| `ST_OUTPUT_LIMITER_LOOKAHEAD_PEAK`(1) | 룩어헤드 선형 램프, −0.2 dBFS 샘플 피크(참조용). 지연 = 룩어헤드 |
-| `ST_OUTPUT_LIMITER_TRUE_PEAK`(2, 기본) | ITU-R BS.1770-5 4× true-peak 사이드체인, 천장 −1 dBTP(고정), 룩어헤드(= attack) + hold 10 ms + 자동 release 60→400 ms. 출력 true-peak가 천장을 넘지 않습니다. 지연 = `max(lookahead, 1) + 5` 샘플(기본 132 → 137, 3.1 ms) |
+| `ST_OUTPUT_LIMITER_LEGACY_ENVELOPE`(0) | No lookahead, 2 ms attack, −0.2 dBFS sample peak + ±1 hard clip (for reference). Latency 0 |
+| `ST_OUTPUT_LIMITER_LOOKAHEAD_PEAK`(1) | Lookahead linear ramp, −0.2 dBFS sample peak (for reference). Latency = lookahead |
+| `ST_OUTPUT_LIMITER_TRUE_PEAK`(2, default) | ITU-R BS.1770-5 4× true-peak sidechain, ceiling −1 dBTP (fixed), lookahead (= attack) + 10 ms hold + automatic release 60→400 ms. Output true peak never exceeds the ceiling. Latency = `max(lookahead, 1) + 5` samples (default 132 → 137, 3.1 ms) |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_limiter_type</code> — 현재 출력 리미터 종류를 읽는다</summary>
+<summary><code>st_rt_render_get_limiter_type</code> — Reads the current output limiter type</summary>
 
 ```c
 int st_rt_render_get_limiter_type(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_render_set_limiter_type`로 건 리미터 종류를 돌려줍니다.
+**Purpose** — Returns the limiter type set with `st_rt_render_set_limiter_type`.
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**When / how** — Thread: `[control]` — a control-thread query that reads engine state without a lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STOutputLimiterType` 값(기본 `2` = `TRUE_PEAK`). 컨텍스트가 `NULL`이면 `-1`.
+**Returns** — An `STOutputLimiterType` value (default `2` = `TRUE_PEAK`). `-1` if the context is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_limiter_lookahead_samples</code> — 리미터 룩어헤드 길이를 정한다</summary>
+<summary><code>st_rt_render_set_limiter_lookahead_samples</code> — Sets the limiter lookahead length</summary>
 
 ```c
 int st_rt_render_set_limiter_lookahead_samples(STRT_Context* context, int samples);
 ```
 
-**용도** — `LOOKAHEAD_PEAK`·`TRUE_PEAK` 리미터가 피크를 미리 보는 길이(= attack)를 샘플 단위로 정합니다. 길수록 이득 변화가 부드럽고, 짧을수록 출력 지연이 줄어듭니다.
+**Purpose** — Sets, in samples, how far ahead the `LOOKAHEAD_PEAK` / `TRUE_PEAK` limiters look at peaks (= attack). Longer gives smoother gain changes; shorter reduces output latency.
 
-**언제·어떻게** — 룩어헤드 버퍼를 다시 구성합니다. 바꾼 뒤에는 `st_rt_render_get_limiter_latency_samples`로 실제 지연을 다시 읽습니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**When / how** — Rebuilds the lookahead buffer. After changing it, re-read the actual latency with `st_rt_render_get_limiter_latency_samples`. Thread: `[control]` — do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `samples` | 룩어헤드 샘플 수(44.1 kHz 엔진 샘플), `[0, ST_OUTPUT_LIMITER_MAX_LOOKAHEAD_SAMPLES]` = `[0, 511]`. 기본 `ST_OUTPUT_LIMITER_DEFAULT_LOOKAHEAD_SAMPLES` = 132(3 ms) |
+| `context` | Context handle |
+| `samples` | Lookahead sample count (44.1 kHz engine samples), `[0, ST_OUTPUT_LIMITER_MAX_LOOKAHEAD_SAMPLES]` = `[0, 511]`. Default `ST_OUTPUT_LIMITER_DEFAULT_LOOKAHEAD_SAMPLES` = 132 (3 ms) |
 
-**반환** — `1` = 적용 / `0` = 거절(범위 밖, 컨텍스트 `NULL`).
+**Returns** — `1` = applied / `0` = rejected (out of range, context `NULL`).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_limiter_lookahead_samples</code> — 리미터 룩어헤드 길이를 읽는다</summary>
+<summary><code>st_rt_render_get_limiter_lookahead_samples</code> — Reads the limiter lookahead length</summary>
 
 ```c
 int st_rt_render_get_limiter_lookahead_samples(const STRT_Context* context);
 ```
 
-**용도** — 현재 리미터 룩어헤드 샘플 수를 돌려줍니다.
+**Purpose** — Returns the current limiter lookahead sample count.
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**When / how** — Thread: `[control]` — a control-thread query that reads engine state without locks.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 룩어헤드 샘플 수(기본 `132`). 컨텍스트가 `NULL`이면 `-1`.
+**Returns** — Lookahead sample count (default `132`). `-1` if the context is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_limiter_latency_samples</code> — 리미터가 더하는 출력 지연을 읽는다</summary>
+<summary><code>st_rt_render_get_limiter_latency_samples</code> — Reads the output latency the limiter adds</summary>
 
 ```c
 int st_rt_render_get_limiter_latency_samples(const STRT_Context* context);
 ```
 
-**용도** — 출력 리미터가 신호에 더하는 고정 지연을 엔진 샘플 단위로 돌려줍니다. 영상·입력 이벤트와의 싱크 보정, 측정 시 정렬에 씁니다.
+**Purpose** — Returns the fixed latency the output limiter adds to the signal, in engine samples. Use it to compensate sync with video and input events, and for alignment during measurements.
 
-**언제·어떻게** — 리미터 종류·룩어헤드·`useLimiter`를 바꾼 뒤 다시 읽습니다. 값은 다음 규칙을 따릅니다.
+**When / how** — Re-read it after changing the limiter type, lookahead or `useLimiter`. The value follows these rules.
 
-- `useLimiter` = 1 · `TRUE_PEAK`: `max(lookahead, 1) + 5`(기본 137 샘플, 3.1 ms)
+- `useLimiter` = 1 · `TRUE_PEAK`: `max(lookahead, 1) + 5` (default 137 samples, 3.1 ms)
 - `useLimiter` = 1 · `LOOKAHEAD_PEAK`: `lookahead`
 - `useLimiter` = 1 · `LEGACY_ENVELOPE`: 0
 - `useLimiter` = 0: 0
 
-스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+Thread: `[control]` — a control-thread query that reads engine state without locks.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 리미터 지연(샘플). 컨텍스트가 `NULL`이면 `-1`.
+**Returns** — Limiter latency (samples). `-1` if the context is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_master_gain_db</code> — 마스터 출력 게인을 정한다</summary>
+<summary><code>st_rt_render_set_master_gain_db</code> — Sets the master output gain</summary>
 
 ```c
 int st_rt_render_set_master_gain_db(STRT_Context* context, float gainDb);
 ```
 
-**용도** — 렌더 출력단의 볼륨입니다. 전파·IR 결과를 무효화하지 않으므로 IR 재계산 없이 전체 음량을 조절할 때 씁니다. 출력 EQ 뒤·리미터 앞에 걸려 키운 만큼은 리미터가 받습니다. 스테레오·스피커 레이아웃 등 채널 수와 무관하게 모든 출력에 걸립니다.
+**Purpose** — The volume of the render output stage. It does not invalidate propagation or IR results, so use it to adjust overall loudness without IR recomputation. It sits after the output EQ and before the limiter, so whatever you boost is received by the limiter. It applies to every output regardless of channel count, stereo or speaker layout.
 
-**언제·어떻게** — 렌더 중 언제든 부를 수 있습니다. 값이 바뀌면 20 ms 선형 램프로 넘어가고, 0 dB이면 곱셈을 하지 않습니다. 등라우드니스 보정의 `followMasterGain`이 켜져 있으면 보정도 이 게인을 따라 다시 계산됩니다(`st_rt_render_set_loudness_compensation` 참고). 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다. 지원 여부는 `ST_CAP1_MASTER_GAIN`(능력 워드 1)으로 확인합니다.
+**When / how** — Can be called at any time during rendering. Changes transition over a 20 ms linear ramp; at 0 dB no multiplication is performed. If loudness compensation's `followMasterGain` is enabled, the compensation is also recomputed to follow this gain (see `st_rt_render_set_loudness_compensation`). Thread: `[control]` — changes only the output stage; do not call from the audio callback. Check support with `ST_CAP1_MASTER_GAIN` (capability word 1).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `gainDb` | 게인 [dB], `[ST_MASTER_GAIN_MIN_DB, ST_MASTER_GAIN_MAX_DB]` = `[−96, +24]`. 기본 0 |
+| `context` | Context handle |
+| `gainDb` | Gain [dB], `[ST_MASTER_GAIN_MIN_DB, ST_MASTER_GAIN_MAX_DB]` = `[−96, +24]`. Default 0 |
 
-**반환** — `1` = 적용 / `0` = 실패. 비유한 값·범위 밖이면 `ST_STATUS_INVALID_ARGUMENT`이고 아무것도 바꾸지 않습니다. `ST_BACKEND_EXA` 백엔드 컨텍스트는 `ST_STATUS_UNAVAILABLE`.
+**Returns** — `1` = applied / `0` = failed. Non-finite or out-of-range values give `ST_STATUS_INVALID_ARGUMENT` and change nothing. `ST_STATUS_UNAVAILABLE` for an `ST_BACKEND_EXA` backend context.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_master_gain_db</code> — 마스터 출력 게인을 읽는다</summary>
+<summary><code>st_rt_render_get_master_gain_db</code> — Reads the master output gain</summary>
 
 ```c
 float st_rt_render_get_master_gain_db(const STRT_Context* context);
 ```
 
-**용도** — 저장된 마스터 게인 [dB]을 돌려줍니다.
+**Purpose** — Returns the stored master gain [dB].
 
-**언제·어떻게** — 스레드: `[control]` — 오디오라이저 컨트롤 락을 짧게 잡고 저장값을 복사합니다.
+**When / how** — Thread: `[control]` — briefly takes the auralizer control lock and copies the stored value.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 마스터 게인 [dB](기본 `0`). 컨텍스트가 `NULL`이면 `0`.
+**Returns** — Master gain [dB] (default `0`). `0` if the context is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_loudness_compensation</code> — 등라우드니스 보정(ISO 226)을 설정한다</summary>
+<summary><code>st_rt_render_set_loudness_compensation</code> — Configures equal-loudness compensation (ISO 226)</summary>
 
 ```c
 int st_rt_render_set_loudness_compensation(STRT_Context* context, const STLoudnessCompensationDesc* desc);
 ```
 
-**용도** — 사람 귀는 콘텐츠가 균형 잡힌 기준 레벨보다 작게 재생되면 저역·초고역을 덜 듣습니다. 이 단은 ISO 226:2003 등라우드니스 곡선 두 개(기준 레벨 R, 재생 레벨 P)의 모양 차를 저역 셸프와 고역 셸프로 근사해 되돌립니다. P가 R보다 크면 반대로 깎습니다. 엔진은 절대 SPL을 모르므로 레벨은 호스트가 phon(1 kHz 순음 dB SPL)으로 줍니다.
+**Purpose** — When content is played back quieter than the balanced reference level, the human ear hears less of the low and very high frequencies. This stage approximates the shape difference between two ISO 226:2003 equal-loudness contours (reference level R, playback level P) with a low shelf and a high shelf and restores it. If P is greater than R it cuts instead. The engine does not know absolute SPL, so the host supplies the levels in phon (dB SPL of a 1 kHz pure tone).
 
-**언제·어떻게** — 출력단(스테레오·바이노럴과 스피커 레이아웃 모두)에서 출력 EQ 뒤, 마스터 게인·리미터 앞에 등라우드니스 보정 → 가상 베이스 순으로 걸립니다. 전파·IR 결과를 무효화하지 않습니다. `st_rt_create` 직후 **켜져 있고** 마스터 게인을 따라갑니다(기준 83 → 재생 70 phon, 120 Hz에서 저역 약 +7.2 dB, 고역 +1.8 dB). 미들웨어·게임 믹스처럼 출력 음색을 호스트가 소유하는 통합에서는 생성 직후 끄는 것을 검토합니다. 끈 동안은 샘플을 건드리지 않습니다.
+**When / how** — On the output stage (both stereo/binaural and speaker layouts), it is applied after the output EQ and before the master gain and limiter, in the order equal-loudness compensation → virtual bass. It does not invalidate propagation or IR results. Right after `st_rt_create` it is **enabled** and follows the master gain (reference 83 → playback 70 phon, about +7.2 dB low end at 120 Hz, +1.8 dB high end). For integrations where the host owns the output tone, such as middleware or a game mix, consider disabling it right after creation. While disabled it does not touch samples.
 
-켜고 끄기·값 변경은 클릭 없이 넘어갑니다(셸프 파라미터 50 ms smoothstep 램프, 끌 때는 0 dB 도착 뒤 5.8 ms 원 신호 크로스페이드). 출력 채널 수가 바뀌면(스피커 레이아웃 변경 등) 이력을 비우고 켬과 같은 램프로 다시 들어갑니다. `followMasterGain`이면 볼륨 변경 때 마스터 게인 램프(20 ms)와 함께 움직이지만 별도 명령이라 시작이 최대 한 블록 어긋날 수 있습니다(각각 램프라 불연속은 없음). 32채널을 넘는 커스텀 스피커 레이아웃에는 걸리지 않습니다.
+Enabling, disabling and value changes transition without clicks (50 ms smoothstep ramp on the shelf parameters; when disabling, a 5.8 ms crossfade to the dry signal after reaching 0 dB). When the output channel count changes (speaker layout change, etc.) it clears its history and re-enters with the same ramp as enabling. With `followMasterGain`, volume changes move together with the master gain ramp (20 ms), but as they are separate commands their start can be offset by up to one block (each is ramped, so there is no discontinuity). It is not applied to custom speaker layouts with more than 32 channels.
 
-기본값을 유지한 채 켜고 끄려면 get으로 채운 뒤 `enabled`만 바꿔 set합니다.
+To toggle while keeping the defaults, fill the struct with get and then set it with only `enabled` changed.
 
 ```c
 STLoudnessCompensationDesc d = { sizeof d, ST_ABI_VERSION };
 st_rt_render_get_loudness_compensation(ctx, &d);
-d.enabled = 0;                                  /* 끄기 */
+d.enabled = 0;                                  /* disable */
 st_rt_render_set_loudness_compensation(ctx, &d);
 ```
 
-스레드: `[control]` — 출력단만 바꾸며, 제어 스레드에서 ISO 226 피팅(수십 µs)을 합니다. 지원 여부는 `ST_CAP1_LOUDNESS_COMPENSATION`(능력 워드 1)으로 확인합니다. 오프라인 라이브러리에는 없습니다.
+Thread: `[control]` — changes only the output stage and performs the ISO 226 fitting (tens of µs) on the control thread. Check support with `ST_CAP1_LOUDNESS_COMPENSATION` (capability word 1). Not available in the offline library.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `desc` | 설정. 호출자가 `structSize` / `apiVersion`을 채우고 `reserved`는 0이어야 합니다 |
+| `context` | Context handle |
+| `desc` | Settings. The caller fills `structSize` / `apiVersion`, and `reserved` must be 0 |
 
-**구조체** `STLoudnessCompensationDesc`
+**Struct** `STLoudnessCompensationDesc`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STLoudnessCompensationDesc)` / `ST_ABI_VERSION` |
-| `enabled` | 0/1. 생성 직후 1 |
-| `followMasterGain` | 0/1. 1이면 실효 재생 레벨 = `playbackLevelPhon` + 마스터 게인 dB. `playbackLevelPhon`을 "마스터 게인 0 dB일 때의 재생 레벨"로 한 번 맞춰 두면 마스터 게인을 볼륨 노브로 쓰는 호스트에서 보정이 자동으로 따라갑니다. 생성 직후 1 |
-| `referenceLevelPhon` | 기준 청취 레벨 `[0, 120]` phon, 기본 83(영화·음악 마스터링 기준 모니터 레벨) |
-| `playbackLevelPhon` | 실제 재생 레벨 `[0, 120]` phon, 기본 70(가정·헤드폰 통상 청취 레벨). 기준과 같으면 보정 0 |
-| `bassScale` | 저역 셸프 게인 배율 `[0, 1]`, 기본 1(ISO 그대로) |
-| `trebleScale` | 고역 셸프 게인 배율 `[0, 1]`, 기본 1. 0이면 저역만 보정 |
-| `maxShelfGainDb` | 셸프 게인 절대값 상한 `[0, 40]` dB(배율 뒤에 적용), 기본 15. 저역 셸프가 상한에 닿으면 게인만 자르지 않고 "셸프가 상한에 닿는 재생 레벨"의 모양(코너·기울기)을 씁니다. 고역 셸프는 모양이 고정이라 게인만 자릅니다 |
+| `enabled` | 0/1. 1 right after creation |
+| `followMasterGain` | 0/1. When 1, effective playback level = `playbackLevelPhon` + master gain dB. Set `playbackLevelPhon` once to "the playback level at 0 dB master gain" and, for hosts that use the master gain as a volume knob, the compensation follows automatically. 1 right after creation |
+| `referenceLevelPhon` | Reference listening level `[0, 120]` phon, default 83 (reference monitor level for film and music mastering) |
+| `playbackLevelPhon` | Actual playback level `[0, 120]` phon, default 70 (typical home and headphone listening level). Equal to the reference means zero compensation |
+| `bassScale` | Low-shelf gain scale `[0, 1]`, default 1 (ISO as is) |
+| `trebleScale` | High-shelf gain scale `[0, 1]`, default 1. 0 compensates the low end only |
+| `maxShelfGainDb` | Absolute cap on shelf gain `[0, 40]` dB (applied after the scale), default 15. When the low shelf hits the cap, instead of just clipping the gain it uses the shape (corner, slope) of "the playback level at which the shelf reaches the cap". The high shelf has a fixed shape, so only its gain is clipped |
 | `reserved[5]` | 0 |
 
-ISO 식의 유효 범위(20 Hz–4 kHz는 20–90 phon, 5–12.5 kHz는 20–80 phon) 밖의 레벨은 그 주파수에서 끝 레벨 등고선의 모양으로 평가합니다(R·P가 둘 다 80 phon을 넘으면 고역 보정 0). 1.25–5 kHz의 ISO 오목부(수 dB 미만)는 셸프로 만들지 않습니다. 근사 오차는 레벨 차가 크고 낮은 쪽 레벨이 낮을수록 커집니다(중역 기준 ISO 표 최대 오차: 83→70 0.5 dB, 83→60 0.9 dB, 83→40 1.9 dB, 90→20 3.7 dB).
+Levels outside the valid range of the ISO formula (20–90 phon for 20 Hz–4 kHz, 20–80 phon for 5–12.5 kHz) are evaluated with the shape of the edge-level contour at that frequency (if R and P both exceed 80 phon, the high-end compensation is 0). The ISO dip at 1.25–5 kHz (under a few dB) is not modeled with a shelf. The approximation error grows with larger level differences and lower low-side levels (maximum error against the ISO table, mid-band reference: 83→70 0.5 dB, 83→60 0.9 dB, 83→40 1.9 dB, 90→20 3.7 dB).
 
-**반환** — `1` = 적용 / `0` = 실패. `NULL`·필드 범위 밖·`reserved` ≠ 0이면 `ST_STATUS_INVALID_ARGUMENT`, 스탬프 불일치면 `ST_STATUS_VERSION_MISMATCH`(둘 다 아무것도 바꾸지 않음). `ST_BACKEND_EXA` 백엔드 컨텍스트는 `ST_STATUS_UNAVAILABLE`.
+**Returns** — `1` = applied / `0` = failed. `NULL`, out-of-range fields or `reserved` ≠ 0 give `ST_STATUS_INVALID_ARGUMENT`, and a stamp mismatch gives `ST_STATUS_VERSION_MISMATCH` (neither changes anything). `ST_STATUS_UNAVAILABLE` for an `ST_BACKEND_EXA` backend context.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_loudness_compensation</code> — 등라우드니스 보정 설정을 읽는다</summary>
+<summary><code>st_rt_render_get_loudness_compensation</code> — Reads the equal-loudness compensation settings</summary>
 
 ```c
 int st_rt_render_get_loudness_compensation(const STRT_Context* context, STLoudnessCompensationDesc* outDesc);
 ```
 
-**용도** — 저장된 등라우드니스 보정 설정(요청값)을 돌려줍니다. 한 번도 set하지 않았으면 생성 직후 기본값을 채웁니다. 기본값을 유지한 채 일부 필드만 바꿀 때 먼저 부릅니다.
+**Purpose** — Returns the stored equal-loudness compensation settings (requested values). If it has never been set, fills the post-creation defaults. Call it first when changing only some fields while keeping the defaults.
 
-**언제·어떻게** — 스레드: `[control]` — 오디오라이저 컨트롤 락을 짧게 잡고 저장값을 복사합니다.
+**When / how** — Thread: `[control]` — briefly takes the auralizer control lock and copies the stored value.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outDesc` | 출력. 호출자가 `structSize` / `apiVersion`을 채웁니다. 필드는 `st_rt_render_set_loudness_compensation` 항목 참고 |
+| `context` | Context handle |
+| `outDesc` | Output. The caller fills `structSize` / `apiVersion`. See `st_rt_render_set_loudness_compensation` for the fields |
 
-**반환** — `1` = 성공 / `0` = 실패. `ST_BACKEND_EXA` 백엔드 컨텍스트는 기본값(꺼짐)을 채웁니다.
+**Returns** — `1` = success / `0` = failed. An `ST_BACKEND_EXA` backend context fills the defaults (disabled).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_virtual_bass</code> — 가상 베이스(배음 합성)를 설정한다</summary>
+<summary><code>st_rt_render_set_virtual_bass</code> — Configures virtual bass (harmonic synthesis)</summary>
 
 ```c
 int st_rt_render_set_virtual_bass(STRT_Context* context, const STVirtualBassDesc* desc);
 ```
 
-**용도** — 저역을 재생하지 못하는 작은 드라이버·이어폰에서 저음을 느끼게 하는 missing fundamental 효과입니다. 차단 주파수 아래 저역을 떼어 2·3·4차 배음을 만들고 대역통과로 다듬어 원 신호에 더합니다. 배음 레벨은 입력 레벨에 비례합니다.
+**Purpose** — A missing-fundamental effect that lets small drivers and earphones that cannot reproduce low frequencies convey bass. It splits off the low band below the cutoff frequency, generates 2nd, 3rd and 4th harmonics, shapes them with a band-pass and adds them to the original signal. The harmonic level is proportional to the input level.
 
-**언제·어떻게** — 출력단에서 등라우드니스 보정 뒤, 마스터 게인·리미터 앞에 걸립니다. 기본은 꺼짐입니다. 전파·IR 결과를 무효화하지 않습니다. 켜고 끄기·값 변경은 30 ms smoothstep 램프로 넘어가고, 켬·차단/대역 변경 때는 혼합 0에서 필터를 23 ms 안정시킨 뒤 올립니다. 출력 채널 수가 바뀌면 이력을 비우고 다시 들어갑니다. 스피커 레이아웃의 LFE 채널은 건너뛰고, 32채널을 넘는 커스텀 레이아웃에는 걸리지 않습니다.
+**When / how** — On the output stage it is applied after equal-loudness compensation and before the master gain and limiter. Disabled by default. It does not invalidate propagation or IR results. Enabling, disabling and value changes transition over a 30 ms smoothstep ramp; on enable or a cutoff/band change, the filters settle for 23 ms at zero mix before it ramps up. When the output channel count changes it clears its history and re-enters. It skips the LFE channel of speaker layouts and is not applied to custom layouts with more than 32 channels.
 
-저역에 여러 톤이 함께 있으면 대역 안 혼변조(합음 f1+f2 등)가 생깁니다. 예를 들어 같은 진폭의 40 Hz + 55 Hz에서는 합음 95 Hz가 2차 배음보다 8.6–10.5 dB 큽니다. 단일 톤이면 2·3·4차 배음만 나옵니다(그 밖 성분 −77 dB 이하). 적용 여부는 청음으로 판단합니다. 기본값으로 켜려면 get으로 채운 뒤 `enabled`만 1로 바꿔 set합니다. 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다. 지원 여부는 `ST_CAP1_VIRTUAL_BASS`(능력 워드 1)로 확인합니다. 오프라인 라이브러리에는 없습니다.
+When several tones are present together in the low band, in-band intermodulation (sum tone f1+f2, etc.) occurs. For example, with 40 Hz + 55 Hz at equal amplitude, the 95 Hz sum tone is 8.6–10.5 dB louder than the 2nd harmonic. A single tone produces only the 2nd, 3rd and 4th harmonics (other components −77 dB or lower). Decide whether to use it by listening. To enable it with the defaults, fill the struct with get and then set it with only `enabled` changed to 1. Thread: `[control]` — changes only the output stage; do not call from the audio callback. Check support with `ST_CAP1_VIRTUAL_BASS` (capability word 1). Not available in the offline library.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `desc` | 설정. 호출자가 `structSize` / `apiVersion`을 채우고 `reserved`는 0이어야 합니다 |
+| `context` | Context handle |
+| `desc` | Settings. The caller fills `structSize` / `apiVersion`, and `reserved` must be 0 |
 
-**구조체** `STVirtualBassDesc`
+**Struct** `STVirtualBassDesc`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STVirtualBassDesc)` / `ST_ABI_VERSION` |
-| `enabled` | 0/1. 기본 0 |
-| `mode` | `STVirtualBassMode` — `ST_VIRTUAL_BASS_HYBRID`(0, 기본): 원 저역을 그대로 두고 배음을 더함(저역이 나오는 이어폰 등) / `ST_VIRTUAL_BASS_HARMONICS_ONLY`(1): 원 신호를 `cutoffHz` LR4 HPF로 거르고 배음만 남김(작은 드라이버 보호) |
-| `cutoffHz` | 저역 분리·HPF 차단 `[40, 160]` Hz, 기본 90 |
-| `harmonicLowHz` | 배음 대역 하한 `[20, 1000]` Hz, 기본 70 |
-| `harmonicHighHz` | 배음 대역 상한 `[20, 1000]` Hz, `harmonicLowHz`보다 커야 함. 기본 220 |
-| `intensity` | 배음 혼합 강도(선형) `[0, 4]`. 1 = 대역통과 전 배음 에너지가 분리한 저역 에너지와 같음. 기본 0.5(−6 dB) — HYBRID에서 2차 배음이 기본파와 거의 같은 크기로 들리는 값입니다. 기본파가 없는 `HARMONICS_ONLY`는 1.0 안팎을 권합니다 |
+| `enabled` | 0/1. Default 0 |
+| `mode` | `STVirtualBassMode` — `ST_VIRTUAL_BASS_HYBRID` (0, default): keeps the original low end and adds harmonics (earphones that reproduce low frequencies, etc.) / `ST_VIRTUAL_BASS_HARMONICS_ONLY` (1): filters the original signal with a `cutoffHz` LR4 HPF and keeps only the harmonics (protects small drivers) |
+| `cutoffHz` | Low-band split and HPF cutoff `[40, 160]` Hz, default 90 |
+| `harmonicLowHz` | Lower edge of the harmonic band `[20, 1000]` Hz, default 70 |
+| `harmonicHighHz` | Upper edge of the harmonic band `[20, 1000]` Hz, must be greater than `harmonicLowHz`. Default 220 |
+| `intensity` | Harmonic mix strength (linear) `[0, 4]`. 1 = harmonic energy before the band-pass equals the split low-band energy. Default 0.5 (−6 dB) — the value at which, in HYBRID, the 2nd harmonic sounds about as loud as the fundamental. For `HARMONICS_ONLY`, which has no fundamental, around 1.0 is recommended |
 | `reserved[6]` | 0 |
 
-**반환** — `1` = 적용 / `0` = 실패. `NULL`·필드 범위 밖·`reserved` ≠ 0이면 `ST_STATUS_INVALID_ARGUMENT`, 스탬프 불일치면 `ST_STATUS_VERSION_MISMATCH`(둘 다 아무것도 바꾸지 않음). `ST_BACKEND_EXA` 백엔드 컨텍스트는 `ST_STATUS_UNAVAILABLE`.
+**Returns** — `1` = applied / `0` = failed. `NULL`, out-of-range fields or `reserved` ≠ 0 give `ST_STATUS_INVALID_ARGUMENT`, and a stamp mismatch gives `ST_STATUS_VERSION_MISMATCH` (neither changes anything). `ST_STATUS_UNAVAILABLE` for an `ST_BACKEND_EXA` backend context.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_virtual_bass</code> — 가상 베이스 설정을 읽는다</summary>
+<summary><code>st_rt_render_get_virtual_bass</code> — Reads the virtual bass settings</summary>
 
 ```c
 int st_rt_render_get_virtual_bass(const STRT_Context* context, STVirtualBassDesc* outDesc);
 ```
 
-**용도** — 저장된 가상 베이스 설정(요청값)을 돌려줍니다. 한 번도 set하지 않았으면 기본값을 채웁니다.
+**Purpose** — Returns the stored virtual bass settings (requested values). If it has never been set, fills the defaults.
 
-**언제·어떻게** — 스레드: `[control]` — 오디오라이저 컨트롤 락을 짧게 잡고 저장값을 복사합니다.
+**When / how** — Thread: `[control]` — briefly takes the auralizer control lock and copies the stored value.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outDesc` | 출력. 호출자가 `structSize` / `apiVersion`을 채웁니다. 필드는 `st_rt_render_set_virtual_bass` 항목 참고 |
+| `context` | Context handle |
+| `outDesc` | Output. The caller fills `structSize` / `apiVersion`. See `st_rt_render_set_virtual_bass` for the fields |
 
-**반환** — `1` = 성공 / `0` = 실패. `ST_BACKEND_EXA` 백엔드 컨텍스트는 기본값(꺼짐)을 채웁니다.
+**Returns** — `1` = success / `0` = failed. An `ST_BACKEND_EXA` backend context fills the defaults (disabled).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_eq</code> — 출력 9밴드 그래픽 EQ(믹서 EQ)를 건다</summary>
+<summary><code>st_rt_render_set_eq</code> — Applies the output 9-band graphic EQ (mixer EQ)</summary>
 
 ```c
 int st_rt_render_set_eq(STRT_Context* context, const float gainsDb[ST_FREQUENCY_BANDS], int enabled);
 ```
 
-**용도** — 렌더 출력에만 걸리는 9밴드 톤 컨트롤입니다. 전파·IR 결과를 무효화하지 않습니다. 출력 EQ는 하나이고 이 함수는 출력 파라메트릭 EQ(`st_rt_render_set_parametric_eq`)의 **호환 뷰**입니다 — 엔진 밴드 중심(63…16k Hz)마다 Q 1.414 피킹 필터 9개 + 프리앰프 0 dB로 설정됩니다.
+**Purpose** — A 9-band tone control applied only to the render output. It does not invalidate propagation or IR results. There is a single output EQ, and this function is a **compatibility view** of the output parametric EQ (`st_rt_render_set_parametric_eq`) — it configures 9 peaking filters with Q 1.414, one at each engine band center (63…16k Hz), plus a 0 dB preamp.
 
-**언제·어떻게** — 렌더 중 언제든 부를 수 있습니다. 이 함수와 `st_rt_render_set_parametric_eq`는 같은 EQ의 밴드 목록 전체를 바꾸며 **마지막에 부른 쪽이 이깁니다**. 이 경로는 계수를 즉시 교체하고(램프 없음) 9채널 이상 스피커 레이아웃에서는 통과시킵니다. 토글만 하려는 경우에도 `ST_FREQUENCY_BANDS`개 게인을 반드시 같이 넘깁니다. 9밴드 전용 getter는 없으며, `st_rt_render_get_parametric_eq`가 이 설정을 9개 `PEAKING` 밴드로 돌려줍니다. 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다.
+**When / how** — Can be called at any time during rendering. This function and `st_rt_render_set_parametric_eq` both replace the entire band list of the same EQ, and **the last one called wins**. This path swaps coefficients immediately (no ramp) and passes through on speaker layouts with 9 or more channels. Even when you only want to toggle, always pass the `ST_FREQUENCY_BANDS` gains. There is no 9-band-specific getter; `st_rt_render_get_parametric_eq` returns this setting as 9 `PEAKING` bands. Thread: `[control]` — changes only the output stage; do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `gainsDb` | 밴드 게인 [dB] `ST_FREQUENCY_BANDS`(9)개, 순서 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz. 엔진이 `[−24, +24]` dB로 clamp합니다. `NULL`이면 아무것도 하지 않습니다 |
-| `enabled` | 0이면 계수는 갱신하되 우회합니다. 0 밖이면 켭니다 |
+| `context` | Context handle |
+| `gainsDb` | `ST_FREQUENCY_BANDS` (9) band gains [dB], in the order 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz. The engine clamps them to `[−24, +24]` dB. Does nothing if `NULL` |
+| `enabled` | 0 updates the coefficients but bypasses. Nonzero enables |
 
-**반환** — `1` = 적용 / `0` = 실패(`gainsDb`가 `NULL` 등).
+**Returns** — `1` = applied / `0` = failed (`gainsDb` is `NULL`, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_parametric_eq</code> — 출력 파라메트릭 EQ를 건다</summary>
+<summary><code>st_rt_render_set_parametric_eq</code> — Applies the output parametric EQ</summary>
 
 ```c
 int st_rt_render_set_parametric_eq(STRT_Context* context, const STParametricEqBand* bands, int32_t bandCount, float preampDb, int32_t enabled);
 ```
 
-**용도** — 헤드폰 보정(AutoEq 프로파일 등)이나 출력 음색 조정을 위한 최대 16밴드 파라메트릭 EQ입니다. 렌더 출력에만 걸려 전파·IR 결과를 무효화하지 않습니다.
+**Purpose** — A parametric EQ of up to 16 bands for headphone correction (AutoEq profiles, etc.) or output tone shaping. It applies only to the render output and does not invalidate propagation or IR results.
 
-**언제·어떻게** — 렌더 중 언제든 부를 수 있고, 바뀌면 20 ms 크로스페이드로 넘어갑니다(9밴드 뷰에서 넘어올 때도). 걸리는 자리는 렌더 체인 끝, 마스터 게인 앞(스테레오·바이노럴)이고, 스피커 출력에서는 디코드·거리 정렬 뒤입니다. 모든 출력 채널(스피커 LFE 포함)에 같은 필터가 걸립니다 — 음향 합에 건 것과 같아 저역을 메인·LFE가 어떻게 나눠 내든 결과 음색이 같습니다. 채널마다 다른 보정은 `st_rt_render_set_speaker_channel_eq`를 씁니다. 64채널까지 처리합니다. `st_rt_render_set_eq`와 같은 EQ이므로 마지막에 부른 setter가 이깁니다. AutoEq 텍스트는 `st_rt_render_parse_autoeq_parametric`으로 밴드 배열로 바꿔 넣습니다. 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다. 지원 여부는 `ST_CAP1_OUTPUT_PARAMETRIC_EQ`(능력 워드 1)로 확인합니다.
+**When / how** — Can be called at any time during rendering; changes transition over a 20 ms crossfade (including when coming from the 9-band view). It sits at the end of the render chain, before the master gain (stereo/binaural), and on speaker output after decoding and distance alignment. The same filter is applied to every output channel (including the speaker LFE) — equivalent to applying it to the acoustic sum, so the resulting tone is the same however the mains and LFE split the low end. For per-channel correction use `st_rt_render_set_speaker_channel_eq`. Handles up to 64 channels. It is the same EQ as `st_rt_render_set_eq`, so the last setter called wins. Convert AutoEq text into a band array with `st_rt_render_parse_autoeq_parametric` and pass it in. Thread: `[control]` — changes only the output stage; do not call from the audio callback. Check support with `ST_CAP1_OUTPUT_PARAMETRIC_EQ` (capability word 1).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `bands` | 밴드 배열 `bandCount`개. 호출 동안만 읽습니다. `bandCount` = 0이면 `NULL`이어도 됩니다 |
-| `bandCount` | 밴드 수 `[0, ST_PARAMETRIC_EQ_MAX_BANDS]` = `[0, 16]` |
-| `preampDb` | 프리앰프 [dB], `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]` = `[−48, +12]`으로 clamp. 주 용도는 클리핑 방지용 음수이며, 키우는 일은 마스터 게인이 맡습니다 |
-| `enabled` | 0이면 목록은 저장하되 통과시킵니다 |
+| `context` | Context handle |
+| `bands` | Array of `bandCount` bands. Read only during the call. May be `NULL` when `bandCount` = 0 |
+| `bandCount` | Band count `[0, ST_PARAMETRIC_EQ_MAX_BANDS]` = `[0, 16]` |
+| `preampDb` | Preamp [dB], clamped to `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]` = `[−48, +12]`. Mainly a negative value to prevent clipping; boosting is the master gain's job |
+| `enabled` | 0 stores the list but passes through |
 
-**구조체** `STParametricEqBand` (32 bytes, 배열 원소라 버전 스탬프 없음)
+**Struct** `STParametricEqBand` (32 bytes, no version stamp as it is an array element)
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `type` | `STParametricEqType` — `PEAKING`(0) / `LOW_SHELF`(1) / `HIGH_SHELF`(2) / `LOW_PASS`(3) / `HIGH_PASS`(4) / `NOTCH`(5) |
-| `enabled` | 0 = 이 밴드는 항등(건너뜀), 그 밖 = 켬 |
-| `frequencyHz` | 중심(PEAKING·NOTCH) 또는 코너(셸프 중점·LP·HP) 주파수. `[20, min(20000, 0.49·Fs)]` Hz로 clamp |
-| `gainDb` | PEAKING·LOW_SHELF·HIGH_SHELF만 사용(LP·HP·NOTCH는 저장만). `[−24, +24]` dB로 clamp |
-| `q` | `[0.1, 30]`, 셸프는 `[0.1, 3]`으로 clamp(큰 Q의 셸프는 모서리에 큰 공진 피크를 만듭니다) |
-| `reserved[3]` | 0이어야 합니다(아니면 거절) |
+| `enabled` | 0 = this band is identity (skipped), otherwise = enabled |
+| `frequencyHz` | Center (PEAKING, NOTCH) or corner (shelf midpoint, LP, HP) frequency. Clamped to `[20, min(20000, 0.49·Fs)]` Hz |
+| `gainDb` | Used only by PEAKING, LOW_SHELF and HIGH_SHELF (stored only for LP, HP, NOTCH). Clamped to `[−24, +24]` dB |
+| `q` | Clamped to `[0.1, 30]`, and `[0.1, 3]` for shelves (a high-Q shelf creates a large resonant peak at the corner) |
+| `reserved[3]` | Must be 0 (otherwise rejected) |
 
-필터 정의(출력 EQ·소스 EQ·스피커 채널 EQ 공통): 밴드마다 RBJ Audio EQ Cookbook 2차 섹션 하나이고, 셸프는 Q를 쓰는 RBJ 셸프(AutoEq와 같음)입니다. Fs는 엔진 내부 표본률 44100 Hz, 계수·연산은 double Direct Form I입니다. 체인은 프리앰프 → 밴드 0..count−1 직렬입니다. `enabled` = 0인 밴드와 \|gain\| ≤ 1e-4 dB인 PEAKING·셸프는 정확히 항등이고, 전체가 꺼져 있거나 효과가 없으면(전 밴드 항등 + 프리앰프 0 dB) 샘플을 건드리지 않습니다. 값이 바뀌면 옛 설정과 새 설정을 20 ms 동안 나란히 돌려 출력을 크로스페이드하고(계수 보간이 아니라 클릭·발산 없음), 그 사이 또 바뀌면 가장 최근 값 하나만 기다렸다가 이어서 넘어갑니다. 유한 값은 위 범위로 clamp하고 getter는 clamp된 실효값을 돌려줍니다.
+Filter definition (shared by the output EQ, source EQ and speaker channel EQ): each band is one RBJ Audio EQ Cookbook biquad section, and shelves are the Q-based RBJ shelves (same as AutoEq). Fs is the engine's internal sample rate of 44100 Hz; coefficients and processing are double-precision Direct Form I. The chain is preamp → bands 0..count−1 in series. Bands with `enabled` = 0 and PEAKING/shelf bands with \|gain\| ≤ 1e-4 dB are exactly identity, and when the whole EQ is disabled or has no effect (all bands identity + 0 dB preamp) samples are not touched. When values change, the old and new settings run side by side for 20 ms and the output is crossfaded (not coefficient interpolation, so no clicks or divergence); if it changes again in the meantime, only the most recent value waits and then transitions next. Finite values are clamped to the ranges above, and the getter returns the clamped effective values.
 
-**반환** — `1` = 적용 / `0` = 실패. `0`일 때 `st_rt_get_last_status`:
+**Returns** — `1` = applied / `0` = failed. On `0`, `st_rt_get_last_status`:
 
-- `ST_STATUS_INVALID_ARGUMENT` — `bandCount` 범위 밖, `bands` `NULL`(`bandCount` > 0), 비유한 값, 알 수 없는 `type`, `reserved` ≠ 0. 아무것도 바꾸지 않습니다.
-- `ST_STATUS_UNAVAILABLE` — `ST_BACKEND_EXA` 백엔드 컨텍스트
+- `ST_STATUS_INVALID_ARGUMENT` — `bandCount` out of range, `bands` `NULL` (`bandCount` > 0), non-finite value, unknown `type`, `reserved` ≠ 0. Changes nothing.
+- `ST_STATUS_UNAVAILABLE` — `ST_BACKEND_EXA` backend context
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_parametric_eq</code> — 출력 EQ 밴드 목록을 읽는다</summary>
+<summary><code>st_rt_render_get_parametric_eq</code> — Reads the output EQ band list</summary>
 
 ```c
 int st_rt_render_get_parametric_eq(const STRT_Context* context, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outEnabled);
 ```
 
-**용도** — 지금 출력 EQ의 밴드 목록(clamp된 실효값)·프리앰프·켜짐 상태를 돌려줍니다. `st_rt_render_set_eq`로 건 설정도 9개 `PEAKING` 밴드(Q 1.414)로 읽힙니다.
+**Purpose** — Returns the current output EQ band list (clamped effective values), preamp and enabled state. A setting applied with `st_rt_render_set_eq` is also read back as 9 `PEAKING` bands (Q 1.414).
 
-**언제·어떻게** — 크기를 모르면 `outBands`를 `NULL`로 불러 `outBandCount`만 받은 뒤 다시 부릅니다. `ST_PARAMETRIC_EQ_MAX_BANDS`(16)개 용량을 주면 늘 들어갑니다. 스레드: `[control]` — 오디오라이저 컨트롤 락을 잡습니다.
+**When / how** — If you do not know the size, call with `outBands` as `NULL` to get only `outBandCount`, then call again. A capacity of `ST_PARAMETRIC_EQ_MAX_BANDS` (16) always fits. Thread: `[control]` — takes the auralizer control lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outBands` | 밴드 출력 배열. `NULL`이면 크기 질의(밴드는 쓰지 않음). 필드는 `st_rt_render_set_parametric_eq` 항목 참고 |
-| `bandCapacity` | `outBands` 용량(원소 수), 0 이상 |
-| `outBandCount` | 밴드 수 출력. `NULL`이면 건너뜀 |
-| `outPreampDb` | 프리앰프 [dB] 출력. `NULL`이면 건너뜀 |
-| `outEnabled` | 켜짐(0/1) 출력. `NULL`이면 건너뜀 |
+| `context` | Context handle |
+| `outBands` | Band output array. `NULL` makes it a size query (no bands written). See `st_rt_render_set_parametric_eq` for the fields |
+| `bandCapacity` | Capacity of `outBands` (element count), 0 or greater |
+| `outBandCount` | Band count output. Skipped if `NULL` |
+| `outPreampDb` | Preamp [dB] output. Skipped if `NULL` |
+| `outEnabled` | Enabled (0/1) output. Skipped if `NULL` |
 
-**반환** — `1` = 성공(크기 질의 포함) / `0` = 실패. `0`일 때 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(`bandCapacity < 0`) / `ST_STATUS_BUFFER_TOO_SMALL`(용량이 밴드 수보다 작음 — 이때도 개수·프리앰프·켜짐은 씁니다) / `ST_STATUS_UNAVAILABLE`(`ST_BACKEND_EXA` 백엔드).
+**Returns** — `1` = success (including size queries) / `0` = failed. On `0`, `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT` (`bandCapacity < 0`) / `ST_STATUS_BUFFER_TOO_SMALL` (capacity smaller than the band count — the count, preamp and enabled state are still written) / `ST_STATUS_UNAVAILABLE` (`ST_BACKEND_EXA` backend).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_parse_autoeq_parametric</code> — AutoEq ParametricEQ.txt를 밴드 배열로 파싱한다</summary>
+<summary><code>st_rt_render_parse_autoeq_parametric</code> — Parses AutoEq ParametricEQ.txt into a band array</summary>
 
 ```c
 int32_t st_rt_render_parse_autoeq_parametric(const char* utf8Text, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outErrorLine, char* outErrorMessage, int32_t errorMessageCapacity);
 ```
 
-**용도** — AutoEq의 `ParametricEQ.txt`(Equalizer APO 문법의 부분집합) 텍스트를 `STParametricEqBand` 배열과 프리앰프로 바꿉니다. 결과는 그대로 `st_rt_render_set_parametric_eq`(켜짐으로), `st_rt_source_set_parametric_eq`, `st_rt_render_set_speaker_channel_eq`에 넣습니다.
+**Purpose** — Converts AutoEq `ParametricEQ.txt` text (a subset of the Equalizer APO syntax) into an `STParametricEqBand` array and a preamp. Pass the result directly to `st_rt_render_set_parametric_eq` (as enabled), `st_rt_source_set_parametric_eq` or `st_rt_render_set_speaker_channel_eq`.
 
-**언제·어떻게** — 컨텍스트가 필요 없고, 전역 상태·할당이 없습니다. 오프라인 라이브러리의 `st_off_render_parse_autoeq_parametric`과 같은 구현·같은 계약입니다. 스레드: `[any]` — 어느 스레드에서 불러도 블록하지 않습니다. 지원 여부는 `ST_CAP1_OUTPUT_PARAMETRIC_EQ`(능력 워드 1)에 포함됩니다.
+**When / how** — Needs no context and has no global state or allocations. Same implementation and contract as `st_off_render_parse_autoeq_parametric` in the offline library. Thread: `[any]` — does not block from any thread. Support is included in `ST_CAP1_OUTPUT_PARAMETRIC_EQ` (capability word 1).
 
-받는 문법(대소문자 무시):
+Accepted syntax (case-insensitive):
 
 ```text
 Preamp: -6.2 dB
 Filter 1: ON LSC Fc 105 Hz Gain 6.8 dB Q 0.70
 ```
 
-- `Preamp: <수> [dB]` — 여러 줄이면 dB로 더합니다.
-- `Filter[ <번호>]: ON|OFF <종류> Fc <수> [Hz] [Gain <수> [dB]] [Q <수>]` — 종류는 `PK`·`PEQ`·`MODAL` / `LSC`·`LS` / `HSC`·`HS` / `LP`·`LPQ` / `HP`·`HPQ` / `NO`. Q를 생략하면 셸프·LP·HP는 0.7071이고 PK·NO는 Q가 필수입니다. Gain은 PK·셸프에 필수입니다. `OFF` 필터는 `enabled` 0 밴드로 들어가 밴드 수에 셉니다.
-- 빈 줄과 `#` 뒤(줄 끝 주석)는 무시하고, UTF-8 BOM·CRLF를 받습니다. 수는 로캘과 무관하게 읽습니다.
-- 거절: 그 밖의 명령(`Channel`·`Device`·`GraphicEQ`·`Include` 등), `BP`·`AP`·`IIR`, 셸프 기울기 형식(`LS 6dB`), `BW Oct`, 범위 밖 값(Fc `[20, 20000]` Hz · Gain ±24 dB · Q `[0.1, 30]`, 셸프 Q `[0.1, 3]` · 프리앰프 최종합 `[−48, +12]` dB), 주석 밖 비 ASCII, 지수 표기. 파서는 clamp하지 않고 거절합니다.
+- `Preamp: <number> [dB]` — multiple lines are summed in dB.
+- `Filter[ <index>]: ON|OFF <type> Fc <number> [Hz] [Gain <number> [dB]] [Q <number>]` — the type is `PK`·`PEQ`·`MODAL` / `LSC`·`LS` / `HSC`·`HS` / `LP`·`LPQ` / `HP`·`HPQ` / `NO`. If Q is omitted it is 0.7071 for shelves, LP and HP; Q is required for PK and NO. Gain is required for PK and shelves. `OFF` filters become bands with `enabled` 0 and count toward the band count.
+- Blank lines and anything after `#` (end-of-line comments) are ignored; UTF-8 BOM and CRLF are accepted. Numbers are read independently of the locale.
+- Rejected: any other command (`Channel`, `Device`, `GraphicEQ`, `Include`, etc.), `BP`·`AP`·`IIR`, the shelf-slope form (`LS 6dB`), `BW Oct`, out-of-range values (Fc `[20, 20000]` Hz · Gain ±24 dB · Q `[0.1, 30]`, shelf Q `[0.1, 3]` · final preamp sum `[−48, +12]` dB), non-ASCII outside comments, exponent notation. The parser rejects rather than clamps.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `utf8Text` | NUL 종료 UTF-8 텍스트. 필수 |
-| `outBands` | 밴드 출력 배열. `bandCapacity` > 0이면 필수. `reserved`는 0으로 채워집니다 |
-| `bandCapacity` | `outBands` 용량, 0 이상 |
-| `outBandCount` | 밴드 수 출력. 필수 |
-| `outPreampDb` | 프리앰프 [dB] 출력. 필수 |
-| `outErrorLine` | 실패 시 오류 줄 번호(1부터, 줄과 무관한 오류는 0 — 프리앰프 최종합 범위 밖은 파일 끝에서 판정해 0이며, 줄 단위 오류가 있으면 그쪽이 먼저 보고됩니다). `NULL` 허용 |
-| `outErrorMessage` | 실패 사유(NUL 종료 영문, 용량에 맞춰 자름). `NULL` 허용 |
-| `errorMessageCapacity` | `outErrorMessage` 바이트 용량 |
+| `utf8Text` | NUL-terminated UTF-8 text. Required |
+| `outBands` | Band output array. Required if `bandCapacity` > 0. `reserved` is filled with 0 |
+| `bandCapacity` | Capacity of `outBands`, 0 or greater |
+| `outBandCount` | Band count output. Required |
+| `outPreampDb` | Preamp [dB] output. Required |
+| `outErrorLine` | Error line number on failure (1-based; 0 for errors not tied to a line — a final preamp sum out of range is judged at end of file and gives 0, and a line-level error, if any, is reported first). `NULL` allowed |
+| `outErrorMessage` | Failure reason (NUL-terminated English, truncated to capacity). `NULL` allowed |
+| `errorMessageCapacity` | Byte capacity of `outErrorMessage` |
 
-**반환** — `STAutoEqParseStatus`. 성공이면 `outBands[0..*outBandCount)`와 `*outPreampDb`를 쓰고, 실패면 `*outBandCount` = 0 · `*outPreampDb` = 0입니다. 컨텍스트가 없으므로 `st_rt_get_last_status`에는 남지 않습니다.
+**Returns** — `STAutoEqParseStatus`. On success writes `outBands[0..*outBandCount)` and `*outPreampDb`; on failure `*outBandCount` = 0 · `*outPreampDb` = 0. There is no context, so nothing is recorded in `st_rt_get_last_status`.
 
-| 값 | 뜻 |
+| Value | Meaning |
 |---|---|
-| `ST_AUTOEQ_PARSE_OK`(0) | 성공 |
-| `ST_AUTOEQ_PARSE_INVALID_ARGUMENT`(1) | `utf8Text`·`outBandCount`·`outPreampDb` `NULL`, `bandCapacity < 0`, `outBands`가 `NULL`인데 `bandCapacity > 0` |
-| `ST_AUTOEQ_PARSE_SYNTAX`(2) | 줄 형식 오류(수 아님·필수 필드 누락·중복·알 수 없는 토큰) |
-| `ST_AUTOEQ_PARSE_UNSUPPORTED`(3) | 지원하지 않는 명령·필터 종류·기울기·BW 형식 |
-| `ST_AUTOEQ_PARSE_OUT_OF_RANGE`(4) | 범위 밖 값 |
-| `ST_AUTOEQ_PARSE_TOO_MANY_BANDS`(5) | `ST_PARAMETRIC_EQ_MAX_BANDS` 또는 `bandCapacity` 초과 |
-| `ST_AUTOEQ_PARSE_EMPTY`(6) | `Preamp`·`Filter` 줄이 하나도 없음 |
+| `ST_AUTOEQ_PARSE_OK`(0) | Success |
+| `ST_AUTOEQ_PARSE_INVALID_ARGUMENT`(1) | `utf8Text`, `outBandCount` or `outPreampDb` `NULL`, `bandCapacity < 0`, `outBands` `NULL` with `bandCapacity > 0` |
+| `ST_AUTOEQ_PARSE_SYNTAX`(2) | Line format error (not a number, missing required field, duplicate, unknown token) |
+| `ST_AUTOEQ_PARSE_UNSUPPORTED`(3) | Unsupported command, filter type, slope or BW form |
+| `ST_AUTOEQ_PARSE_OUT_OF_RANGE`(4) | Out-of-range value |
+| `ST_AUTOEQ_PARSE_TOO_MANY_BANDS`(5) | Exceeds `ST_PARAMETRIC_EQ_MAX_BANDS` or `bandCapacity` |
+| `ST_AUTOEQ_PARSE_EMPTY`(6) | No `Preamp` or `Filter` lines at all |
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_options</code> — 렌더 옵션(경로 성분·공간화·리미터 게이트)을 바꾼다</summary>
+<summary><code>st_rt_render_set_options</code> — Changes render options (path components, spatialization, limiter gate)</summary>
 
 ```c
 void st_rt_render_set_options(STRT_Context* context, const STRenderOptions* options);
 ```
 
-**용도** — 오랄라이제이션 단계의 게이트를 한 번에 바꿉니다. 직접음·투과·반사·회절·잔향 성분을 개별로 끄고 켜 청취 비교(A/B)를 하거나, 초기 반사 렌더 경로(exact 객체 / hybrid HOA bed), 공간화·HRTF, 경로 페이드, 출력 리미터를 고릅니다. 전파와 IR 변환은 같은 데이터를 계속 만들고, 이 옵션은 렌더 합성 단계만 거릅니다.
+**Purpose** — Changes the gates of the auralization stage in one call. Toggle the direct, transmission, reflection, diffraction and reverb components individually for listening comparisons (A/B), or choose the early-reflection render path (exact objects / hybrid HOA bed), spatialization/HRTF, path fades and the output limiter. Propagation and IR conversion keep producing the same data; these options filter only the render synthesis stage.
 
-**언제·어떻게** — 렌더 중에도 부를 수 있습니다. 일부만 바꾸려면 `st_rt_render_get_options`로 현재 값을 받아 필드를 고친 뒤 넘깁니다. 스피커 출력이 활성인 동안에는 레이아웃이 early 경로(전체 앰비소닉)·`useSpatialization` = 1·`useHrtf` = 0을 소유하므로 그 값들은 유지되고 나머지 게이트만 적용됩니다. 스피커를 끈 뒤에는 `reserved0`이 다시 0/1 범위로 제한됩니다. 1차 산란 게이트(`st_rt_render_set_diffuse_rain_enabled`)는 이 구조체 밖의 값이라 이 호출이 바꾸지 않습니다. 스레드: `[control]` — IR 정책 훅이 포함된 제어 스레드 호출이라 오디오 콜백에서 부르지 않습니다.
+**When / how** — Can also be called during rendering. To change only some fields, get the current values with `st_rt_render_get_options`, modify the fields and pass them back. While speaker output is active, the layout owns the early path (full ambisonics), `useSpatialization` = 1 and `useHrtf` = 0, so those values are kept and only the remaining gates are applied. After speakers are disabled, `reserved0` is again limited to the 0/1 range. The first-order scattering gate (`st_rt_render_set_diffuse_rain_enabled`) is outside this struct, so this call does not change it. Thread: `[control]` — a control-thread call that includes IR policy hooks; do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `options` | 새 옵션. `NULL`이면 아무것도 하지 않습니다 |
+| `context` | Context handle |
+| `options` | New options. Does nothing if `NULL` |
 
-**구조체** `STRenderOptions` (버전 스탬프 없는 `int` 필드 12개, 0 = 끔 / 0 밖 = 켬)
+**Struct** `STRenderOptions` (12 `int` fields without a version stamp, 0 = off / nonzero = on)
 
-| 필드 | 기본 | 설명 |
+| Field | Default | Description |
 |---|---|---|
-| `renderDirect` | 1 | 직접음 렌더 |
-| `renderTransmission` | 1 | 투과음 렌더 |
-| `renderReflection` | 1 | 반사음 렌더 |
-| `renderDiffraction` | 1 | 회절음 렌더 |
-| `renderLateReverb` | 1 | 후기 잔향(FDN 탱크). 0은 탱크만 끄고 1차 산란은 남깁니다 |
-| `useDoppler` | 1 | 가변 지연 도플러(피치). 실시간에서는 무시되고 늘 1입니다 — 0을 넘겨도 켜지고 get은 1을 돌려줍니다. 움직이는 소스의 방사 이득은 별개 스위치(`st_rt_set_doppler_gain_mode`)입니다 |
-| `usePathFade` | 1 | 경로 페이드. 길이는 `st_rt_render_set_path_fade_time` |
-| `reserved0` | 1 | 초기 반사 렌더 경로(`STEarlySpatialMode`와 같은 번호). `0` = Objects: 모든 초기 경로를 exact 객체로 개별 렌더(경로 수에 비례해 렌더 비용이 늚). `1` = Hybrid: 리스너 전역 예산 안의 exact 객체 + 나머지 초기 반사·1차 산란은 HOA3 bed. 실시간 게임 통합은 1을 권합니다. 범위 밖 값은 `[0, 1]`로 clamp됩니다. 스피커 출력 중에는 레이아웃 전용 경로를 나타내는 다른 값이 읽힐 수 있습니다 |
-| `useSpatialization` | 1 | 공간화(패닝·HRIR) 사용 |
-| `useHrtf` | 0 | HRTF 바이노럴 공간화. `st_rt_render_start`의 `useHrtf` 인자가 렌더 시작 때 이 값을 정합니다 |
-| `useLimiter` | 1 | 출력 리미터 켬. 종류는 `st_rt_render_set_limiter_type` |
-| `outputBandPressure` | 0 | 예약 슬롯. 실시간에서는 항상 0입니다 |
+| `renderDirect` | 1 | Render direct sound |
+| `renderTransmission` | 1 | Render transmitted sound |
+| `renderReflection` | 1 | Render reflected sound |
+| `renderDiffraction` | 1 | Render diffracted sound |
+| `renderLateReverb` | 1 | Late reverb (FDN tank). 0 disables only the tank and keeps first-order scattering |
+| `useDoppler` | 1 | Variable-delay Doppler (pitch). Ignored in real time and always 1 — passing 0 still enables it and get returns 1. Radiation gain of moving sources is a separate switch (`st_rt_set_doppler_gain_mode`) |
+| `usePathFade` | 1 | Path fade. Length is `st_rt_render_set_path_fade_time` |
+| `reserved0` | 1 | Early-reflection render path (same numbering as `STEarlySpatialMode`). `0` = Objects: renders every early path individually as an exact object (render cost grows with the path count). `1` = Hybrid: exact objects within a listener-global budget + the remaining early reflections and first-order scattering in an HOA3 bed. 1 is recommended for real-time game integration. Out-of-range values are clamped to `[0, 1]`. During speaker output, a different value indicating a layout-specific path may be read |
+| `useSpatialization` | 1 | Use spatialization (panning, HRIR) |
+| `useHrtf` | 0 | HRTF binaural spatialization. The `useHrtf` argument of `st_rt_render_start` sets this value when rendering starts |
+| `useLimiter` | 1 | Enable the output limiter. Type is `st_rt_render_set_limiter_type` |
+| `outputBandPressure` | 0 | Reserved slot. Always 0 in real time |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_options</code> — 현재 렌더 옵션을 읽는다</summary>
+<summary><code>st_rt_render_get_options</code> — Reads the current render options</summary>
 
 ```c
 void st_rt_render_get_options(const STRT_Context* context, STRenderOptions* outOptions);
 ```
 
-**용도** — 지금 적용된 `STRenderOptions`를 채웁니다. 일부 필드만 바꿀 때 먼저 읽는 용도입니다.
+**Purpose** — Fills the currently applied `STRenderOptions`. Used to read first when changing only some fields.
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**When / how** — Thread: `[control]` — a control-thread query that reads engine state without locks.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outOptions` | 출력. `NULL`이면 아무것도 하지 않습니다. 필드는 `st_rt_render_set_options` 항목 참고 |
+| `context` | Context handle |
+| `outOptions` | Output. Does nothing if `NULL`. See `st_rt_render_set_options` for the fields |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_diffuse_rain_enabled</code> — 1차 산란(diffuse rain) 렌더를 끄고 켠다</summary>
+<summary><code>st_rt_render_set_diffuse_rain_enabled</code> — Enables or disables first-order scattering (diffuse rain) rendering</summary>
 
 ```c
 void st_rt_render_set_diffuse_rain_enabled(STRT_Context* context, int enabled);
 ```
 
-**용도** — 1차 산란은 직접음·반사음·회절음·잔향(`STRenderOptions`의 `render*`)과 나란한 독립 렌더 성분입니다. 이 게이트로 1차 산란만 끄고 켜 청취 비교를 합니다. 끄면 hybrid 경로의 rain bed 셀과 Objects 경로의 rain RIR 셀만 빠지고 FDN 꼬리는 그대로입니다. 반대로 `renderLateReverb` = 0은 탱크만 끄고 1차 산란은 남깁니다.
+**Purpose** — First-order scattering is an independent render component alongside direct, reflected, diffracted sound and reverb (`render*` in `STRenderOptions`). Use this gate to toggle only first-order scattering for listening comparisons. Disabling removes only the rain bed cells of the hybrid path and the rain RIR cells of the Objects path; the FDN tail is unchanged. Conversely, `renderLateReverb` = 0 disables only the tank and keeps first-order scattering.
 
-**언제·어떻게** — 렌더 중에도 부를 수 있으며 IR 재변환 없이 렌더 준비만 다시 합니다. `STRenderOptions` 밖의 값이라 `st_rt_render_set_options`와 스피커 레이아웃 전환이 이 값을 바꾸지 않습니다. 사운드 트레이싱을 끄면(`st_rt_render_set_sound_tracing_enabled(…, 0)`) 1차 산란도 함께 꺼집니다. 기본 1. 스레드: `[control]` — 렌더 준비를 다시 발행하는 제어 스레드 호출입니다. 지원 여부는 `ST_CAP1_RENDER_DIFFUSE_RAIN_GATE`(능력 워드 1)로 확인합니다.
+**When / how** — Can also be called during rendering; only render preparation is redone, without IR reconversion. It is outside `STRenderOptions`, so `st_rt_render_set_options` and speaker layout switches do not change it. Disabling sound tracing (`st_rt_render_set_sound_tracing_enabled(…, 0)`) also disables first-order scattering. Default 1. Thread: `[control]` — a control-thread call that republishes render preparation. Check support with `ST_CAP1_RENDER_DIFFUSE_RAIN_GATE` (capability word 1).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | 0 = 1차 산란 끔, 0 밖 = 켬(기본) |
+| `context` | Context handle |
+| `enabled` | 0 = first-order scattering off, nonzero = on (default) |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_is_diffuse_rain_enabled</code> — 1차 산란 렌더 게이트 상태를 읽는다</summary>
+<summary><code>st_rt_render_is_diffuse_rain_enabled</code> — Reads the first-order scattering render gate state</summary>
 
 ```c
 int st_rt_render_is_diffuse_rain_enabled(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_render_set_diffuse_rain_enabled`로 건 값을 돌려줍니다.
+**Purpose** — Returns the value set with `st_rt_render_set_diffuse_rain_enabled`.
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**When / how** — Thread: `[control]` — a control-thread query that reads engine state without locks.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `1` = 켜짐(기본) / `0` = 꺼짐. 컨텍스트가 없으면 `-1`.
+**Returns** — `1` = enabled (default) / `0` = disabled. `-1` if there is no context.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_sound_tracing_enabled</code> — 사운드 트레이싱 효과를 끄고 켠다(기준선 비교)</summary>
+<summary><code>st_rt_render_set_sound_tracing_enabled</code> — Enables or disables the sound tracing effect (baseline comparison)</summary>
 
 ```c
 void st_rt_render_set_sound_tracing_enabled(STRT_Context* context, int enabled);
 ```
 
-**용도** — 사운드 트레이싱 효과를 끈 "거리 감쇠 + 패닝" 기준선과 비교하기 위한 토글입니다. `enabled` = 0은 별도의 바이패스 렌더러가 아닙니다 — 같은 추적 파이프라인을 그대로 돌리되 반사·회절·잔향·1차 산란 경로와 공기흡수·전파지연·직접음 차폐를 꺼서 거리 감쇠와 공간화만 남깁니다. 공간화 방식(`st_rt_render_set_spatializer`)은 그대로입니다.
+**Purpose** — A toggle for comparing against a "distance attenuation + panning" baseline with the sound tracing effect off. `enabled` = 0 is not a separate bypass renderer — the same tracing pipeline keeps running, but the reflection, diffraction, reverb and first-order scattering paths and air absorption, propagation delay and direct-sound occlusion are disabled, leaving only distance attenuation and spatialization. The spatialization method (`st_rt_render_set_spatializer`) is unchanged.
 
-**언제·어떻게** — 렌더 중에도 부를 수 있습니다. 끈 상태에서도 씬 setter·전파 워커·IR 변환·발행은 계속 돕니다 — 스케줄러나 데이터 펌프를 멈추는 기능이 아니며, CPU를 아끼려면 `st_rt_idle`을 씁니다. 그래서 끈 상태에서도 첫 IR이 설치된 뒤부터 소리가 납니다. 기본은 켜짐입니다. 스레드: `[control]` — 씬 락을 여러 번 잡으므로 오디오 콜백에서 부르지 않습니다.
+**When / how** — Can also be called during rendering. Even when disabled, scene setters, propagation workers, IR conversion and publishing keep running — it does not stop the scheduler or data pump; to save CPU use `st_rt_idle`. Therefore, even when disabled, sound plays only after the first IR is installed. Enabled by default. Thread: `[control]` — takes the scene lock several times; do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | 0 = 기준선(거리 감쇠 + 공간화만), 0 밖 = 사운드 트레이싱 켬(기본) |
+| `context` | Context handle |
+| `enabled` | 0 = baseline (distance attenuation + spatialization only), nonzero = sound tracing on (default) |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_is_sound_tracing_enabled</code> — 사운드 트레이싱 효과가 켜져 있는지 읽는다</summary>
+<summary><code>st_rt_render_is_sound_tracing_enabled</code> — Reads whether the sound tracing effect is enabled</summary>
 
 ```c
 int st_rt_render_is_sound_tracing_enabled(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_render_set_sound_tracing_enabled`로 건 값을 돌려줍니다.
+**Purpose** — Returns the value set with `st_rt_render_set_sound_tracing_enabled`.
 
-**언제·어떻게** — 스레드: `[any]` — atomic 읽기라 어느 스레드에서 불러도 블록하지 않습니다.
+**When / how** — Thread: `[any]` — an atomic read, so it does not block from any thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `1` = 켜짐(기본) / `0` = 꺼짐 또는 컨텍스트 `NULL`.
+**Returns** — `1` = enabled (default) / `0` = disabled or context `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_path_fade_time</code> — 경로 페이드 시간을 정한다</summary>
+<summary><code>st_rt_render_set_path_fade_time</code> — Sets the path fade time</summary>
 
 ```c
 void st_rt_render_set_path_fade_time(STRT_Context* context, float seconds);
 ```
 
-**용도** — IR이 갱신되면서 경로가 바뀔 때 클릭 없이 넘어가도록 거는 페이드의 길이(초)를 정합니다. 소스·리스너가 움직이는 장면에서 전환의 부드러움과 반응성 사이를 조정합니다. `STRenderOptions.usePathFade`가 켜져 있을 때(기본) 쓰입니다.
+**Purpose** — Sets the length (seconds) of the fade applied so that path changes during IR updates transition without clicks. Adjusts the trade-off between transition smoothness and responsiveness in scenes where sources and the listener move. Used while `STRenderOptions.usePathFade` is enabled (default).
 
-**언제·어떻게** — 렌더 중에도 부를 수 있습니다. 시간 인자는 씬 단위와 무관한 초입니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**When / how** — Can also be called during rendering. The time argument is in seconds, independent of scene units. Thread: `[control]` — do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `seconds` | 페이드 길이 [s], 양의 유한 값. 기본 0.05 s. 0 이하·비유한 값은 무시됩니다 |
+| `context` | Context handle |
+| `seconds` | Fade length [s], positive finite value. Default 0.05 s. Values of 0 or less and non-finite values are ignored |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_path_fade_time</code> — 경로 페이드 시간을 읽는다</summary>
+<summary><code>st_rt_render_get_path_fade_time</code> — Reads the path fade time</summary>
 
 ```c
 float st_rt_render_get_path_fade_time(const STRT_Context* context);
 ```
 
-**용도** — 현재 경로 페이드 시간(초)을 돌려줍니다.
+**Purpose** — Returns the current path fade time (seconds).
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**When / how** — Thread: `[control]` — a control-thread query that reads engine state without locks.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 페이드 시간 [s](기본 `0.05`). 컨텍스트가 `NULL`이면 `0`.
+**Returns** — Fade time [s] (default `0.05`). `0` if the context is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_max_delay_seconds</code> — 렌더 지연 링의 최대 지연을 정한다</summary>
+<summary><code>st_rt_render_set_max_delay_seconds</code> — Sets the maximum delay of the render delay ring</summary>
 
 ```c
 int st_rt_render_set_max_delay_seconds(STRT_Context* context, float seconds);
 ```
 
-**용도** — 렌더러가 표현할 수 있는 최대 전파 지연(초)을 정합니다. 지연이 이 한계를 넘는 exact 경로는 렌더에서 빠지고 후기 잔향은 FDN이 덮습니다. 큰 실내·야외처럼 늦게 도착하는 경로가 필요하면 늘리고, 메모리를 줄이려면 줄입니다. 지연 링 메모리는 렌더하는 소스마다 9밴드 × 링 길이로 늘어납니다. 음원 메모리 예산(`STMemoryBudget`)에서는 이 값이 소스별 지연 링의 천장입니다.
+**Purpose** — Sets the maximum propagation delay (seconds) the renderer can represent. Exact paths whose delay exceeds this limit are dropped from rendering, and the late reverb is covered by the FDN. Increase it when late-arriving paths are needed, as in large interiors or outdoors; decrease it to reduce memory. Delay ring memory grows by 9 bands × ring length for every rendered source. In the source memory budget (`STMemoryBudget`), this value is the ceiling of the per-source delay ring.
 
-**언제·어떻게** — 지연 링을 재할당하므로 소스를 많이 만들기 전, 렌더를 시작하기 전에 정하는 것이 좋습니다. 생성 시점 값은 `STRT_CreateOptions.maxDelaySeconds`(0 = 기본 2.0 s)로도 줄 수 있습니다. 스레드: `[control, blocking]` — 지연 링 재할당이 있는 긴 구간이라 게임 루프·오디오 스레드에서 부르지 않습니다. 지원 여부는 `ST_CAP_RUNTIME_DELAY_RESIZE`(능력 워드 0)로 확인합니다.
+**When / how** — It reallocates the delay rings, so it is best set before creating many sources and before starting rendering. The value at creation can also be given with `STRT_CreateOptions.maxDelaySeconds` (0 = default 2.0 s). Thread: `[control, blocking]` — a long section with delay ring reallocation; do not call from the game loop or the audio thread. Check support with `ST_CAP_RUNTIME_DELAY_RESIZE` (capability word 0).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `seconds` | 최대 지연 [s], 약 `0.012`(엔진 블록 512 + 보간 여유 8 샘플) ~ `60`. 기본 2.0. 씬 단위와 무관한 초 |
+| `context` | Context handle |
+| `seconds` | Maximum delay [s], about `0.012` (engine block 512 + 8 samples of interpolation margin) to `60`. Default 2.0. Seconds, independent of scene units |
 
-**반환** — `1` = 적용(같은 값이면 그대로 1) / `0` = 거절(범위 밖·비유한 값, 컨텍스트 `NULL`).
+**Returns** — `1` = applied (also 1 for the same value) / `0` = rejected (out-of-range or non-finite value, context `NULL`).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_max_delay_seconds</code> — 렌더 지연 링의 최대 지연을 읽는다</summary>
+<summary><code>st_rt_render_get_max_delay_seconds</code> — Reads the maximum delay of the render delay ring</summary>
 
 ```c
 float st_rt_render_get_max_delay_seconds(const STRT_Context* context);
 ```
 
-**용도** — 현재 최대 지연(초)을 돌려줍니다.
+**Purpose** — Returns the current maximum delay (seconds).
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**When / how** — Thread: `[control]` — a control-thread query that reads engine state without locks.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 최대 지연 [s](기본 `2.0`). 컨텍스트가 `NULL`이면 `0`.
+**Returns** — Maximum delay [s] (default `2.0`). `0` if the context is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_ring_buffer_samples</code> — 지연 링 길이(샘플)를 읽는다</summary>
+<summary><code>st_rt_render_get_ring_buffer_samples</code> — Reads the delay ring length (samples)</summary>
 
 ```c
 int st_rt_render_get_ring_buffer_samples(const STRT_Context* context);
 ```
 
-**용도** — 현재 최대 지연에 대응하는 렌더 지연 링의 길이를 엔진 샘플(44.1 kHz) 단위로 돌려줍니다. 최대 지연 × 44100에 렌더 블록(512)과 보간 여유를 더한 값이라 메모리 추정에 씁니다.
+**Purpose** — Returns the length of the render delay ring corresponding to the current maximum delay, in engine samples (44.1 kHz). It is maximum delay × 44100 plus the render block (512) and interpolation margin, so use it for memory estimates.
 
-**언제·어떻게** — `st_rt_render_set_max_delay_seconds` 뒤에 다시 읽습니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**When / how** — Re-read it after `st_rt_render_set_max_delay_seconds`. Thread: `[control]` — a control-thread query that reads engine state without locks.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 링 길이(샘플). 컨텍스트가 `NULL`이면 `0`.
+**Returns** — Ring length (samples). `0` if the context is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_start</code> — 오디오 렌더를 시작한다(출력 모드별)</summary>
+<summary><code>st_rt_render_start</code> — Starts audio rendering (per output mode)</summary>
 
 ```c
 int st_rt_render_start(STRT_Context* context, int useHrtf);
 ```
 
-**용도** — 렌더 출력을 시작하고 출력 형태(헤드폰 바이노럴 / 스테레오 패닝 / 스피커 레이아웃)를 정합니다. 무엇을 띄우는지는 생성 옵션 `STRT_CreateOptions.renderOutputMode`에 따라 다릅니다.
+**Purpose** — Starts render output and sets the output form (headphone binaural / stereo panning / speaker layout). What it brings up depends on the creation option `STRT_CreateOptions.renderOutputMode`.
 
-| `renderOutputMode` | `st_rt_render_start`가 하는 일 | 출력을 가져가는 쪽 |
+| `renderOutputMode` | What `st_rt_render_start` does | Who takes the output |
 |---|---|---|
-| `ST_RT_RENDER_OUTPUT_DEVICE`(0, 기본) | OS 오디오 장치를 열고 엔진 렌더 스레드를 띄웁니다 | 엔진이 장치까지 직접 냅니다 |
-| `ST_RT_RENDER_OUTPUT_HOST_PULL`(1) | **스레드도 장치도 만들지 않고** 바이노럴/스피커 선택과 "렌더 허용" 플래그만 세웁니다. pull 버퍼와 리샘플러를 여기서 잡습니다 | 호스트가 자기 오디오 스레드에서 `st_rt_render_process`를 부릅니다 |
-| `ST_RT_RENDER_OUTPUT_HOST_PULL_BUFFERED`(2) | 엔진 렌더 스레드를 띄워 출력 링(8블록 용량·3블록 목표)을 채웁니다. 장치는 없습니다 | 호스트가 `st_rt_render_process`로 링에서 복사만 합니다 |
+| `ST_RT_RENDER_OUTPUT_DEVICE`(0, default) | Opens the OS audio device and starts the engine render thread | The engine outputs directly to the device |
+| `ST_RT_RENDER_OUTPUT_HOST_PULL`(1) | **Creates no thread and no device**; only sets the binaural/speaker choice and the "render enabled" flag. Allocates the pull buffer and resampler here | The host calls `st_rt_render_process` on its own audio thread |
+| `ST_RT_RENDER_OUTPUT_HOST_PULL_BUFFERED`(2) | Starts the engine render thread to fill the output ring (8-block capacity, 3-block target). No device | The host only copies from the ring with `st_rt_render_process` |
 
-**언제·어떻게** — 씬·소스·리스너를 준비한 뒤 부릅니다. HOST_PULL 계열에서도 **반드시 불러야 합니다** — 부르기 전 `st_rt_render_process`는 0 프레임을 돌려줍니다. HRIR 공간화를 쓸 거면 먼저 `st_rt_render_set_spatializer`로 데이터셋을 고르고 `useHrtf` = 1로 시작합니다. 스피커 레이아웃(`st_rt_render_set_speaker_layout[_custom]`)을 걸어 두고 `useHrtf` = 0으로 시작하면 그 레이아웃의 N채널로 출력하며, 스피커 출력의 활성 판정(`st_rt_render_get_speaker_channels`)은 이 호출 이후에 섭니다. 엔진이 쉬는 중(`st_rt_idle`)에 시작하면 IDLE 상태로 시작합니다. 스레드: `[control, blocking]` — DEVICE 모드는 장치·스레드 기동이 있는 긴 구간이라 게임 루프·오디오 스레드에서 부르지 않습니다. HOST_PULL 지원은 `ST_CAP_HOST_PULL_RENDER`, BUFFERED는 `ST_CAP_HOST_PULL_BUFFERED`(능력 워드 0)로 확인합니다.
+**When / how** — Call it after preparing the scene, sources and listener. It **must be called** in the HOST_PULL family too — before it is called, `st_rt_render_process` returns 0 frames. To use HRIR spatialization, first choose the dataset with `st_rt_render_set_spatializer` and start with `useHrtf` = 1. If a speaker layout (`st_rt_render_set_speaker_layout[_custom]`) is set and you start with `useHrtf` = 0, it outputs the N channels of that layout, and speaker output becomes active (`st_rt_render_get_speaker_channels`) only after this call. Starting while the engine is idle (`st_rt_idle`) starts in the IDLE state. Thread: `[control, blocking]` — DEVICE mode is a long section with device and thread startup; do not call from the game loop or the audio thread. Check HOST_PULL support with `ST_CAP_HOST_PULL_RENDER` and BUFFERED with `ST_CAP_HOST_PULL_BUFFERED` (capability word 0).
 
-스레드 수(PIPELINED 스케줄러, N = `max(3, 계산 스레드 예산)`): DEVICE = 계산 워커 N−1 + 렌더 1 + 장치 1, HOST_PULL = 계산 워커 N−1(렌더·장치 0), HOST_PULL_BUFFERED = 계산 워커 N−1 + 렌더 1(장치 0). 파일 입력이 있으면 디코더 스레드 1개가 더해집니다. 실측은 `st_rt_get_thread_inventory`로 봅니다.
+Thread count (PIPELINED scheduler, N = `max(3, compute thread budget)`): DEVICE = N−1 compute workers + 1 render + 1 device, HOST_PULL = N−1 compute workers (0 render and device), HOST_PULL_BUFFERED = N−1 compute workers + 1 render (0 device). With file input, one decoder thread is added. Measure with `st_rt_get_thread_inventory`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `useHrtf` | 1 = HRTF 바이노럴 2채널(`st_rt_render_set_spatializer`로 고른 HRIR). 0 = 스테레오 패닝 2채널, 또는 스피커 레이아웃을 걸었으면 그 N채널. `STRenderOptions.useHrtf`도 이 값으로 정해집니다 |
+| `context` | Context handle |
+| `useHrtf` | 1 = HRTF binaural 2 channels (HRIR chosen with `st_rt_render_set_spatializer`). 0 = stereo panning 2 channels, or the N channels of the speaker layout if one is set. `STRenderOptions.useHrtf` is also set from this value |
 
-**반환** — `1` = 시작됨(DEVICE 모드에서 이미 돌고 있으면 그대로 1) / `0` = 실패(컨텍스트 `NULL`, 장치 기동 실패 등).
+**Returns** — `1` = started (also 1 if already running in DEVICE mode) / `0` = failed (context `NULL`, device startup failure, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_stop</code> — 오디오 렌더를 멈춘다</summary>
+<summary><code>st_rt_render_stop</code> — Stops audio rendering</summary>
 
 ```c
 void st_rt_render_stop(STRT_Context* context);
 ```
 
-**용도** — `st_rt_render_start`로 시작한 렌더를 멈춥니다.
+**Purpose** — Stops rendering started with `st_rt_render_start`.
 
-**언제·어떻게** — 모드별 동작:
+**When / how** — Behavior per mode:
 
-- DEVICE: 장치를 멈추고 렌더 스레드를 join합니다.
-- HOST_PULL: "렌더 허용" 플래그를 내리고 이월 FIFO를 비웁니다(다음 start가 남은 꼬리를 내보내지 않게). 이후 `st_rt_render_process`는 0을 돌려줍니다.
-- HOST_PULL_BUFFERED: 렌더 스레드를 멈추고 출력 링을 버립니다. 링에 있던 몫은 스피커 세트의 `contentFrame`에 이미 세었지만 들리지 않으므로, 세트 위치를 맞추려면 버리기 전에 `contentFrame − latencyFrames`(들린 위치)를 읽고 `st_rt_speaker_set_relocate`로 다시 잡습니다.
+- DEVICE: stops the device and joins the render thread.
+- HOST_PULL: clears the "render enabled" flag and empties the carry-over FIFO (so the next start does not emit a leftover tail). Afterwards `st_rt_render_process` returns 0.
+- HOST_PULL_BUFFERED: stops the render thread and discards the output ring. What was in the ring is already counted in the speaker set's `contentFrame` but was never heard, so to keep the set position aligned, read `contentFrame − latencyFrames` (the heard position) before discarding and re-seat it with `st_rt_speaker_set_relocate`.
 
-`st_rt_render_process`와 동시에 불러도 안전합니다 — 엔진이 렌더 허용을 내리고 진행 중인 `st_rt_render_process`가 빠져나갈 때까지 기다린 뒤 멈춥니다. 오래 쉬게 할 때 장치까지 놓으려면 `st_rt_get_idle_state`가 IDLE이 된 뒤 이 함수를 부릅니다. 스레드: `[control, blocking]` — 장치 정지·스레드 join이 있어 게임 루프·오디오 스레드에서 부르지 않습니다.
+Safe to call concurrently with `st_rt_render_process` — the engine clears render enable, waits for any in-progress `st_rt_render_process` to exit, then stops. To also release the device during a long idle period, call this function after `st_rt_get_idle_state` becomes IDLE. Thread: `[control, blocking]` — involves device stop and thread join; do not call from the game loop or the audio thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_is_running</code> — 렌더가 돌고 있는지 읽는다</summary>
+<summary><code>st_rt_render_is_running</code> — Reads whether rendering is running</summary>
 
 ```c
 int st_rt_render_is_running(const STRT_Context* context);
 ```
 
-**용도** — 렌더 상태를 돌려줍니다. 출력 모드와 무관하게 일관된 뜻입니다 — DEVICE는 장치가 도는지, HOST_PULL은 장치가 아니라 "렌더 허용" 플래그(`st_rt_render_start` 뒤·`st_rt_render_stop` 전)를 봅니다.
+**Purpose** — Returns the render state. The meaning is consistent regardless of output mode — DEVICE checks whether the device is running; HOST_PULL checks not a device but the "render enabled" flag (after `st_rt_render_start`, before `st_rt_render_stop`).
 
-**언제·어떻게** — 스레드: `[control]` — 제어 스레드용 질의입니다.
+**When / how** — Thread: `[control]` — a control-thread query.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `1` = 렌더 중 / `0` = 멈춤 또는 컨텍스트 `NULL`.
+**Returns** — `1` = rendering / `0` = stopped or context `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_process</code> — 호스트 오디오 스레드에서 출력 블록을 가져간다(pull 렌더)</summary>
+<summary><code>st_rt_render_process</code> — Pulls an output block on the host audio thread (pull rendering)</summary>
 
 ```c
 int st_rt_render_process(STRT_Context* context, float* interleavedOut, int frames);
 ```
 
-**용도** — HOST_PULL 계열 출력 모드의 진입점입니다. 엔진 출력이 호스트 오디오 그래프를 지나야 하는 통합 — 게임 엔진 서브믹스 이펙트, 오디오 캡처·녹화 파이프라인 등 — 에서 호스트가 자기 오디오 스레드에서 블록을 가져갑니다. HOST_PULL은 이 호출 스레드에서 렌더하고, HOST_PULL_BUFFERED는 엔진 렌더 스레드가 채운 링에서 복사만 합니다(호스트 콜백 비용 ≈ memcpy, 지터는 링이 흡수). 세 출력 모드 모두 같은 블록 함수를 쓰므로 소리는 같습니다.
+**Purpose** — The entry point of the HOST_PULL family output modes. In integrations where the engine output must pass through the host audio graph — game engine submix effects, audio capture and recording pipelines, etc. — the host pulls blocks on its own audio thread. HOST_PULL renders on this calling thread; HOST_PULL_BUFFERED only copies from the ring filled by the engine render thread (host callback cost ≈ memcpy, the ring absorbs jitter). All three output modes use the same block function, so the sound is the same.
 
-**언제·어떻게** — `st_rt_render_start` 뒤, 호스트 오디오 콜백마다 부릅니다. 스레드: `[audio]` — 호스트 오디오 스레드(MMCSS/HIGHEST)에서 불러도 안전합니다. 락·할당·시스템콜을 새로 만들지 않고(버퍼와 리샘플러는 `st_rt_render_start`에서 잡고, IR 채택은 포인터 교체), 호출 스레드의 우선순위·affinity는 건드리지 않습니다. FTZ/DAZ만 이 호출 구간 동안 켰다가 원래대로 되돌립니다.
+**When / how** — Call it in every host audio callback after `st_rt_render_start`. Thread: `[audio]` — safe on the host audio thread (MMCSS/HIGHEST). It introduces no new locks, allocations or system calls (buffers and the resampler are allocated in `st_rt_render_start`, and IR adoption is a pointer swap), and does not touch the calling thread's priority or affinity. Only FTZ/DAZ are enabled for the duration of this call and then restored.
 
-- **채널 수** — 바이노럴·스테레오면 2, 스피커 레이아웃이 활성이면 `st_rt_render_get_speaker_channels()` 값입니다. 그 함수가 0을 돌려주면 출력은 **2채널**입니다 — 0을 채널 수로 쓰지 않습니다.
-- **레이아웃 전환** — 렌더 중에 `st_rt_render_set_speaker_layout[_custom]` / `st_rt_render_disable_speaker_output`을 부르면 pull 출력이 재구성됩니다(채널 수·엔진 블록·이월 FIFO·출력 리샘플러). 전환은 이 함수와 동시에 불러도 안전합니다 — 엔진이 렌더 허용을 내리고 진행 중인 호출이 빠져나갈 때까지 기다린 뒤 바꿉니다(`st_rt_render_start` / `stop`도 같음). 전환 창에 걸린 호출은 **0 프레임**을 돌려주므로 그 블록은 호스트가 무음으로 처리합니다. 전환 뒤에는 `st_rt_render_get_speaker_channels()`를 다시 읽어 그 폭으로 버퍼를 잡습니다.
-- **언더런** — 소스 스트림이 요청보다 적게 채워졌으면 그 소스는 무음으로 채우고 `STStreamStatus.underrunFrames`에 누적합니다. **절대 stall하지 않습니다.** BUFFERED에서 블록당 렌더 비용이 지속적으로 블록 시간(11.61 ms)을 넘으면 링도 막지 못해, 그 언더런은 엔진 링 카운터에 잡히고 무음으로 채워집니다.
-- **임의 `frames`** — 내부는 512프레임 엔진 블록으로 렌더하고 남는 몫은 이월 FIFO에 둡니다. 호스트 블록이 512의 배수가 아니어도(예: 48 kHz에서 1024 = 941.6 엔진 프레임) stall하지 않지만, FIFO에 남은 몫은 그만큼 지연입니다. 지연 상한은 1 엔진 블록 + 리샘플러 지연이고, 호스트 블록이 512의 배수면 이월 잔량은 0으로 고정됩니다(`st_rt_render_get_latency_frames` 참고).
-- **샘플레이트** — `frames`는 `STRT_CreateOptions.hostSampleRate`(0이면 엔진 레이트 44100) 단위입니다. 0이 아니면 엔진이 출력 쪽 변환을 합니다(BUFFERED는 렌더 스레드에서 변환).
+- **Channel count** — 2 for binaural/stereo, and the value of `st_rt_render_get_speaker_channels()` when a speaker layout is active. If that function returns 0, the output is **2 channels** — do not use 0 as the channel count.
+- **Layout switches** — Calling `st_rt_render_set_speaker_layout[_custom]` / `st_rt_render_disable_speaker_output` during rendering reconfigures the pull output (channel count, engine block, carry-over FIFO, output resampler). Switching is safe to call concurrently with this function — the engine clears render enable, waits for the in-progress call to exit, then switches (same for `st_rt_render_start` / `stop`). A call that hits the switching window returns **0 frames**, so the host treats that block as silence. After a switch, re-read `st_rt_render_get_speaker_channels()` and size buffers to that width.
+- **Underrun** — If a source stream was filled with less than requested, that source is filled with silence and the shortfall accumulates in `STStreamStatus.underrunFrames`. **It never stalls.** In BUFFERED, if the per-block render cost persistently exceeds the block time (11.61 ms), the ring cannot hide it either; that underrun is counted by the engine ring counter and filled with silence.
+- **Arbitrary `frames`** — Internally it renders in 512-frame engine blocks and keeps the remainder in the carry-over FIFO. Even if the host block is not a multiple of 512 (e.g. 1024 at 48 kHz = 941.6 engine frames) it does not stall, but what remains in the FIFO is latency. The latency cap is 1 engine block + resampler latency, and when the host block is a multiple of 512 the carry-over remainder is fixed at 0 (see `st_rt_render_get_latency_frames`).
+- **Sample rate** — `frames` is in units of `STRT_CreateOptions.hostSampleRate` (the engine rate 44100 if 0). When nonzero, the engine converts on the output side (BUFFERED converts on the render thread).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `interleavedOut` | 출력 버퍼. interleaved float, `frames × 채널 수`개를 담아야 합니다 |
-| `frames` | 요청 프레임 수(호스트 레이트), 1 이상 |
+| `context` | Context handle |
+| `interleavedOut` | Output buffer. Interleaved float; must hold `frames × channel count` values |
+| `frames` | Requested frame count (host rate), 1 or greater |
 
-**반환** — 실제로 쓴 프레임 수(정상은 `frames`). 부분 반환(`0 < 반환 < frames`)이면 나머지는 무음으로 채워져 있습니다. `0`인 경우와 `st_rt_get_last_status`:
+**Returns** — Number of frames actually written (normally `frames`). On a partial return (`0 < returned < frames`) the rest is filled with silence. Cases of `0` and `st_rt_get_last_status`:
 
-| 상황 | 상태 |
+| Situation | Status |
 |---|---|
-| 컨텍스트·버퍼 `NULL`, `frames` ≤ 0 | `ST_STATUS_INVALID_ARGUMENT` |
-| DEVICE 모드 컨텍스트 | `ST_STATUS_UNAVAILABLE` |
-| `st_rt_render_start` 전 | `ST_STATUS_UNAVAILABLE` |
-| 레이아웃 전환 창 | 0 프레임(무음 처리) |
+| Context or buffer `NULL`, `frames` ≤ 0 | `ST_STATUS_INVALID_ARGUMENT` |
+| DEVICE mode context | `ST_STATUS_UNAVAILABLE` |
+| Before `st_rt_render_start` | `ST_STATUS_UNAVAILABLE` |
+| Layout switching window | 0 frames (treat as silence) |
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_latency_frames</code> — pull 출력단이 들고 있는 지연을 읽는다</summary>
+<summary><code>st_rt_render_get_latency_frames</code> — Reads the latency held by the pull output stage</summary>
 
 ```c
 int st_rt_render_get_latency_frames(const STRT_Context* context);
 ```
 
-**용도** — pull 경로의 **출력단**이 지금 들고 있는 지연을 호스트 프레임으로 돌려줍니다. A/V 싱크 보정에 씁니다.
+**Purpose** — Returns, in host frames, the latency currently held by the **output stage** of the pull path. Use it for A/V sync compensation.
 
-지연 = 이월 FIFO 잔량 + 출력 리샘플러 지연 + 입력 리샘플러 고정 지연
+Latency = carry-over FIFO remainder + output resampler latency + fixed input resampler latency
 
-**언제·어떻게** — 고정값이 아니라 **호출 시점의 스냅샷**입니다. 요청 `frames`가 512의 배수가 아니면 호출마다 이월 잔량만큼(0..511 엔진 프레임 상당) 흔들리고, 상한은 1 엔진 블록 + 리샘플러 지연입니다. A/V 싱크에 쓸 때는 블록 처리 **직전**에 한 번 읽습니다. `hostSampleRate` = 0(무변환)에서도 이월 FIFO가 있으므로 0이 아닐 수 있습니다. BUFFERED 모드에서는 링에 쌓인 프레임(호스트 레이트) + 변환기 지연이며 상한은 약 3 엔진 블록입니다. 스레드: `[any]` — 어느 스레드에서 불러도 블록하지 않습니다.
+**When / how** — Not a fixed value but a **snapshot at call time**. If the requested `frames` is not a multiple of 512, it fluctuates per call by the carry-over remainder (equivalent to 0..511 engine frames), capped at 1 engine block + resampler latency. For A/V sync, read it once **just before** processing a block. Even with `hostSampleRate` = 0 (no conversion) the carry-over FIFO exists, so it may be nonzero. In BUFFERED mode it is the frames queued in the ring (host rate) + converter latency, capped at about 3 engine blocks. Thread: `[any]` — does not block from any thread.
 
-이 값은 출력단의 몫만 셉니다. "지금 민 입력 프레임이 몇 프레임 뒤에 나오나"의 전체 답은 이 값 + `STStreamStatus.queuedFrames` + 엔진 DSP의 고정 지연(리미터 지연 등, 설정이 같으면 상수)입니다.
+This value counts only the output stage's share. The complete answer to "how many frames later will the input frame I just pushed come out" is this value + `STStreamStatus.queuedFrames` + the fixed latency of the engine DSP (limiter latency, etc., constant for the same settings).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 지연(호스트 프레임). DEVICE 모드에서는 언제나 `0`.
+**Returns** — Latency (host frames). Always `0` in DEVICE mode.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_process_stats</code> — 마지막 렌더 블록의 단계별 시간을 읽는다</summary>
+<summary><code>st_rt_render_get_process_stats</code> — Reads the per-stage timings of the last render block</summary>
 
 ```c
 int st_rt_render_get_process_stats(const STRT_Context* context, STProcessStats* outStats);
 ```
 
-**용도** — 마지막으로 끝난 512프레임 렌더 블록 하나의 단계별 순수 연산 시간(µs)과 탭 수를 돌려줍니다. "렌더가 왜 무거운가"를 호스트가 엔진 내부를 보지 않고 가를 때 씁니다. 세 출력 모드 모두 같은 블록 함수라 값의 뜻이 같습니다(HOST_PULL은 호스트 콜백 안에서 잰 값).
+**Purpose** — Returns the per-stage pure compute time (µs) and tap counts of the last completed 512-frame render block. Use it to determine "why rendering is heavy" from the host without looking into the engine. All three output modes use the same block function, so the values mean the same thing (HOST_PULL values are measured inside the host callback).
 
-**언제·어떻게** — 렌더 중 언제든, 어느 스레드에서든 부를 수 있습니다. 스레드: `[any]` — seqlock 스냅샷(필드별 atomic, 최대 8회 재시도)이라 블록하지 않습니다. 지원 여부는 `ST_CAP_PROCESS_STATS`(능력 워드 0)로 확인합니다.
+**When / how** — Can be called at any time during rendering, from any thread. Thread: `[any]` — a seqlock snapshot (per-field atomics, up to 8 retries), so it does not block. Check support with `ST_CAP_PROCESS_STATS` (capability word 0).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outStats` | 출력. 호출자가 `structSize` / `apiVersion`을 채웁니다 |
+| `context` | Context handle |
+| `outStats` | Output. The caller fills `structSize` / `apiVersion` |
 
-**구조체** `STProcessStats`
+**Struct** `STProcessStats`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STProcessStats)` / `ST_ABI_VERSION` |
-| `blockSequence` | 블록마다 +1. 0 = 아직 블록이 돈 적 없음(무음 프리롤 동안도 0) |
-| `sourceInputUs` | 소스 입력 읽기 + 9밴드 크로스오버 + 밴드 지연 링 쓰기(소스 합) |
-| `exactTapsUs` | exact 경로 탭 렌더(HRIR 버스 누적 또는 스테레오 패닝, 소스 합) |
-| `bedUs` | early bed — 소스별 send 버스 합 + 병합 bed 컨볼루션 |
-| `sendUs` | 잔향 send — 소스별 밴드 버스 합 + 리스너 전역 send 탭 렌더 |
-| `lateUs` | FDN16 후기 잔향 |
-| `outputUs` | 나머지 — HRTF 스펙트럼 합성·HOA 디코드·EQ·리미터·모드 페이드 |
-| `totalUs` | 블록 전체(`STTiming.auralProcessMs`와 같은 구간). 여섯 단계의 합은 이 값과 같거나 약간 작습니다 |
-| `activeSources` | 입력이 붙은 소스 수 |
-| `exactTaps` | 그 블록이 실제로 렌더한 exact 탭 수(소스 합) |
-| `sendTaps` | 리스너 전역 send 탭 수 — 소스 수와 무관하고 시간 bin 수가 상한입니다 |
-| `reserved[8]` | 예약 |
+| `blockSequence` | +1 per block. 0 = no block has run yet (also 0 during the silent preroll) |
+| `sourceInputUs` | Source input read + 9-band crossover + band delay ring write (summed over sources) |
+| `exactTapsUs` | Exact path tap rendering (HRIR bus accumulation or stereo panning, summed over sources) |
+| `bedUs` | Early bed — per-source send bus summing + merged bed convolution |
+| `sendUs` | Reverb send — per-source band bus summing + listener-global send tap rendering |
+| `lateUs` | FDN16 late reverb |
+| `outputUs` | The rest — HRTF spectral synthesis, HOA decode, EQ, limiter, mode fade |
+| `totalUs` | The whole block (same span as `STTiming.auralProcessMs`). The sum of the six stages equals or is slightly less than this value |
+| `activeSources` | Number of sources with attached input |
+| `exactTaps` | Number of exact taps actually rendered in that block (summed over sources) |
+| `sendTaps` | Number of listener-global send taps — independent of the source count, capped by the number of time bins |
+| `reserved[8]` | Reserved |
 
-**반환** — `1` = 성공 / `0` = 실패. `NULL`·스탬프 불일치는 `ST_STATUS_VERSION_MISMATCH`, 엔진 미초기화는 `ST_STATUS_INVALID_CONTEXT`, 스냅샷 실패는 `ST_STATUS_UNAVAILABLE`(`outStats` 무변경).
+**Returns** — `1` = success / `0` = failed. `NULL` or a stamp mismatch gives `ST_STATUS_VERSION_MISMATCH`, an uninitialized engine gives `ST_STATUS_INVALID_CONTEXT`, and a snapshot failure gives `ST_STATUS_UNAVAILABLE` (`outStats` unchanged).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_speaker_layout</code> — 프리셋 스피커 레이아웃으로 출력한다</summary>
+<summary><code>st_rt_render_set_speaker_layout</code> — Outputs to a preset speaker layout</summary>
 
 ```c
 int st_rt_render_set_speaker_layout(STRT_Context* context, int preset);
 ```
 
-**용도** — 헤드폰 바이노럴 대신 실제 스피커 배치(2.0~7.1)로 N채널 출력을 냅니다. 스피커 출력에서는 레이아웃이 전체 앰비소닉 early 경로·공간화 켬·HRTF 끔을 소유합니다(`st_rt_render_set_options` 참고).
+**Purpose** — Produces N-channel output for a real speaker arrangement (2.0–7.1) instead of headphone binaural. In speaker output, the layout owns the full-ambisonics early path, spatialization on and HRTF off (see `st_rt_render_set_options`).
 
-**언제·어떻게** — 보통 `st_rt_render_start(context, 0)` 전에 겁니다. 렌더 중에 부르면 오디오 장치를 stop → 적용 → start로 재기동하고, 장치가 N채널 포맷을 거부하면 스테레오로 한 번 강등해 재시도합니다. HOST_PULL 계열에서는 pull 출력이 재구성되며, 그동안 `st_rt_render_process`는 0 프레임을 돌려줍니다. 부른 뒤 `st_rt_render_get_speaker_channels()`로 실제 출력 폭을 다시 읽습니다. 레이아웃을 걸 때마다(같은 레이아웃이라도) 스피커 채널 EQ가 전부 비워지므로 채널 EQ는 레이아웃을 건 뒤에 설정합니다. 스레드: `[control, blocking]` — 장치 재기동이 있어 게임 루프·오디오 스레드에서 부르지 않습니다.
+**When / how** — Usually set before `st_rt_render_start(context, 0)`. Called during rendering, it restarts the audio device as stop → apply → start, and if the device rejects the N-channel format it falls back once to stereo and retries. In the HOST_PULL family the pull output is reconfigured, and meanwhile `st_rt_render_process` returns 0 frames. After calling, re-read the actual output width with `st_rt_render_get_speaker_channels()`. Every time a layout is set (even the same layout) all speaker channel EQs are cleared, so configure channel EQs after setting the layout. Thread: `[control, blocking]` — involves a device restart; do not call from the game loop or the audio thread.
 
-채널 순서는 WAVEFORMATEXTENSIBLE 표준 순서(FL FR FC LFE BL BR SL SR 중 레이아웃에 없는 채널은 건너뜀)를 따르고, 방향 규약은 엔진 전역과 같습니다(azimuth 정면 0° · 오른쪽 +90°, elevation 위쪽 +).
+The channel order follows the WAVEFORMATEXTENSIBLE standard order (of FL FR FC LFE BL BR SL SR, channels not in the layout are skipped), and the direction convention is the same as the engine-wide one (azimuth front 0° · right +90°, elevation up +).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `preset` | `0` = 2.0 / `1` = 2.1 / `2` = 4.1 / `3` = 5.1 / `4` = 7.1 / `5` = 랩톱 근접 2.0 |
+| `context` | Context handle |
+| `preset` | `0` = 2.0 / `1` = 2.1 / `2` = 4.1 / `3` = 5.1 / `4` = 7.1 / `5` = laptop nearfield 2.0 |
 
-`5`(LaptopNearfield20, "MacBook Pro 16-inch reference")는 정확히 2 PCM 채널이고 `0`과 다른 것은 청취 기하(반각 30° → 15.642°)뿐입니다. 기기·OS가 소유한 내장 스피커 처리(우퍼·와이드 스테레오·공간 음향 DSP 등)는 건드리지 않습니다.
+`5` (LaptopNearfield20, "MacBook Pro 16-inch reference") is exactly 2 PCM channels and differs from `0` only in listening geometry (half-angle 30° → 15.642°). It does not touch built-in speaker processing owned by the device or OS (woofers, wide stereo, spatial audio DSP, etc.).
 
-**반환** — `1` = 적용 / `0` = 실패. 범위 밖 `preset`이면 아무것도 하지 않고 `0`.
+**Returns** — `1` = applied / `0` = failed. An out-of-range `preset` does nothing and returns `0`.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_speaker_layout_custom</code> — 임의 스피커 배치로 출력한다</summary>
+<summary><code>st_rt_render_set_speaker_layout_custom</code> — Outputs to an arbitrary speaker arrangement</summary>
 
 ```c
 int st_rt_render_set_speaker_layout_custom(STRT_Context* context, const float* azimuthDegrees, const float* elevationDegrees, const unsigned char* isLfe, const float* gainTrim, const float* distanceMeters, int channelCount);
 ```
 
-**용도** — 프리셋에 없는 스피커 배치(돔·불규칙 배열 등)를 채널별 방향·LFE 여부·트림·거리로 직접 정의합니다. 거리를 주면 가장 먼 스피커를 기준으로 지연·1/r 레벨을 정렬해 스피커까지 거리가 다른 설치를 보정합니다.
+**Purpose** — Defines a speaker arrangement not covered by presets (domes, irregular arrays, etc.) directly with per-channel direction, LFE flag, trim and distance. If distances are given, delay and 1/r level are aligned to the farthest speaker to compensate installations with differing speaker distances.
 
-**언제·어떻게** — 호출 시점·재기동·채널 EQ 초기화·`st_rt_render_get_speaker_channels` 재확인은 `st_rt_render_set_speaker_layout`과 같습니다. 채널 순서는 배열 순서이고, 방향 규약은 엔진 전역과 같습니다(azimuth 정면 0° · 오른쪽 +90°, elevation 위쪽 +). 리미터·등라우드니스 보정·가상 베이스는 32채널까지, 출력 파라메트릭 EQ·스피커 채널 EQ는 64채널까지 걸립니다. 스레드: `[control, blocking]` — 장치 재기동이 있어 게임 루프·오디오 스레드에서 부르지 않습니다.
+**When / how** — Call timing, restart, channel EQ reset and re-checking `st_rt_render_get_speaker_channels` are the same as `st_rt_render_set_speaker_layout`. The channel order is the array order, and the direction convention is the same as the engine-wide one (azimuth front 0° · right +90°, elevation up +). The limiter, equal-loudness compensation and virtual bass apply up to 32 channels; the output parametric EQ and speaker channel EQ apply up to 64 channels. Thread: `[control, blocking]` — involves a device restart; do not call from the game loop or the audio thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `azimuthDegrees` | 채널별 방위각 [°] `channelCount`개. 필수 |
-| `elevationDegrees` | 채널별 고도각 [°] `channelCount`개. 필수 |
-| `isLfe` | 채널별 LFE 여부(0/1) `channelCount`개. 필수 |
-| `gainTrim` | 채널별 선형 트림 `channelCount`개. `NULL`이면 모두 1.0 |
-| `distanceMeters` | 채널별 스피커 거리 [m] `channelCount`개(씬 단위가 아니라 미터). `NULL`이 아니고 모든 비-LFE 채널이 양수면 렌더 출력단에서 가장 먼 스피커 기준 지연·1/r 레벨 정렬을 겁니다. `NULL`이면 정렬하지 않습니다 |
-| `channelCount` | 채널 수, 1 이상 |
+| `context` | Context handle |
+| `azimuthDegrees` | Per-channel azimuth [°], `channelCount` values. Required |
+| `elevationDegrees` | Per-channel elevation [°], `channelCount` values. Required |
+| `isLfe` | Per-channel LFE flag (0/1), `channelCount` values. Required |
+| `gainTrim` | Per-channel linear trim, `channelCount` values. All 1.0 if `NULL` |
+| `distanceMeters` | Per-channel speaker distance [m], `channelCount` values (meters, not scene units). If not `NULL` and all non-LFE channels are positive, the render output stage applies delay and 1/r level alignment relative to the farthest speaker. No alignment if `NULL` |
+| `channelCount` | Channel count, 1 or greater |
 
-**반환** — `1` = 적용 / `0` = 실패(`azimuthDegrees`·`elevationDegrees`·`isLfe`가 `NULL`이거나 `channelCount` ≤ 0 등).
+**Returns** — `1` = applied / `0` = failed (`azimuthDegrees`, `elevationDegrees` or `isLfe` is `NULL`, or `channelCount` ≤ 0, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_disable_speaker_output</code> — 스피커 출력을 끄고 스테레오로 돌아간다</summary>
+<summary><code>st_rt_render_disable_speaker_output</code> — Disables speaker output and returns to stereo</summary>
 
 ```c
 void st_rt_render_disable_speaker_output(STRT_Context* context);
 ```
 
-**용도** — 스피커 레이아웃 출력을 끄고 기본 스테레오(2채널) 경로로 되돌립니다.
+**Purpose** — Disables speaker layout output and returns to the default stereo (2-channel) path.
 
-**언제·어떻게** — 렌더 중이면 장치 재기동(DEVICE) 또는 pull 출력 재구성(HOST_PULL 계열)이 일어나며, 그동안 `st_rt_render_process`는 0 프레임을 돌려줍니다. 스피커 채널 EQ가 전부 비워지고, `STRenderOptions.reserved0`은 다시 0/1 범위로 제한됩니다. 스레드: `[control, blocking]` — 장치 재기동이 있어 게임 루프·오디오 스레드에서 부르지 않습니다.
+**When / how** — During rendering this causes a device restart (DEVICE) or pull output reconfiguration (HOST_PULL family), and meanwhile `st_rt_render_process` returns 0 frames. All speaker channel EQs are cleared, and `STRenderOptions.reserved0` is again limited to the 0/1 range. Thread: `[control, blocking]` — involves a device restart; do not call from the game loop or the audio thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_speaker_channels</code> — 스피커 출력 채널 수를 읽는다</summary>
+<summary><code>st_rt_render_get_speaker_channels</code> — Reads the speaker output channel count</summary>
 
 ```c
 int st_rt_render_get_speaker_channels(STRT_Context* context);
 ```
 
-**용도** — 스피커 출력이 활성이면 현재 출력 채널 수를 돌려줍니다. HOST_PULL 계열에서는 실제 `st_rt_render_process` 출력 폭과 일치합니다(0이면 2채널).
+**Purpose** — Returns the current output channel count when speaker output is active. In the HOST_PULL family it matches the actual `st_rt_render_process` output width (0 means 2 channels).
 
-**언제·어떻게** — 활성 판정은 `st_rt_render_start` 이후에 섭니다 — 레이아웃만 걸고 렌더를 시작하지 않았으면 아직 0입니다. 레이아웃을 바꾼 뒤에는 다시 읽어 버퍼 폭을 맞춥니다. 스레드: `[control]` — 비원자 멤버 읽기라 오디오 콜백에서 부르지 않습니다.
+**When / how** — Speaker output becomes active only after `st_rt_render_start` — if a layout is set but rendering has not started, it is still 0. After changing the layout, re-read it to match the buffer width. Thread: `[control]` — a non-atomic member read; do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 출력 채널 수. 스피커 출력이 비활성이면 `0`(이때 출력은 2채널).
+**Returns** — Output channel count. `0` if speaker output is inactive (the output is then 2 channels).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_speaker_channel_eq</code> — 스피커 출력 채널 하나에 EQ를 건다(룸 보정)</summary>
+<summary><code>st_rt_render_set_speaker_channel_eq</code> — Applies an EQ to one speaker output channel (room correction)</summary>
 
 ```c
 int st_rt_render_set_speaker_channel_eq(STRT_Context* context, int32_t channelIndex, const STParametricEqBand* bands, int32_t bandCount, float preampDb, int32_t enabled);
 ```
 
-**용도** — 물리 스피커마다 잰 룸 보정처럼 출력 채널 하나에만 거는 파라메트릭 EQ입니다. 전 채널 공통 톤은 출력 EQ(`st_rt_render_set_parametric_eq`)가 맡습니다.
+**Purpose** — A parametric EQ applied to a single output channel, such as room correction measured per physical speaker. Tone common to all channels is handled by the output EQ (`st_rt_render_set_parametric_eq`).
 
-**언제·어떻게** — 스피커 경로에서 전역 출력 EQ 바로 뒤, 마스터 게인 앞에 걸립니다. 스피커 레이아웃 출력에서만 걸리고, 스테레오·바이노럴 출력에는 효과가 없습니다. 설정하지 않은(또는 꺼진·효과 없는) 채널은 샘플을 건드리지 않습니다. **레이아웃을 걸 때마다(`st_rt_render_set_speaker_layout[_custom]`, 같은 레이아웃이라도) 그리고 `st_rt_render_disable_speaker_output` 때 전 채널이 비워집니다** — 채널 번호의 뜻이 레이아웃마다 달라(같은 3번이 5.1에서는 LFE) 옛 번호에 남기면 엉뚱한 스피커에 걸리기 때문입니다. 레이아웃을 건 뒤에 설정합니다. 채널 수는 `st_rt_render_get_speaker_channels`와 달리 `st_rt_render_start` 전이어도 레이아웃을 건 직후부터 셉니다. 값이 바뀌면 20 ms 크로스페이드로 넘어갑니다. 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다. 지원 여부는 `ST_CAP1_SPEAKER_CHANNEL_EQ`(능력 워드 1)로 확인합니다.
+**When / how** — In the speaker path it sits right after the global output EQ and before the master gain. It applies only to speaker layout output and has no effect on stereo or binaural output. Channels that are not configured (or are disabled or have no effect) are not touched. **All channels are cleared every time a layout is set (`st_rt_render_set_speaker_layout[_custom]`, even the same layout) and on `st_rt_render_disable_speaker_output`** — the meaning of a channel index differs per layout (the same index 3 is the LFE in 5.1), so keeping old indices would apply EQ to the wrong speaker. Configure it after setting the layout. Unlike `st_rt_render_get_speaker_channels`, the channel count is counted right after the layout is set, even before `st_rt_render_start`. Changes transition over a 20 ms crossfade. Thread: `[control]` — changes only the output stage; do not call from the audio callback. Check support with `ST_CAP1_SPEAKER_CHANNEL_EQ` (capability word 1).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `channelIndex` | 출력 채널 번호(레이아웃 채널 순서, LFE 포함), `[0, 레이아웃 채널 수)`. 64채널까지 |
-| `bands` | 밴드 배열 `bandCount`개. `bandCount` = 0이면 `NULL` 허용. `STParametricEqBand` 필드·필터 정의는 `st_rt_render_set_parametric_eq` 항목 참고 |
-| `bandCount` | 밴드 수 `[0, ST_PARAMETRIC_EQ_MAX_BANDS]` |
-| `preampDb` | 프리앰프 [dB], `[−48, +12]`으로 clamp |
-| `enabled` | 0이면 목록은 저장하되 통과 |
+| `context` | Context handle |
+| `channelIndex` | Output channel index (layout channel order, including LFE), `[0, layout channel count)`. Up to 64 channels |
+| `bands` | Array of `bandCount` bands. `NULL` allowed when `bandCount` = 0. See `st_rt_render_set_parametric_eq` for the `STParametricEqBand` fields and filter definition |
+| `bandCount` | Band count `[0, ST_PARAMETRIC_EQ_MAX_BANDS]` |
+| `preampDb` | Preamp [dB], clamped to `[−48, +12]` |
+| `enabled` | 0 stores the list but passes through |
 
-**반환** — `1` = 적용 / `0` = 실패. `0`일 때 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(채널 범위 밖·레이아웃 없음, 그 밖 검증은 `st_rt_render_set_parametric_eq`와 같음) / `ST_STATUS_UNAVAILABLE`(`ST_BACKEND_EXA` 백엔드).
+**Returns** — `1` = applied / `0` = failed. On `0`, `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT` (channel out of range or no layout; other validation is the same as `st_rt_render_set_parametric_eq`) / `ST_STATUS_UNAVAILABLE` (`ST_BACKEND_EXA` backend).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_speaker_channel_eq</code> — 스피커 채널 EQ를 읽는다</summary>
+<summary><code>st_rt_render_get_speaker_channel_eq</code> — Reads a speaker channel EQ</summary>
 
 ```c
 int st_rt_render_get_speaker_channel_eq(const STRT_Context* context, int32_t channelIndex, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outEnabled);
 ```
 
-**용도** — 출력 채널 하나의 EQ 밴드 목록(clamp된 실효값)·프리앰프·켜짐을 돌려줍니다. 설정하지 않은 채널은 0밴드·꺼짐입니다.
+**Purpose** — Returns the EQ band list (clamped effective values), preamp and enabled state of one output channel. A channel that has not been configured has 0 bands and is disabled.
 
-**언제·어떻게** — 출력 규약(크기 질의, `NULL` 출력 건너뛰기, 용량 부족 처리)은 `st_rt_render_get_parametric_eq`와 같습니다. 스레드: `[control]` — 오디오라이저 컨트롤 락을 잡습니다.
+**When / how** — The output conventions (size query, skipping `NULL` outputs, insufficient-capacity handling) are the same as `st_rt_render_get_parametric_eq`. Thread: `[control]` — takes the auralizer control lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `channelIndex` | 출력 채널 번호, `[0, 레이아웃 채널 수)` |
-| `outBands` | 밴드 출력 배열. `NULL`이면 크기 질의 |
-| `bandCapacity` | `outBands` 용량, 0 이상 |
-| `outBandCount` | 밴드 수 출력. `NULL`이면 건너뜀 |
-| `outPreampDb` | 프리앰프 [dB] 출력. `NULL`이면 건너뜀 |
-| `outEnabled` | 켜짐(0/1) 출력. `NULL`이면 건너뜀 |
+| `context` | Context handle |
+| `channelIndex` | Output channel index, `[0, layout channel count)` |
+| `outBands` | Band output array. `NULL` makes it a size query |
+| `bandCapacity` | Capacity of `outBands`, 0 or greater |
+| `outBandCount` | Band count output. Skipped if `NULL` |
+| `outPreampDb` | Preamp [dB] output. Skipped if `NULL` |
+| `outEnabled` | Enabled (0/1) output. Skipped if `NULL` |
 
-**반환** — `1` = 성공 / `0` = 실패(`ST_STATUS_INVALID_ARGUMENT` / `ST_STATUS_BUFFER_TOO_SMALL` / `ST_STATUS_UNAVAILABLE`, 뜻은 `st_rt_render_get_parametric_eq`와 같음).
+**Returns** — `1` = success / `0` = failed (`ST_STATUS_INVALID_ARGUMENT` / `ST_STATUS_BUFFER_TOO_SMALL` / `ST_STATUS_UNAVAILABLE`, same meanings as `st_rt_render_get_parametric_eq`).
 
 </details>
 
 <details>
-<summary><code>st_rt_render_clear_speaker_channel_eqs</code> — 모든 스피커 채널 EQ를 끈다</summary>
+<summary><code>st_rt_render_clear_speaker_channel_eqs</code> — Disables all speaker channel EQs</summary>
 
 ```c
 int st_rt_render_clear_speaker_channel_eqs(STRT_Context* context);
 ```
 
-**용도** — 전 채널의 스피커 채널 EQ를 한 번에 끕니다.
+**Purpose** — Disables the speaker channel EQ of every channel at once.
 
-**언제·어떻게** — 재생 중이면 20 ms 램프로 넘어갑니다. 레이아웃이 없어도 성공합니다. 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다.
+**When / how** — During playback it transitions over a 20 ms ramp. Succeeds even without a layout. Thread: `[control]` — changes only the output stage; do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `1` = 성공 / `0` = 실패(`ST_BACKEND_EXA` 백엔드는 `ST_STATUS_UNAVAILABLE`).
+**Returns** — `1` = success / `0` = failed (`ST_STATUS_UNAVAILABLE` for the `ST_BACKEND_EXA` backend).
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_create</code> — 다채널 입력을 재생할 가상 스피커 세트를 만든다</summary>
+<summary><code>st_rt_speaker_set_create</code> — Creates a virtual speaker set that plays multichannel input</summary>
 
 ```c
 STSpeakerSetId st_rt_speaker_set_create(STRT_Context* context, const STSpeakerSetDesc* desc);
 ```
 
-**용도** — 스피커 세트는 다채널 PCM 입력 하나(콘텐츠 채널 C개)를 방 안의 가상 스피커 N개로 재생합니다. 스피커 하나는 엔진이 만든 소스(멤버 소스) 하나이고, 한 채널을 여러 스피커가 나눠 낼 수 있습니다(영화관 배열). 입력 링은 세트에 **하나**(interleaved)라, 렌더 블록마다 한 번 꺼내 모든 스피커가 같은 블록·같은 표본을 읽습니다 — 언더런도 전 채널 동시라 채널끼리 어긋나지 않습니다. 스테레오 입력을 3.0/5.1/7.1로 올리는 업믹스 입력도 지원합니다.
+**Purpose** — A speaker set plays one multichannel PCM input (C content channels) through N virtual speakers in the room. Each speaker is one engine-created source (member source), and several speakers can share one channel (cinema arrays). The set has **one** input ring (interleaved), read once per render block so every speaker reads the same block and the same samples — underruns also hit all channels simultaneously, so channels never drift apart. Upmix input that raises stereo input to 3.0/5.1/7.1 is also supported.
 
-**언제·어떻게** — 씬·리스너를 준비한 뒤 만들고, `st_rt_speaker_set_write`로 링을 채운 다음 `st_rt_speaker_set_play`로 재생합니다. 멤버는 만들자마자 재생 상태로 들어가지만 세트가 play되기 전에는 무음을 냅니다. 멤버 품질 설정(광선 수·깊이·수송 갱신 단계)은 `st_rt_speaker_set_get_source`로 받은 id에 생성 뒤 아무 때나 겁니다(첫 전파 전이면 첫 IR부터 그 값). 스레드: `[control, blocking]` — 멤버 소스 N개 생성(+지향성·게인)이 있어 게임 루프·오디오 스레드에서 부르지 않습니다. 지원 여부는 `ST_CAP1_SPEAKER_SET`(능력 워드 1)으로 확인합니다.
+**When / how** — Create it after preparing the scene and listener, fill the ring with `st_rt_speaker_set_write`, then play with `st_rt_speaker_set_play`. Members enter the playing state as soon as they are created but output silence until the set is played. Member quality settings (ray count, depth, transport update tier) can be applied at any time after creation to the ids obtained with `st_rt_speaker_set_get_source` (before the first propagation, they take effect from the first IR). Thread: `[control, blocking]` — creates N member sources (+ directivity, gain); do not call from the game loop or the audio thread. Check support with `ST_CAP1_SPEAKER_SET` (capability word 1).
 
-- **한도** — 세트 `ST_SPEAKER_SET_MAX_SETS`(12)개, 세트당 채널 `ST_SPEAKER_SET_MAX_CHANNELS`(16)·스피커 `ST_SPEAKER_SET_MAX_SPEAKERS`(64). 세트는 호스트 스트림 슬롯(64)을 쓰지 않습니다. 쓰지 않는 슬롯·쉬는 세트는 렌더 블록마다 원자 읽기 몇 번뿐입니다.
-- **좌표** — 스피커 포즈는 **세트 좌표**이고, 월드 = 앵커 ∘ 세트 변환 ∘ 스피커 포즈입니다. `WORLD` 앵커는 항등(방 고정), `LISTENER` 앵커는 리스너 위치 + yaw(+Y축 회전)입니다. `LISTENER` 앵커는 `st_rt_speaker_set_update`의 리스너 필드로만 다시 계산되며 일반 리스너 setter(머리 회전 포함)는 세트를 움직이지 않습니다. 생성 시점 앵커는 그때의 리스너 위치·yaw입니다. 쿼터니언은 XYZW이고 엔진이 정규화합니다(노름 `< 1e-12`는 거절). 스피커 로컬 프레임·지향성 테이블 프레임은 소스와 같습니다(forward = +Z).
-- **레벨** — 멤버 볼륨(소스 볼륨과 같은 자리, 3 ms 램프) = `muted`·`silenced`면 0, 아니면 `gain × trim`. `ST_SPEAKER_SET_FLAG_ARRAY_TRIM`이면 `trim = 1/√N`이고, N은 같은 채널에서 `muted`가 아니고 `gain` > 0인 스피커 수입니다(`silenced`는 셈). LFE는 특별 처리가 없습니다. `st_rt_source_get_volume`은 램프의 목표값을 돌려줍니다.
-- **멤버 소유권** — 멤버 소스는 세트가 소유합니다. 멤버 id에 대한 입력(`set_audio_*`·`attach_stream`·`clear_audio`), 재생(play/pause/stop/seek/loop/trigger/retrigger), 포즈(position/direction/velocity/orientation_q), 방사(directivity/axis_attenuation), 볼륨·피치·destroy, `st_rt_source_idle`/`_run`은 0을 돌려주거나 무시되고 `ST_STATUS_INVALID_ARGUMENT`가 남습니다. 품질 설정(광선 수·깊이·갱신 단계·EQ·경로 켜기·경로 볼륨)과 getter는 그대로 씁니다. 지향성은 생성 때 정하고, 무지향 스피커의 회전은 엔진에 보내지 않습니다.
+- **Limits** — `ST_SPEAKER_SET_MAX_SETS` (12) sets, and per set `ST_SPEAKER_SET_MAX_CHANNELS` (16) channels and `ST_SPEAKER_SET_MAX_SPEAKERS` (64) speakers. Sets do not use host stream slots (64). Unused slots and idle sets cost only a few atomic reads per render block.
+- **Coordinates** — Speaker poses are in **set coordinates**, and world = anchor ∘ set transform ∘ speaker pose. The `WORLD` anchor is identity (room-fixed); the `LISTENER` anchor is listener position + yaw (rotation about +Y). The `LISTENER` anchor is recomputed only from the listener fields of `st_rt_speaker_set_update`; the regular listener setters (including head rotation) do not move the set. The anchor at creation is the listener position and yaw at that time. Quaternions are XYZW and normalized by the engine (norm `< 1e-12` is rejected). The speaker local frame and directivity table frame are the same as for sources (forward = +Z).
+- **Level** — Member volume (same slot as source volume, 3 ms ramp) = 0 if `muted` or `silenced`, otherwise `gain × trim`. With `ST_SPEAKER_SET_FLAG_ARRAY_TRIM`, `trim = 1/√N`, where N is the number of speakers on the same channel that are not `muted` and have `gain` > 0 (`silenced` ones are counted). LFE has no special treatment. `st_rt_source_get_volume` returns the ramp target.
+- **Member ownership** — Member sources are owned by the set. For member ids, input (`set_audio_*`, `attach_stream`, `clear_audio`), playback (play/pause/stop/seek/loop/trigger/retrigger), pose (position/direction/velocity/orientation_q), radiation (directivity/axis_attenuation), volume, pitch, destroy and `st_rt_source_idle`/`_run` return 0 or are ignored and leave `ST_STATUS_INVALID_ARGUMENT`. Quality settings (ray count, depth, update tier, EQ, path enable, path volume) and getters work as usual. Directivity is set at creation, and rotations of omnidirectional speakers are not sent to the engine.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `desc` | 세트 기술자. 호출자가 `structSize` / `apiVersion`을 채웁니다. 포인터 배열은 호출 동안만 읽습니다(복사) |
+| `context` | Context handle |
+| `desc` | Set descriptor. The caller fills `structSize` / `apiVersion`. Pointer arrays are read only during the call (copied) |
 
-**구조체** `STSpeakerSetDesc`
+**Struct** `STSpeakerSetDesc`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STSpeakerSetDesc)` / `ST_ABI_VERSION` |
-| `channelCount` | 콘텐츠 채널 수 `[1, ST_SPEAKER_SET_MAX_CHANNELS]` |
-| `speakerCount` | 스피커 수 `[1, ST_SPEAKER_SET_MAX_SPEAKERS]` |
-| `speakers` | `STSpeakerDesc` 배열 `speakerCount`개 |
-| `directivities` | 공유 지향성 테이블 포인터 배열(`STSourceDirectivity`). 같은 테이블을 가리키는 스피커는 엔진 사본 하나를 같이 씁니다. 각 테이블 검증은 `st_rt_source_set_directivity`와 같습니다. `NULL` 허용(`directivityCount` 0) |
-| `directivityCount` | `directivities` 원소 수 |
+| `channelCount` | Content channel count `[1, ST_SPEAKER_SET_MAX_CHANNELS]` |
+| `speakerCount` | Speaker count `[1, ST_SPEAKER_SET_MAX_SPEAKERS]` |
+| `speakers` | Array of `speakerCount` `STSpeakerDesc` |
+| `directivities` | Array of pointers to shared directivity tables (`STSourceDirectivity`). Speakers pointing to the same table share one engine copy. Each table is validated the same as `st_rt_source_set_directivity`. `NULL` allowed (`directivityCount` 0) |
+| `directivityCount` | Number of elements in `directivities` |
 | `anchor` | `STSpeakerSetAnchor` — `ST_SPEAKER_SET_ANCHOR_WORLD`(0) / `ST_SPEAKER_SET_ANCHOR_LISTENER`(1) |
-| `position[3]` / `rotationXYZW[4]` | 세트 변환(앵커 좌표) |
-| `sampleRate` | 입력 레이트. 엔진 레이트(44100), 또는 `hostSampleRate`를 지정한 컨텍스트면 그 값이어야 합니다 |
-| `capacityFrames` | 링 용량(호스트 프레임), `[512, 1048576]`. 0 = 16384 |
-| `flags` | `ST_SPEAKER_SET_FLAG_ARRAY_TRIM`(채널을 공유하는 스피커 N개에 1/√N) / `ST_SPEAKER_SET_FLAG_STATIC`(멤버 소스를 정적 `isDynamic` 0으로) |
-| `inputChannels` | 업믹스 입력. 0 = `channelCount` 그대로. 2 = 스테레오를 `channelCount`(3 = L R C, 6 = 5.1, 8 = 7.1)로 올림 — 이때 write는 스테레오를 받습니다 |
-| `upmixWindowFrames` | 업믹스 창 길이 `[1024, 65536]` 짝수, 0 = 4096. 창 지연 = 창의 절반(기본 2048) |
+| `position[3]` / `rotationXYZW[4]` | Set transform (anchor coordinates) |
+| `sampleRate` | Input rate. Must be the engine rate (44100), or `hostSampleRate` if the context specifies it |
+| `capacityFrames` | Ring capacity (host frames), `[512, 1048576]`. 0 = 16384 |
+| `flags` | `ST_SPEAKER_SET_FLAG_ARRAY_TRIM` (1/√N for N speakers sharing a channel) / `ST_SPEAKER_SET_FLAG_STATIC` (member sources static, `isDynamic` 0) |
+| `inputChannels` | Upmix input. 0 = `channelCount` as is. 2 = upmixes stereo to `channelCount` (3 = L R C, 6 = 5.1, 8 = 7.1) — write then takes stereo |
+| `upmixWindowFrames` | Upmix window length `[1024, 65536]`, even, 0 = 4096. Window latency = half the window (default 2048) |
 | `reserved[5]` | 0 |
 
-**구조체** `STSpeakerDesc`
+**Struct** `STSpeakerDesc`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `channel` | 이 스피커가 내는 콘텐츠 채널 `[0, channelCount)` |
-| `directivityIndex` | -1 = 무지향, 그 밖 = `STSpeakerSetDesc.directivities` 인덱스 |
-| `pose` | `STSpeakerPose` — 세트 좌표 포즈와 레벨 |
+| `channel` | Content channel this speaker plays `[0, channelCount)` |
+| `directivityIndex` | -1 = omnidirectional, otherwise = index into `STSpeakerSetDesc.directivities` |
+| `pose` | `STSpeakerPose` — pose in set coordinates and level |
 | `reserved[2]` | 0 |
 
-**구조체** `STSpeakerPose`
+**Struct** `STSpeakerPose`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `position[3]` / `rotationXYZW[4]` | 세트 좌표 위치·회전 |
-| `gain` | 선형 압력 `[0, 16]` |
-| `muted` | 0/1 — 1이면 볼륨 0이고 `ARRAY_TRIM`의 N에서 빠집니다 |
-| `silenced` | 0/1 — 1이면 볼륨 0이지만 N은 그대로(측정용 단독 재생: 나머지를 `silenced`로) |
+| `position[3]` / `rotationXYZW[4]` | Position and rotation in set coordinates |
+| `gain` | Linear pressure `[0, 16]` |
+| `muted` | 0/1 — 1 means volume 0 and excluded from N of `ARRAY_TRIM` |
+| `silenced` | 0/1 — 1 means volume 0 but N is unchanged (solo playback for measurement: set the rest to `silenced`) |
 | `reserved[2]` | 0 |
 
-**업믹스 입력**(`inputChannels` = 2) — 엔진 내장 업믹서가 좌우 성분의 레벨 차로 앞쪽 방위(±30°)를, 상관도로 앞·옆·뒤(상관 → 앞, 무상관 → 옆, 역상 → 뒤)를 잡아 스피커 고리에 에너지를 보존하며 나누고, LFE에는 (L + R)/2의 저역(80 Hz까지, 160 Hz에서 0)을 더합니다. 3.0은 가운데 뽑기라 앞에 상관으로 모인 몫만 FC로 옮기고 나머지는 L·R에 남겨 스테레오 이미지를 유지합니다(LFE 없음). 출력 채널 순서는 3.0 = FL FR FC, 5.1 = FL FR FC LFE SL SR, 7.1 = FL FR FC LFE SL SR BL BR이고(스피커 `channel` 번호와 같음), 가정하는 각은 FL −30° · FR 30° · FC 0°, 5.1 SL −110° · SR 110°, 7.1 SL −90° · SR 90° · BL −150° · BR 150°입니다. 업믹스는 write를 부른 생산자 스레드에서 호스트 레이트로 돕니다(할당 없음). 창 지연을 잘라 내 입력 프레임 n = 콘텐츠 프레임 n이지만, 입력이 `inputDelayFrames`만큼 더 들어가야 링에 나오므로 프리필을 그만큼 더 합니다. stop/relocate 뒤 첫 write가 업믹스 이력도 버립니다.
+**Upmix input** (`inputChannels` = 2) — The engine's built-in upmixer determines the front azimuth (±30°) from the level difference of the left and right components and front/side/back from their correlation (correlated → front, uncorrelated → side, out of phase → back), distributes energy-preservingly over the speaker ring, and adds the low band of (L + R)/2 (up to 80 Hz, 0 at 160 Hz) to the LFE. 3.0 is a center extraction that moves only the correlated front share to FC and leaves the rest in L and R to keep the stereo image (no LFE). The output channel order is 3.0 = FL FR FC, 5.1 = FL FR FC LFE SL SR, 7.1 = FL FR FC LFE SL SR BL BR (same as the speaker `channel` numbers), and the assumed angles are FL −30° · FR 30° · FC 0°, 5.1 SL −110° · SR 110°, 7.1 SL −90° · SR 90° · BL −150° · BR 150°. The upmix runs at the host rate on the producer thread that calls write (no allocation). The window latency is trimmed so input frame n = content frame n, but input must go `inputDelayFrames` further before it emerges into the ring, so prefill that much more. After stop/relocate, the first write also discards the upmix history.
 
-**반환** — 세트 핸들. 실패면 `v < 0`이고 만들던 멤버는 모두 지웁니다. `st_rt_get_last_status`: `ST_STATUS_VERSION_MISMATCH` / `ST_STATUS_INVALID_ARGUMENT`(범위·비유한·채널·레이트·`reserved`) / `ST_STATUS_UNAVAILABLE`(세트 `ST_SPEAKER_SET_MAX_SETS`개 소진).
+**Returns** — Set handle. On failure `v < 0`, and any members being created are all destroyed. `st_rt_get_last_status`: `ST_STATUS_VERSION_MISMATCH` / `ST_STATUS_INVALID_ARGUMENT` (range, non-finite, channel, rate, `reserved`) / `ST_STATUS_UNAVAILABLE` (all `ST_SPEAKER_SET_MAX_SETS` sets in use).
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_destroy</code> — 스피커 세트를 지운다</summary>
+<summary><code>st_rt_speaker_set_destroy</code> — Destroys a speaker set</summary>
 
 ```c
 int st_rt_speaker_set_destroy(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 멤버 소스를 지우고(3 ms 페이드) 세트 슬롯을 반납합니다.
+**Purpose** — Destroys the member sources (3 ms fade) and returns the set slot.
 
-**언제·어떻게** — 세트가 더 필요 없을 때 부릅니다. 멤버 id에 `st_rt_source_destroy`를 부르는 것은 거절되므로 반드시 이 함수로 지웁니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**When / how** — Call it when the set is no longer needed. Calling `st_rt_source_destroy` on a member id is rejected, so always destroy with this function. Thread: `[control]` — do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | Context handle |
+| `set` | Set handle |
 
-**반환** — `1` = 지움 / `0` = 없는 세트.
+**Returns** — `1` = destroyed / `0` = no such set.
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_get_source</code> — 스피커 하나의 멤버 소스 id를 얻는다</summary>
+<summary><code>st_rt_speaker_set_get_source</code> — Gets the member source id of one speaker</summary>
 
 ```c
 STSourceId st_rt_speaker_set_get_source(STRT_Context* context, STSpeakerSetId set, int speakerIndex);
 ```
 
-**용도** — `speakerIndex`번 스피커를 맡은 멤버 소스 id를 돌려줍니다. 멤버별 품질 설정(광선 수·깊이·수송 갱신 단계·EQ·경로 켜기·경로 볼륨)과 소스 getter에 씁니다.
+**Purpose** — Returns the id of the member source handling speaker number `speakerIndex`. Use it for per-member quality settings (ray count, depth, transport update tier, EQ, path enable, path volume) and source getters.
 
-**언제·어떻게** — 세트를 만든 뒤 아무 때나 부릅니다. 첫 전파 전에 품질을 걸면 첫 IR부터 그 값입니다. 입력·재생·포즈·방사·볼륨·피치·destroy는 세트가 소유하므로 이 id로는 거절됩니다(`st_rt_speaker_set_create` 참고). 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**When / how** — Call it any time after creating the set. Quality applied before the first propagation takes effect from the first IR. Input, playback, pose, radiation, volume, pitch and destroy are owned by the set and are rejected through this id (see `st_rt_speaker_set_create`). Thread: `[control]` — do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `speakerIndex` | 스피커 번호 `[0, speakerCount)` (`STSpeakerSetDesc.speakers` 순서) |
+| `context` | Context handle |
+| `set` | Set handle |
+| `speakerIndex` | Speaker index `[0, speakerCount)` (order of `STSpeakerSetDesc.speakers`) |
 
-**반환** — 멤버 소스 id. 실패(없는 세트·범위 밖)면 `v < 0`.
+**Returns** — Member source id. On failure (no such set, out of range) `v < 0`.
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_update</code> — 세트 변환·스피커 포즈·리스너를 일괄 갱신한다</summary>
+<summary><code>st_rt_speaker_set_update</code> — Updates the set transform, speaker poses and listener in one call</summary>
 
 ```c
 int st_rt_speaker_set_update(STRT_Context* context, STSpeakerSetId set, const STSpeakerSetUpdate* update, uint32_t* outChanged);
 ```
 
-**용도** — 세트 변환, 스피커 포즈·레벨 전부, 리스너 포즈, `ARRAY_TRIM` 플래그를 한 번에 바꿉니다. 값이 직전 적용값과 비트 동일하면 엔진에 보내지 않아, 매 프레임 불러도 바뀐 것만 반영됩니다.
+**Purpose** — Changes the set transform, all speaker poses and levels, the listener pose and the `ARRAY_TRIM` flag at once. Values bit-identical to the last applied values are not sent to the engine, so even if called every frame only what changed is applied.
 
-**언제·어떻게** — 게임 루프에서 프레임마다 부를 수 있습니다. `LISTENER` 앵커 세트는 이 호출의 리스너 필드로만 다시 계산되고, 같은 호출이 엔진 리스너도 같은 배치로 옮깁니다(`st_rt_listener_set_position`/`rotation`과 같은 뜻). 원자성: SYNCHRONOUS 스케줄러는 다음 `st_rt_propagate`가 갱신 전체를 한 번에 봅니다. PIPELINED는 스피커 위치 전부와 리스너 위치를 한 리비전에 넣으며, 회전 변경은 씬 커밋이라 위치보다 작업 하나만큼 먼저 보일 수 있습니다. `outChanged`가 0이면 엔진에 아무것도 보내지 않은 것이므로 SYNCHRONOUS 호스트는 propagate를 건너뛰어도 됩니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**When / how** — Can be called every frame from the game loop. A `LISTENER`-anchored set is recomputed only from this call's listener fields, and the same call also moves the engine listener to the same placement (same meaning as `st_rt_listener_set_position`/`rotation`). Atomicity: with the SYNCHRONOUS scheduler, the next `st_rt_propagate` sees the whole update at once. PIPELINED puts all speaker positions and the listener position into one revision; rotation changes are scene commits and may become visible one task ahead of positions. If `outChanged` is 0, nothing was sent to the engine, so a SYNCHRONOUS host may skip propagate. Thread: `[control]` — do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `update` | 갱신 내용. 호출자가 `structSize` / `apiVersion`을 채웁니다. `fields`에 든 것만 읽습니다 |
-| `outChanged` | 엔진에 보낸 항목 비트 출력. `NULL` 허용. `ST_SPEAKER_SET_CHANGED_LISTENER`(엔진 리스너 포즈) / `ST_SPEAKER_SET_CHANGED_POSES`(멤버 소스 월드 위치·회전) / `ST_SPEAKER_SET_CHANGED_GAINS`(멤버 소스 볼륨) |
+| `context` | Context handle |
+| `set` | Set handle |
+| `update` | Update contents. The caller fills `structSize` / `apiVersion`. Only what is in `fields` is read |
+| `outChanged` | Output bits of the items sent to the engine. `NULL` allowed. `ST_SPEAKER_SET_CHANGED_LISTENER` (engine listener pose) / `ST_SPEAKER_SET_CHANGED_POSES` (member source world positions and rotations) / `ST_SPEAKER_SET_CHANGED_GAINS` (member source volumes) |
 
-**구조체** `STSpeakerSetUpdate`
+**Struct** `STSpeakerSetUpdate`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STSpeakerSetUpdate)` / `ST_ABI_VERSION` |
-| `fields` | 읽을 항목 비트: `ST_SPEAKER_SET_UPDATE_TRANSFORM` / `_SPEAKERS` / `_LISTENER` / `_FLAGS` |
-| `position[3]` / `rotationXYZW[4]` | TRANSFORM — 세트 변환(앵커 좌표) |
-| `listenerPosition[3]` | LISTENER — 리스너 위치(씬 단위) |
-| `listenerYaw` | LISTENER — yaw [rad], +Y축 |
-| `listenerPitch` | LISTENER — pitch [rad]. 리스너에만 걸리고 앵커는 yaw만 따릅니다 |
-| `speakerCount` | SPEAKERS — 세트의 스피커 수와 같아야 합니다 |
-| `speakers` | SPEAKERS — `STSpeakerPose` 배열 `speakerCount`개(전부). 필드는 `st_rt_speaker_set_create` 항목 참고 |
-| `flags` | FLAGS — `ST_SPEAKER_SET_FLAG_ARRAY_TRIM` 켬/끔(그 밖 비트는 0) |
+| `fields` | Bits of the items to read: `ST_SPEAKER_SET_UPDATE_TRANSFORM` / `_SPEAKERS` / `_LISTENER` / `_FLAGS` |
+| `position[3]` / `rotationXYZW[4]` | TRANSFORM — set transform (anchor coordinates) |
+| `listenerPosition[3]` | LISTENER — listener position (scene units) |
+| `listenerYaw` | LISTENER — yaw [rad], about +Y |
+| `listenerPitch` | LISTENER — pitch [rad]. Applies only to the listener; the anchor follows yaw only |
+| `speakerCount` | SPEAKERS — must equal the set's speaker count |
+| `speakers` | SPEAKERS — array of `speakerCount` `STSpeakerPose` (all of them). See `st_rt_speaker_set_create` for the fields |
+| `flags` | FLAGS — `ST_SPEAKER_SET_FLAG_ARRAY_TRIM` on/off (other bits 0) |
 | `reserved[5]` | 0 |
 
-**반환** — `1` = 성공 / `0` = 실패.
+**Returns** — `1` = success / `0` = failed.
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_write</code> — 세트 링에 interleaved PCM을 쓴다</summary>
+<summary><code>st_rt_speaker_set_write</code> — Writes interleaved PCM to the set ring</summary>
 
 ```c
 int st_rt_speaker_set_write(STRT_Context* context, STSpeakerSetId set, const float* interleaved, int frames);
 ```
 
-**용도** — 세트의 다채널 콘텐츠를 링에 공급합니다. 파일 디코드·웹 PCM·마이크 등 어디서 온 것이든 같은 방식으로 씁니다.
+**Purpose** — Supplies the set's multichannel content to the ring. Write it the same way whatever the origin — file decoding, web PCM, microphone, etc.
 
-**언제·어떻게** — 재생 전에 프리필하고, 재생 중에는 `st_rt_speaker_set_get_status`의 `queuedFrames`를 보며 공급량을 맞춥니다. 렌더가 돌지 않는 동안에도 쓸 수 있고, 엔진·세트가 쉬는 동안 쓴 프레임은 링에 남았다가 깨운 뒤 나갑니다. 스레드: `[any]` — 단일 생산자 전용이며 락·할당이 없습니다(업믹스도 이 호출 스레드에서 돕니다).
+**When / how** — Prefill before playback, and during playback match the supply rate by watching `queuedFrames` of `st_rt_speaker_set_get_status`. It can be written even while rendering is not running; frames written while the engine or set is idle stay in the ring and play after waking. Thread: `[any]` — single producer only, no locks or allocations (the upmix also runs on this calling thread).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `interleaved` | interleaved float, `frames × 입력 채널 수`개. 입력 채널 수 = `channelCount`, 업믹스 입력이면 2 |
-| `frames` | 프레임 수(호스트 프레임 = `STSpeakerSetDesc.sampleRate`) |
+| `context` | Context handle |
+| `set` | Set handle |
+| `interleaved` | Interleaved float, `frames × input channel count` values. Input channel count = `channelCount`, or 2 for upmix input |
+| `frames` | Frame count (host frames = `STSpeakerSetDesc.sampleRate`) |
 
-**반환** — `hostSampleRate` = 0이고 업믹스가 없으면 링에 실제로 들어간 프레임 수(백프레셔 — 나머지는 다시 씁니다). 그 밖(`hostSampleRate` 지정 또는 업믹스 입력)이면 항상 `frames`이고 백프레셔가 없으므로 `queuedFrames`로 공급량을 맞춥니다. 넘친 몫은 `droppedFrames`로만 남습니다.
+**Returns** — With `hostSampleRate` = 0 and no upmix, the number of frames that actually entered the ring (backpressure — write the rest again). Otherwise (`hostSampleRate` specified or upmix input) always `frames` with no backpressure, so match the supply rate with `queuedFrames`. Overflow is recorded only in `droppedFrames`.
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_write_planar</code> — 세트 링에 채널별 배열로 PCM을 쓴다</summary>
+<summary><code>st_rt_speaker_set_write_planar</code> — Writes PCM to the set ring as per-channel arrays</summary>
 
 ```c
 int st_rt_speaker_set_write_planar(STRT_Context* context, STSpeakerSetId set, const float* const* channels, int frames);
 ```
 
-**용도** — `st_rt_speaker_set_write`와 같고 입력만 채널별(planar) 배열입니다. 디코더가 planar로 내는 경우 interleave 복사를 피합니다.
+**Purpose** — Same as `st_rt_speaker_set_write`, except the input is per-channel (planar) arrays. Avoids an interleave copy when the decoder outputs planar data.
 
-**언제·어떻게** — `st_rt_speaker_set_write`와 같습니다. 스레드: `[any]` — 단일 생산자 전용, 락·할당 없음.
+**When / how** — Same as `st_rt_speaker_set_write`. Thread: `[any]` — single producer only, no locks or allocations.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `channels` | 채널 포인터 배열 `channels[입력 채널 수]`, 각 `frames`개 float. 입력 채널 수 = `channelCount`, 업믹스 입력이면 2 |
-| `frames` | 프레임 수(호스트 프레임) |
+| `context` | Context handle |
+| `set` | Set handle |
+| `channels` | Array of channel pointers `channels[input channel count]`, each with `frames` floats. Input channel count = `channelCount`, or 2 for upmix input |
+| `frames` | Frame count (host frames) |
 
-**반환** — `st_rt_speaker_set_write`와 같습니다.
+**Returns** — Same as `st_rt_speaker_set_write`.
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_play</code> — 세트 재생을 시작한다</summary>
+<summary><code>st_rt_speaker_set_play</code> — Starts set playback</summary>
 
 ```c
 int st_rt_speaker_set_play(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 세트 전체의 재생을 요청합니다. 모든 멤버가 같은 렌더 블록에서 함께 시작합니다.
+**Purpose** — Requests playback of the whole set. All members start together in the same render block.
 
-**언제·어떻게** — 요청 상태는 **호출 즉시** 바뀌고, 소리는 다음 렌더 블록 경계에서 세트 전체에 한 번에 걸립니다. 그래서 렌더가 멈춘 동안에도 stop → relocate → write(프리필) → play가 쌓였다가 다음 첫 블록에서 한꺼번에 걸립니다. play는 멤버 소스를 담은 IR이 렌더러에 채택될 때까지 `ST_SPEAKER_SET_STARTING`으로 기다리고(콘텐츠를 꺼내지 않음), 그 뒤에는 링이 비어 있어도 시작합니다(언더런으로 셈) — 호스트가 먼저 채웁니다. **첫 재생은 페이드인 없이** 시작하고, 일시정지·정지 뒤 다시 시작할 때는 132표본 페이드인을 겁니다. pause 뒤 재개는 멈춘 바로 그 프레임부터입니다. 엔진이 쉬는 중이면 깨운 뒤 블록 경계에서 풀립니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**When / how** — The requested state changes **immediately on the call**, and the sound takes effect for the whole set at once at the next render block boundary. So even while rendering is stopped, stop → relocate → write (prefill) → play accumulate and all take effect together in the next first block. play waits in `ST_SPEAKER_SET_STARTING` until an IR containing the member sources is adopted by the renderer (without consuming content), and after that starts even if the ring is empty (counted as underrun) — the host fills it first. **The first playback starts without a fade-in**; restarting after pause or stop applies a 132-sample fade-in. Resuming after pause continues from exactly the frame where it stopped. If the engine is idle, it is released at a block boundary after waking. Thread: `[control]` — do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | Context handle |
+| `set` | Set handle |
 
-**반환** — `1` = 요청됨 / `0` = 실패(없는 세트 등).
+**Returns** — `1` = requested / `0` = failed (no such set, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_pause</code> — 세트를 일시정지한다(큐 유지)</summary>
+<summary><code>st_rt_speaker_set_pause</code> — Pauses the set (keeps the queue)</summary>
 
 ```c
 int st_rt_speaker_set_pause(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 세트 전체를 일시정지합니다. 링에 쌓인 큐를 남기므로 다시 play하면 멈춘 바로 그 프레임부터 이어집니다.
+**Purpose** — Pauses the whole set. The queue in the ring is kept, so playing again continues from exactly the frame where it stopped.
 
-**언제·어떻게** — 요청은 즉시, 소리는 다음 렌더 블록 경계에서 걸립니다. 멈출 때는 채널마다 마지막 출력 표본에서 0까지 132표본 램프를 걸고 링에서 더 꺼내지 않으므로 `contentFrame`은 실제로 낸 위치입니다. 이미 방에 나간 잔향은 계속 울립니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**When / how** — The request is immediate; the sound takes effect at the next render block boundary. When stopping, it applies a 132-sample ramp from the last output sample of each channel to 0 and consumes no more from the ring, so `contentFrame` is the position actually output. Reverb already released into the room keeps ringing. Thread: `[control]` — do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | Context handle |
+| `set` | Set handle |
 
-**반환** — `1` = 요청됨 / `0` = 실패(없는 세트 등).
+**Returns** — `1` = requested / `0` = failed (no such set, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_stop</code> — 세트를 정지한다(큐 비움)</summary>
+<summary><code>st_rt_speaker_set_stop</code> — Stops the set (empties the queue)</summary>
 
 ```c
 int st_rt_speaker_set_stop(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 세트 전체를 정지하고 링의 큐를 비웁니다.
+**Purpose** — Stops the whole set and empties the ring queue.
 
-**언제·어떻게** — 요청은 즉시, 소리는 다음 렌더 블록 경계에서 걸립니다(132표본 램프 아웃). 이미 방에 나간 잔향은 계속 울립니다. 탐색하려면 stop(또는 pause) 직후 `st_rt_speaker_set_relocate` → write(프리필) → play 순으로 부릅니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**When / how** — The request is immediate; the sound takes effect at the next render block boundary (132-sample ramp out). Reverb already released into the room keeps ringing. To seek, call `st_rt_speaker_set_relocate` → write (prefill) → play right after stop (or pause). Thread: `[control]` — do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | Context handle |
+| `set` | Set handle |
 
-**반환** — `1` = 요청됨 / `0` = 실패(없는 세트 등).
+**Returns** — `1` = requested / `0` = failed (no such set, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_relocate</code> — 세트의 콘텐츠 위치를 다시 잡는다(탐색)</summary>
+<summary><code>st_rt_speaker_set_relocate</code> — Re-seats the set's content position (seek)</summary>
 
 ```c
 int st_rt_speaker_set_relocate(STRT_Context* context, STSpeakerSetId set, int64_t contentFrame);
 ```
 
-**용도** — 탐색(seek)용입니다. 호출 시점까지 쓴 프레임을 버리고, 다음 꺼냄부터 `contentFrame`을 이 값에서 셉니다. 그 뒤에 쓴 프레임은 남습니다.
+**Purpose** — For seeking. Discards the frames written up to the call, and from the next read counts `contentFrame` from this value. Frames written afterwards are kept.
 
-**언제·어떻게** — 요청 상태가 정지·일시정지일 때만 받습니다(stop 직후 바로 불러도 됩니다). 입력 리샘플러(`hostSampleRate`)·업믹스 이력도 다음 write에서 버리므로, relocate 뒤 첫 출력 표본은 그 뒤 처음 쓴 호스트 프레임(= `contentFrame` 기준값)에 표본 단위로 맞습니다. HOST_PULL_BUFFERED에서 `st_rt_render_stop`/`start`로 출력 링을 버리기 전에는 `contentFrame − latencyFrames`(들린 위치)를 읽어 두었다가 이 함수로 다시 잡습니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**When / how** — Accepted only when the requested state is stopped or paused (it can be called right after stop). The input resampler (`hostSampleRate`) and upmix history are also discarded on the next write, so the first output sample after relocate is sample-accurately aligned to the first host frame written afterwards (= the `contentFrame` reference). In HOST_PULL_BUFFERED, before discarding the output ring with `st_rt_render_stop`/`start`, read `contentFrame − latencyFrames` (the heard position) and re-seat with this function. Thread: `[control]` — do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `contentFrame` | 새 콘텐츠 위치 기준(호스트 프레임) |
+| `context` | Context handle |
+| `set` | Set handle |
+| `contentFrame` | New content position reference (host frames) |
 
-**반환** — `1` = 적용 / `0` = 실패(재생 중, 없는 세트 등).
+**Returns** — `1` = applied / `0` = failed (playing, no such set, etc.).
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_idle</code> — 세트(멤버 전원)를 쉬게 한다</summary>
+<summary><code>st_rt_speaker_set_idle</code> — Idles the set (all members)</summary>
 
 ```c
 int st_rt_speaker_set_idle(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 들려줄 것이 없는 세트의 계산·렌더 비용을 없앱니다. 멤버 전원을 한 번에(씬 커밋 1번) 쉬게 하고(동작은 `st_rt_source_idle`과 같음), 세트 창이 멤버와 같은 길이(지연선 길이 + 1 s) 동안 무음이고 원음 모드 지연 링도 비면 렌더 블록마다 하던 링 꺼내기·원음 믹스도 멈춥니다(블록 시각 `renderFrame`도 멈춤).
+**Purpose** — Eliminates the compute and render cost of a set that has nothing to play. Idles all members at once (one scene commit; behavior is the same as `st_rt_source_idle`), and once the set window has been silent for as long as the members (delay line length + 1 s) and the dry-mode delay ring is also empty, the per-render-block ring reads and dry mix stop as well (the block clock `renderFrame` also stops).
 
-**언제·어떻게** — 재생을 멈춘 뒤(stop·pause·무음 쓰기) 부릅니다. 쉬는 동안 쓴 프레임은 링에 남았다가 깨운 뒤 나갑니다. 멤버 id에 대한 `st_rt_source_idle`/`_run`은 거절되므로 세트는 이 함수와 `st_rt_speaker_set_run`으로 다룹니다. 스레드: `[control]` — 씬 락을 잡습니다. 지원 여부는 `ST_CAP1_ENGINE_IDLE`(능력 워드 1)로 확인합니다.
+**When / how** — Call it after stopping playback (stop, pause, writing silence). Frames written while idle stay in the ring and play after waking. `st_rt_source_idle`/`_run` on member ids are rejected, so handle sets with this function and `st_rt_speaker_set_run`. Thread: `[control]` — takes the scene lock. Check support with `ST_CAP1_ENGINE_IDLE` (capability word 1).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | Context handle |
+| `set` | Set handle |
 
-**반환** — `1` = 성공 / `0` = 실패(`ST_STATUS_NOT_FOUND` 없는 세트, `ST_STATUS_UNAVAILABLE`).
+**Returns** — `1` = success / `0` = failed (`ST_STATUS_NOT_FOUND` no such set, `ST_STATUS_UNAVAILABLE`).
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_run</code> — 쉬는 세트를 깨운다</summary>
+<summary><code>st_rt_speaker_set_run</code> — Wakes an idle set</summary>
 
 ```c
 int st_rt_speaker_set_run(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — `st_rt_speaker_set_idle`로 쉬게 한 세트를 다시 돌립니다. 멤버를 먼저 깨운 뒤 세트 창을 열어, 그 사이 렌더 블록이 끼어도 콘텐츠를 잃지 않습니다.
+**Purpose** — Runs a set idled with `st_rt_speaker_set_idle` again. It wakes the members first and then opens the set window, so no content is lost even if a render block intervenes.
 
-**언제·어떻게** — 다시 재생하기 전에 부릅니다. 쉬는 동안 링에 쓴 프레임은 깨운 뒤 나갑니다. 스레드: `[control]` — 씬 락을 잡습니다. 지원 여부는 `ST_CAP1_ENGINE_IDLE`(능력 워드 1)로 확인합니다.
+**When / how** — Call it before playing again. Frames written to the ring while idle play after waking. Thread: `[control]` — takes the scene lock. Check support with `ST_CAP1_ENGINE_IDLE` (capability word 1).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | Context handle |
+| `set` | Set handle |
 
-**반환** — `1` = 성공 / `0` = 실패(`ST_STATUS_NOT_FOUND` 없는 세트, `ST_STATUS_UNAVAILABLE`).
+**Returns** — `1` = success / `0` = failed (`ST_STATUS_NOT_FOUND` no such set, `ST_STATUS_UNAVAILABLE`).
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_get_idle_state</code> — 세트의 쉼 상태를 읽는다</summary>
+<summary><code>st_rt_speaker_set_get_idle_state</code> — Reads the set's idle state</summary>
 
 ```c
 int st_rt_speaker_set_get_idle_state(const STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 세트의 쉼·실행 상태를 `STRT_IdleState`로 돌려줍니다. 세트와 멤버가 모두 쉬어야 IDLE입니다.
+**Purpose** — Returns the set's idle/running state as `STRT_IdleState`. It is IDLE only when the set and all members are idle.
 
-**언제·어떻게** — `st_rt_speaker_set_idle` 뒤 꼬리가 다 나갔는지 확인할 때 씁니다. 스레드: `[control]` — 제어 스레드용 질의입니다.
+**When / how** — Use it to check whether the tail has fully played out after `st_rt_speaker_set_idle`. Thread: `[control]` — a control-thread query.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | Context handle |
+| `set` | Set handle |
 
-**반환** — `ST_RT_IDLE_RUNNING`(0) / `ST_RT_IDLE_DRAINING`(1, 남은 소리를 내는 중) / `ST_RT_IDLE_IDLE`(2). 없는 세트·컨텍스트 `NULL`이면 `-1`.
+**Returns** — `ST_RT_IDLE_RUNNING`(0) / `ST_RT_IDLE_DRAINING`(1, still outputting remaining sound) / `ST_RT_IDLE_IDLE`(2). `-1` for no such set or context `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_set_direct</code> — 원음 모드(전파를 건너뛴 직접 출력)를 설정한다</summary>
+<summary><code>st_rt_speaker_set_set_direct</code> — Configures dry mode (direct output bypassing propagation)</summary>
 
 ```c
 int st_rt_speaker_set_set_direct(STRT_Context* context, STSpeakerSetId set, const STSpeakerSetDirect* direct);
 ```
 
-**용도** — 원음 모드는 전파·오랄라이제이션을 건너뛰고 세트 채널을 출력 채널로 바로 냅니다. 켜고 끌 때 방 안의 스피커 소리와 콘텐츠 원음 사이를 같은 콘텐츠 위치에서 크로스페이드합니다. 같은 링·`contentFrame`·transport·페이드를 쓰며, 렌더 블록마다 꺼낸 같은 콘텐츠 표본을 원음 g, 젖은 경로(멤버 소스) 1 − g로 나누고 g를 크로스페이드 동안 선형으로 옮깁니다. 젖은 경로가 0이 돼도 방에 이미 나간 잔향은 자연 감쇠합니다.
+**Purpose** — Dry mode bypasses propagation and auralization and outputs the set channels directly to the output channels. Toggling it crossfades between the in-room speaker sound and the dry content at the same content position. It uses the same ring, `contentFrame`, transport and fades; the same content samples read each render block are split into dry g and the wet path (member sources) 1 − g, and g moves linearly during the crossfade. Even when the wet path reaches 0, reverb already released into the room decays naturally.
 
-**언제·어떻게** — 매번 설정 전체를 보내며 다음 렌더 블록부터 적용됩니다. 세트가 소리를 내지 않던 동안(정지·일시정지·시작 대기) 바꾼 설정은 크로스페이드 없이 바로 걸립니다 — 원음 모드로 처음 재생하면 첫 표본부터 원음만 나갑니다. 원음은 `delayFrames` 뒤에 행렬을 거쳐 출력단(출력 EQ → 마스터 게인 → 리미터) **앞**에 더해지므로 리미터·출력단 지연은 젖은 경로와 같고, 남는 차이인 젖은 경로의 전파 지연(거리/음속)을 `delayFrames`로 맞춥니다. 원음이 켜진 동안 `delayFrames`를 바꾸면 이어 붙이지 않고 건너뜁니다. 헤드폰 출력에서도 원음은 HRTF를 타지 않습니다. 원음을 한 번도 켜지 않은 세트의 출력은 이 기능이 없을 때와 비트 동일합니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**When / how** — The full setting is sent each time and applies from the next render block. Settings changed while the set was not sounding (stopped, paused, waiting to start) take effect immediately without a crossfade — playing for the first time in dry mode outputs only dry sound from the first sample. The dry signal goes through the matrix after `delayFrames` and is added **before** the output stage (output EQ → master gain → limiter), so the limiter and output-stage latency are the same as the wet path; match the remaining difference, the wet path's propagation delay (distance/speed of sound), with `delayFrames`. Changing `delayFrames` while dry is enabled jumps instead of splicing. Even on headphone output the dry signal does not go through HRTF. The output of a set that has never enabled dry mode is bit-identical to having no such feature. Thread: `[control]` — do not call from the audio callback.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `direct` | 원음 설정. 호출자가 `structSize` / `apiVersion`을 채웁니다 |
+| `context` | Context handle |
+| `set` | Set handle |
+| `direct` | Dry settings. The caller fills `structSize` / `apiVersion` |
 
-**구조체** `STSpeakerSetDirect`
+**Struct** `STSpeakerSetDirect`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STSpeakerSetDirect)` / `ST_ABI_VERSION` |
-| `enabled` | 0 = 젖은 경로(기본), 1 = 원음 |
-| `crossfadeMs` | 전환 길이 `[0, 1000]` ms. 3 ms보다 짧으면 3 ms |
-| `delayFrames` | 원음 지연(호스트 프레임), `[0, 1 s]` |
-| `outputChannels` | `matrix` 행 수. 0이면 행렬 없음(엔진 기본 매핑) |
-| `matrix` | `outputChannels × channelCount`, 출력 행 우선 — `matrix[o * channelCount + c]`. `NULL` 허용 |
+| `enabled` | 0 = wet path (default), 1 = dry |
+| `crossfadeMs` | Transition length `[0, 1000]` ms. Shorter than 3 ms becomes 3 ms |
+| `delayFrames` | Dry delay (host frames), `[0, 1 s]` |
+| `outputChannels` | Number of `matrix` rows. 0 means no matrix (engine default mapping) |
+| `matrix` | `outputChannels × channelCount`, output-row major — `matrix[o * channelCount + c]`. `NULL` allowed |
 | `reserved[6]` | 0 |
 
-`outputChannels`가 지금 출력 채널 수(스테레오 2 · 스피커 레이아웃 N)와 다르거나 `matrix`가 `NULL`이면 엔진 기본 매핑을 씁니다.
+If `outputChannels` differs from the current output channel count (stereo 2 · speaker layout N) or `matrix` is `NULL`, the engine default mapping is used.
 
-| 조건 | 기본 매핑 |
+| Condition | Default mapping |
 |---|---|
-| 채널 수 = 출력 수 | 그대로 |
-| 출력 2 | ITU-R BS.775 다운믹스 — 3.0은 FL FR FC(FC 0.7071), 그 밖은 FL FR FC LFE SL SR [BL BR \| BC]로 읽고 FC·서라운드·백 0.7071, LFE 0(제외), 6.1의 BC는 양쪽 0.5, 모노는 양쪽 0.7071, 그 밖 채널 수는 짝수 → L · 홀수 → R |
-| 그 밖 | 앞에서부터 1:1 |
+| Channel count = output count | As is |
+| Output 2 | ITU-R BS.775 downmix — 3.0 is read as FL FR FC (FC 0.7071), others as FL FR FC LFE SL SR [BL BR \| BC], with FC, surrounds and backs at 0.7071, LFE 0 (excluded), the BC of 6.1 at 0.5 to both sides, mono at 0.7071 to both sides, and other channel counts even → L · odd → R |
+| Otherwise | 1:1 from the front |
 
-다운믹스는 정규화하지 않습니다(리미터가 받습니다).
+The downmix is not normalized (the limiter handles it).
 
-**반환** — `1` = 적용 / `0` = 실패(`ST_STATUS_VERSION_MISMATCH` · `ST_STATUS_INVALID_ARGUMENT` · `ST_STATUS_NOT_FOUND`).
+**Returns** — `1` = applied / `0` = failed (`ST_STATUS_VERSION_MISMATCH` · `ST_STATUS_INVALID_ARGUMENT` · `ST_STATUS_NOT_FOUND`).
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_get_status</code> — 세트의 재생 상태·카운터·시각을 읽는다</summary>
+<summary><code>st_rt_speaker_set_get_status</code> — Reads the set's playback state, counters and clocks</summary>
 
 ```c
 int st_rt_speaker_set_get_status(const STRT_Context* context, STSpeakerSetId set, STSpeakerSetStatus* outStatus);
 ```
 
-**용도** — 세트의 transport 상태, 링 상태, 누적 카운터, 표본 단위 정렬용 렌더 시각을 한 번에 돌려줍니다. 공급량 조절(`queuedFrames`), 재생 위치 표시, 영상과의 표본 단위 싱크에 씁니다.
+**Purpose** — Returns the set's transport state, ring state, cumulative counters and render clocks for sample-accurate alignment in one call. Use it for supply control (`queuedFrames`), playback position display and sample-accurate sync with video.
 
-**언제·어떻게** — 어느 스레드에서든 부를 수 있습니다. 프레임 필드는 전부 호스트 프레임(엔진 프레임 누계를 조회 때 round-half-up 한 번 환산)이고, 카운터는 생성 시점부터의 누계입니다. `state`·`contentFrame`·`renderFrame`·`playRenderFrame`·`playContentFrame`은 렌더 블록 하나가 함께 쓰는 값이라 한 번의 호출 안에서 서로 맞습니다. `latencyFrames`는 출력단 상태를 따로 읽으므로 렌더와 다른 스레드에서 읽으면 ±1블록 어긋날 수 있습니다 — 표본 단위 정렬은 렌더 시각 필드로 합니다. 스레드: `[any]` — 블록하지 않습니다.
+**When / how** — Can be called from any thread. All frame fields are host frames (engine frame totals converted once at query time with round-half-up), and counters are cumulative since creation. `state`, `contentFrame`, `renderFrame`, `playRenderFrame` and `playContentFrame` are written together by one render block, so they are mutually consistent within one call. `latencyFrames` reads the output-stage state separately, so it may be off by ±1 block when read from a thread other than the render thread — do sample-accurate alignment with the render clock fields. Thread: `[any]` — does not block.
 
-표본 단위 정렬: 재생이 `playRenderFrame`에서 시작한 뒤 언더런 없이 이어졌다면, 렌더 위치 r(`renderFrame` 축)의 콘텐츠는 `playContentFrame + (r − playRenderFrame)`입니다(3 ms 페이드인 포함). 출력 표본은 그 뒤 `latencyFrames`(출력단 + 리미터)만큼 늦게 나옵니다. 소리의 전파 지연(거리/음속)과 필터 군지연은 여기 들어가지 않으며, `hostSampleRate`를 지정했으면 두 축의 환산 반올림으로 ±1 프레임 차이가 날 수 있습니다.
+Sample-accurate alignment: if playback started at `playRenderFrame` and continued without underrun, the content at render position r (on the `renderFrame` axis) is `playContentFrame + (r − playRenderFrame)` (including the 3 ms fade-in). The output sample comes out `latencyFrames` (output stage + limiter) later. The sound's propagation delay (distance/speed of sound) and filter group delay are not included, and if `hostSampleRate` is specified, conversion rounding between the two axes may cause a ±1 frame difference.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `outStatus` | 출력. 호출자가 `structSize` / `apiVersion`을 채웁니다 |
+| `context` | Context handle |
+| `set` | Set handle |
+| `outStatus` | Output. The caller fills `structSize` / `apiVersion` |
 
-**구조체** `STSpeakerSetStatus`
+**Struct** `STSpeakerSetStatus`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STSpeakerSetStatus)` / `ST_ABI_VERSION` |
-| `state` | `STSpeakerSetState` — `STOPPED`(0) / `PLAYING`(1) / `PAUSED`(2) / `STARTING`(3, play 요청 후 멤버 소스를 담은 IR 채택 대기 — 콘텐츠를 꺼내지 않음) |
-| `queuedFrames` | 링에 쌓인 몫 |
-| `capacityFrames` | 엔진이 실제로 잡은 링 용량 |
-| `latencyFrames` | 렌더 → 출력 지연: 출력단(pull FIFO·버퍼드 링·출력 리샘플러) + 리미터 |
-| `contentFrame` | relocate 기준 + 렌더가 링에서 꺼낸 몫 |
-| `underrunFrames` | 재생 중 링이 비어 무음으로 채운 몫 |
-| `droppedFrames` | 링이 가득 차 버린 몫 |
-| `totalWrittenFrames` | 링에 실제로 들어간 몫 |
-| `renderFrame` | 컨텍스트가 지금까지 렌더한 프레임(무음 프리롤 블록 포함) |
-| `playRenderFrame` | 마지막 재생 시작 블록의 첫 표본 렌더 위치. 시작 전 −1 |
-| `playContentFrame` | 그 표본의 콘텐츠 프레임 |
-| `appliedSetters` | `st_rt_speaker_set_update`가 엔진에 보낸 값 수(위치·회전·게인·리스너 위치·회전) |
-| `skippedSetters` | 비트 동일·무지향 회전이라 보내지 않은 값 수 |
-| `directMix` | 원음 몫 0..1(직전 블록 끝). 0 = 젖은 경로만 |
-| `inputDelayFrames` | 업믹스 창 지연(호스트 프레임, 업믹스 없으면 0) |
-| `reserved[4]` | 예약 |
+| `state` | `STSpeakerSetState` — `STOPPED`(0) / `PLAYING`(1) / `PAUSED`(2) / `STARTING`(3, waiting after a play request for an IR containing the member sources to be adopted — no content is consumed) |
+| `queuedFrames` | Amount queued in the ring |
+| `capacityFrames` | Ring capacity actually allocated by the engine |
+| `latencyFrames` | Render → output latency: output stage (pull FIFO, buffered ring, output resampler) + limiter |
+| `contentFrame` | Relocate reference + amount the renderer has read from the ring |
+| `underrunFrames` | Amount filled with silence because the ring was empty during playback |
+| `droppedFrames` | Amount discarded because the ring was full |
+| `totalWrittenFrames` | Amount that actually entered the ring |
+| `renderFrame` | Frames rendered by the context so far (including silent preroll blocks) |
+| `playRenderFrame` | Render position of the first sample of the last playback start block. −1 before start |
+| `playContentFrame` | Content frame of that sample |
+| `appliedSetters` | Number of values `st_rt_speaker_set_update` sent to the engine (position, rotation, gain, listener position, rotation) |
+| `skippedSetters` | Number of values not sent because they were bit-identical or omnidirectional rotations |
+| `directMix` | Dry share 0..1 (at the end of the previous block). 0 = wet path only |
+| `inputDelayFrames` | Upmix window latency (host frames, 0 without upmix) |
+| `reserved[4]` | Reserved |
 
-**반환** — `1` = 성공 / `0` = 실패(`NULL`, 스탬프 불일치, 없는 세트).
+**Returns** — `1` = success / `0` = failed (`NULL`, stamp mismatch, no such set).
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>디버그 · 시각화</strong> — 9개</summary>
+<summary><strong>Debug · Visualization</strong> — 9 functions</summary>
 
 <details>
-<summary><code>st_rt_debug_get_frame_generation</code> — 전파 프레임 세대 번호를 읽는다</summary>
+<summary><code>st_rt_debug_get_frame_generation</code> — Reads the propagation frame generation number</summary>
 
 ```c
 uint64_t st_rt_debug_get_frame_generation(const STRT_Context* context);
 ```
 
-**용도** — 새 전파 결과가 나왔는지 값의 변화만으로 가볍게 감지하는 카운터입니다. 디버그 시각화가 매 프레임 스냅샷을 다시 가져올 필요가 있는지 판단할 때 씁니다.
+**Purpose** — A counter for cheaply detecting, by a change in value alone, whether a new propagation result has been produced. Use it in debug visualization to decide whether a new snapshot needs to be fetched each frame.
 
-**언제·어떻게** — 언제든 폴링할 수 있습니다. 값이 바뀌었으면 `st_rt_debug_acquire_snapshot`을 불러 새 스냅샷을 잡습니다. `st_rt_debug_copy_visual_paths`에 넘길 세대는 이 값이 아니라 `st_rt_debug_acquire_snapshot`이 돌려준 `frameGeneration`을 씁니다. 스레드: `[any]` — atomic 하나를 읽습니다.
+**When / how** — Can be polled at any time. If the value has changed, call `st_rt_debug_acquire_snapshot` to take a new snapshot. For the generation passed to `st_rt_debug_copy_visual_paths`, use the `frameGeneration` returned by `st_rt_debug_acquire_snapshot`, not this value. Thread: `[any]` — reads a single atomic.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 현재 세대 번호. 아직 전파 결과가 없거나 `context`가 `NULL`이면 `0`.
+**Returns** — Current generation number. `0` if there is no propagation result yet or `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_set_collect_failed_walks</code> — 중도에 실패한 경로 walk도 시각화용으로 수집할지 정한다</summary>
+<summary><code>st_rt_debug_set_collect_failed_walks</code> — Sets whether path walks that failed midway are also collected for visualization</summary>
 
 ```c
 void st_rt_debug_set_collect_failed_walks(STRT_Context* context, int enabled);
 ```
 
-**용도** — 기본 시각화는 소스에서 리스너까지 완주한 경로만 담습니다. 이 옵션을 켜면 중간에 끊긴 walk도 수집돼 "왜 이 경로가 연결되지 않았는가"를 디버깅할 수 있습니다.
+**Purpose** — Default visualization contains only paths that completed from source to listener. Enabling this option also collects walks that broke off midway, so you can debug "why this path did not connect".
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있고 이후 전파 결과부터 반영됩니다. 수집 대상 경로 종류는 `st_rt_debug_set_collect_visual_paths`의 마스크로 따로 정하며, 이 플래그는 그 마스크와 독립적으로 유지됩니다(`st_rt_debug_get_collect_mask`에는 나타나지 않습니다). 실패 walk는 `STVisualPathRecord.valid = 0`으로 들어오고, 복사할 때 `ST_VISUAL_PATH_COPY_ALL`로 가져옵니다. 기본은 꺼짐입니다. 스레드: `[control]` — 씬 쓰기 락을 잡으므로 오디오 스레드에서 부르지 않습니다.
+**When / how** — Can be called any time after creation and takes effect from subsequent propagation results. The path kinds to collect are set separately with the mask of `st_rt_debug_set_collect_visual_paths`, and this flag is kept independently of that mask (it does not appear in `st_rt_debug_get_collect_mask`). Failed walks come in with `STVisualPathRecord.valid = 0` and are fetched with `ST_VISUAL_PATH_COPY_ALL` when copying. Disabled by default. Thread: `[control]` — takes the scene write lock; do not call from the audio thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | `0` = 끔(기본) / `0`이 아닌 값 = 켬 |
+| `context` | Context handle |
+| `enabled` | `0` = off (default) / non-`0` value = on |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_set_collect_visual_paths</code> — 시각화용으로 수집할 경로 종류 마스크를 지정한다</summary>
+<summary><code>st_rt_debug_set_collect_visual_paths</code> — Specifies the mask of path kinds collected for visualization</summary>
 
 ```c
 int st_rt_debug_set_collect_visual_paths(STRT_Context* context, uint32_t mask);
 ```
 
-**용도** — 에디터·디버그 뷰에서 guide 레이, 소스 수송 레이, 직접음·투과 경로, 반사·회절 경로를 선분으로 그리기 위해 전파가 경로 기하를 기록하게 합니다.
+**Purpose** — Makes propagation record path geometry so that editor and debug views can draw guide rays, source transport rays, direct and transmission paths, and reflection and diffraction paths as line segments.
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있고 이후 전파 결과부터 반영됩니다. 수집된 결과는 `st_rt_debug_acquire_snapshot` → `st_rt_debug_copy_visual_paths` 순으로 가져옵니다. 기본 마스크는 `0`(수집 안 함)입니다. 지원 여부는 `ST_CAP_PATH_COLLECTION_MASK`. 스레드: `[control]` — 씬 쓰기 락을 잡으므로 오디오 스레드에서 부르지 않습니다.
+**When / how** — Can be called any time after creation and takes effect from subsequent propagation results. Fetch the collected results in the order `st_rt_debug_acquire_snapshot` → `st_rt_debug_copy_visual_paths`. The default mask is `0` (no collection). Support: `ST_CAP_PATH_COLLECTION_MASK`. Thread: `[control]` — takes the scene write lock; do not call from the audio thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mask` | `STPathCollectionFlag` 조합(아래 표). `0` = 수집 끔. 정의되지 않은 비트가 있으면 거절 |
+| `context` | Context handle |
+| `mask` | Combination of `STPathCollectionFlag` (table below). `0` = collection off. Rejected if it contains undefined bits |
 
-**열거형** `STPathCollectionFlag`
+**Enum** `STPathCollectionFlag`
 
-| 값 | 이름 | 수집 대상 |
+| Value | Name | Collected |
 |---|---|---|
-| `1u << 0` | `ST_PATH_COLLECTION_GUIDE_RAY` | 리스너에서 쏜 guide 레이 |
-| `1u << 1` | `ST_PATH_COLLECTION_SOURCE_TRANSPORT_RAY` | 소스 수송 레이 |
-| `1u << 2` | `ST_PATH_COLLECTION_DIRECT_TRANSMISSION` | 직접음·투과 경로 |
-| `1u << 3` | `ST_PATH_COLLECTION_REFLECTION_DIFFRACTION` | 반사·회절 경로(반사 구간을 포함한 혼합 회절 경로가 있어 한 비트로 묶임) |
-| 위 넷의 OR | `ST_PATH_COLLECTION_ALL` | 전부 |
+| `1u << 0` | `ST_PATH_COLLECTION_GUIDE_RAY` | Guide rays cast from the listener |
+| `1u << 1` | `ST_PATH_COLLECTION_SOURCE_TRANSPORT_RAY` | Source transport rays |
+| `1u << 2` | `ST_PATH_COLLECTION_DIRECT_TRANSMISSION` | Direct and transmission paths |
+| `1u << 3` | `ST_PATH_COLLECTION_REFLECTION_DIFFRACTION` | Reflection and diffraction paths (grouped into one bit because there are mixed diffraction paths that include reflection segments) |
+| OR of the four above | `ST_PATH_COLLECTION_ALL` | All |
 
-**반환** — `1` = 적용 / `0` = 거절(`context`가 `NULL`, `mask`에 정의되지 않은 비트).
+**Returns** — `1` = applied / `0` = rejected (`context` is `NULL`, undefined bits in `mask`).
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_get_collect_mask</code> — 현재 경로 수집 마스크를 읽는다</summary>
+<summary><code>st_rt_debug_get_collect_mask</code> — Reads the current path collection mask</summary>
 
 ```c
 uint32_t st_rt_debug_get_collect_mask(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_debug_set_collect_visual_paths`로 지정한 수집 마스크를 확인합니다.
+**Purpose** — Checks the collection mask specified with `st_rt_debug_set_collect_visual_paths`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 실패 walk 수집 여부(`st_rt_debug_set_collect_failed_walks`)는 이 값에 포함되지 않습니다. 스레드: `[any]` — atomic 사본을 읽습니다.
+**When / how** — Can be called at any time. Whether failed walks are collected (`st_rt_debug_set_collect_failed_walks`) is not included in this value. Thread: `[any]` — reads an atomic copy.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STPathCollectionFlag` 비트 조합. 기본 `0`, `context`가 `NULL`이면 `0`.
+**Returns** — Bit combination of `STPathCollectionFlag`. Default `0`; `0` if `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_acquire_snapshot</code> — 최신 전파 진단 스냅샷을 잡고 요약을 읽는다</summary>
+<summary><code>st_rt_debug_acquire_snapshot</code> — Takes the latest propagation diagnostic snapshot and reads its summary</summary>
 
 ```c
 int st_rt_debug_acquire_snapshot(STRT_Context* context, STPropagationSnapshotInfo* outInfo);
 ```
 
-**용도** — 최신 전파 세대 하나를 진단용으로 고정하고, 그 세대의 경로 수·시각화 버퍼 크기를 한 번에 돌려줍니다. 모든 값이 **같은 세대**에서 온 것이므로 경로 수 통계와 시각화 경로가 서로 어긋나지 않습니다.
+**Purpose** — Pins the latest propagation generation for diagnostics and returns that generation's path counts and visualization buffer sizes in one call. All values come from the **same generation**, so path-count statistics and visualization paths never disagree.
 
-**언제·어떻게** — 시각화 경로를 가져오려면 먼저 이 함수로 스냅샷을 잡고, 돌려받은 `frameGeneration`과 개수로 버퍼를 준비해 `st_rt_debug_copy_visual_paths`를 부릅니다. 다시 부르면 그사이 새 세대가 나왔을 경우 그 세대로 바뀌므로, 복사는 마지막으로 잡은 세대에 대해 합니다. 시각화 경로·점 개수는 `st_rt_debug_set_collect_visual_paths`로 수집을 켰을 때만 0이 아닙니다. 스레드: `[control]` — 진단 뮤텍스를 잡습니다.
+**When / how** — To fetch visualization paths, first take a snapshot with this function, prepare buffers using the returned `frameGeneration` and counts, then call `st_rt_debug_copy_visual_paths`. Calling it again switches to a newer generation if one has appeared in the meantime, so copy against the most recently taken generation. Visualization path and point counts are nonzero only when collection is enabled with `st_rt_debug_set_collect_visual_paths`. Thread: `[control]` — takes the diagnostics mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outInfo` | 출력. 호출자가 `structSize = sizeof(STPropagationSnapshotInfo)`, `apiVersion = ST_ABI_VERSION`을 채운다 |
+| `context` | Context handle |
+| `outInfo` | Output. The caller fills `structSize = sizeof(STPropagationSnapshotInfo)` and `apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STPropagationSnapshotInfo`
+**Struct** `STPropagationSnapshotInfo`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `frameGeneration` | 이 스냅샷의 세대. `st_rt_debug_copy_visual_paths`에 그대로 넘긴다 |
-| `collectionMask` | 이 세대를 만들 때 쓰인 수집 마스크(`STPathCollectionFlag`) |
-| `reserved0` | 예약 |
-| `visualPathCount` | 시각화 경로 전체 수(실패 walk 포함) |
-| `validVisualPathCount` | 완주한 시각화 경로 수. 유효 경로는 배열 앞쪽을 차지한다 |
-| `visualPointCount` | 시각화 점 전체 수 |
-| `validVisualPointCount` | 유효 경로에 속한 점 수. 배열 앞쪽을 차지한다 |
-| `totalPathCount` | 이 세대의 전체 음향 경로 수 |
-| `reflectionPathCount` | 반사 경로 수 |
-| `diffractionPathCount` | 회절 경로 수 |
-| `sourceSideOnlyPaths` | 소스 쪽 회절 모서리만 있는 회절 경로 수 |
-| `unclassifiedPaths` | 분류되지 않은 회절 경로 수(정상 동작에서는 0) |
-| `sourceSideEvents` | 소스 쪽 회절 이벤트 수 |
-| `terminalOnlyPaths` | 리스너 쪽 끝 모서리 회절만 있는 경로 수 |
-| `sourceAndTerminalPaths` | 소스 쪽과 리스너 쪽 회절이 모두 있는 경로 수 |
-| `terminalEvents` | 리스너 쪽 끝 모서리 회절 이벤트 수 |
-| `reserved[4]` | 예약 |
+| `structSize` / `apiVersion` | Stamps filled by the caller |
+| `frameGeneration` | Generation of this snapshot. Pass it as is to `st_rt_debug_copy_visual_paths` |
+| `collectionMask` | Collection mask used when producing this generation (`STPathCollectionFlag`) |
+| `reserved0` | Reserved |
+| `visualPathCount` | Total number of visualization paths (including failed walks) |
+| `validVisualPathCount` | Number of completed visualization paths. Valid paths occupy the front of the array |
+| `visualPointCount` | Total number of visualization points |
+| `validVisualPointCount` | Number of points belonging to valid paths. They occupy the front of the array |
+| `totalPathCount` | Total number of acoustic paths in this generation |
+| `reflectionPathCount` | Number of reflection paths |
+| `diffractionPathCount` | Number of diffraction paths |
+| `sourceSideOnlyPaths` | Number of diffraction paths with only source-side diffraction edges |
+| `unclassifiedPaths` | Number of unclassified diffraction paths (0 in normal operation) |
+| `sourceSideEvents` | Number of source-side diffraction events |
+| `terminalOnlyPaths` | Number of paths with only listener-side terminal-edge diffraction |
+| `sourceAndTerminalPaths` | Number of paths with both source-side and listener-side diffraction |
+| `terminalEvents` | Number of listener-side terminal-edge diffraction events |
+| `reserved[4]` | Reserved |
 
-**반환** — `1` = 성공 / `0` = `context`·`outInfo`가 `NULL`, 스탬프 불일치, 또는 아직 전파 결과가 한 번도 없음. 실패 시 `outInfo`는 바뀌지 않습니다.
+**Returns** — `1` = success / `0` = `context` or `outInfo` is `NULL`, stamp mismatch, or no propagation result has been produced yet. On failure `outInfo` is unchanged.
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_copy_visual_paths</code> — 잡아 둔 스냅샷의 시각화 경로와 점을 복사한다</summary>
+<summary><code>st_rt_debug_copy_visual_paths</code> — Copies the visualization paths and points of the held snapshot</summary>
 
 ```c
 int st_rt_debug_copy_visual_paths(STRT_Context* context, uint64_t frameGeneration, int copyMode, STVisualPathRecord* outPaths, uint32_t pathCapacity, STVisualPoint* outPoints, uint32_t pointCapacity);
 ```
 
-**용도** — 디버그 뷰에서 경로를 선분으로 그리기 위해 경로 레코드와 꼭짓점 배열을 호스트 버퍼로 복사합니다. 오디오 데이터는 이 표면을 통과하지 않습니다(검사·시각화 전용).
+**Purpose** — Copies path records and vertex arrays into host buffers so a debug view can draw paths as line segments. No audio data passes through this surface (inspection and visualization only).
 
-**언제·어떻게** — `st_rt_debug_acquire_snapshot`을 먼저 부르고, 그 `frameGeneration`과 개수로 버퍼를 준비합니다: `VALID_ONLY`면 경로 `validVisualPathCount`개·점 `validVisualPointCount`개, `ALL`이면 `visualPathCount`개·`visualPointCount`개. 버퍼는 해당 세트 전체를 담아야 하며 부분 복사는 하지 않습니다. 각 레코드의 `points[pointOffset .. pointOffset + pointCount)`가 순서대로 이어진 경로 하나입니다. 스레드: `[control]` — 진단 뮤텍스를 잡습니다.
+**When / how** — Call `st_rt_debug_acquire_snapshot` first and prepare buffers with its `frameGeneration` and counts: for `VALID_ONLY`, `validVisualPathCount` paths and `validVisualPointCount` points; for `ALL`, `visualPathCount` and `visualPointCount`. The buffers must hold the entire corresponding set; no partial copy is performed. Each record's `points[pointOffset .. pointOffset + pointCount)` is one path in order. Thread: `[control]` — takes the diagnostics mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `frameGeneration` | `st_rt_debug_acquire_snapshot`이 돌려준 세대. 잡아 둔 스냅샷의 세대와 다르면 실패 |
-| `copyMode` | `STVisualPathCopyMode`: `ST_VISUAL_PATH_COPY_VALID_ONLY`(0) = 완주한 경로만 / `ST_VISUAL_PATH_COPY_ALL`(1) = 실패 walk 포함 전부. 그 밖 값은 실패 |
-| `outPaths` | 경로 레코드 출력 배열. 복사할 경로가 0개면 `NULL` 가능 |
-| `pathCapacity` | `outPaths` 원소 수 |
-| `outPoints` | 점 출력 배열. 복사할 점이 0개면 `NULL` 가능 |
-| `pointCapacity` | `outPoints` 원소 수 |
+| `context` | Context handle |
+| `frameGeneration` | Generation returned by `st_rt_debug_acquire_snapshot`. Fails if it differs from the generation of the held snapshot |
+| `copyMode` | `STVisualPathCopyMode`: `ST_VISUAL_PATH_COPY_VALID_ONLY`(0) = completed paths only / `ST_VISUAL_PATH_COPY_ALL`(1) = everything including failed walks. Other values fail |
+| `outPaths` | Path record output array. May be `NULL` if there are 0 paths to copy |
+| `pathCapacity` | Number of elements in `outPaths` |
+| `outPoints` | Point output array. May be `NULL` if there are 0 points to copy |
+| `pointCapacity` | Number of elements in `outPoints` |
 
-**구조체** `STVisualPathRecord`
+**Struct** `STVisualPathRecord`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `pointOffset` | 이 경로의 첫 점이 `outPoints`에서 차지하는 인덱스 |
-| `pointCount` | 이 경로의 점 수 |
-| `depth` | 경로 깊이(상호작용 차수) |
-| `pathKind` | `STPathKind`(아래 표) |
-| `soundSourceIndex` | 소스 인덱스. guide 레이는 `-1` |
-| `valid` | `1` = 완주 / `0` = 중도 실패 walk |
-| `totalLengthMeters` | 경로 전체 길이(m) |
-| `reserved0` | 예약 |
+| `pointOffset` | Index in `outPoints` of this path's first point |
+| `pointCount` | Number of points in this path |
+| `depth` | Path depth (interaction order) |
+| `pathKind` | `STPathKind` (table below) |
+| `soundSourceIndex` | Source index. `-1` for guide rays |
+| `valid` | `1` = completed / `0` = walk that failed midway |
+| `totalLengthMeters` | Total path length (m) |
+| `reserved0` | Reserved |
 
-음향 경로의 점 순서는 소스 → 상호작용 지점들 → 리스너이고, guide 레이는 리스너 → 히트 지점들입니다.
+The point order of acoustic paths is source → interaction points → listener; for guide rays it is listener → hit points.
 
-**열거형** `STPathKind`
+**Enum** `STPathKind`
 
-| 값 | 이름 | 의미 |
+| Value | Name | Meaning |
 |---|---|---|
-| `0` | `ST_PATH_GUIDE_RAY` | guide 레이 |
-| `1` | `ST_PATH_DIRECT` | 직접음(투과 포함) |
-| `2` | `ST_PATH_REFLECTION` | 반사 |
-| `3` | `ST_PATH_DIFFRACTION_UNKNOWN` | 분류되지 않은 회절(정상 동작에서는 나오지 않음) |
-| `1 << 2` | `ST_PATH_DIFFRACTION_S` | 소스 쪽 모서리 회절 |
-| `1 << 3` | `ST_PATH_DIFFRACTION_L` | 리스너 쪽 끝 모서리 회절 |
-| `S \| L` | `ST_PATH_DIFFRACTION_SL` | 소스 쪽과 리스너 쪽 회절 모두 |
-| `1 << 4` | `ST_PATH_SOURCE_TRANSPORT_RAY` | 소스 수송 레이 |
+| `0` | `ST_PATH_GUIDE_RAY` | Guide ray |
+| `1` | `ST_PATH_DIRECT` | Direct sound (including transmission) |
+| `2` | `ST_PATH_REFLECTION` | Reflection |
+| `3` | `ST_PATH_DIFFRACTION_UNKNOWN` | Unclassified diffraction (does not occur in normal operation) |
+| `1 << 2` | `ST_PATH_DIFFRACTION_S` | Source-side edge diffraction |
+| `1 << 3` | `ST_PATH_DIFFRACTION_L` | Listener-side terminal-edge diffraction |
+| `S \| L` | `ST_PATH_DIFFRACTION_SL` | Both source-side and listener-side diffraction |
+| `1 << 4` | `ST_PATH_SOURCE_TRANSPORT_RAY` | Source transport ray |
 
-**구조체** `STVisualPoint`
+**Struct** `STVisualPoint`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `x`, `y`, `z` | 점 좌표(씬 프레임) |
-| `flags` | `STVisualPointFlag`: `ST_VISUAL_POINT_NONE`(0) / `ST_VISUAL_POINT_DIFFRACTION`(`1u << 0`, 회절 지점) |
+| `x`, `y`, `z` | Point coordinates (scene frame) |
+| `flags` | `STVisualPointFlag`: `ST_VISUAL_POINT_NONE`(0) / `ST_VISUAL_POINT_DIFFRACTION`(`1u << 0`, diffraction point) |
 
-**반환** — `1` = 성공 / `0` = 실패: `context`가 `NULL`, `copyMode`가 범위 밖, 아직 스냅샷이 없음, `frameGeneration`이 잡아 둔 세대와 다름, 버퍼 용량 부족(또는 필요한데 `NULL`). 세대 불일치로 실패하면 `st_rt_debug_acquire_snapshot`을 다시 부른 뒤 복사합니다.
+**Returns** — `1` = success / `0` = failed: `context` is `NULL`, `copyMode` out of range, no snapshot yet, `frameGeneration` differs from the held generation, insufficient buffer capacity (or `NULL` where needed). On a generation mismatch, call `st_rt_debug_acquire_snapshot` again and then copy.
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_copy_mesh_accel_nodes</code> — 메시 하나의 가속구조(BLAS) 노드 박스를 복사한다</summary>
+<summary><code>st_rt_debug_copy_mesh_accel_nodes</code> — Copies the acceleration structure (BLAS) node boxes of one mesh</summary>
 
 ```c
 int st_rt_debug_copy_mesh_accel_nodes(STRT_Context* context, STMeshId mesh, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 전파가 쓰는 메시 가속구조의 노드 경계 상자를 시각화용으로 꺼냅니다. 메시가 어떻게 분할됐는지 확인하거나 에디터에 BVH 박스를 겹쳐 그릴 때 씁니다. 전파가 쓰는 구조를 읽기만 합니다.
+**Purpose** — Extracts the node bounding boxes of the mesh acceleration structure used by propagation, for visualization. Use it to check how a mesh was partitioned or to overlay BVH boxes in an editor. It only reads the structure propagation uses.
 
-**언제·어떻게** — `st_rt_mesh_create` 뒤 언제든 부를 수 있습니다. BLAS는 메시 생성 시점의 `st_rt_scene_set_accel` 값으로 지어집니다. 보통 `outNodes = NULL`로 먼저 불러 노드 수를 받고 버퍼를 할당한 뒤 다시 부릅니다. 큰 메시는 수천 노드이므로 시각화에는 `maxDepth`로 윗단만 보는 것이 일반적입니다. 버퍼가 모자라면 전위 순서의 앞부분(맨 왼쪽 가지부터)만 쓰이므로, 윗단만 원하면 `maxDepth`로 자릅니다. 지원 여부는 `ST_CAP_ACCEL_DEBUG_NODES`. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**When / how** — Can be called any time after `st_rt_mesh_create`. The BLAS is built with the `st_rt_scene_set_accel` value at mesh creation time. Usually call first with `outNodes = NULL` to get the node count, allocate a buffer, then call again. Large meshes have thousands of nodes, so for visualization it is common to view only the upper levels with `maxDepth`. If the buffer is too small, only the front of the pre-order sequence (starting from the leftmost branch) is written, so if you want only the upper levels, cut with `maxDepth`. Support: `ST_CAP_ACCEL_DEBUG_NODES`. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 대상 메시 핸들(`st_rt_mesh_create`가 돌려준 값) |
-| `maxDepth` | `< 0` = 전 깊이. `0` 이상이면 `depth ≤ maxDepth`인 노드만 세고 쓴다 |
-| `outNodes` | 출력 배열. `NULL`이면 크기 질의(`nodeCapacity` 무시) |
-| `nodeCapacity` | `outNodes` 원소 수. 앞에서부터 `min(전체, nodeCapacity)`개를 쓴다 |
+| `context` | Context handle |
+| `mesh` | Target mesh handle (value returned by `st_rt_mesh_create`) |
+| `maxDepth` | `< 0` = all depths. When `0` or greater, counts and writes only nodes with `depth ≤ maxDepth` |
+| `outNodes` | Output array. `NULL` makes it a size query (`nodeCapacity` ignored) |
+| `nodeCapacity` | Number of elements in `outNodes`. Writes `min(total, nodeCapacity)` nodes from the front |
 
-**구조체** `STAccelNode` (32바이트, 버전 스탬프 없는 배열 원소)
+**Struct** `STAccelNode` (32 bytes, array element without a version stamp)
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `boundsMin[3]` | 노드 상자 최소 좌표 |
-| `boundsMax[3]` | 노드 상자 최대 좌표 |
-| `depth` | 깊이, 루트 = `0` |
-| `primitiveCount` | 리프: 담긴 프리미티브 수(≥ 0) / 내부 노드: `-1` |
+| `boundsMin[3]` | Minimum coordinates of the node box |
+| `boundsMax[3]` | Maximum coordinates of the node box |
+| `depth` | Depth, root = `0` |
+| `primitiveCount` | Leaf: number of contained primitives (≥ 0) / interior node: `-1` |
 
-- **순서**: 깊이 우선 전위(pre-order). 루트가 `[0]`이고, 각 노드의 부모는 배열 앞쪽에서 가장 가까운 `depth − 1` 노드입니다 — 부모 인덱스 없이 트리를 복원할 수 있습니다.
-- **좌표**: 메시 BLAS는 `st_rt_mesh_create`에 넘긴 정점 프레임(메시 로컬)입니다. 인스턴스 위치에 그리려면 호스트가 오브젝트 변환을 곱합니다. `sceneRatio` 변환은 없습니다.
-- **가속구조 종류별 의미**(`st_rt_scene_set_accel`의 kind): BVH 계열(`0` BinnedSAH, `2` TinyBVH, `3` LBVH, `4` LBVH_Simd)은 빌드된 이진 트리이며, 4/8-wide 순회 표현의 상자는 이 목록의 부분집합입니다. TinyBVH BVH8의 리프는 삼각형 4개 이하입니다. KD(`1` HybridKD)는 루트 상자를 분할 평면으로 잘라 상자를 유도하므로 형제 상자가 겹치지 않고 부모를 정확히 나눕니다. 빈 리프(`primitiveCount = 0`)가 있을 수 있고, 여러 리프에 걸친 삼각형은 리프마다 셉니다.
+- **Order**: depth-first pre-order. The root is `[0]`, and each node's parent is the nearest preceding node in the array with `depth − 1` — the tree can be reconstructed without parent indices.
+- **Coordinates**: A mesh BLAS is in the vertex frame passed to `st_rt_mesh_create` (mesh-local). To draw at the instance location, the host multiplies by the object transform. There is no `sceneRatio` conversion.
+- **Meaning per acceleration structure kind** (kind of `st_rt_scene_set_accel`): The BVH family (`0` BinnedSAH, `2` TinyBVH, `3` LBVH, `4` LBVH_Simd) is the built binary tree, and the boxes of the 4/8-wide traversal representation are a subset of this list. TinyBVH BVH8 leaves hold at most 4 triangles. KD (`1` HybridKD) derives boxes by cutting the root box with split planes, so sibling boxes do not overlap and exactly partition the parent. There may be empty leaves (`primitiveCount = 0`), and triangles spanning several leaves are counted in each leaf.
 
-**반환** — `maxDepth` 안의 **전체** 노드 수(≥ 0), 실패 시 `-1`(`context`가 `NULL`, 없는 메시 → `ST_STATUS_NOT_FOUND`). 버퍼가 모자라 잘린 복사도 전체 수를 돌려주며 `st_rt_get_last_status`에 `ST_STATUS_BUFFER_TOO_SMALL`을 남깁니다.
+**Returns** — The **total** number of nodes within `maxDepth` (≥ 0), `-1` on failure (`context` is `NULL`, no such mesh → `ST_STATUS_NOT_FOUND`). A copy truncated by an insufficient buffer also returns the total count and leaves `ST_STATUS_BUFFER_TOO_SMALL` in `st_rt_get_last_status`.
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_copy_scene_accel_nodes</code> — 씬 최상위 가속구조(TLAS) 노드 박스를 복사한다</summary>
+<summary><code>st_rt_debug_copy_scene_accel_nodes</code> — Copies the node boxes of the scene top-level acceleration structure (TLAS)</summary>
 
 ```c
 int st_rt_debug_copy_scene_accel_nodes(STRT_Context* context, int layer, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 오브젝트 인스턴스 위에 지은 씬 가속구조의 노드 상자를 시각화용으로 꺼냅니다. 정적·동적 오브젝트가 씬에서 어떻게 묶였는지 확인할 때 씁니다.
+**Purpose** — Extracts, for visualization, the node boxes of the scene acceleration structure built over object instances. Use it to check how static and dynamic objects are grouped in the scene.
 
-**언제·어떻게** — `st_rt_build` 뒤에 부릅니다. 정적 TLAS는 `st_rt_build`가 발행한 것이라, 다음 `st_rt_build` 전까지는 스테이징된 정적 변경이 보이지 않습니다. 동적 TLAS는 동적 재구축이 다시 발행합니다. 크기 질의(`outNodes = NULL`)·`maxDepth`·잘린 복사 규약은 `st_rt_debug_copy_mesh_accel_nodes`와 같습니다. 지원 여부는 `ST_CAP_ACCEL_DEBUG_NODES`. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**When / how** — Call it after `st_rt_build`. The static TLAS is the one published by `st_rt_build`, so staged static changes are not visible until the next `st_rt_build`. The dynamic TLAS is republished by dynamic rebuilds. The size query (`outNodes = NULL`), `maxDepth` and truncated-copy conventions are the same as `st_rt_debug_copy_mesh_accel_nodes`. Support: `ST_CAP_ACCEL_DEBUG_NODES`. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `layer` | `STAccelLayer`: `ST_ACCEL_LAYER_STATIC`(0) = `st_rt_build`가 발행한 정적 TLAS / `ST_ACCEL_LAYER_DYNAMIC`(1) = 동적 오브젝트 TLAS |
-| `maxDepth` | `< 0` = 전 깊이. `0` 이상이면 `depth ≤ maxDepth`인 노드만 |
-| `outNodes` | 출력 배열. `NULL`이면 크기 질의 |
-| `nodeCapacity` | `outNodes` 원소 수 |
+| `context` | Context handle |
+| `layer` | `STAccelLayer`: `ST_ACCEL_LAYER_STATIC`(0) = static TLAS published by `st_rt_build` / `ST_ACCEL_LAYER_DYNAMIC`(1) = dynamic object TLAS |
+| `maxDepth` | `< 0` = all depths. When `0` or greater, only nodes with `depth ≤ maxDepth` |
+| `outNodes` | Output array. `NULL` makes it a size query |
+| `nodeCapacity` | Number of elements in `outNodes` |
 
-`STAccelNode` 필드는 `st_rt_debug_copy_mesh_accel_nodes` 항목 참고. TLAS의 좌표는 씬(월드) 프레임이며, 리프의 프리미티브는 삼각형이 아니라 오브젝트 인스턴스입니다.
+See `st_rt_debug_copy_mesh_accel_nodes` for the `STAccelNode` fields. TLAS coordinates are in the scene (world) frame, and leaf primitives are object instances, not triangles.
 
-**반환** — `maxDepth` 안의 전체 노드 수(≥ 0). 그 TLAS가 아직 없으면(빌드 전, 해당 종류의 오브젝트 없음) `0`이며 오류가 아닙니다. `-1` = 실패(`context`가 `NULL`, `layer` 범위 밖 → `ST_STATUS_INVALID_ARGUMENT`). 잘린 복사는 `st_rt_debug_copy_mesh_accel_nodes`와 같이 `ST_STATUS_BUFFER_TOO_SMALL`을 남깁니다.
+**Returns** — Total number of nodes within `maxDepth` (≥ 0). If that TLAS does not exist yet (before build, no objects of that kind) it is `0`, which is not an error. `-1` = failed (`context` is `NULL`, `layer` out of range → `ST_STATUS_INVALID_ARGUMENT`). A truncated copy leaves `ST_STATUS_BUFFER_TOO_SMALL`, as in `st_rt_debug_copy_mesh_accel_nodes`.
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_build_mesh_accel_nodes</code> — 컨텍스트 없이 메시 하나의 BLAS를 지어 노드 박스를 돌려준다</summary>
+<summary><code>st_rt_debug_build_mesh_accel_nodes</code> — Builds the BLAS of one mesh without a context and returns its node boxes</summary>
 
 ```c
 int st_rt_debug_build_mesh_accel_nodes(const STMesh* mesh, int accelKind, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 호스트 에디터가 씬을 만들기 전에 메시의 가속구조를 미리 볼 때 씁니다. `st_rt_mesh_create`와 같은 입력 검증·같은 빌드 경로를 거치므로, 같은 `accelKind`면 실시간 컨텍스트가 짓는 BLAS와 같은 트리가 나옵니다.
+**Purpose** — Used by a host editor to preview a mesh's acceleration structure before building a scene. It goes through the same input validation and the same build path as `st_rt_mesh_create`, so for the same `accelKind` it produces the same tree as the BLAS a real-time context builds.
 
-**언제·어떻게** — 컨텍스트 없이 언제든 부를 수 있습니다. 매 호출이 BLAS를 새로 짓기 때문에(메시 크기에 비례하는 비용) 결과는 호스트가 캐시합니다. 크기 질의(`outNodes = NULL`)·`maxDepth`·전위 순서 규약은 `st_rt_debug_copy_mesh_accel_nodes`와 같습니다. 지원 여부는 `ST_CAP_ACCEL_DEBUG_NODES`. 스레드: `[any]` — 전역 상태를 쓰지 않습니다(빌드 비용은 호출 스레드가 부담합니다).
+**When / how** — Can be called at any time without a context. Every call builds the BLAS anew (cost proportional to mesh size), so the host caches the result. The size query (`outNodes = NULL`), `maxDepth` and pre-order conventions are the same as `st_rt_debug_copy_mesh_accel_nodes`. Support: `ST_CAP_ACCEL_DEBUG_NODES`. Thread: `[any]` — uses no global state (the build cost is borne by the calling thread).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `mesh` | 입력 메시. `vertices`는 xyz 인터리브(`numVertices × 3` float), `triangles`는 정점 인덱스(`numTriangles × 3` int) |
-| `accelKind` | `st_rt_scene_set_accel`의 kind: `0` BinnedSAH / `1` HybridKD / `2` TinyBVH / `3` LBVH / `4` LBVH_Simd. `-1` = 엔진 기본(TinyBVH, 환경변수 `SIMPLEST_ACCEL`이 있으면 그 값) |
-| `maxDepth` | `< 0` = 전 깊이. `0` 이상이면 `depth ≤ maxDepth`인 노드만 |
-| `outNodes` | 출력 배열. `NULL`이면 크기 질의 |
-| `nodeCapacity` | `outNodes` 원소 수 |
+| `mesh` | Input mesh. `vertices` is xyz interleaved (`numVertices × 3` float), `triangles` is vertex indices (`numTriangles × 3` int) |
+| `accelKind` | kind of `st_rt_scene_set_accel`: `0` BinnedSAH / `1` HybridKD / `2` TinyBVH / `3` LBVH / `4` LBVH_Simd. `-1` = engine default (TinyBVH, or the value of the environment variable `SOUNDTRACING_ACCEL` if set) |
+| `maxDepth` | `< 0` = all depths. When `0` or greater, only nodes with `depth ≤ maxDepth` |
+| `outNodes` | Output array. `NULL` makes it a size query |
+| `nodeCapacity` | Number of elements in `outNodes` |
 
-**구조체** `STMesh`
+**Struct** `STMesh`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `numVertices` | 정점 수 |
-| `vertices` | 정점 좌표 배열(xyz 인터리브) |
-| `numTriangles` | 삼각형 수 |
-| `triangles` | 삼각형 정점 인덱스 배열(삼각형당 3개) |
+| `numVertices` | Vertex count |
+| `vertices` | Vertex coordinate array (xyz interleaved) |
+| `numTriangles` | Triangle count |
+| `triangles` | Triangle vertex index array (3 per triangle) |
 
-`STAccelNode` 필드와 노드 순서·좌표 규약은 `st_rt_debug_copy_mesh_accel_nodes` 항목 참고. 좌표는 입력 정점 프레임 그대로입니다.
+See `st_rt_debug_copy_mesh_accel_nodes` for the `STAccelNode` fields and the node order and coordinate conventions. Coordinates are in the input vertex frame as is.
 
-**반환** — `maxDepth` 안의 전체 노드 수(≥ 0). `-1` = 실패(`mesh`나 배열이 `NULL`, 개수 0 이하, 비유한 정점, 범위 밖 인덱스, 잘못된 `accelKind`, 할당 실패). 컨텍스트가 없으므로 `st_rt_get_last_status`에는 아무것도 남지 않습니다.
+**Returns** — Total number of nodes within `maxDepth` (≥ 0). `-1` = failed (`mesh` or an array is `NULL`, count of 0 or less, non-finite vertex, out-of-range index, invalid `accelKind`, allocation failure). There is no context, so nothing is recorded in `st_rt_get_last_status`.
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>오프라인(`st_off_*`) — 컨텍스트 · 씬 · 음원 · 리스너</strong> — 72개</summary>
+<summary><strong>Offline (`st_off_*`) — Context · Scene · Source · Listener</strong> — 72 functions</summary>
 
 <details>
-<summary><code>st_off_get_api_version</code> — 오프라인 DLL의 ABI 버전을 돌려준다</summary>
+<summary><code>st_off_get_api_version</code> — Returns the ABI version of the offline DLL</summary>
 
 ```c
 uint32_t st_off_get_api_version(void);
 ```
 
-**용도** — 로드한 `SimpleSTOffline` 라이브러리가 어떤 ABI 버전으로 빌드됐는지 알려 줍니다. 호스트가 컴파일한 헤더(`STTypes.h`의 `ST_ABI_VERSION`)와 DLL이 같은 구조체 배치를 쓰는지 확인하는 유일한 판정 수단입니다.
+**Purpose** — Reports which ABI version the loaded `SoundTracingOffline` library was built with. It is the only means of determining whether the header the host compiled against (`ST_ABI_VERSION` in `STTypes.h`) and the DLL use the same struct layout.
 
-**언제·어떻게** — 라이브러리를 로드한 직후, 컨텍스트를 만들기 전에 한 번 불러 `ST_ABI_VERSION`과 비교합니다. 다르면 구조체 레이아웃이 어긋나므로 사용을 중단합니다. 모든 버전 스탬프 구조체의 `apiVersion` 필드에도 이 값(`ST_ABI_VERSION`)을 넣습니다. 스레드: `[any]` — 컴파일 상수라 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**When / how** — Call it once right after loading the library, before creating a context, and compare it with `ST_ABI_VERSION`. If they differ, struct layouts disagree, so stop using it. Also put this value (`ST_ABI_VERSION`) in the `apiVersion` field of every version-stamped struct. Thread: `[any]` — a compile-time constant, callable from any thread without blocking.
 
-**파라미터** — 없음.
+**Parameters** — None.
 
-**반환** — 라이브러리의 ABI 버전(`ST_ABI_VERSION`과 같은 값이어야 호환).
+**Returns** — The library's ABI version (compatible only if equal to `ST_ABI_VERSION`).
 
 </details>
 
 <details>
-<summary><code>st_off_get_version_string</code> — 제품 릴리스 버전 문자열을 돌려준다</summary>
+<summary><code>st_off_get_version_string</code> — Returns the product release version string</summary>
 
 ```c
 const char* st_off_get_version_string(void);
 ```
 
-**용도** — 로그·진단 화면에 표시할 제품 릴리스 버전을 사람이 읽을 수 있는 문자열로 줍니다.
+**Purpose** — Provides the product release version as a human-readable string for logs and diagnostic screens.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. ABI 호환성 판정에는 쓰지 않습니다 — 그 판정은 `st_off_get_api_version`으로 합니다. 스레드: `[any]` — 블록하지 않습니다.
+**When / how** — Can be called at any time. Do not use it to determine ABI compatibility — use `st_off_get_api_version` for that. Thread: `[any]` — does not block.
 
-**파라미터** — 없음.
+**Parameters** — None.
 
-**반환** — DLL이 소유한 정적 NUL 종료 문자열. 호출자가 해제하지 않습니다.
+**Returns** — A static NUL-terminated string owned by the DLL. The caller does not free it.
 
 </details>
 
 <details>
-<summary><code>st_off_get_capabilities</code> — 능력 워드 0(<code>ST_CAP_*</code>)을 돌려준다</summary>
+<summary><code>st_off_get_capabilities</code> — Returns capability word 0 (<code>ST_CAP_*</code>)</summary>
 
 ```c
 uint64_t st_off_get_capabilities(void);
 ```
 
-**용도** — 이 오프라인 라이브러리가 지원하는 기능을 비트마스크로 알려 줍니다. 기능이 선택적으로 추가되는 ABI라서, 호스트는 함수 존재가 아니라 이 비트로 지원 여부를 판단합니다.
+**Purpose** — Reports the features this offline library supports as a bitmask. Because features are added optionally to the ABI, the host determines support from these bits, not from the existence of functions.
 
-**언제·어떻게** — 초기화 시 한 번 읽어 두고 `ST_CAP_*` 비트로 AND해 확인합니다. 예: `ST_CAP_OFFLINE`, `ST_CAP_SCENE_RAYCAST`, `ST_CAP_SOURCE_DIRECTIVITY`, `ST_CAP_SCENE_RATIO`, `ST_CAP_THREAD_ATTRIBUTES`, `ST_CAP_SOURCE_EQ` 등. 실시간 DLL과 집합이 다릅니다 — 실시간 전용 비트(`ST_CAP_REALTIME_SINGLE` / `ST_CAP_REALTIME_MULTI`, `ST_CAP_RUNTIME_DELAY_RESIZE`, `ST_CAP_LOOKAHEAD_OUTPUT_LIMITER`, `ST_CAP_ENGINE_TIMING` 등)는 없고 `ST_CAP_OFFLINE_*` 비트가 있습니다. Exa 백엔드가 포함된 빌드는 `ST_CAP_BACKEND_EXA`가 더해집니다. 워드 1 이상의 능력(`ST_CAP1_*`)은 `st_off_get_capability_word`로 읽습니다 — 서로 다른 워드의 비트를 섞어 AND하지 않습니다. 스레드: `[any]` — 컴파일 상수입니다.
+**When / how** — Read it once at initialization and check by ANDing with `ST_CAP_*` bits. Examples: `ST_CAP_OFFLINE`, `ST_CAP_SCENE_RAYCAST`, `ST_CAP_SOURCE_DIRECTIVITY`, `ST_CAP_SCENE_RATIO`, `ST_CAP_THREAD_ATTRIBUTES`, `ST_CAP_SOURCE_EQ`, etc. The set differs from the realtime DLL — real-time-only bits (`ST_CAP_REALTIME_SINGLE` / `ST_CAP_REALTIME_MULTI`, `ST_CAP_RUNTIME_DELAY_RESIZE`, `ST_CAP_LOOKAHEAD_OUTPUT_LIMITER`, `ST_CAP_ENGINE_TIMING`, etc.) are absent and `ST_CAP_OFFLINE_*` bits are present. Builds that include the Exa backend add `ST_CAP_BACKEND_EXA`. Capabilities in word 1 and above (`ST_CAP1_*`) are read with `st_off_get_capability_word` — do not mix bits from different words in an AND. Thread: `[any]` — a compile-time constant.
 
-**파라미터** — 없음.
+**Parameters** — None.
 
-**반환** — 능력 워드 0의 비트 OR(`st_off_get_capability_word(0)`과 같은 값).
+**Returns** — Bitwise OR of capability word 0 (same value as `st_off_get_capability_word(0)`).
 
 </details>
 
 <details>
-<summary><code>st_off_get_capability_word</code> — 능력 워드 n을 돌려준다</summary>
+<summary><code>st_off_get_capability_word</code> — Returns capability word n</summary>
 
 ```c
 uint64_t st_off_get_capability_word(uint32_t word);
 ```
 
-**용도** — 워드 0의 64비트가 다 찬 뒤 추가된 능력을 워드 단위로 조회합니다. 이 함수가 있다는 것 자체는 워드 0의 `ST_CAP_CAPABILITY_WORDS` 비트로 알 수 있습니다.
+**Purpose** — Queries, per word, capabilities added after the 64 bits of word 0 were used up. The existence of this function itself is indicated by the `ST_CAP_CAPABILITY_WORDS` bit of word 0.
 
-**언제·어떻게** — 초기화 시 필요한 워드를 읽고, 같은 워드의 상수(`ST_CAP1_*`는 워드 1)로만 AND합니다. 오프라인 DLL의 워드 1에는 `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN`, `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE`, `ST_CAP1_OFFLINE_MAX_DELAY`, `ST_CAP1_SOURCE_PARAMETRIC_EQ`, `ST_CAP1_LISTENER_ORIENTATION_Q`가 들어 있습니다. 스레드: `[any]` — 컴파일 상수입니다.
+**When / how** — Read the needed words at initialization and AND only with constants of the same word (`ST_CAP1_*` is word 1). Word 1 of the offline DLL contains `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN`, `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE`, `ST_CAP1_OFFLINE_MAX_DELAY`, `ST_CAP1_SOURCE_PARAMETRIC_EQ` and `ST_CAP1_LISTENER_ORIENTATION_Q`. Thread: `[any]` — a compile-time constant.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `word` | 워드 번호. `0` = `st_off_get_capabilities()`와 같은 값, `1` = `ST_CAP1_*` 워드. 헤더가 아는 워드 수는 `ST_CAPABILITY_WORD_COUNT`이며 그 밖의 번호는 `0`을 돌려줍니다 |
+| `word` | Word number. `0` = same value as `st_off_get_capabilities()`, `1` = the `ST_CAP1_*` word. The number of words the header knows is `ST_CAPABILITY_WORD_COUNT`; other numbers return `0` |
 
-**반환** — 해당 워드의 비트 OR. 모르는 워드는 `0`(= 해당 능력 없음).
+**Returns** — Bitwise OR of that word. `0` for unknown words (= no such capabilities).
 
 </details>
 
 <details>
-<summary><code>st_off_get_sample_rate</code> — 엔진 샘플레이트(44100 Hz)를 돌려준다</summary>
+<summary><code>st_off_get_sample_rate</code> — Returns the engine sample rate (44100 Hz)</summary>
 
 ```c
 int st_off_get_sample_rate(void);
 ```
 
-**용도** — 엔진이 IR과 오디오를 만드는 고정 샘플레이트를 알려 줍니다. 오프라인 렌더 결과의 샘플 수를 시간으로 바꾸거나, 다른 레이트로 리샘플할지 판단할 때 씁니다.
+**Purpose** — Reports the fixed sample rate at which the engine produces IRs and audio. Use it to convert sample counts of offline render results to time, or to decide whether to resample to another rate.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 값은 44100 Hz로 고정이며, 호스트가 다른 레이트를 쓰면 리샘플은 호스트 몫입니다. 스레드: `[any]` — 컴파일 상수입니다.
+**When / how** — Can be called at any time. The value is fixed at 44100 Hz; if the host uses another rate, resampling is the host's job. Thread: `[any]` — a compile-time constant.
 
-**파라미터** — 없음.
+**Parameters** — None.
 
-**반환** — `44100`.
+**Returns** — `44100`.
 
 </details>
 
 <details>
-<summary><code>st_off_set_thread_attributes</code> — 엔진 스레드 종류별 우선순위·코어 선호·affinity를 지정한다</summary>
+<summary><code>st_off_set_thread_attributes</code> — Specifies priority, core preference and affinity per engine thread type</summary>
 
 ```c
 int st_off_set_thread_attributes(int threadType, const STThreadAttributes* attributes);
 ```
 
-**용도** — 엔진이 만드는 스레드의 속성을 호스트가 스레드 **생성 전에** 정합니다. 호스트가 자기 스레드 예산·우선순위 정책 안에 엔진 계산 스레드를 맞춰 넣기 위한 표면입니다.
+**Purpose** — Lets the host set the attributes of engine-created threads **before the threads are created**. It is the surface for fitting engine compute threads into the host's own thread budget and priority policy.
 
-**언제·어떻게** — `st_off_create` **전에** 부르는 것이 계약입니다. 이미 시작된 스레드에는 적용되지 않고 이후 만들어지는 스레드(다음 `st_off_create`의 계산 풀 등)부터 적용됩니다. 표는 컨텍스트와 무관한 **프로세스 전역**이고, 실시간 DLL과 오프라인 DLL은 각자 자기 표를 가집니다 — 두 DLL을 함께 쓰면 `st_rt_set_thread_attributes`와 이 함수 양쪽에 같은 값을 넣어야 합니다. 오프라인 셸에서 실제로 의미가 있는 종류는 `ST_THREAD_COMPUTE_POOL`뿐이고, 나머지 종류는 값이 저장만 되고 적용될 스레드가 없습니다(배치 워커는 `STThreadType`에 속하지 않습니다). `affinityMask`와 코어 선호 플래그는 Windows에서만 반영되고 macOS에서는 무시됩니다(QoS 클래스가 배치를 정합니다). 지원 여부는 `ST_CAP_THREAD_ATTRIBUTES`. 스레드: `[any]` — 프로세스 전역 표를 뮤텍스로 한 번 갱신합니다.
+**When / how** — The contract is to call it **before** `st_off_create`. It does not apply to threads already started, only to threads created afterwards (the compute pool of the next `st_off_create`, etc.). The table is **process-global** and independent of contexts, and the realtime and offline DLLs each have their own table — when using both DLLs, put the same values into both `st_rt_set_thread_attributes` and this function. In the offline shell only `ST_THREAD_COMPUTE_POOL` is actually meaningful; other types are only stored and have no thread to apply to (batch workers are not part of `STThreadType`). `affinityMask` and the core preference flags are honored only on Windows and ignored on macOS (the QoS class determines placement). Support: `ST_CAP_THREAD_ATTRIBUTES`. Thread: `[any]` — updates the process-global table once under a mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `threadType` | `STThreadType` 값, `[0, ST_THREAD_TYPE_COUNT)`. 오프라인에서 적용되는 것은 `ST_THREAD_COMPUTE_POOL`(4) — 계산 풀 워커(`maxComputeThreads` N > 1일 때 N개) |
-| `attributes` | 지정할 속성. 호출자가 `structSize = sizeof(STThreadAttributes)`, `apiVersion = ST_ABI_VERSION`을 채웁니다. `NULL`이면 그 종류를 기본값으로 되돌립니다 |
+| `threadType` | `STThreadType` value, `[0, ST_THREAD_TYPE_COUNT)`. What applies offline is `ST_THREAD_COMPUTE_POOL`(4) — compute pool workers (N of them when `maxComputeThreads` N > 1) |
+| `attributes` | Attributes to set. The caller fills `structSize = sizeof(STThreadAttributes)` and `apiVersion = ST_ABI_VERSION`. `NULL` resets that type to defaults |
 
-**구조체** `STThreadAttributes`
+**Struct** `STThreadAttributes`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` | `sizeof(STThreadAttributes)`. 호출자가 채움 |
-| `apiVersion` | `ST_ABI_VERSION`. 호출자가 채움 |
-| `priority` | `STThreadPriority` — `ST_THREAD_PRIORITY_DEFAULT`(0, 플랫폼 기본 그대로) / `LOW`(1) / `BELOW_NORMAL`(2) / `NORMAL`(3) / `ABOVE_NORMAL`(4) / `HIGH`(5) / `TIME_CRITICAL`(6). Windows는 같은 이름의 스레드 우선순위(LOW→LOWEST, HIGH→HIGHEST)로, macOS는 QoS 클래스(LOW→BACKGROUND, BELOW_NORMAL→UTILITY, NORMAL→USER_INITIATED, 그 이상→USER_INTERACTIVE)로 매핑됩니다 |
-| `flags` | `ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES` / `ST_THREAD_FLAG_PREFER_EFFICIENCY_CORES`. 둘을 동시에 켜면 거절됩니다. Windows만 반영 |
-| `affinityMask` | 논리 프로세서 비트마스크, `0` = 지정 없음. Windows만 반영하며, 64개를 넘는 머신에서는 현재 프로세서 그룹 안에서만 해석됩니다 |
-| `reserved[4]` | 전부 `0`이어야 합니다 |
+| `structSize` | `sizeof(STThreadAttributes)`. Filled by the caller |
+| `apiVersion` | `ST_ABI_VERSION`. Filled by the caller |
+| `priority` | `STThreadPriority` — `ST_THREAD_PRIORITY_DEFAULT`(0, platform default as is) / `LOW`(1) / `BELOW_NORMAL`(2) / `NORMAL`(3) / `ABOVE_NORMAL`(4) / `HIGH`(5) / `TIME_CRITICAL`(6). On Windows it maps to the thread priority of the same name (LOW→LOWEST, HIGH→HIGHEST); on macOS to QoS classes (LOW→BACKGROUND, BELOW_NORMAL→UTILITY, NORMAL→USER_INITIATED, higher→USER_INTERACTIVE) |
+| `flags` | `ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES` / `ST_THREAD_FLAG_PREFER_EFFICIENCY_CORES`. Setting both is rejected. Honored on Windows only |
+| `affinityMask` | Logical processor bitmask, `0` = unspecified. Honored on Windows only; on machines with more than 64 processors it is interpreted only within the current processor group |
+| `reserved[4]` | Must all be `0` |
 
-**반환** — `1` = 성공 / `0` = 실패: `threadType` 범위 밖, `structSize`/`apiVersion` 불일치, `priority` 범위 밖, 코어 선호 플래그 상충, `reserved[]`가 0이 아님. 컨텍스트를 받지 않으므로 `st_off_get_last_status`에는 아무것도 남지 않습니다.
+**Returns** — `1` = success / `0` = failed: `threadType` out of range, `structSize`/`apiVersion` mismatch, `priority` out of range, conflicting core preference flags, `reserved[]` not 0. It takes no context, so nothing is recorded in `st_off_get_last_status`.
 
 </details>
 
 <details>
-<summary><code>st_off_get_thread_attributes</code> — 저장된 스레드 속성 요청값을 읽는다</summary>
+<summary><code>st_off_get_thread_attributes</code> — Reads the stored requested thread attributes</summary>
 
 ```c
 int st_off_get_thread_attributes(int threadType, STThreadAttributes* outAttributes);
 ```
 
-**용도** — `st_off_set_thread_attributes`로 지정해 둔 값을 확인합니다.
+**Purpose** — Checks the values specified with `st_off_set_thread_attributes`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 돌려주는 값은 실제로 스레드에 심긴 값이 아니라 저장된 **요청값** 그대로입니다. 지정하지 않은 종류의 기본값은 `priority` = `ST_THREAD_PRIORITY_DEFAULT` · `flags` = 0 · `affinityMask` = 0입니다. 스레드: `[any]` — 프로세스 전역 표를 뮤텍스로 한 번 읽습니다.
+**When / how** — Can be called at any time. The returned value is the stored **requested value** as is, not what was actually applied to threads. Defaults for unspecified types are `priority` = `ST_THREAD_PRIORITY_DEFAULT` · `flags` = 0 · `affinityMask` = 0. Thread: `[any]` — reads the process-global table once under a mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `threadType` | `STThreadType` 값, `[0, ST_THREAD_TYPE_COUNT)` |
-| `outAttributes` | 결과를 받을 구조체. 호출자가 `structSize`/`apiVersion`을 채웁니다. 필드는 `st_off_set_thread_attributes` 항목 참고 |
+| `threadType` | `STThreadType` value, `[0, ST_THREAD_TYPE_COUNT)` |
+| `outAttributes` | Struct to receive the result. The caller fills `structSize`/`apiVersion`. See `st_off_set_thread_attributes` for the fields |
 
-**반환** — `1` = 성공 / `0` = 거절(`outAttributes`가 `NULL`, 스탬프 불일치, `threadType` 범위 밖).
+**Returns** — `1` = success / `0` = rejected (`outAttributes` is `NULL`, stamp mismatch, `threadType` out of range).
 
 </details>
 
 <details>
-<summary><code>st_off_get_thread_inventory</code> — 이 컨텍스트가 띄운 스레드 수를 종류별로 읽는다</summary>
+<summary><code>st_off_get_thread_inventory</code> — Reads the number of threads this context started, per type</summary>
 
 ```c
 int st_off_get_thread_inventory(const STOFF_Context* context, STThreadInventory* outInventory);
 ```
 
-**용도** — 컨텍스트가 지금 실제로 몇 개의 스레드를 점유하는지 종류별 수치로 줍니다. 호스트가 스레드 예산을 추측이 아니라 측정값으로 세우게 하려는 것입니다.
+**Purpose** — Reports, as per-type counts, how many threads the context actually occupies right now. The aim is to let the host set its thread budget from measurements rather than guesses.
 
-**언제·어떻게** — 컨텍스트를 만든 뒤 언제든 부릅니다. 오프라인 셸에는 전파 레인·오디오 렌더·장치·파일 디코더 스레드가 없으므로 값이 서는 자리는 `ST_THREAD_COMPUTE_POOL`뿐입니다 — `maxComputeThreads`가 N > 1이면 N, 1이면 0(호출자 스레드에서 인라인 실행). `ST_THREAD_ACCEL_BUILD`는 예약 역할이라 0입니다. 종류별 값은 각각 독립 atomic이라 같은 순간의 스냅샷은 아닙니다. 지원 여부는 `ST_CAP_THREAD_INVENTORY`. 스레드: `[any]` — atomic 카운터만 읽어 블록하지 않습니다.
+**When / how** — Call it any time after creating the context. The offline shell has no propagation lane, audio render, device or file decoder threads, so the only slot with a value is `ST_THREAD_COMPUTE_POOL` — N when `maxComputeThreads` N > 1, and 0 when it is 1 (inline execution on the calling thread). `ST_THREAD_ACCEL_BUILD` is a reserved role and is 0. Each per-type value is an independent atomic, so they are not a snapshot of the same instant. Support: `ST_CAP_THREAD_INVENTORY`. Thread: `[any]` — reads only atomic counters and does not block.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outInventory` | 결과를 받을 구조체. 호출자가 `structSize = sizeof(STThreadInventory)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | Context handle |
+| `outInventory` | Struct to receive the result. The caller fills `structSize = sizeof(STThreadInventory)` and `apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STThreadInventory`
+**Struct** `STThreadInventory`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` | `sizeof(STThreadInventory)`. 호출자가 채움 |
-| `apiVersion` | `ST_ABI_VERSION`. 호출자가 채움 |
-| `countByRole[ST_THREAD_TYPE_COUNT]` | `STThreadType` 순서의 종류별 스레드 수(인덱스 = 종류). 오프라인은 `[ST_THREAD_COMPUTE_POOL]`만 0이 아닐 수 있습니다 |
-| `reserved[5]` | 예약 |
+| `structSize` | `sizeof(STThreadInventory)`. Filled by the caller |
+| `apiVersion` | `ST_ABI_VERSION`. Filled by the caller |
+| `countByRole[ST_THREAD_TYPE_COUNT]` | Thread count per type in `STThreadType` order (index = type). Offline, only `[ST_THREAD_COMPUTE_POOL]` can be nonzero |
+| `reserved[5]` | Reserved |
 
-**반환** — `1` = 성공 / `0` = `context`·`outInventory`가 `NULL`이거나 스탬프 불일치(`st_off_get_last_status`에 `ST_STATUS_VERSION_MISMATCH`).
+**Returns** — `1` = success / `0` = `context` or `outInventory` is `NULL`, or stamp mismatch (`ST_STATUS_VERSION_MISMATCH` in `st_off_get_last_status`).
 
 </details>
 
 <details>
-<summary><code>st_off_init_create_options</code> — <code>STOFF_CreateOptions</code>를 기본값으로 채운다</summary>
+<summary><code>st_off_init_create_options</code> — Fills <code>STOFF_CreateOptions</code> with defaults</summary>
 
 ```c
 void st_off_init_create_options(STOFF_CreateOptions* outOptions);
 ```
 
-**용도** — 컨텍스트 생성 옵션을 버전 스탬프와 기본값으로 초기화합니다. 호스트가 바꾸고 싶은 필드만 덮어쓰고 나머지는 엔진 기본값을 받게 하려는 것입니다.
+**Purpose** — Initializes the context creation options with the version stamp and defaults. The aim is to let the host overwrite only the fields it wants to change and get engine defaults for the rest.
 
-**언제·어떻게** — `st_off_create` 직전에 부릅니다. 구조체 전체를 0으로 지운 뒤 `structSize`와 `apiVersion`을 채우므로, 0이 곧 "기본"인 필드들이 모두 기본값이 됩니다. 이어서 필요한 필드(`maxComputeThreads`, `sceneRatio` 등)만 바꾸고 `st_off_create`에 넘깁니다. 스레드: `[any]` — 호출자 소유 POD만 채웁니다.
+**When / how** — Call it right before `st_off_create`. It zeroes the whole struct and then fills `structSize` and `apiVersion`, so all fields for which 0 means "default" get their defaults. Then change only the fields you need (`maxComputeThreads`, `sceneRatio`, etc.) and pass it to `st_off_create`. Thread: `[any]` — fills only a caller-owned POD.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `outOptions` | 채울 구조체. `NULL`이면 아무것도 하지 않습니다 |
+| `outOptions` | Struct to fill. Does nothing if `NULL` |
 
-**구조체** `STOFF_CreateOptions`
+**Struct** `STOFF_CreateOptions`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` | `sizeof(STOFF_CreateOptions)`. 이 함수가 채웁니다 |
-| `apiVersion` | `ST_ABI_VERSION`. 이 함수가 채웁니다 |
-| `seedValue` | 기본 `0`. 기본(ST) 백엔드의 출력에는 영향이 없습니다 — ABI 호환과 Exa 백엔드를 위해 남아 있는 필드입니다 |
-| `maxComputeThreads` | 컨텍스트가 쓰는 계산 스레드 상한. `0` = 자동 = min(퍼포먼스 코어 수, 6), 최소 1. 이 값이 엔진 소유 공유 계산 풀의 폭이 되며, 오프라인 셸에서는 이것이 컨텍스트가 만드는 스레드의 전부입니다 — `1`이면 풀 스레드 0개(모든 계산을 호출 스레드에서 인라인 실행), N > 1이면 계산 풀 워커 N개. 환경 변수는 영향을 주지 않습니다. 배치 워커는 컨텍스트가 아니라 `st_off_batch_create`가 만든 배치 객체가 소유합니다. 지원 여부는 `ST_CAP_MAX_COMPUTE_THREADS` |
-| `sceneRatio` | 씬 단위 → 미터 변환 인자. `0` = 기본 = `1.0`(씬 단위가 곧 미터). 센티미터 호스트는 `0.01f`, 피트 호스트는 `0.3048f`. **초기화 전용**이라 런타임 setter가 없습니다. 좌표는 씬 단위 그대로 넣고, 엔진은 전파 지연·거리 감쇠·공기 흡수·잔향 기술자·`...Meters` 출력 필드처럼 미터가 필요한 곳에서만 이 인자를 곱합니다. 비유한 값이나 0 이하(0 제외)는 `st_off_create`가 거절합니다. 지원 여부는 `ST_CAP_SCENE_RATIO` |
-| `backend` | `STBackend` — `ST_BACKEND_ST`(0, 기본) / `ST_BACKEND_EXA`(1). 생성 시 전체 파이프라인을 고르며 런타임 전환은 없습니다. Exa는 라이브러리가 `ST_CAP_BACKEND_EXA`를 광고할 때만 쓸 수 있습니다 |
-| `reserved[5]` | 예약. 0으로 둡니다 |
+| `structSize` | `sizeof(STOFF_CreateOptions)`. Filled by this function |
+| `apiVersion` | `ST_ABI_VERSION`. Filled by this function |
+| `seedValue` | Default `0`. Has no effect on the output of the default (ST) backend — a field kept for ABI compatibility and the Exa backend |
+| `maxComputeThreads` | Upper limit of compute threads used by the context. `0` = auto = min(performance cores, 6), minimum 1. This value becomes the width of the engine-owned shared compute pool, and in the offline shell it is all the threads the context creates — `1` means 0 pool threads (all computation inline on the calling thread), N > 1 means N compute pool workers. Environment variables have no influence. Batch workers are owned not by the context but by the batch object created by `st_off_batch_create`. Support: `ST_CAP_MAX_COMPUTE_THREADS` |
+| `sceneRatio` | Scene unit → meter conversion factor. `0` = default = `1.0` (scene units are meters). Centimeter hosts use `0.01f`, feet hosts `0.3048f`. **Initialization only**, so there is no runtime setter. Pass coordinates in scene units as is; the engine multiplies by this factor only where meters are needed, such as propagation delay, distance attenuation, air absorption, reverb descriptors and `...Meters` output fields. Non-finite values or values of 0 or less (excluding 0) are rejected by `st_off_create`. Support: `ST_CAP_SCENE_RATIO` |
+| `backend` | `STBackend` — `ST_BACKEND_ST`(0, default) / `ST_BACKEND_EXA`(1). Selects the whole pipeline at creation; there is no runtime switching. Exa can be used only when the library advertises `ST_CAP_BACKEND_EXA` |
+| `reserved[5]` | Reserved. Leave as 0 |
 
-오프라인 옵션에는 실시간의 `scheduler`·`maxDelaySeconds`·`renderOutputMode`·`hostSampleRate`·`startIdle`·`maxSources`에 해당하는 필드가 없습니다 — 스케줄러 없이 호출 스레드가 파이프라인을 구동하고, 장치·스트리밍·음원 예산이 없기 때문입니다. 렌더 지연 링 길이는 생성 뒤 `st_off_render_set_max_delay_seconds`로 정합니다(기본 4.0 s).
+The offline options have no fields corresponding to the real-time `scheduler`, `maxDelaySeconds`, `renderOutputMode`, `hostSampleRate`, `startIdle` or `maxSources` — the calling thread drives the pipeline without a scheduler, and there is no device, streaming or source budget. Set the render delay ring length after creation with `st_off_render_set_max_delay_seconds` (default 4.0 s).
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_off_create</code> — 오프라인 컨텍스트를 만든다</summary>
+<summary><code>st_off_create</code> — Creates an offline context</summary>
 
 ```c
 STStatus st_off_create(const STOFF_CreateOptions* options, STOFF_Context** outContext);
 ```
 
-**용도** — 오프라인 엔진 인스턴스(씬·재질·소스·리스너·IR 캐시를 소유)와 그 계산 풀을 만듭니다. 오프라인 컨텍스트는 장치·오디오 렌더·전파 워커 스레드 없이, 호출 스레드가 `st_off_ir_compute`로 전파를 한 번 돌려 결정적인 IR을 만드는 용도입니다.
+**Purpose** — Creates an offline engine instance (owning the scene, materials, sources, listeners and IR cache) and its compute pool. An offline context has no device, audio render or propagation worker threads; it is for producing deterministic IRs by having the calling thread run propagation once with `st_off_ir_compute`.
 
-**언제·어떻게** — 필요하면 `st_off_set_thread_attributes`를 먼저 부르고, `st_off_init_create_options`로 옵션을 초기화한 뒤 호출합니다. 성공 직후의 상태: 리스너 하나가 자동으로 만들어져 활성이고(id `1`, 위치 (0,0,0), 방향 항등), IR 캐시는 비어 있어 `st_off_ir_compute` 전에는 렌더 계열이 `ST_STATUS_UNAVAILABLE`로 실패합니다. 삼각형 교차 커널은 `0`(MollerTrumbore), early 공간 모드는 `ST_EARLY_SPATIAL_OBJECTS`, 렌더 지연 링은 4.0 s이며, 그 밖의 기본값(대기·거리 감쇠·에너지 타깃·경로 종류·음향 기능·소스 기본값)은 실시간과 같습니다. 서로 **다른** 컨텍스트라면 `st_off_create`/`st_off_destroy`를 여러 스레드에서 동시에 불러도 되고, 다른 컨텍스트의 compute·렌더·배치 작업과 겹쳐도 됩니다(Exa 백엔드는 서로 다른 컨텍스트라도 compute를 동시에 돌리면 안 됩니다). 실패 이유 문자열은 `st_off_get_last_error(NULL, ...)`로 같은 스레드에서 읽습니다. 스레드: `[control, blocking]` — 엔진과 계산 풀을 만드는 긴 구간입니다.
+**When / how** — If needed, call `st_off_set_thread_attributes` first, initialize the options with `st_off_init_create_options`, then call it. State right after success: one listener is created automatically and is active (id `1`, position (0,0,0), identity orientation), and the IR cache is empty, so render functions fail with `ST_STATUS_UNAVAILABLE` before `st_off_ir_compute`. The triangle intersection kernel is `0` (MollerTrumbore), the early spatial mode is `ST_EARLY_SPATIAL_OBJECTS`, the render delay ring is 4.0 s, and the other defaults (atmosphere, distance attenuation, energy target, path kinds, acoustic features, source defaults) are the same as real time. For **different** contexts, `st_off_create`/`st_off_destroy` may be called concurrently from multiple threads and may overlap with compute, render and batch work of other contexts (the Exa backend must not run compute concurrently, even on different contexts). Read the failure reason string with `st_off_get_last_error(NULL, ...)` on the same thread. Thread: `[control, blocking]` — a long section that creates the engine and the compute pool.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `options` | 생성 옵션. `NULL`이면 `st_off_init_create_options`의 기본값을 씁니다. 필드는 `st_off_init_create_options` 항목 참고 |
-| `outContext` | 만든 컨텍스트를 받을 포인터. 실패하면 `NULL`이 들어갑니다 |
+| `options` | Creation options. `NULL` uses the defaults of `st_off_init_create_options`. See `st_off_init_create_options` for the fields |
+| `outContext` | Pointer to receive the created context. Set to `NULL` on failure |
 
-**반환** — `STStatus`: `ST_STATUS_OK` = 성공 / `ST_STATUS_INVALID_ARGUMENT` = `outContext`가 `NULL`, 알 수 없거나 이 빌드에 없는 `backend`, 잘못된 `sceneRatio` / `ST_STATUS_VERSION_MISMATCH` = `structSize`·`apiVersion` 불일치 / `ST_STATUS_INITIALIZATION_FAILED` = 엔진 초기화 실패 / `ST_STATUS_ALLOCATION_FAILED` = 메모리 할당 실패.
+**Returns** — `STStatus`: `ST_STATUS_OK` = success / `ST_STATUS_INVALID_ARGUMENT` = `outContext` is `NULL`, unknown `backend` or one not in this build, invalid `sceneRatio` / `ST_STATUS_VERSION_MISMATCH` = `structSize` or `apiVersion` mismatch / `ST_STATUS_INITIALIZATION_FAILED` = engine initialization failure / `ST_STATUS_ALLOCATION_FAILED` = memory allocation failure.
 
 </details>
 
 <details>
-<summary><code>st_off_get_backend</code> — 컨텍스트가 쓰는 백엔드를 돌려준다</summary>
+<summary><code>st_off_get_backend</code> — Returns the backend the context uses</summary>
 
 ```c
 int st_off_get_backend(const STOFF_Context* context);
 ```
 
-**용도** — 생성 시 `STOFF_CreateOptions.backend`로 고른 파이프라인을 확인합니다.
+**Purpose** — Checks the pipeline chosen with `STOFF_CreateOptions.backend` at creation.
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 백엔드는 생성 시 확정되며 런타임에 바꿀 수 없습니다. 스레드: `[control]`.
+**When / how** — Call it any time after creation. The backend is fixed at creation and cannot be changed at runtime. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STBackend` 값(`ST_BACKEND_ST` = 0 / `ST_BACKEND_EXA` = 1). `context`가 `NULL`이면 `-1`.
+**Returns** — `STBackend` value (`ST_BACKEND_ST` = 0 / `ST_BACKEND_EXA` = 1). `-1` if `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_off_destroy</code> — 오프라인 컨텍스트를 파괴한다</summary>
+<summary><code>st_off_destroy</code> — Destroys an offline context</summary>
 
 ```c
 void st_off_destroy(STOFF_Context* context);
 ```
 
-**용도** — 컨텍스트와 그 엔진·계산 풀·IR 캐시를 해제합니다.
+**Purpose** — Releases the context and its engine, compute pool and IR cache.
 
-**언제·어떻게** — 그 컨텍스트에 대한 다른 호출이 모두 끝난 뒤 부릅니다. 파괴 중이거나 파괴된 컨텍스트를 다른 스레드가 쓰면 안 됩니다. 배치(`st_off_batch_*`)에 등록한 컨텍스트는 그 작업의 완료 레코드를 `st_off_batch_poll`로 받은 뒤에만 파괴합니다. 이 함수는 그 컨텍스트의 계산 풀 워커만 join합니다(`maxComputeThreads`가 1이면 join할 스레드가 없습니다). 서로 다른 컨텍스트라면 여러 스레드에서 동시에 불러도 됩니다. 스레드: `[control, blocking]`.
+**When / how** — Call it after all other calls on that context have finished. Other threads must not use a context that is being or has been destroyed. Destroy a context registered with a batch (`st_off_batch_*`) only after receiving its work's completion record with `st_off_batch_poll`. This function joins only that context's compute pool workers (if `maxComputeThreads` is 1 there are no threads to join). For different contexts it may be called concurrently from multiple threads. Thread: `[control, blocking]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 파괴할 컨텍스트 핸들 |
+| `context` | Handle of the context to destroy |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_off_get_last_status</code> — 마지막 호출의 상태 코드를 읽는다</summary>
+<summary><code>st_off_get_last_status</code> — Reads the status code of the last call</summary>
 
 ```c
 STStatus st_off_get_last_status(const STOFF_Context* context);
 ```
 
-**용도** — `0`/`-1`/실패 핸들만 돌려주는 함수가 왜 실패했는지 상태 코드로 확인합니다.
+**Purpose** — Checks, as a status code, why a function that only returns `0`/`-1`/a failure handle failed.
 
-**언제·어떻게** — 실패를 반환한 호출 직후, 같은 스레드에서 부릅니다. 컨텍스트마다 진단 필드가 하나라서 같은 컨텍스트를 여러 스레드에서 동시에 쓰면 값이 섞일 수 있습니다. 사람이 읽을 메시지는 `st_off_get_last_error`. 스레드: `[control]`.
+**When / how** — Call it on the same thread right after the call that returned failure. There is one diagnostic field per context, so values may mix if the same context is used concurrently from multiple threads. For a human-readable message use `st_off_get_last_error`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STStatus`: `ST_STATUS_OK`(0) / `INVALID_CONTEXT`(1) / `INVALID_ARGUMENT`(2) / `VERSION_MISMATCH`(3) / `INITIALIZATION_FAILED`(4) / `ALLOCATION_FAILED`(5) / `NOT_FOUND`(6) / `BUFFER_TOO_SMALL`(7) / `INVALID_MATERIAL`(8) / `STALE_SNAPSHOT`(9) / `UNAVAILABLE`(10). `context`가 `NULL`이면 `ST_STATUS_INVALID_CONTEXT`.
+**Returns** — `STStatus`: `ST_STATUS_OK`(0) / `INVALID_CONTEXT`(1) / `INVALID_ARGUMENT`(2) / `VERSION_MISMATCH`(3) / `INITIALIZATION_FAILED`(4) / `ALLOCATION_FAILED`(5) / `NOT_FOUND`(6) / `BUFFER_TOO_SMALL`(7) / `INVALID_MATERIAL`(8) / `STALE_SNAPSHOT`(9) / `UNAVAILABLE`(10). `ST_STATUS_INVALID_CONTEXT` if `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_off_get_last_error</code> — 마지막 오류 메시지를 복사한다</summary>
+<summary><code>st_off_get_last_error</code> — Copies the last error message</summary>
 
 ```c
 int st_off_get_last_error(const STOFF_Context* context, char* outMessage, int capacity);
 ```
 
-**용도** — 마지막 실패의 사람이 읽을 수 있는 설명(예: 검증기의 거절 사유)을 얻습니다. `context`를 `NULL`로 주면 `st_off_create` 실패 이유를 얻을 수 있습니다 — 그때는 컨텍스트가 없기 때문입니다.
+**Purpose** — Gets a human-readable description of the last failure (e.g. the validator's rejection reason). Passing `context` as `NULL` gives the reason for an `st_off_create` failure — since there is no context in that case.
 
-**언제·어떻게** — 실패 직후 같은 스레드에서 부릅니다. `NULL` 컨텍스트로 부르면 이 호출 스레드에서 마지막으로 실패한 `st_off_create`의 메시지를 돌려주며, 다음 create가 이를 지웁니다. 필요한 크기를 모르면 `outMessage = NULL`로 먼저 불러 길이를 받습니다. 스레드: `[control]`.
+**When / how** — Call it on the same thread right after the failure. With a `NULL` context it returns the message of the last failed `st_off_create` on this calling thread, and the next create clears it. If you do not know the required size, call first with `outMessage = NULL` to get the length. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들. `NULL`이면 이 스레드의 마지막 create 실패 메시지 |
-| `outMessage` | 메시지를 받을 버퍼. `NULL`이면 복사하지 않고 길이만 돌려줍니다 |
-| `capacity` | `outMessage`의 바이트 수. 부족하면 잘라서 NUL로 끝냅니다 |
+| `context` | Context handle. `NULL` gives this thread's last create failure message |
+| `outMessage` | Buffer to receive the message. `NULL` copies nothing and only returns the length |
+| `capacity` | Byte size of `outMessage`. If insufficient, truncates and NUL-terminates |
 
-**반환** — 메시지 전체를 담는 데 필요한 바이트 수(NUL 포함). 반환값이 `capacity`보다 크면 잘린 것입니다.
+**Returns** — Number of bytes needed to hold the whole message (including NUL). If the return value is greater than `capacity`, it was truncated.
 
 </details>
 
 <details>
-<summary><code>st_off_material_create</code> — 음향 재질 하나를 등록한다</summary>
+<summary><code>st_off_material_create</code> — Registers one acoustic material</summary>
 
 ```c
 STMaterialId st_off_material_create(STOFF_Context* context, const STMaterial* material);
 ```
 
-**용도** — 메시 표면에 쓸 9밴드 음향 재질(반사·흡수·투과·산란)을 등록하고 핸들을 받습니다. 재질 계수는 엔진이 보정하지 않는 엄격한 입력이라, 등록 시점에 검증해 잘못된 값을 바로 거절합니다.
+**Purpose** — Registers a 9-band acoustic material (reflection, absorption, transmission, scattering) for mesh surfaces and returns a handle. Material coefficients are strict inputs the engine does not correct, so they are validated at registration and invalid values are rejected immediately.
 
-**언제·어떻게** — 메시를 만들기 전에 필요한 재질을 모두 등록하고, 받은 핸들을 `st_off_mesh_create`의 `material`(또는 삼각형별 재질 인덱스)에 씁니다. 여러 재질은 이 함수를 반복 호출해 등록하며, 반환 id는 등록 순서대로 연속입니다. 실시간 `st_rt_material_create`와 같은 계약입니다. 스레드: `[control]` — 씬 쓰기 락을 잡아 잠깐 블록될 수 있습니다.
+**When / how** — Register all needed materials before creating meshes, and use the returned handles as the `material` (or per-triangle material indices) of `st_off_mesh_create`. Register multiple materials by calling this function repeatedly; returned ids are consecutive in registration order. Same contract as real-time `st_rt_material_create`. Thread: `[control]` — takes the scene write lock and may block briefly.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `material` | 등록할 재질. 호출자가 `structSize`/`apiVersion`을 채웁니다 |
+| `context` | Context handle |
+| `material` | Material to register. The caller fills `structSize`/`apiVersion` |
 
-**구조체** `STMaterial`
+**Struct** `STMaterial`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` | `sizeof(STMaterial)`. 계수를 읽기 전에 검증합니다 |
+| `structSize` | `sizeof(STMaterial)`. Validated before reading the coefficients |
 | `apiVersion` | `ST_ABI_VERSION` |
-| `reflection[ST_FREQUENCY_BANDS]` | 밴드별 반사 에너지 비율, `[0, 1]` |
-| `absorption[ST_FREQUENCY_BANDS]` | 밴드별 흡수 에너지 비율, `[0, 1]` |
-| `transmission[ST_FREQUENCY_BANDS]` | 밴드별 투과 에너지 비율, `[0, 1]` |
-| `scattering[ST_FREQUENCY_BANDS]` | 반사 에너지 중 확산 비율, `[0, 1]`. R+A+T 합 검사에서는 빠집니다 |
-| `reserved[8]` | 예약 |
+| `reflection[ST_FREQUENCY_BANDS]` | Per-band reflected energy ratio, `[0, 1]` |
+| `absorption[ST_FREQUENCY_BANDS]` | Per-band absorbed energy ratio, `[0, 1]` |
+| `transmission[ST_FREQUENCY_BANDS]` | Per-band transmitted energy ratio, `[0, 1]` |
+| `scattering[ST_FREQUENCY_BANDS]` | Diffuse fraction of the reflected energy, `[0, 1]`. Excluded from the R+A+T sum check |
+| `reserved[8]` | Reserved |
 
-밴드 순서는 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz(`ST_FREQUENCY_BANDS` = 9)입니다. 모든 계수는 **에너지 도메인**의 무차원 비율이고, 밴드마다 `|R + A + T − 1| ≤ ST_MATERIAL_ENERGY_BALANCE_TOLERANCE`(0.001)를 만족해야 합니다. 엔진은 값을 유도·정규화·클램프·보간하지 않습니다.
+The band order is 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz (`ST_FREQUENCY_BANDS` = 9). All coefficients are dimensionless ratios in the **energy domain**, and each band must satisfy `|R + A + T − 1| ≤ ST_MATERIAL_ENERGY_BALANCE_TOLERANCE` (0.001). The engine does not derive, normalize, clamp or interpolate values.
 
-**반환** — 재질 핸들 `STMaterialId`. 실패는 `v < 0`: `context`·`material`이 `NULL`이면 `ST_STATUS_INVALID_ARGUMENT`, 계수 검증에 걸리면 `ST_STATUS_INVALID_MATERIAL`(스탬프 불일치는 `ST_STATUS_VERSION_MISMATCH`)이 `st_off_get_last_status`에 남고, 사유는 `st_off_get_last_error`로 읽습니다.
+**Returns** — Material handle `STMaterialId`. Failure is `v < 0`: `ST_STATUS_INVALID_ARGUMENT` if `context` or `material` is `NULL`, `ST_STATUS_INVALID_MATERIAL` if coefficient validation fails (`ST_STATUS_VERSION_MISMATCH` for a stamp mismatch) is recorded in `st_off_get_last_status`, and the reason is read with `st_off_get_last_error`.
 
 </details>
 
 <details>
-<summary><code>st_off_material_load_defaults</code> — 기본 재질 라이브러리를 통째로 등록한다</summary>
+<summary><code>st_off_material_load_defaults</code> — Registers the whole default material library</summary>
 
 ```c
 STMaterialId st_off_material_load_defaults(STOFF_Context* context);
 ```
 
-**용도** — 재질 계수를 직접 준비하지 않고도 씬을 구성할 수 있도록 엔진 내장 기본 재질 묶음을 한 번에 등록합니다.
+**Purpose** — Registers the engine's built-in default material set in one call, so a scene can be built without preparing material coefficients yourself.
 
-**언제·어떻게** — 메시를 만들기 전에 부릅니다. 반환된 핸들이 묶음의 첫 재질이고, 이후 재질은 `v+1`, `v+2` … 순서로 연속입니다. 실시간 `st_rt_material_load_defaults`와 같은 계약입니다. 스레드: `[control]`.
+**When / how** — Call it before creating meshes. The returned handle is the first material of the set, and the following materials are consecutive in the order `v+1`, `v+2` …. Same contract as real-time `st_rt_material_load_defaults`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 첫 재질의 핸들 `STMaterialId`. 실패는 `v < 0`.
+**Returns** — Handle of the first material, `STMaterialId`. Failure is `v < 0`.
 
 </details>
 
 <details>
-<summary><code>st_off_scene_set_edge_split_collinear_overlaps</code> — 메시 엣지 토폴로지 컴파일 옵션을 켜고 끈다</summary>
+<summary><code>st_off_scene_set_edge_split_collinear_overlaps</code> — Enables or disables a mesh edge topology compile option</summary>
 
 ```c
 void st_off_scene_set_edge_split_collinear_overlaps(STOFF_Context* context, int enabled);
 ```
 
-**용도** — `st_off_mesh_create`가 메시의 음향 엣지(회절 후보) 토폴로지를 컴파일할 때, 한 직선 위에서 겹치는 엣지들을 분할해 다룰지 정하는 씬 빌드 옵션입니다.
+**Purpose** — A scene build option that determines whether, when `st_off_mesh_create` compiles a mesh's acoustic edge (diffraction candidate) topology, edges overlapping on one straight line are split and handled separately.
 
-**언제·어떻게** — 메시를 만들기 전에 부릅니다. 이 호출 뒤에 추가되는 메시에만 적용되고, 이미 만든 메시는 생성 시점에 컴파일한 토폴로지를 유지합니다. 지원 여부는 `ST_CAP_ACOUSTIC_EDGE_BUILD_OPTIONS`. 실시간 `st_rt_scene_set_edge_split_collinear_overlaps`와 같은 계약입니다. 스레드: `[control]`.
+**When / how** — Call it before creating meshes. It applies only to meshes added after this call; meshes already created keep the topology compiled at creation. Support: `ST_CAP_ACOUSTIC_EDGE_BUILD_OPTIONS`. Same contract as real-time `st_rt_scene_set_edge_split_collinear_overlaps`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | `0` = 끔 / 그 밖 = 켬 |
+| `context` | Context handle |
+| `enabled` | `0` = off / otherwise = on |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_off_scene_set_solid_wedge_gate</code> — 두 면 회절 쐐기의 각도 구간 기각을 켜고 끈다</summary>
+<summary><code>st_off_scene_set_solid_wedge_gate</code> — Enables or disables angular-range rejection for two-face diffraction wedges</summary>
 
 ```c
 void st_off_scene_set_solid_wedge_gate(STOFF_Context* context, int enabled);
 ```
 
-**용도** — 회절 경로를 검증할 때 두 면으로 이루어진 쐐기(wedge)의 솔리드 쪽 각도 구간을 지나는 경로를 기각하는 게이트입니다. 기본은 꺼져 있습니다.
+**Purpose** — A gate that, when validating diffraction paths, rejects paths passing through the solid-side angular range of a wedge formed by two faces. Disabled by default.
 
-**언제·어떻게** — 전파 시점에 적용되는 옵션이라 `st_off_ir_compute` 전에 정합니다. 켜면 쐐기의 볼록/오목 판정에 메시 와인딩(삼각형 정점 순서가 주는 법선 부호)이 쓰이므로, 와인딩을 뒤집으면 기각되는 회절 경로 집합이 반대가 됩니다 — 메시 하나 안에서 와인딩을 일관되게 유지하고 가능하면 법선이 공기 쪽을 향하게 합니다. 지원 여부는 `ST_CAP_EXPERIMENTAL_SOLID_WEDGE_GATE`. 실시간 `st_rt_scene_set_solid_wedge_gate`와 같은 계약입니다. 스레드: `[control]`.
+**When / how** — It is an option applied at propagation time, so set it before `st_off_ir_compute`. When enabled, mesh winding (the normal sign given by triangle vertex order) is used to decide whether a wedge is convex or concave, so flipping the winding inverts the set of rejected diffraction paths — keep winding consistent within a mesh and, where possible, have normals face the air side. Support: `ST_CAP_EXPERIMENTAL_SOLID_WEDGE_GATE`. Same contract as real-time `st_rt_scene_set_solid_wedge_gate`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | `0` = 끔(기본) / 그 밖 = 켬 |
+| `context` | Context handle |
+| `enabled` | `0` = off (default) / otherwise = on |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_off_scene_set_accel</code> — 메시·정적 가속구조 종류를 고른다</summary>
+<summary><code>st_off_scene_set_accel</code> — Chooses the mesh and static acceleration structure kind</summary>
 
 ```c
 int st_off_scene_set_accel(STOFF_Context* context, int kind);
 ```
 
-**용도** — 레이 교차에 쓰는 BLAS·정적 가속구조의 구현을 호스트가 고릅니다. 씬 규모나 빌드 시간·질의 속도 우선순위에 따라 구조를 바꿔 비교할 수 있게 합니다.
+**Purpose** — Lets the host choose the implementation of the BLAS and static acceleration structure used for ray intersection. Allows switching and comparing structures according to scene size or build-time vs. query-speed priorities.
 
-**언제·어떻게** — 오브젝트를 넣기 전에 부릅니다. 이후의 빌드에만 적용됩니다. 기본은 `2`(TinyBVH)입니다. 실시간 `st_rt_scene_set_accel`과 완전히 같은 계약입니다. 스레드: `[control]`.
+**When / how** — Call it before adding objects. It applies only to subsequent builds. Default is `2` (TinyBVH). Exactly the same contract as real-time `st_rt_scene_set_accel`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `kind` | `0` = BinnedSAH / `1` = HybridKD / `2` = TinyBVH(기본) / `3` = LBVH / `4` = LBVH_Simd |
+| `context` | Context handle |
+| `kind` | `0` = BinnedSAH / `1` = HybridKD / `2` = TinyBVH (default) / `3` = LBVH / `4` = LBVH_Simd |
 
-**반환** — `1` = 적용 / `0` = `kind` 범위 밖이거나 컨텍스트 없음.
+**Returns** — `1` = applied / `0` = `kind` out of range or no context.
 
 </details>
 
 <details>
-<summary><code>st_off_scene_set_triangle_intersection</code> — 삼각형 교차 커널을 고른다</summary>
+<summary><code>st_off_scene_set_triangle_intersection</code> — Chooses the triangle intersection kernel</summary>
 
 ```c
 int st_off_scene_set_triangle_intersection(STOFF_Context* context, int kind);
 ```
 
-**용도** — 레이–삼각형 교차 계산 방식을 고릅니다. 기본값은 실시간과 같은 MollerTrumbore라서, 오프라인이 실시간과 같은 기하 통계를 냅니다.
+**Purpose** — Chooses the ray–triangle intersection method. The default is MollerTrumbore, the same as real time, so offline produces the same geometry statistics as real time.
 
-**언제·어떻게** — 커널은 `st_off_mesh_create` 시점에 메시에 고정되므로 이 호출 **이후 추가하는 메시에만** 적용됩니다(기존 메시에는 소급하지 않으며, 메시마다 커널이 달라도 유효한 구성입니다). 보통 메시를 만들기 전에 한 번 부릅니다. 세 커널 모두 양면 교차이며 백페이스 컬링이 없습니다. 스레드: `[control]`.
+**When / how** — The kernel is fixed to a mesh at `st_off_mesh_create` time, so it applies **only to meshes added after this call** (not retroactive to existing meshes; meshes with different kernels are a valid configuration). Usually call it once before creating meshes. All three kernels are double-sided with no backface culling. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `kind` | `0` = MollerTrumbore(기본) / `1` = PluckerAdaptive / `2` = Watertight |
+| `context` | Context handle |
+| `kind` | `0` = MollerTrumbore (default) / `1` = PluckerAdaptive / `2` = Watertight |
 
-**반환** — `1` = 적용 / `0` = 잘못된 `kind`이거나 컨텍스트 없음.
+**Returns** — `1` = applied / `0` = invalid `kind` or no context.
 
 </details>
 
 <details>
-<summary><code>st_off_scene_get_triangle_intersection</code> — 다음 메시에 적용될 교차 커널을 읽는다</summary>
+<summary><code>st_off_scene_get_triangle_intersection</code> — Reads the intersection kernel that will apply to the next mesh</summary>
 
 ```c
 int st_off_scene_get_triangle_intersection(const STOFF_Context* context);
 ```
 
-**용도** — `st_off_scene_set_triangle_intersection`으로 지정한 값을 확인합니다.
+**Purpose** — Checks the value specified with `st_off_scene_set_triangle_intersection`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 값은 **다음 `st_off_mesh_create`에 적용될** 커널이며, 이미 만든 메시의 커널과 다를 수 있습니다. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**When / how** — Can be called at any time. The value is the kernel **that will apply to the next `st_off_mesh_create`** and may differ from the kernels of meshes already created. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `0` = MollerTrumbore / `1` = PluckerAdaptive / `2` = Watertight.
+**Returns** — `0` = MollerTrumbore / `1` = PluckerAdaptive / `2` = Watertight.
 
 </details>
 
 <details>
-<summary><code>st_off_scene_raycast</code> — 엔진 가속구조로 최근접 히트를 질의한다</summary>
+<summary><code>st_off_scene_raycast</code> — Queries the nearest hit with the engine acceleration structure</summary>
 
 ```c
 int st_off_scene_raycast(STOFF_Context* context, const float origin[3], const float direction[3], float maxDistanceMeters, STRayHit* outHit);
 ```
 
-**용도** — 전파가 쓰는 바로 그 가속구조(정적+동적 TLAS)에 레이 한 개를 쏴서 가장 가까운 히트를 돌려줍니다. 호스트가 자기 물리 엔진과 별도로, 엔진이 실제로 보는 음향 기하를 확인·디버그할 수 있게 합니다.
+**Purpose** — Casts a single ray into the very acceleration structure propagation uses (static + dynamic TLAS) and returns the nearest hit. Lets the host check and debug the acoustic geometry the engine actually sees, separately from its own physics engine.
 
-**언제·어떻게** — `st_off_build` 뒤에 부릅니다. 빌드 전이면 오류 없이 미스가 됩니다. 읽기 전용 질의라 파이프라인 상태를 바꾸지 않습니다. 지원 여부는 `ST_CAP_SCENE_RAYCAST`. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**When / how** — Call it after `st_off_build`. Before a build it is a miss without error. A read-only query that does not change pipeline state. Support: `ST_CAP_SCENE_RAYCAST`. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `origin` | 레이 원점, 월드 좌표 3성분(씬 단위). 유한해야 합니다 |
-| `direction` | 레이 방향 3성분. 엔진이 정규화하며 유한하고 0벡터가 아니어야 합니다 |
-| `maxDistanceMeters` | 최대 거리(미터). `sceneRatio`로 씬 단위로 되돌려 적용합니다. `≤ 0` 또는 비유한 값 = 무한 |
-| `outHit` | 결과. 호출자가 `structSize = sizeof(STRayHit)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | Context handle |
+| `origin` | Ray origin, 3 world-coordinate components (scene units). Must be finite |
+| `direction` | 3 ray direction components. Normalized by the engine; must be finite and not a zero vector |
+| `maxDistanceMeters` | Maximum distance (meters). Converted back to scene units with `sceneRatio`. `≤ 0` or a non-finite value = infinite |
+| `outHit` | Result. The caller fills `structSize = sizeof(STRayHit)` and `apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STRayHit`
+**Struct** `STRayHit`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채움 |
-| `hit` | `1` = 히트 / `0` = 미스 |
-| `distanceMeters` | 원점에서 히트점까지 거리(씬 거리 × `sceneRatio`). 미스면 0 |
-| `point[3]` | 히트점, 씬 좌표 그대로. 미스면 0 |
-| `normal[3]` | 히트 삼각형의 단위 기하 법선. 항상 레이 원점 쪽을 향하도록 정렬되며(와인딩 부호는 유지되지 않음) 미스면 0 |
-| `objectId` | 히트한 오브젝트 id. 미스면 `-1` |
-| `meshId` | 그 오브젝트의 메시 id. 미스면 `-1` |
-| `triangleIndex` | 메시 로컬 삼각형 인덱스. 미스면 `-1` |
-| `materialIndex` | 그 삼각형의 재질 인덱스. 미스면 `-1` |
-| `reserved[6]` | 예약 |
+| `structSize` / `apiVersion` | Filled by the caller |
+| `hit` | `1` = hit / `0` = miss |
+| `distanceMeters` | Distance from the origin to the hit point (scene distance × `sceneRatio`). 0 on a miss |
+| `point[3]` | Hit point, in scene coordinates as is. 0 on a miss |
+| `normal[3]` | Unit geometric normal of the hit triangle. Always oriented to face the ray origin (winding sign is not preserved); 0 on a miss |
+| `objectId` | Id of the hit object. `-1` on a miss |
+| `meshId` | Mesh id of that object. `-1` on a miss |
+| `triangleIndex` | Mesh-local triangle index. `-1` on a miss |
+| `materialIndex` | Material index of that triangle. `-1` on a miss |
+| `reserved[6]` | Reserved |
 
-`0`은 유효한 id이므로 미스 판정은 반드시 `hit`(또는 id가 `-1`인지)로 합니다.
+`0` is a valid id, so always detect a miss with `hit` (or by whether the id is `-1`).
 
-**반환** — `1` = 호출 성공(히트 여부는 `outHit->hit`, 미스는 실패가 아님) / `0` = `context`·포인터가 `NULL`, 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`), `origin`·`direction` 비유한 또는 `direction`이 0벡터(`ST_STATUS_INVALID_ARGUMENT`).
+**Returns** — `1` = call succeeded (whether it hit is in `outHit->hit`; a miss is not a failure) / `0` = `context` or a pointer is `NULL`, stamp mismatch (`ST_STATUS_VERSION_MISMATCH`), `origin` or `direction` non-finite, or `direction` is a zero vector (`ST_STATUS_INVALID_ARGUMENT`).
 
 </details>
 
 <details>
-<summary><code>st_off_mesh_create</code> — 삼각형 메시를 등록한다</summary>
+<summary><code>st_off_mesh_create</code> — Registers a triangle mesh</summary>
 
 ```c
 STMeshId st_off_mesh_create(STOFF_Context* context, const STMesh* mesh, STMaterialId material, const int32_t* triangleMaterialIndices);
 ```
 
-**용도** — 음향 기하로 쓸 삼각형 메시를 등록합니다. 등록 시점에 회절용 음향 엣지 토폴로지를 컴파일하고 교차 커널을 고정합니다. 메시는 그 자체로는 씬에 놓이지 않고, `st_off_object_create`로 인스턴스를 만들어야 전파에 참여합니다.
+**Purpose** — Registers a triangle mesh to use as acoustic geometry. At registration it compiles the acoustic edge topology for diffraction and fixes the intersection kernel. A mesh by itself is not placed in the scene; it participates in propagation only once an instance is created with `st_off_object_create`.
 
-**언제·어떻게** — 재질을 등록하고, 필요하면 `st_off_scene_set_triangle_intersection`·`st_off_scene_set_edge_split_collinear_overlaps`를 정한 뒤 부릅니다. 재질은 둘 중 하나로 지정합니다 — `triangleMaterialIndices`가 `NULL`이면 메시 전체가 `material` 하나를 쓰고, `NULL`이 아니면 삼각형마다 재질 인덱스를 주며 그때 `material` 인자는 무시됩니다(지원 여부 `ST_CAP_PER_TRIANGLE_MATERIALS`). 메시 하나 안에서는 와인딩을 일관되게 유지합니다 — 부분적으로 뒤집힌 와인딩은 두께 0 판의 회절 엣지를 잃게 할 수 있습니다. 실시간 `st_rt_mesh_create`와 완전히 같은 계약입니다. 스레드: `[control, blocking]` — 음향 엣지 토폴로지 컴파일이 메시 크기에 비례해 오래 걸릴 수 있습니다.
+**When / how** — Call it after registering materials and, if needed, setting `st_off_scene_set_triangle_intersection` and `st_off_scene_set_edge_split_collinear_overlaps`. Materials are specified in one of two ways — if `triangleMaterialIndices` is `NULL` the whole mesh uses a single `material`; if not `NULL`, a material index is given per triangle and the `material` argument is ignored (support: `ST_CAP_PER_TRIANGLE_MATERIALS`). Keep winding consistent within a mesh — partially flipped winding can lose the diffraction edges of zero-thickness plates. Exactly the same contract as real-time `st_rt_mesh_create`. Thread: `[control, blocking]` — acoustic edge topology compilation can take long, proportional to mesh size.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 메시 데이터. 엔진이 호출 중에 읽어 들입니다 |
-| `material` | 메시 전체 재질 핸들(`triangleMaterialIndices == NULL`일 때만 사용) |
-| `triangleMaterialIndices` | 삼각형별 재질 인덱스 배열(`mesh->numTriangles`개, 재질 핸들의 `v` 값). `NULL`이면 `material` 하나를 씁니다 |
+| `context` | Context handle |
+| `mesh` | Mesh data. Read by the engine during the call |
+| `material` | Material handle for the whole mesh (used only when `triangleMaterialIndices == NULL`) |
+| `triangleMaterialIndices` | Per-triangle material index array (`mesh->numTriangles` entries, the `v` values of material handles). `NULL` uses the single `material` |
 
-**구조체** `STMesh`
+**Struct** `STMesh`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `numVertices` | 정점 수(> 0) |
-| `vertices` | xyz가 이어진 정점 배열(`numVertices × 3` float), 메시 로컬 좌표(씬 단위) |
-| `numTriangles` | 삼각형 수(> 0) |
-| `triangles` | 정점 인덱스 배열(`numTriangles × 3` int) |
+| `numVertices` | Vertex count (> 0) |
+| `vertices` | Vertex array of consecutive xyz (`numVertices × 3` float), mesh-local coordinates (scene units) |
+| `numTriangles` | Triangle count (> 0) |
+| `triangles` | Vertex index array (`numTriangles × 3` int) |
 
-**반환** — 메시 핸들 `STMeshId`. 실패는 `v < 0`(컨텍스트·`mesh`·배열이 `NULL`이거나 정점·삼각형 수가 0 이하 등).
+**Returns** — Mesh handle `STMeshId`. Failure is `v < 0` (context, `mesh` or an array is `NULL`, vertex or triangle count of 0 or less, etc.).
 
 </details>
 
 <details>
-<summary><code>st_off_object_create</code> — 메시 인스턴스를 행렬 변환으로 씬에 놓는다</summary>
+<summary><code>st_off_object_create</code> — Places a mesh instance in the scene with a matrix transform</summary>
 
 ```c
 STObjectId st_off_object_create(STOFF_Context* context, STMeshId mesh, const STTransform* transform, int isDynamic);
 ```
 
-**용도** — 등록한 메시를 월드 변환과 함께 씬에 배치해 전파에 참여시킵니다. 같은 메시를 여러 오브젝트가 공유할 수 있습니다.
+**Purpose** — Places a registered mesh in the scene with a world transform so it participates in propagation. Several objects can share the same mesh.
 
-**언제·어떻게** — `st_off_mesh_create` 뒤, `st_off_build` 전에 부릅니다. 정적 오브젝트(`isDynamic = 0`)는 정적 가속구조에, 동적 오브젝트는 동적 TLAS에 들어가며 `st_off_object_set_transform*`로 옮긴 뒤 `st_off_build_dynamic`으로 갱신합니다. 쿼터니언으로 배치하려면 `st_off_object_create_q`. 스레드: `[control]`.
+**When / how** — Call it after `st_off_mesh_create` and before `st_off_build`. Static objects (`isDynamic = 0`) go into the static acceleration structure and dynamic objects into the dynamic TLAS; move them with `st_off_object_set_transform*` and then update with `st_off_build_dynamic`. To place with a quaternion, use `st_off_object_create_q`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | `st_off_mesh_create`가 돌려준 메시 핸들 |
-| `transform` | 메시 로컬 → 월드 변환 |
-| `isDynamic` | `0` = 정적 / 그 밖 = 동적 |
+| `context` | Context handle |
+| `mesh` | Mesh handle returned by `st_off_mesh_create` |
+| `transform` | Mesh-local → world transform |
+| `isDynamic` | `0` = static / otherwise = dynamic |
 
-**구조체** `STTransform`
+**Struct** `STTransform`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `m00, m01, m02` / `m10, m11, m12` / `m20, m21, m22` | 3×3 회전·스케일, 행 우선(row-major) |
-| `tx, ty, tz` | 이동(씬 단위) |
+| `m00, m01, m02` / `m10, m11, m12` / `m20, m21, m22` | 3×3 rotation and scale, row-major |
+| `tx, ty, tz` | Translation (scene units) |
 
-점은 열벡터로 곱합니다: `x' = m00·x + m01·y + m02·z + tx`, `y' = m10·x + m11·y + m12·z + ty`, `z' = m20·x + m21·y + m22·z + tz`. 비균등 스케일과 행렬식이 음수인 변환(거울·음수 스케일)도 받습니다.
+Points are multiplied as column vectors: `x' = m00·x + m01·y + m02·z + tx`, `y' = m10·x + m11·y + m12·z + ty`, `z' = m20·x + m21·y + m22·z + tz`. Non-uniform scale and transforms with a negative determinant (mirroring, negative scale) are also accepted.
 
-**반환** — 오브젝트 핸들 `STObjectId`. 실패는 `v < 0`.
+**Returns** — Object handle `STObjectId`. Failure is `v < 0`.
 
 </details>
 
 <details>
-<summary><code>st_off_object_create_q</code> — 메시 인스턴스를 위치·쿼터니언·스케일로 씬에 놓는다</summary>
+<summary><code>st_off_object_create_q</code> — Places a mesh instance in the scene with position, quaternion and scale</summary>
 
 ```c
 STObjectId st_off_object_create_q(STOFF_Context* context, STMeshId mesh, const float position[3], const float quatXYZW[4], const float scale[3], int isDynamic);
 ```
 
-**용도** — `st_off_object_create`의 쿼터니언판입니다. 게임 엔진의 TRS(위치·회전·스케일) 표현을 행렬로 바꾸지 않고 그대로 넣을 수 있습니다.
+**Purpose** — The quaternion version of `st_off_object_create`. Lets you pass a game engine's TRS (position, rotation, scale) representation as is, without converting it to a matrix.
 
-**언제·어떻게** — `st_off_object_create`와 같습니다(`st_off_build` 전, 동적이면 이후 `st_off_build_dynamic`). 스레드: `[control]`.
+**When / how** — Same as `st_off_object_create` (before `st_off_build`; if dynamic, `st_off_build_dynamic` afterwards). Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 메시 핸들 |
-| `position` | 위치 xyz(씬 단위) |
-| `quatXYZW` | 로컬 → 월드 회전 쿼터니언, **XYZW 순서**. 엔진이 정규화하며 `norm < 1e-12`이면 항등으로 대체합니다 |
-| `scale` | 축별 스케일 xyz. R·S로 합성되며 비균등을 허용합니다 |
-| `isDynamic` | `0` = 정적 / 그 밖 = 동적 |
+| `context` | Context handle |
+| `mesh` | Mesh handle |
+| `position` | Position xyz (scene units) |
+| `quatXYZW` | Local → world rotation quaternion, **XYZW order**. Normalized by the engine; replaced with identity if `norm < 1e-12` |
+| `scale` | Per-axis scale xyz. Composed as R·S; non-uniform is allowed |
+| `isDynamic` | `0` = static / otherwise = dynamic |
 
-**반환** — 오브젝트 핸들 `STObjectId`. 실패는 `v < 0`.
+**Returns** — Object handle `STObjectId`. Failure is `v < 0`.
 
 </details>
 
 <details>
-<summary><code>st_off_source_create</code> — 음원을 만든다</summary>
+<summary><code>st_off_source_create</code> — Creates a source</summary>
 
 ```c
 STSourceId st_off_source_create(STOFF_Context* context, const STSourceDesc* source);
 ```
 
-**용도** — IR을 계산할 음원을 씬에 추가합니다. 오프라인 컨텍스트의 음원은 오디오 입력(파일·스트림)을 받지 않고, 리스너와 짝을 이뤄 IR 계산·렌더의 대상이 됩니다. 실시간과 달리 음원 수 예산이 없습니다.
+**Purpose** — Adds a source to the scene for which IRs are computed. Sources in an offline context take no audio input (file, stream); paired with listeners, they are the targets of IR computation and rendering. Unlike real time, there is no source count budget.
 
-**언제·어떻게** — 씬을 구성한 뒤 `st_off_ir_compute` 전에 만듭니다. 생성 직후 상태는 실시간과 같습니다 — source energy 1.0, 경로 볼륨 4종 1.0, 지향성 테이블 없음, 방향은 `direction`에 맞춘 roll 없는 회전, 수송 갱신 단계 수 0. 이후 위치·방향·레이 수·깊이·EQ·지향성 등은 `st_off_source_set_*`로 바꿉니다. 스레드: `[control]`.
+**When / how** — Create it after building the scene and before `st_off_ir_compute`. The state right after creation is the same as real time — source energy 1.0, all 4 path volumes 1.0, no directivity table, orientation a roll-free rotation aligned to `direction`, 0 transport update tiers. Afterwards change position, direction, ray count, depth, EQ, directivity, etc. with `st_off_source_set_*`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 기술자. 모든 값이 유한해야 하고 `intensity ≥ 0`이어야 합니다 |
+| `context` | Context handle |
+| `source` | Source descriptor. All values must be finite and `intensity ≥ 0` |
 
-**구조체** `STSourceDesc`
+**Struct** `STSourceDesc`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `positionX, positionY, positionZ` | 위치(씬 단위) |
-| `directionX, directionY, directionZ` | 정면 방향. 이 방향에 맞는 roll 없는 소스 프레임이 만들어집니다 |
-| `velocityX, velocityY, velocityZ` | 속도(씬 단위/초). `sceneRatio`로 m/s로 바뀌어 도플러 방사 이득(`st_off_set_doppler_gain_mode`)에 쓰입니다 |
-| `intensity` | 무차원 선형 **압력** 게인(≥ 0). 음향 인텐시티(W/m²)·SPL·Pa가 아닙니다. 별도의 에너지 배율은 `st_off_source_set_energy` |
-| `directional` | `0` = 무지향(onAxis = offAxis = 1) / 그 밖 = 지향 프로파일(onAxis = 1, offAxis = 0) |
-| `isDynamic` | `1` = 동적 / `0` = 정적. 오프라인에서 정적 소스의 수송은 계산마다 한 번 굽고 고정되며, 동적 소스는 매 계산 전량 재추적합니다 |
+| `positionX, positionY, positionZ` | Position (scene units) |
+| `directionX, directionY, directionZ` | Front direction. A roll-free source frame matching this direction is created |
+| `velocityX, velocityY, velocityZ` | Velocity (scene units/s). Converted to m/s with `sceneRatio` and used for the Doppler radiation gain (`st_off_set_doppler_gain_mode`) |
+| `intensity` | Dimensionless linear **pressure** gain (≥ 0). Not acoustic intensity (W/m²), SPL or Pa. A separate energy scale is `st_off_source_set_energy` |
+| `directional` | `0` = omnidirectional (onAxis = offAxis = 1) / otherwise = directional profile (onAxis = 1, offAxis = 0) |
+| `isDynamic` | `1` = dynamic / `0` = static. Offline, the transport of static sources is baked once per computation and fixed, while dynamic sources are fully retraced every computation |
 
-**반환** — 음원 핸들 `STSourceId`. 실패는 `v < 0`(`NULL`, 비유한 값, 음수 `intensity`는 `ST_STATUS_INVALID_ARGUMENT`).
+**Returns** — Source handle `STSourceId`. Failure is `v < 0` (`NULL`, non-finite values and negative `intensity` give `ST_STATUS_INVALID_ARGUMENT`).
 
 </details>
 
 <details>
-<summary><code>st_off_listener_create</code> — 리스너를 하나 더 만든다</summary>
+<summary><code>st_off_listener_create</code> — Creates an additional listener</summary>
 
 ```c
 STListenerId st_off_listener_create(STOFF_Context* context);
 ```
 
-**용도** — 오프라인 컨텍스트는 리스너를 여러 개 둘 수 있습니다. 한 씬에서 여러 청취 위치의 IR을 한 번의 `st_off_ir_compute`로 얻기 위한 것입니다. 실시간 DLL에는 없는 오프라인 전용 함수입니다.
+**Purpose** — An offline context can have multiple listeners. This is for getting IRs at several listening positions in one scene with a single `st_off_ir_compute`. An offline-only function not present in the realtime DLL.
 
-**언제·어떻게** — 컨텍스트를 만들면 리스너 하나(id `1`)가 자동으로 만들어져 활성 상태입니다. 그 외 청취 위치마다 이 함수를 부릅니다. 새 리스너는 자동으로 활성이 되지 않습니다 — 리스너 위치·방향 setter(`st_off_listener_set_position` 등)는 **활성 리스너**에 적용되므로, `st_off_listener_set_active`로 전환한 뒤 포즈를 지정합니다. IR 계산은 등록된 리스너마다 이루어지고, 렌더·원시 IR 조회 함수가 리스너 핸들을 인자로 받습니다. 스레드: `[control]`.
+**When / how** — Creating a context automatically creates one listener (id `1`), which is active. Call this function for each additional listening position. A new listener does not automatically become active — the listener position and orientation setters (`st_off_listener_set_position`, etc.) apply to the **active listener**, so switch with `st_off_listener_set_active` and then set the pose. IR computation is performed for every registered listener, and the render and raw IR query functions take a listener handle as an argument. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 새 리스너 핸들 `STListenerId`. 실패는 `v < 0`.
+**Returns** — New listener handle `STListenerId`. Failure is `v < 0`.
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_active</code> — 활성 리스너를 바꾼다</summary>
+<summary><code>st_off_listener_set_active</code> — Changes the active listener</summary>
 
 ```c
 void st_off_listener_set_active(STOFF_Context* context, STListenerId listener);
 ```
 
-**용도** — 리스너 포즈 setter(`st_off_listener_set_position` · `_set_rotation` · `_set_orientation_q` · `_set_rotation_ypr`)가 어느 리스너에 적용될지 고릅니다.
+**Purpose** — Chooses which listener the listener pose setters (`st_off_listener_set_position` · `_set_rotation` · `_set_orientation_q` · `_set_rotation_ypr`) apply to.
 
-**언제·어떻게** — 여러 리스너를 쓸 때, 각 리스너의 포즈를 지정하기 직전에 부릅니다. 존재하지 않는 리스너 핸들이면 아무것도 바꾸지 않습니다. 스레드: `[control]`.
+**When / how** — When using multiple listeners, call it right before setting each listener's pose. A nonexistent listener handle changes nothing. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `listener` | 활성으로 만들 리스너 핸들 |
+| `context` | Context handle |
+| `listener` | Handle of the listener to make active |
 
-**반환** — 없음. 전환 여부는 `st_off_listener_get_active`로 확인합니다.
+**Returns** — None. Check whether it switched with `st_off_listener_get_active`.
 
 </details>
 
 <details>
-<summary><code>st_off_listener_get_active</code> — 현재 활성 리스너를 읽는다</summary>
+<summary><code>st_off_listener_get_active</code> — Reads the current active listener</summary>
 
 ```c
 STListenerId st_off_listener_get_active(const STOFF_Context* context);
 ```
 
-**용도** — 포즈 setter가 지금 어느 리스너를 대상으로 하는지 확인합니다.
+**Purpose** — Checks which listener the pose setters currently target.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 생성 직후 값은 자동 생성된 리스너 `1`입니다. 스레드: `[any]` — atomic 읽기입니다.
+**When / how** — Can be called at any time. Right after creation the value is the automatically created listener `1`. Thread: `[any]` — an atomic read.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 활성 리스너 핸들. `context`가 `NULL`이면 `v = -1`.
+**Returns** — Active listener handle. `v = -1` if `context` is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_off_listener_destroy</code> — 리스너를 지운다</summary>
+<summary><code>st_off_listener_destroy</code> — Destroys a listener</summary>
 
 ```c
 int st_off_listener_destroy(STOFF_Context* context, STListenerId listener);
 ```
 
-**용도** — 더 이상 계산할 필요가 없는 청취 위치를 제거해 다음 계산의 비용을 줄입니다.
+**Purpose** — Removes a listening position that no longer needs to be computed, reducing the cost of the next computation.
 
-**언제·어떻게** — 활성 리스너는 지울 수 없습니다 — 먼저 `st_off_listener_set_active`로 다른 리스너로 전환합니다. 스레드: `[control]`.
+**When / how** — The active listener cannot be destroyed — first switch to another listener with `st_off_listener_set_active`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `listener` | 지울 리스너 핸들 |
+| `context` | Context handle |
+| `listener` | Handle of the listener to destroy |
 
-**반환** — `1` = 제거 / `0` = 컨텍스트 없음, 없는 리스너, 또는 활성 리스너.
+**Returns** — `1` = removed / `0` = no context, no such listener, or the active listener.
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_position</code> — 음원 위치를 바꾼다</summary>
+<summary><code>st_off_source_set_position</code> — Changes the source position</summary>
 
 ```c
 void st_off_source_set_position(STOFF_Context* context, STSourceId source, float x, float y, float z);
 ```
 
-**용도** — 음원을 옮깁니다.
+**Purpose** — Moves the source.
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 변경은 다음 계산에 반영됩니다. 실시간과 달리 모션 큐가 없고 즉시 씬에 적용됩니다. 스레드: `[control]`.
+**When / how** — Call it before `st_off_ir_compute`. The change is reflected in the next computation. Unlike real time there is no motion queue; it is applied to the scene immediately. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `x`, `y`, `z` | 월드 위치(씬 단위) |
+| `context` | Context handle |
+| `source` | Source handle |
+| `x`, `y`, `z` | World position (scene units) |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_direction</code> — 음원 정면 방향을 바꾼다</summary>
+<summary><code>st_off_source_set_direction</code> — Changes the source front direction</summary>
 
 ```c
 void st_off_source_set_direction(STOFF_Context* context, STSourceId source, float x, float y, float z);
 ```
 
-**용도** — 지향성 음원(콘 또는 지향성 테이블)의 정면을 돌립니다.
+**Purpose** — Rotates the front of a directional source (cone or directivity table).
 
-**언제·어떻게** — 소스 프레임(`st_off_source_set_orientation_q`)과 양방향 동기화됩니다 — 이 함수를 부르면 프레임은 "+Z에서 이 방향으로 가는 roll 없는 최소 회전"이 됩니다. roll이 필요하면 이 함수 대신 `st_off_source_set_orientation_q`를 씁니다. 변경은 다음 `st_off_ir_compute`에 반영됩니다. 스레드: `[control]`.
+**When / how** — Synchronized both ways with the source frame (`st_off_source_set_orientation_q`) — calling this function sets the frame to "the minimal roll-free rotation from +Z to this direction". If roll is needed, use `st_off_source_set_orientation_q` instead. The change is reflected in the next `st_off_ir_compute`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `x`, `y`, `z` | 월드 방향 벡터 |
+| `context` | Context handle |
+| `source` | Source handle |
+| `x`, `y`, `z` | World direction vector |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_position</code> — 활성 리스너의 위치를 바꾼다</summary>
+<summary><code>st_off_listener_set_position</code> — Changes the position of the active listener</summary>
 
 ```c
 void st_off_listener_set_position(STOFF_Context* context, float x, float y, float z);
 ```
 
-**용도** — 청취 위치를 지정합니다.
+**Purpose** — Sets the listening position.
 
-**언제·어떻게** — **활성 리스너**에 적용됩니다(여러 리스너는 `st_off_listener_set_active`로 전환하며 지정). 방향은 유지됩니다. 변경은 다음 `st_off_ir_compute`에 반영됩니다. 스레드: `[control]`.
+**When / how** — Applies to the **active listener** (for multiple listeners, switch with `st_off_listener_set_active` while setting). Orientation is kept. The change is reflected in the next `st_off_ir_compute`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `x`, `y`, `z` | 월드 위치(씬 단위) |
+| `context` | Context handle |
+| `x`, `y`, `z` | World position (scene units) |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_rotation</code> — 활성 리스너의 방향을 yaw·pitch로 정한다</summary>
+<summary><code>st_off_listener_set_rotation</code> — Sets the active listener's orientation with yaw and pitch</summary>
 
 ```c
 void st_off_listener_set_rotation(STOFF_Context* context, float yaw, float pitch);
 ```
 
-**용도** — 바이노럴·공간화 렌더가 기준으로 삼는 리스너 머리 방향을 지정합니다.
+**Purpose** — Sets the listener head orientation used as the reference by binaural and spatialized rendering.
 
-**언제·어떻게** — 활성 리스너에 적용됩니다. 회전은 R = Ry(yaw)·Rx(pitch)이며, yaw = pitch = 0이면 forward = +Z, up = +Y, right = +X입니다. forward = (sin(yaw)·cos(pitch), −sin(pitch), cos(yaw)·cos(pitch)). 방향 벡터 d에서 역으로 구하려면 `yaw = atan2f(d.x, d.z); pitch = -asinf(d.y);`. roll은 표현할 수 없습니다 — 필요하면 `st_off_listener_set_rotation_ypr` 또는 `st_off_listener_set_orientation_q`를 씁니다. 리스너 방향 setter 셋은 마지막에 부른 쪽이 이깁니다. 스레드: `[control]`.
+**When / how** — Applies to the active listener. The rotation is R = Ry(yaw)·Rx(pitch); with yaw = pitch = 0, forward = +Z, up = +Y, right = +X. forward = (sin(yaw)·cos(pitch), −sin(pitch), cos(yaw)·cos(pitch)). To derive them from a direction vector d: `yaw = atan2f(d.x, d.z); pitch = -asinf(d.y);`. Roll cannot be expressed — if needed, use `st_off_listener_set_rotation_ypr` or `st_off_listener_set_orientation_q`. Among the three listener orientation setters, the last one called wins. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `yaw` | 라디안. 양수 = 위에서 내려다볼 때 시계 방향(오른쪽으로 돈다) |
-| `pitch` | 라디안. 양수 = 아래를 본다 |
+| `context` | Context handle |
+| `yaw` | Radians. Positive = clockwise viewed from above (turns right) |
+| `pitch` | Radians. Positive = looks down |
 
-**반환** — 없음.
+**Returns** — None.
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_orientation_q</code> — 활성 리스너의 방향을 쿼터니언으로 정한다</summary>
+<summary><code>st_off_listener_set_orientation_q</code> — Sets the active listener's orientation with a quaternion</summary>
 
 ```c
 int st_off_listener_set_orientation_q(STOFF_Context* context, const float quatXYZW[4]);
 ```
 
-**용도** — roll(머리 기울임)까지 포함한 리스너 방향을 게임 엔진의 쿼터니언 그대로 넣습니다.
+**Purpose** — Passes the listener orientation, including roll (head tilt), as the game engine's quaternion as is.
 
-**언제·어떻게** — 활성 리스너에 적용됩니다. 로컬 축은 forward = +Z · up = +Y · right = +X이고, 소스 `orientation_q`와 같은 순서·같은 검증입니다. yaw/pitch 표현은 q = q_y(yaw)·q_x(pitch)인 roll 0 경우에 해당합니다. 리스너 방향 setter 셋은 마지막에 부른 쪽이 이깁니다. 지원 여부는 워드 1의 `ST_CAP1_LISTENER_ORIENTATION_Q`. 스레드: `[control]`.
+**When / how** — Applies to the active listener. The local axes are forward = +Z · up = +Y · right = +X, with the same order and validation as the source `orientation_q`. The yaw/pitch representation corresponds to the roll-0 case q = q_y(yaw)·q_x(pitch). Among the three listener orientation setters, the last one called wins. Support: `ST_CAP1_LISTENER_ORIENTATION_Q` in word 1. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `quatXYZW` | 로컬 → 월드 단위 쿼터니언, **XYZW 순서**. 엔진이 정규화합니다 |
+| `context` | Context handle |
+| `quatXYZW` | Local → world unit quaternion, **XYZW order**. Normalized by the engine |
 
-**반환** — `1` = 성공 / `0` = 실패. 비유한 성분이나 퇴화(`norm < 1e-12`)는 `ST_STATUS_INVALID_ARGUMENT`이며 아무것도 바꾸지 않습니다.
+**Returns** — `1` = success / `0` = failed. Non-finite components or degeneracy (`norm < 1e-12`) give `ST_STATUS_INVALID_ARGUMENT` and change nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_rotation_ypr</code> — 활성 리스너의 방향을 yaw·pitch·roll로 정한다</summary>
+<summary><code>st_off_listener_set_rotation_ypr</code> — Sets the active listener's orientation with yaw, pitch and roll</summary>
 
 ```c
 int st_off_listener_set_rotation_ypr(STOFF_Context* context, float yaw, float pitch, float roll);
 ```
 
-**용도** — `st_off_listener_set_rotation`에 roll을 더한 오일러판입니다.
+**Purpose** — The Euler version of `st_off_listener_set_rotation` with roll added.
 
-**언제·어떻게** — 활성 리스너에 적용됩니다. 회전은 R = Ry(yaw)·Rx(pitch)·Rz(roll)이며 Unity `Quaternion.Euler(pitch, yaw, roll)`(도 → 라디안)과 같은 순서입니다. `roll = 0`이면 `st_off_listener_set_rotation(yaw, pitch)`와 같은 행렬입니다. 리스너 방향 setter 셋은 마지막에 부른 쪽이 이깁니다. 지원 여부는 `ST_CAP1_LISTENER_ORIENTATION_Q`. 스레드: `[control]`.
+**When / how** — Applies to the active listener. The rotation is R = Ry(yaw)·Rx(pitch)·Rz(roll), the same order as Unity `Quaternion.Euler(pitch, yaw, roll)` (degrees → radians). With `roll = 0` it is the same matrix as `st_off_listener_set_rotation(yaw, pitch)`. Among the three listener orientation setters, the last one called wins. Support: `ST_CAP1_LISTENER_ORIENTATION_Q`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `yaw` | 라디안. 양수 = 오른쪽으로 돈다 |
-| `pitch` | 라디안. 양수 = 아래를 본다 |
-| `roll` | 라디안. 양수 = right 축이 위로 기운다(머리가 왼쪽으로 기울고 오른쪽 귀가 올라감) |
+| `context` | Context handle |
+| `yaw` | Radians. Positive = turns right |
+| `pitch` | Radians. Positive = looks down |
+| `roll` | Radians. Positive = the right axis tilts up (head tilts left, right ear rises) |
 
-**반환** — `1` = 성공 / `0` = 실패. 비유한 값은 `ST_STATUS_INVALID_ARGUMENT`이며 아무것도 바꾸지 않습니다.
+**Returns** — `1` = success / `0` = failed. Non-finite values give `ST_STATUS_INVALID_ARGUMENT` and change nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_object_set_transform</code> — 오브젝트 변환을 행렬로 바꾼다</summary>
+<summary><code>st_off_object_set_transform</code> — Changes an object's transform with a matrix</summary>
 
 ```c
 void st_off_object_set_transform(STOFF_Context* context, STObjectId object, const STTransform* transform);
 ```
 
-**용도** — 배치한 오브젝트를 옮기거나 회전·스케일합니다.
+**Purpose** — Moves, rotates or scales a placed object.
 
-**언제·어떻게** — 바꾼 뒤 가속구조에 반영해야 다음 계산에 쓰입니다 — 동적 오브젝트는 `st_off_build_dynamic`(동적 TLAS refit), 정적 오브젝트는 `st_off_build`(전체 빌드). 쿼터니언판은 `st_off_object_set_transform_q`. 스레드: `[control]`.
+**When / how** — After the change, apply it to the acceleration structure so the next computation uses it — `st_off_build_dynamic` (dynamic TLAS refit) for dynamic objects, `st_off_build` (full build) for static objects. The quaternion variant is `st_off_object_set_transform_q`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 오브젝트 핸들 |
-| `transform` | 새 로컬 → 월드 변환. `STTransform` 필드는 `st_off_object_create` 항목 참고 |
+| `context` | Context handle |
+| `object` | Object handle |
+| `transform` | New local → world transform. See `st_off_object_create` for the `STTransform` fields |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_object_set_transform_q</code> — 오브젝트 변환을 위치·쿼터니언·스케일로 바꾼다</summary>
+<summary><code>st_off_object_set_transform_q</code> — Changes an object's transform with position, quaternion and scale</summary>
 
 ```c
 void st_off_object_set_transform_q(STOFF_Context* context, STObjectId object, const float position[3], const float quatXYZW[4], const float scale[3]);
 ```
 
-**용도** — `st_off_object_set_transform`의 쿼터니언판입니다. 실시간 `st_rt_object_set_transform_q`와 같은 계약입니다.
+**Purpose** — Quaternion variant of `st_off_object_set_transform`. Same contract as the real-time `st_rt_object_set_transform_q`.
 
-**언제·어떻게** — `st_off_object_set_transform`과 같습니다(이후 `st_off_build_dynamic` 또는 `st_off_build`). 스레드: `[control]`.
+**When / how** — Same as `st_off_object_set_transform` (followed by `st_off_build_dynamic` or `st_off_build`). Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 오브젝트 핸들 |
-| `position` | 위치 xyz(씬 단위) |
-| `quatXYZW` | 회전 쿼터니언, **XYZW 순서**. 엔진이 정규화합니다 |
-| `scale` | 축별 스케일 xyz(비균등 허용) |
+| `context` | Context handle |
+| `object` | Object handle |
+| `position` | Position xyz (scene units) |
+| `quatXYZW` | Rotation quaternion, **XYZW order**. The engine normalizes it |
+| `scale` | Per-axis scale xyz (non-uniform allowed) |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_source_destroy</code> — 음원을 지운다</summary>
+<summary><code>st_off_source_destroy</code> — Deletes a source</summary>
 
 ```c
 int st_off_source_destroy(STOFF_Context* context, STSourceId source);
 ```
 
-**용도** — 음원을 씬에서 제거합니다. 소스 EQ 등 소스별 설정도 함께 사라집니다.
+**Purpose** — Removes a source from the scene. Per-source settings such as the source EQ are removed with it.
 
-**언제·어떻게** — 다음 `st_off_ir_compute`부터 그 음원은 계산되지 않습니다. 스레드: `[control]`.
+**When / how** — From the next `st_off_ir_compute` on, the source is no longer computed. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
+| `context` | Context handle |
+| `source` | Source handle |
 
-**반환** — `1` = 제거 / `0` = 컨텍스트 없음 또는 없는 음원.
+**Returns** — `1` = removed / `0` = no context or unknown source.
 
 </details>
 
 <details>
-<summary><code>st_off_mesh_destroy</code> — 메시를 지운다</summary>
+<summary><code>st_off_mesh_destroy</code> — Deletes a mesh</summary>
 
 ```c
 int st_off_mesh_destroy(STOFF_Context* context, STMeshId mesh);
 ```
 
-**용도** — 등록한 메시를 제거합니다.
+**Purpose** — Removes a registered mesh.
 
-**언제·어떻게** — 씬 구성을 바꾼 뒤에는 `st_off_build`로 가속구조를 다시 짓습니다. 스레드: `[control]`.
+**When / how** — After changing the scene composition, rebuild the acceleration structure with `st_off_build`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 메시 핸들 |
+| `context` | Context handle |
+| `mesh` | Mesh handle |
 
-**반환** — `1` = 제거 / `0` = 컨텍스트 없음 또는 제거 실패.
+**Returns** — `1` = removed / `0` = no context or removal failed.
 
 </details>
 
 <details>
-<summary><code>st_off_object_destroy</code> — 오브젝트를 지운다</summary>
+<summary><code>st_off_object_destroy</code> — Deletes an object</summary>
 
 ```c
 int st_off_object_destroy(STOFF_Context* context, STObjectId object);
 ```
 
-**용도** — 배치한 메시 인스턴스를 씬에서 뺍니다.
+**Purpose** — Removes a placed mesh instance from the scene.
 
-**언제·어떻게** — 씬 구성을 바꾼 뒤에는 `st_off_build`로 가속구조를 다시 짓습니다. 스레드: `[control]`.
+**When / how** — After changing the scene composition, rebuild the acceleration structure with `st_off_build`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 오브젝트 핸들 |
+| `context` | Context handle |
+| `object` | Object handle |
 
-**반환** — `1` = 제거 / `0` = 컨텍스트 없음 또는 없는 오브젝트.
+**Returns** — `1` = removed / `0` = no context or unknown object.
 
 </details>
 
 <details>
-<summary><code>st_off_mesh_set_material</code> — 메시 재질을 바꾼다</summary>
+<summary><code>st_off_mesh_set_material</code> — Changes a mesh's material</summary>
 
 ```c
 int st_off_mesh_set_material(STOFF_Context* context, STMeshId mesh, STMaterialId material);
 ```
 
-**용도** — 기하를 다시 등록하지 않고 메시의 재질만 교체합니다. 재질 A/B 비교에 씁니다.
+**Purpose** — Replaces only the mesh's material without re-registering the geometry. Use it for material A/B comparisons.
 
-**언제·어떻게** — 변경은 다음 `st_off_ir_compute`에 반영됩니다. 스레드: `[control]`.
+**When / how** — The change takes effect at the next `st_off_ir_compute`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 메시 핸들 |
-| `material` | 새 재질 핸들 |
+| `context` | Context handle |
+| `mesh` | Mesh handle |
+| `material` | New material handle |
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음, 없는 메시·재질.
+**Returns** — `1` = success / `0` = no context, unknown mesh or material.
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_ray_count</code> — 음원의 수송 레이 격자 크기를 정한다</summary>
+<summary><code>st_off_source_set_ray_count</code> — Sets the size of a source's transport ray grid</summary>
 
 ```c
 void st_off_source_set_ray_count(STOFF_Context* context, STSourceId source, int width, int height);
 ```
 
-**용도** — 음원에서 쏘는 확산 수송(diffuse transport) 레이의 수를 정합니다. 레이 수 N = `width × height`이며, 늘리면 잔향·확산 성분의 통계가 안정되는 대신 계산 비용이 늘어납니다.
+**Purpose** — Sets the number of diffuse transport rays cast from the source. The ray count N = `width × height`; raising it stabilizes the statistics of the reverb and diffuse components at the cost of more computation.
 
-**언제·어떻게** — `st_off_ir_compute` 전에 음원마다 부릅니다. 기본은 16 × 8입니다. 받아들일 수 없는 값이면 설정을 바꾸지 않고 `st_off_get_last_status`에 `ST_STATUS_INVALID_ARGUMENT`를 남깁니다. 스레드: `[control]`.
+**When / how** — Call it per source before `st_off_ir_compute`. The default is 16 × 8. An unacceptable value leaves the setting unchanged and records `ST_STATUS_INVALID_ARGUMENT` in `st_off_get_last_status`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `width` | 격자 가로 레이 수(기본 16) |
-| `height` | 격자 세로 레이 수(기본 8) |
+| `context` | Context handle |
+| `source` | Source handle |
+| `width` | Horizontal ray count of the grid (default 16) |
+| `height` | Vertical ray count of the grid (default 8) |
 
-**반환** — 없음. 실패는 `st_off_get_last_status`로 확인합니다.
+**Returns** — Nothing. Check failures with `st_off_get_last_status`.
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_depth</code> — 음원별 최대 반사 깊이를 정한다</summary>
+<summary><code>st_off_source_set_depth</code> — Sets the per-source maximum reflection depth</summary>
 
 ```c
 void st_off_source_set_depth(STOFF_Context* context, STSourceId source, int depth);
 ```
 
-**용도** — 이 음원에서 추적하는 반사 차수 상한을 음원마다 따로 정합니다. 중요한 음원만 깊게 추적해 비용을 배분할 때 씁니다.
+**Purpose** — Sets the cap on the reflection order traced from this source, separately per source. Use it to distribute cost by tracing only important sources deeply.
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 음원별 4입니다(전역 상한은 `st_off_set_max_depth`, 기본 8). 받아들일 수 없는 값이면 `st_off_get_last_status`에 `ST_STATUS_INVALID_ARGUMENT`를 남깁니다. 스레드: `[control]`.
+**When / how** — Call it before `st_off_ir_compute`. The default is 4 per source (the global cap is `st_off_set_max_depth`, default 8). An unacceptable value records `ST_STATUS_INVALID_ARGUMENT` in `st_off_get_last_status`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `depth` | 최대 반사 깊이(기본 4) |
+| `context` | Context handle |
+| `source` | Source handle |
+| `depth` | Maximum reflection depth (default 4) |
 
-**반환** — 없음. 실패는 `st_off_get_last_status`로 확인합니다.
+**Returns** — Nothing. Check failures with `st_off_get_last_status`.
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_energy</code> — 음원의 에너지 배율을 정한다</summary>
+<summary><code>st_off_source_set_energy</code> — Sets a source's energy multiplier</summary>
 
 ```c
 int st_off_source_set_energy(STOFF_Context* context, STSourceId source, float energy);
 ```
 
-**용도** — `STSourceDesc.intensity`(압력 도메인 게인)와 별개인 **에너지 도메인** 상대 배율로 음원 세기를 조정합니다. 지원 여부는 `ST_CAP_SOURCE_ENERGY`.
+**Purpose** — Adjusts source strength with an **energy-domain** relative multiplier, separate from `STSourceDesc.intensity` (pressure-domain gain). Support is indicated by `ST_CAP_SOURCE_ENERGY`.
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 1.0입니다. 스레드: `[control]`.
+**When / how** — Call it before `st_off_ir_compute`. The default is 1.0. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `energy` | 에너지 배율. 유한하고 `≥ 0`이어야 합니다(기본 1.0) |
+| `context` | Context handle |
+| `source` | Source handle |
+| `energy` | Energy multiplier. Must be finite and `≥ 0` (default 1.0) |
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음, 비유한·음수 값, 없는 음원.
+**Returns** — `1` = success / `0` = no context, non-finite or negative value, unknown source.
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_transport_refresh_steps</code> — 음원별 수송 갱신 단계 수를 저장한다</summary>
+<summary><code>st_off_source_set_transport_refresh_steps</code> — Stores the per-source transport refresh step count</summary>
 
 ```c
 int st_off_source_set_transport_refresh_steps(STOFF_Context* context, STSourceId source, int steps);
 ```
 
-**용도** — 실시간 컨텍스트에서 음원의 수송 레이 격자 N을 n번의 전파에 나눠 갱신하게 하는 값입니다. 오프라인에도 같은 setter가 있는 것은, 호스트가 같은 씬 설정을 실시간 컨텍스트에 그대로 재생할 수 있도록 값을 왕복시키기 위해서입니다.
+**Purpose** — In a real-time context, this value makes the source's transport ray grid N refresh spread over n propagations. The offline context has the same setter so the value round-trips, letting the host replay the same scene settings unchanged in a real-time context.
 
-**언제·어떻게** — 오프라인 컨텍스트는 롤링 수송을 쓰지 않으므로 **동적 음원의 n을 무시하고 매 계산 전량 재추적합니다**(실효 n = 1). 그래서 같은 씬·같은 입력이면 몇 번을 계산해도 같은 RIR이 나옵니다. 정적 음원은 n과 무관하게 계산마다 한 번 구운 결과로 고정됩니다. 값 자체는 저장되고 `st_off_source_get_transport_refresh_steps`가 그대로 돌려줍니다. 실시간 `st_rt_source_set_transport_refresh_steps`와 시그니처·반환 계약이 같습니다. 지원 여부는 `ST_CAP_SOURCE_TRANSPORT_REFRESH_STEPS`. 스레드: `[control]`.
+**When / how** — The offline context does not use rolling transport, so it **ignores n for dynamic sources and fully retraces on every computation** (effective n = 1). The same scene and the same inputs therefore produce the same RIR no matter how many times you compute. Static sources are fixed to the result baked once per computation, regardless of n. The value itself is stored and `st_off_source_get_transport_refresh_steps` returns it as is. Signature and return contract match the real-time `st_rt_source_set_transport_refresh_steps`. Support is indicated by `ST_CAP_SOURCE_TRANSPORT_REFRESH_STEPS`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `steps` | `0` = 기본(셸·음원 플래그가 정함) / `1` = 매 전파 전량 재추적 / `≥ 2` = n번에 나눠 갱신(실시간에서 `[1, N]`으로 clamp). 음수는 거절 |
+| `context` | Context handle |
+| `source` | Source handle |
+| `steps` | `0` = default (decided by the shell and source flags) / `1` = full retrace every propagation / `≥ 2` = refresh spread over n (clamped to `[1, N]` in real time). Negative values are rejected |
 
-**반환** — `1` = 성공 / `0` = 실패: 음수 `steps`는 `ST_STATUS_INVALID_ARGUMENT`, 없는 음원은 `ST_STATUS_NOT_FOUND`.
+**Returns** — `1` = success / `0` = failure: negative `steps` gives `ST_STATUS_INVALID_ARGUMENT`, an unknown source gives `ST_STATUS_NOT_FOUND`.
 
 </details>
 
 <details>
-<summary><code>st_off_source_get_transport_refresh_steps</code> — 저장된 수송 갱신 단계 수를 읽는다</summary>
+<summary><code>st_off_source_get_transport_refresh_steps</code> — Reads the stored transport refresh step count</summary>
 
 ```c
 int st_off_source_get_transport_refresh_steps(const STOFF_Context* context, STSourceId source);
 ```
 
-**용도** — `st_off_source_set_transport_refresh_steps`로 저장한 값을 확인합니다.
+**Purpose** — Checks the value stored with `st_off_source_set_transport_refresh_steps`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 돌려주는 값은 실효 n이 아니라 **저장값 그대로**(0 포함)입니다 — 오프라인의 동적 음원 실효값은 항상 1입니다. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**When / how** — Can be called at any time. The returned value is **the stored value as is** (including 0), not the effective n — the effective value for offline dynamic sources is always 1. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
+| `context` | Context handle |
+| `source` | Source handle |
 
-**반환** — 저장된 단계 수(`≥ 0`). 실패는 `-1`.
+**Returns** — The stored step count (`≥ 0`). `-1` on failure.
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_orientation_q</code> — 음원 로컬 프레임을 쿼터니언으로 정한다</summary>
+<summary><code>st_off_source_set_orientation_q</code> — Sets a source's local frame with a quaternion</summary>
 
 ```c
 int st_off_source_set_orientation_q(STOFF_Context* context, STSourceId source, const float quatXYZW[4]);
 ```
 
-**용도** — 음원의 로컬 프레임을 roll까지 포함해 월드에 얹습니다. 지향성 테이블은 이 프레임 기준으로 조회되므로, 테이블을 쓰는 음원은 이 함수로 방향을 지정합니다.
+**Purpose** — Places the source's local frame in the world, including roll. The directivity table is looked up relative to this frame, so sources that use a table set their orientation with this function.
 
-**언제·어떻게** — 로컬 축은 forward = +Z / up = +Y / right = +X입니다. `st_off_source_set_direction`과 양방향 동기화됩니다 — 여기서 프레임을 주면 direction = forward(q)로 함께 바뀌고, direction setter를 부르면 프레임은 roll 없는 최소 회전이 됩니다. roll이 필요하면 반드시 이 함수를 씁니다. 실시간 `st_rt_source_set_orientation_q`와 같은 계약입니다. 지원 여부는 `ST_CAP_SOURCE_DIRECTIVITY`. 스레드: `[control]`.
+**When / how** — Local axes are forward = +Z / up = +Y / right = +X. It is synchronized both ways with `st_off_source_set_direction` — setting the frame here also changes direction = forward(q), and calling the direction setter makes the frame the minimal rotation without roll. If you need roll, always use this function. Same contract as the real-time `st_rt_source_set_orientation_q`. Support is indicated by `ST_CAP_SOURCE_DIRECTIVITY`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `quatXYZW` | 로컬 → 월드 단위 쿼터니언, **XYZW 순서**. 엔진이 정규화합니다 |
+| `context` | Context handle |
+| `source` | Source handle |
+| `quatXYZW` | Local → world unit quaternion, **XYZW order**. The engine normalizes it |
 
-**반환** — `1` = 성공 / `0` = 실패: 비유한 성분 또는 퇴화(`norm < 1e-12`)는 `ST_STATUS_INVALID_ARGUMENT`, 없는 음원은 `ST_STATUS_NOT_FOUND`.
+**Returns** — `1` = success / `0` = failure: non-finite components or degenerate (`norm < 1e-12`) give `ST_STATUS_INVALID_ARGUMENT`, an unknown source gives `ST_STATUS_NOT_FOUND`.
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_directivity</code> — 음원 지향성 테이블을 붙이거나 뗀다</summary>
+<summary><code>st_off_source_set_directivity</code> — Attaches or detaches a source directivity table</summary>
 
 ```c
 int st_off_source_set_directivity(STOFF_Context* context, STSourceId source, const STSourceDirectivity* table);
 ```
 
-**용도** — 측정·저작한 방위각 × 고도각 × 9밴드 에너지 테이블로 음원의 방사 패턴을 지정합니다. 단순한 정면/측면 콘보다 실제 음원(악기·스피커·사람 목소리 등)의 방사를 정확히 담을 수 있습니다.
+**Purpose** — Specifies the source's radiation pattern with a measured or authored azimuth × elevation × 9-band energy table. It captures the radiation of real sources (instruments, loudspeakers, human voice, etc.) more accurately than a simple front/side cone.
 
-**언제·어떻게** — 테이블이 붙어 있는 동안에는 콘 감쇠(`STSourceDesc.directional`이 만든 on/off-axis) 대신 테이블이 쓰이고, `table = NULL`로 떼면 콘 공식으로 돌아갑니다. 엔진이 테이블을 **복사**하므로 호출이 돌아온 뒤 호스트 버퍼를 해제해도 됩니다. 조회 방향은 소스 프레임 기준이라 `st_off_source_set_orientation_q`와 짝으로 씁니다. 실시간 `st_rt_source_set_directivity`와 같은 계약입니다. 지원 여부는 `ST_CAP_SOURCE_DIRECTIVITY`. 스레드: `[control]` — 테이블 복사와 정규화 스칼라 계산을 이 호출에서 한 번 합니다.
+**When / how** — While a table is attached it is used instead of the cone attenuation (the on/off-axis made by `STSourceDesc.directional`); detaching it with `table = NULL` returns to the cone formula. The engine **copies** the table, so the host buffer can be freed once the call returns. Lookup directions are relative to the source frame, so pair it with `st_off_source_set_orientation_q`. Same contract as the real-time `st_rt_source_set_directivity`. Support is indicated by `ST_CAP_SOURCE_DIRECTIVITY`. Thread: `[control]` — the table copy and the normalization scalar computation happen once in this call.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `table` | 지향성 테이블. 호출자가 `structSize`/`apiVersion`을 채웁니다. `NULL`이면 테이블 제거 |
+| `context` | Context handle |
+| `source` | Source handle |
+| `table` | Directivity table. The caller fills `structSize`/`apiVersion`. `NULL` removes the table |
 
-**구조체** `STSourceDirectivity`
+**Struct** `STSourceDirectivity`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채움 |
-| `azCount` | 방위각 노드 수, `[3, 361]`. 노드 az_i = i·360/azCount(360°에서 wrap) |
-| `elCount` | 고도각 노드 수, `[2, 181]`. 노드 el_j = −90 + j·180/(elCount−1). 홀수면 수평면(0°)이 노드에 놓입니다. 권장 격자는 5° 간격(72 × 37) |
-| `levelMode` | `STDirectivityLevelMode` — `ST_DIRECTIVITY_ABSOLUTE`(0, 값을 그대로 씀: 절대 레벨까지 담긴 측정 자료용) / `ST_DIRECTIVITY_POWER_MEAN`(1, 밴드별 구면 파워 평균이 1이 되도록 정규화: 패턴만 쓰고 총 파워는 intensity/energy로 잡을 때, 권장) / `ST_DIRECTIVITY_ON_AXIS`(2, 정면 값이 1이 되도록 정규화) |
-| `reserved0` | 예약 |
-| `energy` | `elCount × azCount × ST_FREQUENCY_BANDS`개 float, 레이아웃 `[el][az][band]`(band가 가장 빠름). **에너지 도메인**, 유한하고 `≥ 0` |
-| `reserved[6]` | 예약 |
+| `structSize` / `apiVersion` | Filled by the caller |
+| `azCount` | Number of azimuth nodes, `[3, 361]`. Node az_i = i·360/azCount (wraps at 360°) |
+| `elCount` | Number of elevation nodes, `[2, 181]`. Node el_j = −90 + j·180/(elCount−1). If odd, the horizontal plane (0°) falls on a node. The recommended grid is 5° spacing (72 × 37) |
+| `levelMode` | `STDirectivityLevelMode` — `ST_DIRECTIVITY_ABSOLUTE` (0, values used as is: for measurement data that includes absolute level) / `ST_DIRECTIVITY_POWER_MEAN` (1, normalized so the per-band spherical power mean is 1: when only the pattern is used and total power is set by intensity/energy, recommended) / `ST_DIRECTIVITY_ON_AXIS` (2, normalized so the on-axis value is 1) |
+| `reserved0` | Reserved |
+| `energy` | `elCount × azCount × ST_FREQUENCY_BANDS` floats, layout `[el][az][band]` (band fastest). **Energy domain**, finite and `≥ 0` |
+| `reserved[6]` | Reserved |
 
-방향 규약은 소스 로컬 프레임에서 az = atan2(x, z)(정면 0, 오른쪽 +90°), el = asin(y)(위 +)이며, 조회는 az wrap · el clamp 쌍선형 보간입니다.
+The direction convention in the source local frame is az = atan2(x, z) (front 0, right +90°), el = asin(y) (up +), and lookup is bilinear interpolation with az wrap · el clamp.
 
-**반환** — `1` = 성공(테이블 제거 포함) / `0` = 실패: 스탬프 불일치 `ST_STATUS_VERSION_MISMATCH`, `levelMode`·`azCount`·`elCount` 범위 밖·`energy`가 `NULL`·비유한 또는 음수 원소 `ST_STATUS_INVALID_ARGUMENT`(사유는 `st_off_get_last_error`), 없는 음원 `ST_STATUS_NOT_FOUND`.
+**Returns** — `1` = success (including table removal) / `0` = failure: stamp mismatch `ST_STATUS_VERSION_MISMATCH`, `levelMode` · `azCount` · `elCount` out of range · `energy` is `NULL` · non-finite or negative element `ST_STATUS_INVALID_ARGUMENT` (reason in `st_off_get_last_error`), unknown source `ST_STATUS_NOT_FOUND`.
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_eq</code> — 음원 원음에 9밴드 그래픽 EQ를 건다</summary>
+<summary><code>st_off_source_set_eq</code> — Applies a 9-band graphic EQ to the source's dry signal</summary>
 
 ```c
 int st_off_source_set_eq(STOFF_Context* context, STSourceId source, const float gainsDb[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 음원 신호 자체의 음색을 9밴드로 보정합니다. 크로스오버 앞에서 걸리므로 그 음원의 모든 경로(직접·투과·반사·회절)와 잔향 송출에 같은 필터가 적용됩니다. 실시간 `st_rt_source_set_eq`와 같은 구현이라 같은 결과를 냅니다.
+**Purpose** — Corrects the tone of the source signal itself in 9 bands. It is applied before the crossover, so the same filter applies to every path of that source (direct, transmission, reflection, diffraction) and to its reverb send. It is the same implementation as the real-time `st_rt_source_set_eq` and produces the same result.
 
-**언제·어떻게** — 렌더 전용 설정이라 IR 캐시를 무효화하지 않습니다 — `st_off_ir_compute`를 다시 하지 않고 렌더만 다시 하면 바로 반영됩니다(압력 IR의 솔로·혼합·배치 렌더 모두). `gainsDb = NULL` 또는 전 밴드 0 dB면 EQ를 끄며, 그 결과는 EQ가 없는 결과와 비트 동일합니다. 설정은 음원을 지울 때까지 유지되고 `st_off_trim_memory`에도 남습니다. 파라메트릭 EQ(`st_off_source_set_parametric_eq`)와 같은 EQ를 공유하며 마지막에 부른 setter가 이깁니다. 지원 여부는 `ST_CAP_SOURCE_EQ`. 스레드: `[control]` — 씬 읽기 락과 오디오라이저 컨트롤 락을 잡습니다.
+**When / how** — It is a render-only setting and does not invalidate the IR cache — re-rendering without another `st_off_ir_compute` applies it immediately (for solo, mixed and batch renders of pressure IRs alike). `gainsDb = NULL` or 0 dB in every band turns the EQ off, and the result is bit-identical to having no EQ. The setting persists until the source is deleted and also survives `st_off_trim_memory`. It shares the same EQ as the parametric EQ (`st_off_source_set_parametric_eq`); the last setter called wins. Support is indicated by `ST_CAP_SOURCE_EQ`. Thread: `[control]` — takes the scene read lock and the auralizer control lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `gainsDb` | 밴드별 게인(dB), 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz 순서. 유한하고 `[−ST_SOURCE_EQ_MAX_GAIN_DB, +ST_SOURCE_EQ_MAX_GAIN_DB]`(±24 dB) 범위여야 하며 클램프하지 않고 거절합니다. `NULL` = 끔 |
+| `context` | Context handle |
+| `source` | Source handle |
+| `gainsDb` | Per-band gain (dB), in the order 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz. Must be finite and within `[−ST_SOURCE_EQ_MAX_GAIN_DB, +ST_SOURCE_EQ_MAX_GAIN_DB]` (±24 dB); out-of-range values are rejected, not clamped. `NULL` = off |
 
-필터는 밴드마다 RBJ 피킹 biquad 하나(중심 = 밴드 중심, Q = 1.414)를 44100 Hz에서 오름차순 직렬로 겁니다. 이웃 밴드끼리 응답이 겹치므로 밴드 중심에서 정확히 지정값을 원하면 호스트가 게인을 보정해 넣습니다.
+The filter is one RBJ peaking biquad per band (center = band center, Q = 1.414), applied in series in ascending order at 44100 Hz. Responses of neighboring bands overlap, so if you need exactly the specified value at band centers, the host compensates the gains it passes in.
 
-**반환** — `1` = 성공 / `0` = 실패: 비유한 값 또는 범위 밖 `ST_STATUS_INVALID_ARGUMENT`(아무것도 바꾸지 않음), 없는 음원 `ST_STATUS_NOT_FOUND`, 소스 EQ를 지원하지 않는 백엔드(Exa) `ST_STATUS_UNAVAILABLE`.
+**Returns** — `1` = success / `0` = failure: non-finite or out-of-range value `ST_STATUS_INVALID_ARGUMENT` (nothing changed), unknown source `ST_STATUS_NOT_FOUND`, backend without source EQ support (Exa) `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_source_get_eq</code> — 음원 EQ를 9밴드 게인으로 읽는다</summary>
+<summary><code>st_off_source_get_eq</code> — Reads the source EQ as 9-band gains</summary>
 
 ```c
 int st_off_source_get_eq(STOFF_Context* context, STSourceId source, float outGainsDb[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 현재 음원 EQ를 9밴드 그래픽 EQ 뷰로 돌려줍니다.
+**Purpose** — Returns the current source EQ as a 9-band graphic EQ view.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. EQ가 꺼져 있으면 전부 0입니다. 파라메트릭 EQ로 9밴드 모양이 아닌 설정을 걸었다면 그래픽 뷰로 표현할 수 없어 실패합니다 — `0` + `ST_STATUS_UNAVAILABLE`일 때 `st_off_source_get_parametric_eq`를 불러 성공하면 그쪽으로 설정을 읽고, 같은 `UNAVAILABLE`로 실패하면 백엔드가 소스 EQ를 지원하지 않는 것입니다. 스레드: `[control]`.
+**When / how** — Can be called at any time. All zeros when the EQ is off. If a parametric EQ setting that is not 9-band shaped was applied, it cannot be expressed as a graphic view and the call fails — on `0` + `ST_STATUS_UNAVAILABLE`, call `st_off_source_get_parametric_eq`; if it succeeds, read the setting from there, and if it fails with the same `UNAVAILABLE`, the backend does not support source EQ. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `outGainsDb` | 9밴드 게인(dB)을 받을 배열 |
+| `context` | Context handle |
+| `source` | Source handle |
+| `outGainsDb` | Array that receives the 9-band gains (dB) |
 
-**반환** — `1` = 성공 / `0` = 실패: `outGainsDb`가 `NULL`이면 `ST_STATUS_INVALID_ARGUMENT`, 없는 음원 `ST_STATUS_NOT_FOUND`, `ST_STATUS_UNAVAILABLE`(백엔드 미지원 또는 9밴드로 표현할 수 없는 파라메트릭 설정 — 이때 `outGainsDb`는 건드리지 않음).
+**Returns** — `1` = success / `0` = failure: `ST_STATUS_INVALID_ARGUMENT` if `outGainsDb` is `NULL`, unknown source `ST_STATUS_NOT_FOUND`, `ST_STATUS_UNAVAILABLE` (backend not supported, or a parametric setting not expressible in 9 bands — `outGainsDb` is left untouched in that case).
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_parametric_eq</code> — 음원 원음에 파라메트릭 EQ를 건다</summary>
+<summary><code>st_off_source_set_parametric_eq</code> — Applies a parametric EQ to the source's dry signal</summary>
 
 ```c
 int st_off_source_set_parametric_eq(STOFF_Context* context, STSourceId source, const STParametricEqBand* bands, int32_t bandCount, float preampDb, int32_t enabled);
 ```
 
-**용도** — 9밴드 고정 EQ보다 자유로운 밴드 목록(피킹·셸프·LP·HP·노치)으로 음원 음색을 보정합니다. `st_off_source_set_eq`와 **같은 EQ**이며, 걸리는 위치(크로스오버 앞, 그 음원의 모든 경로)도 같습니다. AutoEq 프로파일은 `st_off_render_parse_autoeq_parametric`으로 읽어 그대로 넣을 수 있습니다.
+**Purpose** — Corrects source tone with a band list (peaking, shelf, LP, HP, notch) that is more flexible than the fixed 9-band EQ. It is **the same EQ** as `st_off_source_set_eq`, applied at the same point (before the crossover, on every path of that source). AutoEq profiles can be read with `st_off_render_parse_autoeq_parametric` and passed in as is.
 
-**언제·어떻게** — 오프라인은 램프 없이 즉시 바뀌고, 압력 렌더의 솔로·혼합·배치 모두에 같은 필터가 걸립니다. IR 캐시를 무효화하지 않으므로 렌더만 다시 하면 반영됩니다. 두 소스 EQ setter는 목록 전체를 바꾸며 마지막에 부른 쪽이 이깁니다. 꺼진 목록이나 효과 없는 목록도 저장되며, 끄고 지우려면 `st_off_source_set_eq(context, source, NULL)`을 부릅니다. 설정은 음원을 지울 때까지 유지됩니다. 실시간 `st_rt_source_set_parametric_eq`와 같은 계약·같은 구현입니다. 지원 여부는 워드 1의 `ST_CAP1_SOURCE_PARAMETRIC_EQ`. 스레드: `[control]` — 씬 읽기 락과 오디오라이저 컨트롤 락을 잡습니다.
+**When / how** — Offline, it changes immediately without a ramp, and the same filter applies to solo, mixed and batch pressure renders alike. It does not invalidate the IR cache, so re-rendering applies it. Both source EQ setters replace the whole list, and the last one called wins. A disabled list or a list with no effect is still stored; to turn it off and clear it, call `st_off_source_set_eq(context, source, NULL)`. The setting persists until the source is deleted. Same contract and same implementation as the real-time `st_rt_source_set_parametric_eq`. Support is indicated by `ST_CAP1_SOURCE_PARAMETRIC_EQ` in word 1. Thread: `[control]` — takes the scene read lock and the auralizer control lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `bands` | 밴드 배열(`bandCount`개). `bandCount = 0`이면 `NULL`이어도 됩니다 |
-| `bandCount` | 밴드 수, `[0, ST_PARAMETRIC_EQ_MAX_BANDS]`(16) |
-| `preampDb` | 프리앰프(dB), `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]`(−48 ~ +12)로 clamp. 주 용도는 클리핑 방지용 음수 값 |
-| `enabled` | `0` = 목록은 저장하되 통과 / 그 밖 = 켬 |
+| `context` | Context handle |
+| `source` | Source handle |
+| `bands` | Band array (`bandCount` entries). May be `NULL` when `bandCount = 0` |
+| `bandCount` | Number of bands, `[0, ST_PARAMETRIC_EQ_MAX_BANDS]` (16) |
+| `preampDb` | Preamp (dB), clamped to `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]` (−48 to +12). Mainly used with negative values to prevent clipping |
+| `enabled` | `0` = store the list but pass through / otherwise = on |
 
-**구조체** `STParametricEqBand`
+**Struct** `STParametricEqBand`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `type` | `STParametricEqType` — `ST_PARAMETRIC_EQ_PEAKING`(0) / `LOW_SHELF`(1) / `HIGH_SHELF`(2) / `LOW_PASS`(3) / `HIGH_PASS`(4) / `NOTCH`(5) |
-| `enabled` | `0` = 이 밴드는 항등(건너뜀) / 그 밖 = 켬 |
-| `frequencyHz` | 중심(PEAKING·NOTCH) 또는 코너(셸프 중점·LP·HP) 주파수. `[20, min(20000, 0.49·44100)]`로 clamp |
-| `gainDb` | PEAKING·셸프만 사용. `[−24, +24]`로 clamp |
-| `q` | `[0.1, 30]`, 셸프는 `[0.1, 3]`로 clamp |
-| `reserved[3]` | 반드시 `0` |
+| `enabled` | `0` = this band is identity (skipped) / otherwise = on |
+| `frequencyHz` | Center (PEAKING, NOTCH) or corner (shelf midpoint, LP, HP) frequency. Clamped to `[20, min(20000, 0.49·44100)]` |
+| `gainDb` | Used by PEAKING and shelves only. Clamped to `[−24, +24]` |
+| `q` | Clamped to `[0.1, 30]`, shelves to `[0.1, 3]` |
+| `reserved[3]` | Must be `0` |
 
-비유한 값·알 수 없는 `type`·`reserved ≠ 0`·밴드 수 범위 밖은 거절하고(아무것도 바꾸지 않음), 유한 값은 위 범위로 clamp합니다. 필터는 밴드마다 RBJ 2차 섹션(44100 Hz, double)이며 체인은 프리앰프 → 밴드 0..count−1 직렬입니다.
+Non-finite values, unknown `type`, `reserved ≠ 0` and an out-of-range band count are rejected (nothing changes); finite values are clamped to the ranges above. Each band is an RBJ second-order section (44100 Hz, double), and the chain is preamp → bands 0..count−1 in series.
 
-**반환** — `1` = 성공 / `0` = 실패: `ST_STATUS_INVALID_ARGUMENT` / `ST_STATUS_NOT_FOUND`(음원 없음) / `ST_STATUS_UNAVAILABLE`(Exa 백엔드).
+**Returns** — `1` = success / `0` = failure: `ST_STATUS_INVALID_ARGUMENT` / `ST_STATUS_NOT_FOUND` (no source) / `ST_STATUS_UNAVAILABLE` (Exa backend).
 
 </details>
 
 <details>
-<summary><code>st_off_source_get_parametric_eq</code> — 음원 EQ를 파라메트릭 밴드 목록으로 읽는다</summary>
+<summary><code>st_off_source_get_parametric_eq</code> — Reads the source EQ as a parametric band list</summary>
 
 ```c
 int st_off_source_get_parametric_eq(STOFF_Context* context, STSourceId source, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outEnabled);
 ```
 
-**용도** — 현재 음원 EQ를 clamp된 실효값의 밴드 목록으로 돌려줍니다. 9밴드 setter로 건 설정도 PEAKING 밴드 9개로 읽힙니다.
+**Purpose** — Returns the current source EQ as a band list of clamped effective values. A setting applied with the 9-band setter also reads back as 9 PEAKING bands.
 
-**언제·어떻게** — 크기를 모르면 `outBands = NULL`로 먼저 불러 밴드 수를 받습니다. `ST_PARAMETRIC_EQ_MAX_BANDS`개 용량을 주면 항상 들어갑니다. EQ가 없으면 0밴드·꺼짐입니다. 출력 규약은 실시간 `st_rt_render_get_parametric_eq`와 같습니다. 스레드: `[control]`.
+**When / how** — If you do not know the size, call it first with `outBands = NULL` to get the band count. A capacity of `ST_PARAMETRIC_EQ_MAX_BANDS` always fits. With no EQ, it is 0 bands and off. The output convention matches the real-time `st_rt_render_get_parametric_eq`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `outBands` | 밴드를 받을 배열. `NULL`이면 크기 질의(밴드는 쓰지 않음) |
-| `bandCapacity` | `outBands`의 원소 수(`≥ 0`) |
-| `outBandCount` | 밴드 수. `NULL`이면 건너뜀 |
-| `outPreampDb` | 프리앰프(dB). `NULL`이면 건너뜀 |
-| `outEnabled` | 켜짐 여부. `NULL`이면 건너뜀 |
+| `context` | Context handle |
+| `source` | Source handle |
+| `outBands` | Array that receives the bands. `NULL` = size query (no bands written) |
+| `bandCapacity` | Number of elements in `outBands` (`≥ 0`) |
+| `outBandCount` | Band count. Skipped if `NULL` |
+| `outPreampDb` | Preamp (dB). Skipped if `NULL` |
+| `outEnabled` | Whether enabled. Skipped if `NULL` |
 
-`STParametricEqBand` 필드는 `st_off_source_set_parametric_eq` 항목 참고.
+See `st_off_source_set_parametric_eq` for the `STParametricEqBand` fields.
 
-**반환** — `1` = 성공(크기 질의 포함) / `0` = 실패: `bandCapacity < 0`이면 `ST_STATUS_INVALID_ARGUMENT`, 용량이 밴드 수보다 작으면 `ST_STATUS_BUFFER_TOO_SMALL`(밴드 수·프리앰프·켜짐은 씀), 없는 음원 `ST_STATUS_NOT_FOUND`, Exa 백엔드 `ST_STATUS_UNAVAILABLE`.
+**Returns** — `1` = success (including size queries) / `0` = failure: `ST_STATUS_INVALID_ARGUMENT` if `bandCapacity < 0`, `ST_STATUS_BUFFER_TOO_SMALL` if the capacity is smaller than the band count (band count, preamp and enabled are still written), unknown source `ST_STATUS_NOT_FOUND`, Exa backend `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_path_volume</code> — 음원의 경로 종류별 볼륨을 정한다</summary>
+<summary><code>st_off_source_set_path_volume</code> — Sets a source's volume per path type</summary>
 
 ```c
 int st_off_source_set_path_volume(STOFF_Context* context, STSourceId source, int volumeKind, float volume);
 ```
 
-**용도** — 한 음원의 직접음·반사·회절·잔향 기여를 따로 키우거나 줄입니다. 물리 결과를 유지하면서 믹스 관점의 조정이 필요할 때 씁니다. 지원 여부는 `ST_CAP_SOURCE_PATH_VOLUME`.
+**Purpose** — Raises or lowers the direct, reflection, diffraction and reverb contributions of one source separately. Use it when you need mix-oriented adjustments while keeping the physical result. Support is indicated by `ST_CAP_SOURCE_PATH_VOLUME`.
 
-**언제·어떻게** — 기본은 네 종류 모두 1.0입니다. 값은 **압력 도메인** 선형 배율입니다. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**When / how** — The default is 1.0 for all four types. The value is a **pressure-domain** linear multiplier. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `volumeKind` | `STSourceVolumeKind` — `ST_SOURCE_VOLUME_DIRECT`(0, 투과 포함) / `ST_SOURCE_VOLUME_REFLECTION`(1) / `ST_SOURCE_VOLUME_DIFFRACTION`(2) / `ST_SOURCE_VOLUME_REVERB`(3, 이 음원이 리스너 공유 잔향 탱크를 구동하는 양만 조정) |
-| `volume` | 선형 압력 배율. 유한하고 `≥ 0`(기본 1.0) |
+| `context` | Context handle |
+| `source` | Source handle |
+| `volumeKind` | `STSourceVolumeKind` — `ST_SOURCE_VOLUME_DIRECT` (0, includes transmission) / `ST_SOURCE_VOLUME_REFLECTION` (1) / `ST_SOURCE_VOLUME_DIFFRACTION` (2) / `ST_SOURCE_VOLUME_REVERB` (3, adjusts only how much this source drives the listener's shared reverb tank) |
+| `volume` | Linear pressure multiplier. Finite and `≥ 0` (default 1.0) |
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음, 범위 밖 `volumeKind`, 비유한·음수 `volume`, 없는 음원.
+**Returns** — `1` = success / `0` = no context, out-of-range `volumeKind`, non-finite or negative `volume`, unknown source.
 
 </details>
 
 <details>
-<summary><code>st_off_set_path_type_enabled</code> — 경로 종류를 전역으로 켜고 끈다</summary>
+<summary><code>st_off_set_path_type_enabled</code> — Enables or disables a path type globally</summary>
 
 ```c
 void st_off_set_path_type_enabled(STOFF_Context* context, int pathType, int enabled);
 ```
 
-**용도** — 직접음·투과·반사·회절·잔향 중 특정 경로 종류를 계산에서 빼서, 각 성분이 결과에 무엇을 기여하는지 분리해 들어 보거나 비용을 줄입니다.
+**Purpose** — Excludes a specific path type (direct, transmission, reflection, diffraction or reverb) from computation, to listen separately to what each component contributes to the result or to reduce cost.
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 다섯 종류 모두 켜짐입니다. `st_off_set_acoustic_feature_enabled`와 조합하면 "거리 감쇠 + 패닝만 남긴" 기준선을 설정만으로 만들 수 있습니다. 스레드: `[control]`.
+**When / how** — Call it before `st_off_ir_compute`. By default all five types are enabled. Combined with `st_off_set_acoustic_feature_enabled`, you can build a "distance attenuation + panning only" baseline purely through settings. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 | `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb |
-| `enabled` | `0` = 끔 / 그 밖 = 켬 |
+| `enabled` | `0` = off / otherwise = on |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_set_acoustic_feature_enabled</code> — 개별 음향 기능을 켜고 끈다</summary>
+<summary><code>st_off_set_acoustic_feature_enabled</code> — Enables or disables individual acoustic features</summary>
 
 ```c
 int st_off_set_acoustic_feature_enabled(STOFF_Context* context, int feature, int enabled);
 ```
 
-**용도** — 공기 흡수·전파 지연·직접음 차폐를 하나씩 끄고 켜서 청취 A/B 비교를 합니다. 실시간 `st_rt_set_acoustic_feature_enabled`와 같은 계약입니다.
+**Purpose** — Turns air absorption, propagation delay and direct-sound occlusion off and on one at a time for listening A/B comparisons. Same contract as the real-time `st_rt_set_acoustic_feature_enabled`.
 
-**언제·어떻게** — 기본은 세 기능 모두 켜짐(물리 그대로)입니다. IR 정책 설정이라 호출하면 IR 캐시가 무효화되므로, 렌더 전에 `st_off_ir_compute`를 다시 부릅니다. 반사·회절·잔향을 끄고(`st_off_set_path_type_enabled`) 세 기능을 모두 끄면 거리 감쇠 + 패닝만 남습니다. 스레드: `[control]`.
+**When / how** — By default all three features are on (physically as is). It is an IR policy setting, so calling it invalidates the IR cache; call `st_off_ir_compute` again before rendering. Disabling reflection, diffraction and reverb (`st_off_set_path_type_enabled`) and all three features leaves only distance attenuation + panning. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION`(0, 대기 감쇠·고역 손실) / `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY`(1, 경로 길이 기반 전파 지연) / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION`(2, 직접음 가시성 검사) |
-| `enabled` | `0` = 끔 / 그 밖 = 켬 |
+| `context` | Context handle |
+| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION` (0, atmospheric attenuation and high-frequency loss) / `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY` (1, propagation delay based on path length) / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION` (2, direct-sound visibility test) |
+| `enabled` | `0` = off / otherwise = on |
 
-**반환** — `1` = 성공 / `0` = 범위 밖 `feature`이거나 실패.
+**Returns** — `1` = success / `0` = out-of-range `feature` or failure.
 
 </details>
 
 <details>
-<summary><code>st_off_is_acoustic_feature_enabled</code> — 음향 기능의 켜짐 여부를 읽는다</summary>
+<summary><code>st_off_is_acoustic_feature_enabled</code> — Reads whether an acoustic feature is enabled</summary>
 
 ```c
 int st_off_is_acoustic_feature_enabled(const STOFF_Context* context, int feature);
 ```
 
-**용도** — `st_off_set_acoustic_feature_enabled`로 지정한 상태를 확인합니다.
+**Purpose** — Checks the state set with `st_off_set_acoustic_feature_enabled`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽습니다.
+**When / how** — Can be called at any time. Thread: `[control]` — reads engine state without a lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 | `feature` | `ST_ACOUSTIC_FEATURE_*`(0~2) |
 
-**반환** — `1` = 켜짐 / `0` = 꺼짐 / `-1` = 컨텍스트 없음.
+**Returns** — `1` = on / `0` = off / `-1` = no context.
 
 </details>
 
 <details>
-<summary><code>st_off_set_late_coupling</code> — late 잔향 결합 감쇠 파라미터를 개별로 정한다</summary>
+<summary><code>st_off_set_late_coupling</code> — Sets the late-reverb coupling attenuation parameters individually</summary>
 
 ```c
 int st_off_set_late_coupling(STOFF_Context* context, float floorDb, float visibleLow, float visibleHigh, float sendNormalizeTrim, int rainDirectionWalk);
 ```
 
-**용도** — 리스너가 음원의 확산장에 얼마나 결합돼 있는지(가시몫)에 따라 late 잔향 주입을 감쇠합니다. 잔향 탱크는 완전 혼합된 단일 공간이라 기본적으로 어디서나 같은 크기로 들리는데, ㄷ자·ㅁ자처럼 모퉁이 너머로 갈라진 공간에서 "멀어졌는데 잔향이 그대로이거나 오히려 커지는" 문제를 고치기 위한 옵션입니다.
+**Purpose** — Attenuates late-reverb injection according to how strongly the listener is coupled to the source's diffuse field (the visible fraction). The reverb tank is a single fully mixed space, so by default it sounds equally loud everywhere; this option fixes the problem in spaces split around corners, such as U- or ring-shaped layouts, where "you move away but the reverb stays the same or even gets louder".
 
-**언제·어떻게** — 보통은 `st_off_set_late_coupling_preset`으로 충분하고, 세밀한 조정이 필요할 때 이 함수를 씁니다. 결합 감쇠·send 평탄화·rain 방향 워크는 함께 켜도록 설계된 묶음입니다 — 평탄화 없이 결합만 켜면 멀어질수록 잔향 주입이 오히려 커질 수 있고, rain 워크가 없으면 갈라진 공간 건너편의 late 방향 표본이 부족해집니다. 음원과 같은 공간(가시몫이 `visibleHigh` 이상)은 정확히 0 dB입니다. 파라미터 구성은 아직 확정되지 않아 바뀔 수 있습니다. IR 정책이라 바뀐 값은 다음 `st_off_ir_compute`부터 반영됩니다. 실시간 `st_rt_set_late_coupling`과 같은 계약입니다. 스레드: `[control]`.
+**When / how** — `st_off_set_late_coupling_preset` is usually enough; use this function when you need fine adjustments. Coupling attenuation, send flattening and the rain direction walk are a bundle designed to be enabled together — enabling coupling without flattening can make reverb injection grow as you move away, and without the rain walk there are too few late direction samples on the far side of a split space. A space shared with the source (visible fraction at or above `visibleHigh`) is exactly 0 dB. The parameter set is not final and may change. It is an IR policy, so changed values take effect from the next `st_off_ir_compute`. Same contract as the real-time `st_rt_set_late_coupling`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `floorDb` | 완전 차단 시 감쇠 깊이(dB). `0` = 결합 감쇠 끔. 기본 9 |
-| `visibleLow` | 가시몫이 이보다 작으면 완전 차단으로 보고 바닥 감쇠를 줍니다. `0` → 기본 0.05 |
-| `visibleHigh` | 가시몫이 이보다 크면 같은 공간으로 보고 정확히 0 dB. `0` → 기본 0.60 |
-| `sendNormalizeTrim` | send 총합 평탄화 트림. `0` = 평탄화 안 함. 기본 0.75 |
-| `rainDirectionWalk` | `0` = 끔 / 그 밖 = 켬(기본). 체인이 끝난 뒤에도 late 방향 표본을 계속 모읍니다(에너지는 나르지 않음) |
+| `context` | Context handle |
+| `floorDb` | Attenuation depth (dB) at full blocking. `0` = coupling attenuation off. Default 9 |
+| `visibleLow` | Below this visible fraction, the listener is treated as fully blocked and gets the floor attenuation. `0` → default 0.05 |
+| `visibleHigh` | Above this visible fraction, the listener is treated as in the same space, exactly 0 dB. `0` → default 0.60 |
+| `sendNormalizeTrim` | Trim for flattening the send total. `0` = no flattening. Default 0.75 |
+| `rainDirectionWalk` | `0` = off / otherwise = on (default). Keeps collecting late direction samples after the chain ends (carries no energy) |
 
-**반환** — `1` = 성공 / `0` = 범위 밖 값이거나 실패.
+**Returns** — `1` = success / `0` = out-of-range value or failure.
 
 </details>
 
 <details>
-<summary><code>st_off_get_late_coupling</code> — late 잔향 결합 감쇠 파라미터를 읽는다</summary>
+<summary><code>st_off_get_late_coupling</code> — Reads the late-reverb coupling attenuation parameters</summary>
 
 ```c
 int st_off_get_late_coupling(const STOFF_Context* context, float* outFloorDb, float* outVisibleLow, float* outVisibleHigh, float* outSendNormalizeTrim, int* outRainDirectionWalk);
 ```
 
-**용도** — 현재 적용 중인 late 결합 감쇠 설정(개별 setter 또는 프리셋으로 건 값)을 확인합니다.
+**Purpose** — Checks the late coupling attenuation settings currently in effect (values set by the individual setter or a preset).
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 필요 없는 출력은 `NULL`로 둡니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽습니다.
+**When / how** — Can be called at any time. Leave outputs you do not need as `NULL`. Thread: `[control]` — reads engine state without a lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outFloorDb` | 바닥 감쇠 깊이(dB). `NULL` 허용 |
-| `outVisibleLow` | 완전 차단 무릎. `NULL` 허용 |
-| `outVisibleHigh` | 같은 공간 무릎. `NULL` 허용 |
-| `outSendNormalizeTrim` | send 평탄화 트림. `NULL` 허용 |
-| `outRainDirectionWalk` | rain 방향 워크 켜짐 여부. `NULL` 허용 |
+| `context` | Context handle |
+| `outFloorDb` | Floor attenuation depth (dB). `NULL` allowed |
+| `outVisibleLow` | Full-blocking knee. `NULL` allowed |
+| `outVisibleHigh` | Same-space knee. `NULL` allowed |
+| `outSendNormalizeTrim` | Send flattening trim. `NULL` allowed |
+| `outRainDirectionWalk` | Whether the rain direction walk is on. `NULL` allowed |
 
-각 값의 뜻은 `st_off_set_late_coupling` 항목 참고.
+See `st_off_set_late_coupling` for the meaning of each value.
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음.
+**Returns** — `1` = success / `0` = no context.
 
 </details>
 
 <details>
-<summary><code>st_off_set_late_coupling_preset</code> — late 잔향 결합 감쇠를 권장 프리셋으로 정한다</summary>
+<summary><code>st_off_set_late_coupling_preset</code> — Sets late-reverb coupling attenuation to a recommended preset</summary>
 
 ```c
 int st_off_set_late_coupling_preset(STOFF_Context* context, int preset);
 ```
 
-**용도** — 바닥 감쇠 깊이만 고르고 나머지(무릎 두 점·평탄화 트림·rain 워크)는 권장값으로 채우는 한 번 설정입니다.
+**Purpose** — One-shot setup that lets you choose only the floor attenuation depth and fills the rest (the two knees, flattening trim, rain walk) with recommended values.
 
-**언제·어떻게** — 프리셋 선택은 주로 청감 문제입니다 — 단일 방에서는 가시몫이 무릎 위라 감쇠가 개입하지 않고, 어느 프리셋이든 음원과 같은 공간은 정확히 0 dB입니다. 개별 조정이 필요하면 `st_off_set_late_coupling`을 씁니다. IR 정책이라 바뀐 값은 다음 `st_off_ir_compute`부터 반영됩니다. 스레드: `[control]`.
+**When / how** — Choosing a preset is mostly a matter of listening — in a single room the visible fraction is above the knee so the attenuation never engages, and with any preset a space shared with the source is exactly 0 dB. Use `st_off_set_late_coupling` if you need individual adjustments. It is an IR policy, so changed values take effect from the next `st_off_ir_compute`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `preset` | `ST_LATE_COUPLING_OFF`(0, 결합 감쇠·평탄화·rain 워크 전부 끔) / `ST_LATE_COUPLING_SUBTLE`(1, 바닥 6 dB) / `ST_LATE_COUPLING_DEFAULT`(2, 바닥 9 dB, 엔진 기본) / `ST_LATE_COUPLING_STRONG`(3, 바닥 12 dB) |
+| `context` | Context handle |
+| `preset` | `ST_LATE_COUPLING_OFF` (0, coupling attenuation, flattening and rain walk all off) / `ST_LATE_COUPLING_SUBTLE` (1, floor 6 dB) / `ST_LATE_COUPLING_DEFAULT` (2, floor 9 dB, engine default) / `ST_LATE_COUPLING_STRONG` (3, floor 12 dB) |
 
-**반환** — `1` = 성공 / `0` = 범위 밖 `preset`이거나 실패.
+**Returns** — `1` = success / `0` = out-of-range `preset` or failure.
 
 </details>
 
 <details>
-<summary><code>st_off_set_physical_distance_attenuation</code> — 거리 감쇠 기준 거리와 최소 거리를 정한다</summary>
+<summary><code>st_off_set_physical_distance_attenuation</code> — Sets the reference and minimum distances for distance attenuation</summary>
 
 ```c
 void st_off_set_physical_distance_attenuation(STOFF_Context* context, float referenceDistanceMeters, float minDistanceMeters);
 ```
 
-**용도** — 물리적 구면 확산(압력 1/R) 거리 감쇠의 기준점과 근거리 한계를 정합니다. 엔진의 유일한 거리 감쇠 법칙이며, 압력 게인은 `reference / max(R, min)`입니다.
+**Purpose** — Sets the reference point and near-field limit of physical spherical-spreading (pressure 1/R) distance attenuation. It is the engine's only distance attenuation law, and the pressure gain is `reference / max(R, min)`.
 
-**언제·어떻게** — 기본은 기준 1.0 m · 최소 1.0 m입니다(최소 거리를 기준 거리보다 작게 두면 기준보다 가까울 때 근거리 증폭이 생깁니다). 두 값은 `sceneRatio`와 무관하게 **호스트가 미터로** 줍니다 — 비교 대상인 경로 길이가 이미 미터로 환산돼 있기 때문입니다. IR 캐시를 무효화하므로 렌더 전에 `st_off_ir_compute`를 다시 부릅니다. 스레드: `[control]`.
+**When / how** — The default is reference 1.0 m · minimum 1.0 m (setting the minimum below the reference produces near-field boost closer than the reference). The **host passes both values in meters**, regardless of `sceneRatio` — the path lengths they are compared with are already converted to meters. It invalidates the IR cache, so call `st_off_ir_compute` again before rendering. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `referenceDistanceMeters` | 게인이 1이 되는 기준 거리(m). 기본 1.0 |
-| `minDistanceMeters` | 이보다 가까운 거리는 이 값으로 봅니다(m). 기본 1.0 |
+| `context` | Context handle |
+| `referenceDistanceMeters` | Reference distance (m) at which the gain is 1. Default 1.0 |
+| `minDistanceMeters` | Distances closer than this are treated as this value (m). Default 1.0 |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_set_atmosphere</code> — 대기 조건(온도·습도·기압)을 정한다</summary>
+<summary><code>st_off_set_atmosphere</code> — Sets atmospheric conditions (temperature, humidity, pressure)</summary>
 
 ```c
 void st_off_set_atmosphere(STOFF_Context* context, float temperatureC, float relativeHumidityPercent, float pressureKPa);
 ```
 
-**용도** — 공기 흡수(고역 손실)와 음속을 결정하는 대기 상태를 지정합니다. 음속은 고정 상수가 아니라 이 값에서 런타임에 유도되므로 전파 지연도 함께 바뀝니다.
+**Purpose** — Specifies the atmospheric state that determines air absorption (high-frequency loss) and the speed of sound. The speed of sound is not a fixed constant but derived from these values at runtime, so propagation delay changes too.
 
-**언제·어떻게** — 기본은 20.0 °C · 50.0 %RH · 101.325 kPa입니다. IR 캐시를 무효화하므로 렌더 전에 `st_off_ir_compute`를 다시 부릅니다. 스레드: `[control]`.
+**When / how** — The default is 20.0 °C · 50.0 %RH · 101.325 kPa. It invalidates the IR cache, so call `st_off_ir_compute` again before rendering. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `temperatureC` | 기온(°C). 기본 20.0 |
-| `relativeHumidityPercent` | 상대 습도(%). 기본 50.0 |
-| `pressureKPa` | 기압(kPa). 기본 101.325 |
+| `context` | Context handle |
+| `temperatureC` | Air temperature (°C). Default 20.0 |
+| `relativeHumidityPercent` | Relative humidity (%). Default 50.0 |
+| `pressureKPa` | Atmospheric pressure (kPa). Default 101.325 |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_set_doppler_gain_mode</code> — 움직이는 음원의 방사 이득 모드를 고른다</summary>
+<summary><code>st_off_set_doppler_gain_mode</code> — Selects the radiation gain mode for moving sources</summary>
 
 ```c
 int st_off_set_doppler_gain_mode(STOFF_Context* context, int mode);
 ```
 
-**용도** — 음원이 움직일 때 진행 방향 쪽 방사가 커지고 반대쪽이 작아지는 이득을 IR에 반영할지 정합니다. 가변 지연에 의한 도플러 피치와는 별개의 스위치입니다. 지원 여부는 `ST_CAP_DOPPLER_GAIN_MODE`.
+**Purpose** — Decides whether the IR includes the gain by which a moving source radiates more toward its direction of travel and less behind it. It is a separate switch from the Doppler pitch produced by variable delay. Support is indicated by `ST_CAP_DOPPLER_GAIN_MODE`.
 
-**언제·어떻게** — 기본은 `ST_DOPPLER_GAIN_MOVING_MONOPOLE`입니다. 음원 속도는 `STSourceDesc.velocity*`로 주며, 정지 음원의 이득은 1입니다. IR 캐시를 무효화하므로 렌더 전에 `st_off_ir_compute`를 다시 부릅니다. 스레드: `[control]`.
+**When / how** — The default is `ST_DOPPLER_GAIN_MOVING_MONOPOLE`. Source velocity is given with `STSourceDesc.velocity*`; a stationary source has gain 1. It invalidates the IR cache, so call `st_off_ir_compute` again before rendering. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mode` | `STDopplerGainMode` — `ST_DOPPLER_GAIN_OFF`(0) / `ST_DOPPLER_GAIN_MOVING_MONOPOLE`(1, 기본: 움직이는 단극자 근사 — 압력 D², 에너지 D⁴, D = 1/(1−Mr), 방사 경로 방향마다 따로 계산) |
+| `context` | Context handle |
+| `mode` | `STDopplerGainMode` — `ST_DOPPLER_GAIN_OFF` (0) / `ST_DOPPLER_GAIN_MOVING_MONOPOLE` (1, default: moving monopole approximation — pressure D², energy D⁴, D = 1/(1−Mr), computed separately for each radiated path direction) |
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음 또는 범위 밖 `mode`.
+**Returns** — `1` = success / `0` = no context or out-of-range `mode`.
 
 </details>
 
 <details>
-<summary><code>st_off_get_doppler_gain_mode</code> — 도플러 방사 이득 모드를 읽는다</summary>
+<summary><code>st_off_get_doppler_gain_mode</code> — Reads the Doppler radiation gain mode</summary>
 
 ```c
 int st_off_get_doppler_gain_mode(const STOFF_Context* context);
 ```
 
-**용도** — `st_off_set_doppler_gain_mode`로 지정한 값을 확인합니다.
+**Purpose** — Checks the value set with `st_off_set_doppler_gain_mode`.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽습니다.
+**When / how** — Can be called at any time. Thread: `[control]` — reads engine state without a lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — `STDopplerGainMode` 값(`0` = OFF / `1` = MOVING_MONOPOLE). 컨텍스트가 없으면 `-1`.
+**Returns** — A `STDopplerGainMode` value (`0` = OFF / `1` = MOVING_MONOPOLE). `-1` if there is no context.
 
 </details>
 
 <details>
-<summary><code>st_off_set_early_late_band_energy_targets</code> — early·late 밴드별 에너지 배율을 정한다</summary>
+<summary><code>st_off_set_early_late_band_energy_targets</code> — Sets per-band energy multipliers for early and late</summary>
 
 ```c
 int st_off_set_early_late_band_energy_targets(STOFF_Context* context, const float earlyBandEnergy[ST_FREQUENCY_BANDS], const float lateBandEnergy[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 초기음(early)과 후기 잔향(late)의 스펙트럼을 서로 독립적으로 밴드별 조정합니다. 측정값에 맞추거나 잔향 음색만 따로 다듬을 때 씁니다. 실시간 `st_rt_set_early_late_band_energy_targets`의 오프라인 대응입니다. 지원 여부는 `ST_CAP_EARLY_LATE_BAND_ENERGY`.
+**Purpose** — Adjusts the spectra of the early sound and the late reverb per band, independently of each other. Use it to match measurements or to shape the reverb tone on its own. Offline counterpart of the real-time `st_rt_set_early_late_band_energy_targets`. Support is indicated by `ST_CAP_EARLY_LATE_BAND_ENERGY`.
 
-**언제·어떻게** — 두 배열을 한 번에 교체합니다. early 배율은 exact·초기 탭에만, late 배율은 잔향 send·탱크 구동에만 적용되며 서로 곱하지 않습니다. 기본은 모두 1.0(중립)입니다. IR 캐시를 무효화하므로 렌더 전에 `st_off_ir_compute`를 다시 부릅니다. 스레드: `[control]`.
+**When / how** — Replaces both arrays at once. Early multipliers apply only to exact and early taps, late multipliers only to the reverb send and tank drive, and they are not multiplied together. All default to 1.0 (neutral). It invalidates the IR cache, so call `st_off_ir_compute` again before rendering. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `earlyBandEnergy` | 초기음 밴드별 **에너지 도메인** 배율(63 ~ 16k Hz 9개). 비유한 값은 1.0으로, 나머지는 `[0, 16]`으로 정규화 |
-| `lateBandEnergy` | 후기 잔향 밴드별 에너지 배율. 규칙은 위와 같음 |
+| `context` | Context handle |
+| `earlyBandEnergy` | Per-band **energy-domain** multipliers for the early sound (9 values, 63 to 16k Hz). Non-finite values are normalized to 1.0, the rest to `[0, 16]` |
+| `lateBandEnergy` | Per-band energy multipliers for the late reverb. Same rules as above |
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음 또는 배열이 `NULL`.
+**Returns** — `1` = success / `0` = no context or an array is `NULL`.
 
 </details>
 
 <details>
-<summary><code>st_off_set_max_depth</code> — 전역 최대 반사 깊이를 정한다</summary>
+<summary><code>st_off_set_max_depth</code> — Sets the global maximum reflection depth</summary>
 
 ```c
 void st_off_set_max_depth(STOFF_Context* context, int depth);
 ```
 
-**용도** — 반사 경로 탐색의 전역 차수 상한을 정해 계산 비용과 초기 반사 밀도를 조절합니다.
+**Purpose** — Sets the global order cap for reflection path search to control computation cost and early reflection density.
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 8입니다(음원별 상한은 `st_off_source_set_depth`, 기본 4). 스레드: `[control]`.
+**When / how** — Call it before `st_off_ir_compute`. The default is 8 (the per-source cap is `st_off_source_set_depth`, default 4). Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `depth` | 전역 최대 반사 깊이(기본 8) |
+| `context` | Context handle |
+| `depth` | Global maximum reflection depth (default 8) |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_set_transmission_max_depth</code> — 투과 경로의 최대 깊이를 정한다</summary>
+<summary><code>st_off_set_transmission_max_depth</code> — Sets the maximum depth of transmission paths</summary>
 
 ```c
 void st_off_set_transmission_max_depth(STOFF_Context* context, int depth);
 ```
 
-**용도** — 직접음이 벽을 투과할 때 몇 개의 면까지 통과를 추적할지 상한을 정합니다.
+**Purpose** — Sets the cap on how many surfaces are traced when direct sound transmits through walls.
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 64입니다. 스레드: `[control]`.
+**When / how** — Call it before `st_off_ir_compute`. The default is 64. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `depth` | 투과 최대 깊이(기본 64) |
+| `context` | Context handle |
+| `depth` | Maximum transmission depth (default 64) |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_ray_count</code> — 리스너 가이드 레이 격자 크기를 정한다</summary>
+<summary><code>st_off_listener_set_ray_count</code> — Sets the size of the listener guide ray grid</summary>
 
 ```c
 void st_off_listener_set_ray_count(STOFF_Context* context, int width, int height);
 ```
 
-**용도** — 리스너에서 쏘는 가이드(probe) 레이 수를 정합니다(N = `width × height`). 반사·회절 경로 탐색과 공간 통계의 해상도를 계산 비용과 맞바꿉니다.
+**Purpose** — Sets the number of guide (probe) rays cast from the listener (N = `width × height`). Trades the resolution of reflection/diffraction path search and spatial statistics against computation cost.
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 16 × 16입니다. 스레드: `[control]`.
+**When / how** — Call it before `st_off_ir_compute`. The default is 16 × 16. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `width` | 격자 가로 레이 수(기본 16) |
-| `height` | 격자 세로 레이 수(기본 16) |
+| `context` | Context handle |
+| `width` | Horizontal ray count of the grid (default 16) |
+| `height` | Vertical ray count of the grid (default 16) |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_ray_sampling_method</code> — 리스너 가이드 레이의 방향 분포를 고른다</summary>
+<summary><code>st_off_listener_set_ray_sampling_method</code> — Selects the direction distribution of listener guide rays</summary>
 
 ```c
 int st_off_listener_set_ray_sampling_method(STOFF_Context* context, int method);
 ```
 
-**용도** — 리스너 가이드 레이를 구면에 어떻게 배치할지 정하는 setter입니다. 현재는 피보나치 구면 분포만 선택할 수 있으며, 다른 값은 번호 호환을 위해 열거형에만 남아 있습니다. 피보나치 분포는 시드를 쓰지 않는 결정적 분포입니다.
+**Purpose** — Setter that decides how listener guide rays are placed on the sphere. Currently only the Fibonacci sphere distribution can be selected; the other values remain in the enum only for numbering compatibility. The Fibonacci distribution is deterministic and uses no seed.
 
-**언제·어떻게** — 기본값이 이미 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`라 보통 부를 필요가 없습니다. 지원 여부는 `ST_CAP_RAY_SAMPLING_METHODS`. 스레드: `[control]`.
+**When / how** — The default is already `ST_RAY_SAMPLING_FIBONACCI_SPHERE`, so you normally do not need to call it. Support is indicated by `ST_CAP_RAY_SAMPLING_METHODS`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `method` | `STRaySamplingMethod`. 받아들이는 값은 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)뿐 — `LEGACY_GRID`(0) / `EQUAL_AREA_GRID`(2) / `SOBOL_SPHERE`(3) / `ICOSAHEDRAL`(4)는 거절 |
+| `context` | Context handle |
+| `method` | `STRaySamplingMethod`. The only accepted value is `ST_RAY_SAMPLING_FIBONACCI_SPHERE` (1) — `LEGACY_GRID` (0) / `EQUAL_AREA_GRID` (2) / `SOBOL_SPHERE` (3) / `ICOSAHEDRAL` (4) are rejected |
 
-**반환** — `1` = 성공 / `0` = 그 밖의 값(`ST_STATUS_INVALID_ARGUMENT`, 상태 불변) 또는 컨텍스트 없음.
+**Returns** — `1` = success / `0` = any other value (`ST_STATUS_INVALID_ARGUMENT`, state unchanged) or no context.
 
 </details>
 
 <details>
-<summary><code>st_off_set_source_ray_sampling_method</code> — 음원 수송 레이의 방향 분포를 고른다</summary>
+<summary><code>st_off_set_source_ray_sampling_method</code> — Selects the direction distribution of source transport rays</summary>
 
 ```c
 int st_off_set_source_ray_sampling_method(STOFF_Context* context, int method);
 ```
 
-**용도** — 음원 수송 레이의 구면 배치를 정하는 setter입니다. `st_off_listener_set_ray_sampling_method`와 마찬가지로 피보나치 구면 분포만 선택할 수 있습니다.
+**Purpose** — Setter that decides the spherical placement of source transport rays. As with `st_off_listener_set_ray_sampling_method`, only the Fibonacci sphere distribution can be selected.
 
-**언제·어떻게** — 기본값이 이미 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`입니다. 스레드: `[control]`.
+**When / how** — The default is already `ST_RAY_SAMPLING_FIBONACCI_SPHERE`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `method` | `STRaySamplingMethod`. `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)만 허용, 나머지는 거절 |
+| `context` | Context handle |
+| `method` | `STRaySamplingMethod`. Only `ST_RAY_SAMPLING_FIBONACCI_SPHERE` (1) is allowed; the rest are rejected |
 
-**반환** — `1` = 성공 / `0` = 그 밖의 값(`ST_STATUS_INVALID_ARGUMENT`, 상태 불변) 또는 컨텍스트 없음.
+**Returns** — `1` = success / `0` = any other value (`ST_STATUS_INVALID_ARGUMENT`, state unchanged) or no context.
 
 </details>
 
 <details>
-<summary><code>st_off_build</code> — 씬 가속구조를 전체 빌드한다</summary>
+<summary><code>st_off_build</code> — Fully builds the scene acceleration structure</summary>
 
 ```c
 void st_off_build(STOFF_Context* context);
 ```
 
-**용도** — 등록한 메시·오브젝트로 정적+동적 가속구조를 모두 짓습니다. 전파와 `st_off_scene_raycast`는 이 구조를 씁니다.
+**Purpose** — Builds both the static and dynamic acceleration structures from the registered meshes and objects. Propagation and `st_off_scene_raycast` use this structure.
 
-**언제·어떻게** — 메시·오브젝트를 추가하거나 지운 뒤, 정적 오브젝트를 옮긴 뒤, 그리고 `st_off_ir_compute` 전에 부릅니다. 빌드 전에는 레이 질의가 모두 미스입니다. 가속구조 종류는 `st_off_scene_set_accel`이 정합니다. 스레드: `[control, blocking]` — 씬 크기에 비례하는 긴 배타 구간입니다.
+**When / how** — Call it after adding or deleting meshes or objects, after moving static objects, and before `st_off_ir_compute`. Before a build, every ray query misses. The acceleration structure type is decided by `st_off_scene_set_accel`. Thread: `[control, blocking]` — a long exclusive section proportional to scene size.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_build_dynamic</code> — 동적 오브젝트의 TLAS만 갱신한다</summary>
+<summary><code>st_off_build_dynamic</code> — Updates only the TLAS of dynamic objects</summary>
 
 ```c
 void st_off_build_dynamic(STOFF_Context* context);
 ```
 
-**용도** — 동적 오브젝트의 변환만 바뀌었을 때 전체 빌드 없이 동적 TLAS를 refit해 빠르게 반영합니다.
+**Purpose** — When only dynamic object transforms changed, refits the dynamic TLAS to apply them quickly without a full build.
 
-**언제·어떻게** — `st_off_object_set_transform` / `_q`로 동적 오브젝트를 옮긴 뒤, `st_off_ir_compute` 전에 부릅니다. 메시·오브젝트를 추가·삭제했거나 정적 오브젝트가 바뀌었다면 `st_off_build`를 씁니다. 스레드: `[control]`.
+**When / how** — Call it after moving dynamic objects with `st_off_object_set_transform` / `_q` and before `st_off_ir_compute`. If you added or deleted meshes or objects, or static objects changed, use `st_off_build`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | Context handle |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>오프라인(`st_off_*`) — IR 계산·렌더, 배치, 디버그</strong> — 49개</summary>
+<summary><strong>Offline (`st_off_*`) — IR computation and rendering, batch, debug</strong> — 49 functions</summary>
 
 <details>
-<summary><code>st_off_render_parse_autoeq_parametric</code> — AutoEq ParametricEQ.txt 텍스트를 파라메트릭 EQ 밴드 배열로 파싱한다</summary>
+<summary><code>st_off_render_parse_autoeq_parametric</code> — Parses AutoEq ParametricEQ.txt text into a parametric EQ band array</summary>
 
 ```c
 int32_t st_off_render_parse_autoeq_parametric(const char* utf8Text, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outErrorLine, char* outErrorMessage, int32_t errorMessageCapacity);
 ```
 
-**용도** — AutoEq가 배포하는 `ParametricEQ.txt`(Equalizer APO 문법의 부분집합)를 읽어 `STParametricEqBand` 배열과 프리앰프 값으로 바꿉니다. 결과를 `st_off_source_set_parametric_eq`에 그대로 넣을 수 있어, 헤드폰 보정 곡선 같은 외부 EQ 파일을 호스트가 직접 파싱하지 않고 소스 EQ로 걸 수 있습니다. 실시간 `st_rt_render_parse_autoeq_parametric`과 같은 구현·같은 계약입니다.
+**Purpose** — Reads the `ParametricEQ.txt` distributed by AutoEq (a subset of the Equalizer APO syntax) and converts it into a `STParametricEqBand` array and a preamp value. The result can be passed as is to `st_off_source_set_parametric_eq`, so the host can apply external EQ files such as headphone correction curves as a source EQ without parsing them itself. Same implementation and same contract as the real-time `st_rt_render_parse_autoeq_parametric`.
 
-**언제·어떻게** — 컨텍스트가 필요 없으므로 언제든 부를 수 있습니다. 성공하면 결과를 켜짐(`enabled` = 1)으로 `st_off_source_set_parametric_eq`에 넘깁니다. 지원 여부는 `st_off_get_capability_word(1)`의 `ST_CAP1_SOURCE_PARAMETRIC_EQ`로 확인합니다(이 파서는 그 비트에 포함되며 별도 비트가 없습니다). 스레드: `[any]` — 전역 상태도 할당도 없어 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**When / how** — It needs no context, so it can be called at any time. On success, pass the result to `st_off_source_set_parametric_eq` as enabled (`enabled` = 1). Check support with `ST_CAP1_SOURCE_PARAMETRIC_EQ` of `st_off_get_capability_word(1)` (this parser is covered by that bit and has no separate bit). Thread: `[any]` — no global state and no allocation, so it can be called from any thread without blocking.
 
-받는 문법(대소문자 무시):
+Accepted syntax (case-insensitive):
 
-- `Preamp: <수> [dB]` — 여러 줄이면 dB로 더합니다.
-- `Filter[ <번호>]: ON|OFF <종류> Fc <수> [Hz] [Gain <수> [dB]] [Q <수>]` — 종류는 `PK`·`PEQ`·`MODAL` / `LSC`·`LS` / `HSC`·`HS` / `LP`·`LPQ` / `HP`·`HPQ` / `NO`. Q를 생략하면 셸프·LP·HP는 0.7071이고, `PK`·`NO`는 Q가 필수입니다. Gain은 PK·셸프에 필수입니다. `OFF` 필터는 `enabled` = 0 밴드로 들어가 밴드 수에 셉니다.
-- 빈 줄과 `#` 뒤(줄 끝 주석)는 무시하고, UTF-8 BOM·CRLF를 받습니다. 수는 로캘과 무관하게 읽습니다.
+- `Preamp: <number> [dB]` — multiple lines are summed in dB.
+- `Filter[ <index>]: ON|OFF <type> Fc <number> [Hz] [Gain <number> [dB]] [Q <number>]` — types are `PK` · `PEQ` · `MODAL` / `LSC` · `LS` / `HSC` · `HS` / `LP` · `LPQ` / `HP` · `HPQ` / `NO`. If Q is omitted it is 0.7071 for shelves, LP and HP; `PK` and `NO` require Q. Gain is required for PK and shelves. An `OFF` filter becomes an `enabled` = 0 band and counts toward the band count.
+- Blank lines and anything after `#` (end-of-line comments) are ignored; UTF-8 BOM and CRLF are accepted. Numbers are read independently of locale.
 
-거절하는 것: 그 밖의 명령(`Channel`·`Device`·`GraphicEQ`·`Include` 등), `BP`·`AP`·`IIR`, 셸프 기울기 형식(`LS 6dB`), `BW Oct`, 범위 밖 값(Fc [20, 20000] Hz · Gain ±24 dB · Q [0.1, 30], 셸프는 Q [0.1, 3] · 프리앰프 최종합 [−48, +12] dB), 주석 밖의 비 ASCII 문자, 지수 표기. 파서는 clamp하지 않고 거절합니다(setter는 같은 범위로 clamp합니다).
+Rejected: other commands (`Channel` · `Device` · `GraphicEQ` · `Include`, etc.), `BP` · `AP` · `IIR`, shelf slope forms (`LS 6dB`), `BW Oct`, out-of-range values (Fc [20, 20000] Hz · Gain ±24 dB · Q [0.1, 30], Q [0.1, 3] for shelves · final preamp sum [−48, +12] dB), non-ASCII characters outside comments, exponent notation. The parser rejects rather than clamps (the setter clamps to the same ranges).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `utf8Text` | NUL 종료 UTF-8 텍스트(파일 내용 전체). 필수 |
-| `outBands` | 밴드를 받을 호출자 배열. `bandCapacity`가 0보다 크면 필수 |
-| `bandCapacity` | `outBands` 원소 수. 0 이상. 최대 밴드 수는 `ST_PARAMETRIC_EQ_MAX_BANDS`(16) |
-| `outBandCount` | 파싱된 밴드 수를 받는다. 필수(NULL 불가) |
-| `outPreampDb` | 프리앰프(dB)를 받는다. 필수(NULL 불가) |
-| `outErrorLine` | 실패한 줄 번호(1부터, 줄과 무관한 오류는 0). NULL 허용 |
-| `outErrorMessage` | 실패 사유(NUL 종료 영문). NULL 허용 |
-| `errorMessageCapacity` | `outErrorMessage` 바이트 수. 이 길이에 맞춰 자른다 |
+| `utf8Text` | NUL-terminated UTF-8 text (the entire file content). Required |
+| `outBands` | Caller array that receives the bands. Required if `bandCapacity` is greater than 0 |
+| `bandCapacity` | Number of elements in `outBands`. 0 or more. The maximum band count is `ST_PARAMETRIC_EQ_MAX_BANDS` (16) |
+| `outBandCount` | Receives the number of parsed bands. Required (not NULL) |
+| `outPreampDb` | Receives the preamp (dB). Required (not NULL) |
+| `outErrorLine` | Line number of the failure (from 1; 0 for errors not tied to a line). NULL allowed |
+| `outErrorMessage` | Failure reason (NUL-terminated English). NULL allowed |
+| `errorMessageCapacity` | Byte size of `outErrorMessage`. The message is truncated to fit |
 
-**구조체** `STParametricEqBand` (32바이트, 버전 스탬프 없는 배열 원소)
+**Struct** `STParametricEqBand` (32 bytes, array element without a version stamp)
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `type` | `STParametricEqType` — `ST_PARAMETRIC_EQ_PEAKING`(0) / `LOW_SHELF`(1) / `HIGH_SHELF`(2) / `LOW_PASS`(3) / `HIGH_PASS`(4) / `NOTCH`(5) |
-| `enabled` | 0 = 항등(건너뜀), 그 밖 = 켬 |
-| `frequencyHz` | 중심(PEAKING·NOTCH) 또는 코너(셸프 중점·LP·HP) 주파수 |
-| `gainDb` | PEAKING·LOW_SHELF·HIGH_SHELF만 사용 |
-| `q` | Q 값 |
-| `reserved[3]` | 0. 파서는 0으로 채운다 |
+| `enabled` | 0 = identity (skipped), otherwise = on |
+| `frequencyHz` | Center (PEAKING, NOTCH) or corner (shelf midpoint, LP, HP) frequency |
+| `gainDb` | Used only by PEAKING, LOW_SHELF and HIGH_SHELF |
+| `q` | Q value |
+| `reserved[3]` | 0. The parser fills it with 0 |
 
-**반환** — `STAutoEqParseStatus`. `ST_AUTOEQ_PARSE_OK`(0)이면 `outBands[0..*outBandCount)`와 `*outPreampDb`를 씁니다. 실패하면 `*outBandCount` = 0 · `*outPreampDb` = 0이고 오류 줄·메시지를 씁니다: `ST_AUTOEQ_PARSE_INVALID_ARGUMENT`(1, 필수 포인터 NULL·용량 음수 등) / `SYNTAX`(2, 줄 형식 오류) / `UNSUPPORTED`(3, 지원하지 않는 명령·필터·형식) / `OUT_OF_RANGE`(4, 범위 밖 값) / `TOO_MANY_BANDS`(5, `ST_PARAMETRIC_EQ_MAX_BANDS` 또는 `bandCapacity` 초과) / `EMPTY`(6, Preamp·Filter 줄이 하나도 없음). 컨텍스트가 없으므로 last_status는 남지 않습니다.
+**Returns** — `STAutoEqParseStatus`. On `ST_AUTOEQ_PARSE_OK` (0), writes `outBands[0..*outBandCount)` and `*outPreampDb`. On failure, `*outBandCount` = 0 · `*outPreampDb` = 0 and the error line and message are written: `ST_AUTOEQ_PARSE_INVALID_ARGUMENT` (1, required pointer NULL, negative capacity, etc.) / `SYNTAX` (2, malformed line) / `UNSUPPORTED` (3, unsupported command, filter or form) / `OUT_OF_RANGE` (4, out-of-range value) / `TOO_MANY_BANDS` (5, exceeds `ST_PARAMETRIC_EQ_MAX_BANDS` or `bandCapacity`) / `EMPTY` (6, no Preamp or Filter lines at all). There is no context, so no last_status is recorded.
 
 </details>
 
 <details>
-<summary><code>st_off_render_set_spatializer</code> — 컨텍스트의 공간화기(HRTF 종류)를 고르고 HRIR 데이터셋을 로드한다</summary>
+<summary><code>st_off_render_set_spatializer</code> — Selects the context's spatializer (HRTF type) and loads the HRIR dataset</summary>
 
 ```c
 int st_off_render_set_spatializer(STOFF_Context* context, int type);
 ```
 
-**용도** — 오프라인 컨텍스트의 공간화 구현(패닝 / 내장 MIT KEMAR / SADIE II D2)을 고르고, 필요한 HRIR 데이터셋을 로드합니다. 실시간 `st_rt_render_set_spatializer`와 같은 값 집합을 받습니다.
+**Purpose** — Selects the offline context's spatialization implementation (panning / built-in MIT KEMAR / SADIE II D2) and loads the required HRIR dataset. Accepts the same set of values as the real-time `st_rt_render_set_spatializer`.
 
-**언제·어떻게** — 바이노럴 IR·오디션 렌더는 요청 구조체(`STOfflineBinauralIRRequestOptions.hrtfType`)로 요청마다 공간화기를 고르므로, 그 렌더만 쓴다면 이 함수를 따로 부를 필요는 없습니다. SADIE D2는 외부 자산 파일 `SADIE_D2_44K_16bit_256tap.hrtfbin`이 있어야 합니다 — 엔진은 환경변수 `SIMPLEST_SADIE_D2_HRTF_PATH`, 현재 작업 폴더, 실행 파일 폴더, DLL 폴더(각각 그 폴더와 상위 8단계의 `Assets/HRTF/`·`SimpleST/Assets/HRTF/`·`Resources/HRTF/`) 순서로 찾습니다. 배포에서는 DLL 옆(또는 상위)의 `Resources/HRTF/`에 두는 것이 가장 간단합니다. 스레드: `[control, blocking]` — HRIR 데이터셋을 로드하는 긴 구간이 있으므로 지연에 민감한 스레드에서 부르지 않습니다.
+**When / how** — Binaural IR and audition renders select the spatializer per request through the request struct (`STOfflineBinauralIRRequestOptions.hrtfType`), so if you only use those renders you do not need to call this function separately. SADIE D2 requires the external asset file `SADIE_D2_44K_16bit_256tap.hrtfbin` — the engine searches, in order, the environment variable `SOUNDTRACING_SADIE_D2_HRTF_PATH`, the current working folder, the executable folder and the DLL folder (in each case `Assets/HRTF/` · `SoundTracing/Assets/HRTF/` · `Resources/HRTF/` in that folder and up to 8 parent levels). For distribution, placing it in `Resources/HRTF/` next to (or above) the DLL is soundtracing. Thread: `[control, blocking]` — it has a long section that loads the HRIR dataset, so do not call it from latency-sensitive threads.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `type` | `STSpatializerType` — `ST_SPATIALIZER_PANNING`(0, HRIR 데이터 불필요) / `ST_SPATIALIZER_MIT_KEMAR`(1, DLL 내장) / `ST_SPATIALIZER_SADIE_D2_KEMAR`(2, 외부 자산 필요). 그 밖의 값은 거절 |
+| `context` | Offline context handle |
+| `type` | `STSpatializerType` — `ST_SPATIALIZER_PANNING` (0, no HRIR data needed) / `ST_SPATIALIZER_MIT_KEMAR` (1, built into the DLL) / `ST_SPATIALIZER_SADIE_D2_KEMAR` (2, external asset required). Other values are rejected |
 
-**반환** — `1` = 적용 / `0` = 실패. 컨텍스트가 NULL이거나 `type`이 범위 밖이면 0. SADIE D2를 골랐는데 자산 파일이 없으면 0과 `ST_STATUS_UNAVAILABLE`("SADIE D2 HRTF asset not found ...")를 남깁니다.
+**Returns** — `1` = applied / `0` = failure. 0 if the context is NULL or `type` is out of range. If SADIE D2 is selected and the asset file is missing, returns 0 and records `ST_STATUS_UNAVAILABLE` ("SADIE D2 HRTF asset not found ...").
 
 </details>
 
 <details>
-<summary><code>st_off_render_set_early_spatial_mode</code> — 바이노럴·오디션 렌더의 초기 반사 렌더 경로(exact 객체 / HOA3 bed)를 고른다</summary>
+<summary><code>st_off_render_set_early_spatial_mode</code> — Selects the early-reflection render path (exact objects / HOA3 bed) for binaural and audition renders</summary>
 
 ```c
 int st_off_render_set_early_spatial_mode(STOFF_Context* context, int mode);
 ```
 
-**용도** — 바이노럴 IR과 오디션 렌더가 초기 반사를 어느 경로로 낼지 고릅니다. `ST_EARLY_SPATIAL_OBJECTS`(기본)는 모든 초기 경로를 exact 객체로 합성하는 정본이고, `ST_EARLY_SPATIAL_BED`는 실시간 헤드폰 기본 경로(예산 안 exact 객체 + 나머지 초기 반사·1차 산란은 HOA3 bed → 바이노럴 디코드)로 렌더합니다. BED로 렌더한 결과는 "그 소스 하나만 있는 정지 장면의 동기 실시간 출력"과 같으므로, 게임에서 실제로 들릴 소리를 오프라인으로 미리 들어 보거나 비교할 때 씁니다.
+**Purpose** — Selects which path binaural IR and audition renders use for early reflections. `ST_EARLY_SPATIAL_OBJECTS` (default) is the reference that synthesizes every early path as an exact object; `ST_EARLY_SPATIAL_BED` renders with the real-time headphone default path (exact objects within budget + the remaining early reflections and first-order scattering into an HOA3 bed → binaural decode). A BED render equals "the synchronous real-time output of a static scene with only that one source", so use it to preview offline, or compare, what will actually be heard in the game.
 
-**언제·어떻게** — 모드와 계산·렌더는 다음 순서로 연결됩니다.
+**When / how** — The mode connects to computation and rendering in this order.
 
-1. 이 함수로 모드를 고릅니다. IR 캐시는 비우지 않습니다.
-2. `st_off_ir_compute` — BED이면 리스너마다 전파는 한 번 하고 변환을 두 번 해 exact 정본과 bed 변형을 함께 캐시합니다(변환 시간과 IR 메모리만 늘고 전파 비용은 같습니다). OBJECTS이면 변환도 한 번입니다.
-3. `st_off_ir_render_binaural` / `st_off_ir_render_audition_pair`는 **렌더 시점의 모드**를 따릅니다. BED로 계산한 캐시는 두 변형을 모두 가지므로 다시 계산하지 않고 모드를 오가며 둘 다 렌더할 수 있습니다. 변형이 없는 캐시(OBJECTS로 계산한 캐시 등)를 BED로 렌더하면 0과 `ST_STATUS_UNAVAILABLE`이 돌아오며, 이때는 모드를 BED로 둔 채 다시 compute합니다. 결과 info의 `earlySpatialMode`가 실제로 쓴 모드입니다.
+1. Select the mode with this function. The IR cache is not cleared.
+2. `st_off_ir_compute` — with BED, it propagates once per listener and converts twice, caching both the exact reference and the bed variant (only conversion time and IR memory grow; propagation cost stays the same). With OBJECTS, it converts once as well.
+3. `st_off_ir_render_binaural` / `st_off_ir_render_audition_pair` follow **the mode at render time**. A cache computed with BED holds both variants, so you can switch modes and render both without recomputing. Rendering a cache without the variant (such as one computed with OBJECTS) in BED returns 0 and `ST_STATUS_UNAVAILABLE`; in that case leave the mode at BED and compute again. `earlySpatialMode` in the result info is the mode actually used.
 
-압력 IR(솔로·혼합·배치)과 원시 IR 조회는 모드와 무관하게 항상 exact 정본입니다. IR 아카이브는 BED로 계산한 캐시면 두 변형을 함께 저장하고, 아카이브를 적재해도 컨텍스트의 모드는 바뀌지 않습니다. BED 렌더는 IR을 설치한 뒤 무음 워밍업(16384프레임 ≈ 0.37 s, 출력에서 버림)으로 경로 페이드·게인 램프를 정착시킨 다음 입력을 넣으므로 그만큼 렌더 시간이 늘어납니다. 소스 여러 개를 함께 튼 실시간 출력은 병합 bed·send를 소스끼리 공유하므로 쌍별 결과의 합과 미세하게 다릅니다. 두 모드 모두 late 확산장을 리스너 주변 1차 산란의 도착 방향 분포로 가중합니다(압력 IR은 공간화를 하지 않으므로 영향이 없습니다).
+Pressure IRs (solo, mixed, batch) and raw IR queries are always the exact reference regardless of mode. An IR archive stores both variants if the cache was computed with BED, and loading an archive does not change the context's mode. A BED render installs the IR, settles path fades and gain ramps with a silent warm-up (16384 frames ≈ 0.37 s, discarded from the output) and then feeds the input, so render time grows by that much. Real-time output that plays several sources together shares the merged bed and send between sources, so it differs slightly from the sum of the pairwise results. Both modes weight the late diffuse field by the arrival-direction distribution of first-order scattering around the listener (pressure IRs are not spatialized, so they are unaffected).
 
-지원 여부는 `st_off_get_capability_word(1)`의 `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE`로 확인합니다. 스레드: `[control]` — 잡 뮤텍스를 잡으므로 진행 중인 compute·렌더가 끝날 때까지 블록될 수 있습니다.
+Check support with `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE` of `st_off_get_capability_word(1)`. Thread: `[control]` — it takes the job mutex, so it may block until an in-progress compute or render finishes.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `mode` | `STEarlySpatialMode` — `ST_EARLY_SPATIAL_OBJECTS`(0, 기본, exact 정본) / `ST_EARLY_SPATIAL_BED`(1, 실시간 bed 경로). 그 밖의 값은 거절 |
+| `context` | Offline context handle |
+| `mode` | `STEarlySpatialMode` — `ST_EARLY_SPATIAL_OBJECTS` (0, default, exact reference) / `ST_EARLY_SPATIAL_BED` (1, real-time bed path). Other values are rejected |
 
-**반환** — `1` = 성공 / `0` = 실패. 그 밖의 값이면 `ST_STATUS_INVALID_ARGUMENT`, `ST_BACKEND_EXA` 컨텍스트에서 BED를 고르면 `ST_STATUS_UNAVAILABLE`(OBJECTS는 언제나 됩니다).
+**Returns** — `1` = success / `0` = failure. Any other value gives `ST_STATUS_INVALID_ARGUMENT`; selecting BED on an `ST_BACKEND_EXA` context gives `ST_STATUS_UNAVAILABLE` (OBJECTS always works).
 
 </details>
 
 <details>
-<summary><code>st_off_render_get_early_spatial_mode</code> — 현재 early 공간 모드를 읽는다</summary>
+<summary><code>st_off_render_get_early_spatial_mode</code> — Reads the current early spatial mode</summary>
 
 ```c
 int st_off_render_get_early_spatial_mode(const STOFF_Context* context);
 ```
 
-**용도** — `st_off_render_set_early_spatial_mode`로 고른 현재 모드를 돌려줍니다. 기본값은 `ST_EARLY_SPATIAL_OBJECTS`(0)로, 실시간 기본값(BED)과 다릅니다.
+**Purpose** — Returns the current mode selected with `st_off_render_set_early_spatial_mode`. The default is `ST_EARLY_SPATIAL_OBJECTS` (0), which differs from the real-time default (BED).
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 실제 렌더에 쓰인 모드는 결과 info(`STOfflineBinauralIRInfo.earlySpatialMode`, `STOFF_AuditionInfo.earlySpatialMode`)로도 확인할 수 있습니다. 스레드: `[any]` — atomic 읽기라 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**When / how** — Can be called at any time. The mode actually used for a render can also be checked in the result info (`STOfflineBinauralIRInfo.earlySpatialMode`, `STOFF_AuditionInfo.earlySpatialMode`). Thread: `[any]` — an atomic read, so it can be called from any thread without blocking.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | Offline context handle |
 
-**반환** — 현재 모드(`ST_EARLY_SPATIAL_OBJECTS`(0) / `ST_EARLY_SPATIAL_BED`(1)). `context`가 NULL이면 `-1`.
+**Returns** — The current mode (`ST_EARLY_SPATIAL_OBJECTS` (0) / `ST_EARLY_SPATIAL_BED` (1)). `-1` if `context` is NULL.
 
 </details>
 
 <details>
-<summary><code>st_off_render_set_max_delay_seconds</code> — 오프라인 렌더가 쓰는 지연 링 길이(초)를 정한다</summary>
+<summary><code>st_off_render_set_max_delay_seconds</code> — Sets the delay ring length (seconds) used by offline renders</summary>
 
 ```c
 int st_off_render_set_max_delay_seconds(STOFF_Context* context, float seconds);
 ```
 
-**용도** — 압력·바이노럴·오디션·배치 렌더가 쓰는 지연 링의 길이를 정합니다. 지연이 링 한계를 넘는 exact 경로는 렌더에서 빠지고(late는 FDN이 덮습니다), 따라서 기본 4 s보다 늦게 도착하는 경로가 필요한 큰 공간이나 긴 IR에서는 이 값을 늘립니다.
+**Purpose** — Sets the length of the delay ring used by pressure, binaural, audition and batch renders. Exact paths whose delay exceeds the ring limit are dropped from the render (the FDN covers the late part), so raise this value for large spaces or long IRs that need paths arriving later than the default 4 s.
 
-**언제·어떻게** — IR 캐시와 무관한 렌더 설정이라 다시 compute하지 않아도 다음 렌더부터 적용됩니다. 링 메모리는 렌더하는 소스마다 9밴드 × 링 길이입니다. IR 아카이브는 저장할 때의 값을 기록하고, 적재한 컨텍스트는 그 값을 씁니다(적재 뒤 다시 바꿀 수 있습니다). 지원 여부는 `st_off_get_capability_word(1)`의 `ST_CAP1_OFFLINE_MAX_DELAY`로 확인합니다. 스레드: `[control, blocking]` — 잡 뮤텍스를 잡고 지연 링을 재할당합니다.
+**When / how** — It is a render setting independent of the IR cache, so it applies from the next render without recomputing. Ring memory is 9 bands × ring length per rendered source. An IR archive records the value at save time, and a context that loads it uses that value (it can be changed again after loading). Check support with `ST_CAP1_OFFLINE_MAX_DELAY` of `st_off_get_capability_word(1)`. Thread: `[control, blocking]` — takes the job mutex and reallocates the delay ring.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `seconds` | 링 길이(초). 기본 4.0 s(실시간 기본 2.0 s와 다름). 범위는 실시간 `st_rt_render_set_max_delay_seconds`와 같은 약 0.012 s ~ 60 s. 범위 밖·비유한 값은 거절 |
+| `context` | Offline context handle |
+| `seconds` | Ring length (seconds). Default 4.0 s (differs from the real-time default of 2.0 s). The range is about 0.012 s to 60 s, the same as the real-time `st_rt_render_set_max_delay_seconds`. Out-of-range and non-finite values are rejected |
 
-**반환** — `1` = 성공 / `0` = 실패. 범위 밖·비유한 값이면 `ST_STATUS_INVALID_ARGUMENT`, 링 길이를 바꾸지 못하는 백엔드면 `ST_STATUS_UNAVAILABLE`.
+**Returns** — `1` = success / `0` = failure. Out-of-range or non-finite values give `ST_STATUS_INVALID_ARGUMENT`; a backend that cannot change the ring length gives `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_render_get_max_delay_seconds</code> — 현재 렌더 지연 링 길이(초)를 읽는다</summary>
+<summary><code>st_off_render_get_max_delay_seconds</code> — Reads the current render delay ring length (seconds)</summary>
 
 ```c
 float st_off_render_get_max_delay_seconds(const STOFF_Context* context);
 ```
 
-**용도** — `st_off_render_set_max_delay_seconds`로 정한(또는 아카이브에서 적재한) 현재 지연 링 길이를 돌려줍니다.
+**Purpose** — Returns the current delay ring length set with `st_off_render_set_max_delay_seconds` (or loaded from an archive).
 
-**언제·어떻게** — 렌더 길이보다 늦게 도착하는 경로가 잘리지 않는지 확인할 때 씁니다. 스레드: `[control]`.
+**When / how** — Use it to check that paths arriving later than the render length are not cut off. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | Offline context handle |
 
-**반환** — 현재 값(초, 기본 4.0). `context`가 NULL이면 `0`.
+**Returns** — The current value (seconds, default 4.0). `0` if `context` is NULL.
 
 </details>
 
 <details>
-<summary><code>st_off_debug_set_collect_visual_paths</code> — 다음 계산에서 시각화용 경로를 어떤 종류까지 수집할지 정한다</summary>
+<summary><code>st_off_debug_set_collect_visual_paths</code> — Sets which path types to collect for visualization in the next computation</summary>
 
 ```c
 int st_off_debug_set_collect_visual_paths(STOFF_Context* context, uint32_t mask);
 ```
 
-**용도** — 전파 경로를 3D 뷰에 겹쳐 그리기 위한 시각화 경로 수집을 켜고, 수집할 경로 종류를 마스크로 고릅니다. 기본은 0(수집 안 함)이라 디버그 시각화가 필요할 때만 비용을 냅니다.
+**Purpose** — Enables collection of visualization paths for overlaying propagation paths in a 3D view, and selects the path types to collect with a mask. The default is 0 (no collection), so the cost is paid only when debug visualization is needed.
 
-**언제·어떻게** — 시각화 스냅샷은 `st_off_ir_compute`가 발행하므로 compute **전에** 마스크를 정합니다. 계산 뒤 `st_off_debug_get_snapshot_info` → `st_off_debug_copy_visual_paths` 순서로 읽습니다. 실패한 walk까지 보려면 `st_off_debug_set_collect_failed_walks`를 함께 켭니다. 지원 여부는 `ST_CAP_PATH_COLLECTION_MASK`로 확인합니다. 스레드: `[control]`.
+**When / how** — The visualization snapshot is published by `st_off_ir_compute`, so set the mask **before** computing. After computing, read it with `st_off_debug_get_snapshot_info` → `st_off_debug_copy_visual_paths` in that order. To also see failed walks, enable `st_off_debug_set_collect_failed_walks` too. Check support with `ST_CAP_PATH_COLLECTION_MASK`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `mask` | `STPathCollectionFlag` 비트 OR — `ST_PATH_COLLECTION_GUIDE_RAY`(1) / `ST_PATH_COLLECTION_SOURCE_TRANSPORT_RAY`(2) / `ST_PATH_COLLECTION_DIRECT_TRANSMISSION`(4) / `ST_PATH_COLLECTION_REFLECTION_DIFFRACTION`(8, 반사 구간을 포함하는 회절 경로가 있어 두 종류가 한 비트를 공유) / `ST_PATH_COLLECTION_ALL`. 0 = 수집 안 함 |
+| `context` | Offline context handle |
+| `mask` | Bitwise OR of `STPathCollectionFlag` — `ST_PATH_COLLECTION_GUIDE_RAY` (1) / `ST_PATH_COLLECTION_SOURCE_TRANSPORT_RAY` (2) / `ST_PATH_COLLECTION_DIRECT_TRANSMISSION` (4) / `ST_PATH_COLLECTION_REFLECTION_DIFFRACTION` (8, diffraction paths can contain reflection segments, so the two types share one bit) / `ST_PATH_COLLECTION_ALL`. 0 = no collection |
 
-**반환** — `1` = 적용 / `0` = 실패(`context` NULL 또는 정의되지 않은 비트).
+**Returns** — `1` = applied / `0` = failure (`context` NULL or undefined bits).
 
 </details>
 
 <details>
-<summary><code>st_off_debug_set_collect_failed_walks</code> — 시각화 수집에 중도 실패한 walk도 포함할지 정한다</summary>
+<summary><code>st_off_debug_set_collect_failed_walks</code> — Sets whether visualization collection also includes walks that failed midway</summary>
 
 ```c
 void st_off_debug_set_collect_failed_walks(STOFF_Context* context, int enabled);
 ```
 
-**용도** — 기본적으로 시각화 스냅샷에는 완주한 경로만 의미 있게 쓰입니다. 이 옵션을 켜면 도중에 실패한 walk도 기록해, 경로가 왜 생기지 않는지 디버깅할 수 있습니다. 실패한 walk는 `STVisualPathRecord.valid` = 0으로 표시됩니다.
+**Purpose** — By default, only completed paths are meaningfully used in the visualization snapshot. Enabling this option also records walks that failed midway, so you can debug why a path is not formed. Failed walks are marked with `STVisualPathRecord.valid` = 0.
 
-**언제·어떻게** — `st_off_debug_set_collect_visual_paths`와 함께 compute 전에 설정합니다. 실패 walk를 받으려면 `st_off_debug_copy_visual_paths`를 `ST_VISUAL_PATH_COPY_ALL`로 부릅니다(`VALID_ONLY`는 완주 경로만 복사합니다). 기본은 꺼짐입니다. 스레드: `[control]`.
+**When / how** — Set it before computing, together with `st_off_debug_set_collect_visual_paths`. To receive failed walks, call `st_off_debug_copy_visual_paths` with `ST_VISUAL_PATH_COPY_ALL` (`VALID_ONLY` copies only completed paths). Off by default. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `enabled` | 0 = 끔(기본) / 그 밖 = 켬 |
+| `context` | Offline context handle |
+| `enabled` | 0 = off (default) / otherwise = on |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_compute</code> — 전파와 IR 변환을 한 번 돌려 canonical IR 캐시를 만든다</summary>
+<summary><code>st_off_ir_compute</code> — Runs propagation and IR conversion once to build the canonical IR cache</summary>
 
 ```c
 int st_off_ir_compute(STOFF_Context* context);
 ```
 
-**용도** — 오프라인 IR 생성의 출발점입니다. 등록된 리스너마다 전파(기하)와 IR 변환을 한 번 돌려, 리스너 × 소스 쌍마다 **canonical 원시 IR**을 캐시에 만듭니다. 원시 IR은 시간 영역 샘플이 아니라 파라미터 형태(에너지 영역 초기 탭, late 잔향 송출 탭, 1차 산란 셀, late 잔향 기술자)라서 IR 길이와 무관하게 한 번만 계산됩니다. 이후의 모든 결과는 이 같은 세대에서 파생됩니다.
+**Purpose** — The starting point of offline IR generation. For each registered listener it runs propagation (geometry) and IR conversion once, building a **canonical raw IR** in the cache for every listener × source pair. Raw IRs are not time-domain samples but a parametric form (energy-domain early taps, late-reverb send taps, first-order scattering cells, late-reverb descriptor), so they are computed only once regardless of IR length. Every later result is derived from this same generation.
 
-- 원시 IR 조회: `st_off_ir_get_raw_descriptor`, `st_off_ir_copy_raw_*` — 탭·셀·기술자를 그대로 복사
-- 압력 IR: `st_off_ir_render_pressure`(쌍 하나) / `st_off_ir_render_pressure_mixed`(소스 여러 개 합) — 광대역 모노 또는 9밴드 분리
-- 바이노럴 IR: `st_off_ir_render_binaural` — 스테레오(L/R)
-- 오디션: `st_off_ir_render_audition_pair` — 드라이 신호를 고정 RIR 컨볼루션과 엔진 렌더 단계로 각각 렌더
+- Raw IR queries: `st_off_ir_get_raw_descriptor`, `st_off_ir_copy_raw_*` — copy taps, cells and descriptors as is
+- Pressure IR: `st_off_ir_render_pressure` (one pair) / `st_off_ir_render_pressure_mixed` (sum of several sources) — broadband mono or 9 separate bands
+- Binaural IR: `st_off_ir_render_binaural` — stereo (L/R)
+- Audition: `st_off_ir_render_audition_pair` — renders a dry signal through fixed-RIR convolution and through the engine render stage, separately
 
-렌더 함수는 캐시를 소비만 하므로 길이·출력 모드·HRTF를 바꿔 여러 번 렌더해도 다시 계산하지 않습니다.
+Render functions only consume the cache, so rendering many times with different lengths, output modes or HRTFs does not recompute.
 
-**언제·어떻게** — 장면(재질·메시·오브젝트)·소스·리스너·전파 옵션을 설정하고 `st_off_build`로 가속구조를 지은 뒤 부릅니다. 장면·소스·리스너나 IR 정책(대기, 거리 감쇠, Doppler gain mode, 에너지 타깃 등)을 바꾸면 다시 compute해야 결과에 반영됩니다. 반면 렌더 전용 설정(소스 EQ, early 공간 모드 전환, 지연 링 길이)은 캐시를 유지한 채 다음 렌더부터 적용됩니다. early 공간 모드가 `ST_EARLY_SPATIAL_BED`이면 쌍마다 bed 변형도 함께 만듭니다(`st_off_render_set_early_spatial_mode` 참고). 시각화 경로 수집이 켜져 있으면 같은 세대의 시각화 스냅샷도 발행합니다.
+**When / how** — Call it after setting up the scene (materials, meshes, objects), sources, listeners and propagation options and building the acceleration structure with `st_off_build`. Changes to the scene, sources, listeners or IR policy (atmosphere, distance attenuation, Doppler gain mode, energy targets, etc.) require another compute to show up in the results. Render-only settings (source EQ, switching the early spatial mode, delay ring length), on the other hand, keep the cache and apply from the next render. When the early spatial mode is `ST_EARLY_SPATIAL_BED`, a bed variant is also built for each pair (see `st_off_render_set_early_spatial_mode`). If visualization path collection is enabled, it also publishes a visualization snapshot of the same generation.
 
-성공하면 캐시 세대(`st_off_ir_get_cache_generation`)가 바뀌고 모든 결과 info에 그 세대가 실립니다. 계산이 실패하거나 취소되면 새 캐시는 발행되지 않고 이전 캐시가 그대로 남습니다. 진행률은 다른 스레드에서 `st_off_ir_get_progress`로 읽고, 취소는 `st_off_ir_request_cancel`로 겁니다. `st_off_ir_archive_load_pair`로 아카이브를 적재한 render-only 컨텍스트에서는 거절됩니다. `maxComputeThreads`가 1보다 크면 병렬 구간은 컨텍스트의 계산 풀 워커에서 돕니다. 여러 컨텍스트를 병렬로 계산하려면 배치 API(`st_off_batch_*`)를 씁니다.
+On success the cache generation (`st_off_ir_get_cache_generation`) changes and every result info carries that generation. If the computation fails or is canceled, no new cache is published and the previous cache remains. Read progress from another thread with `st_off_ir_get_progress`, and cancel with `st_off_ir_request_cancel`. It is rejected on a render-only context that loaded an archive with `st_off_ir_archive_load_pair`. When `maxComputeThreads` is greater than 1, parallel sections run on the context's compute pool workers. To compute several contexts in parallel, use the batch API (`st_off_batch_*`).
 
-스레드: `[control, runs-here]` — 전파·변환 파이프라인 전체가 **호출 스레드에서 실제로 돌고** 끝날 때까지 돌아오지 않습니다. 이 컨텍스트의 다른 잡(렌더·조회)과는 잡 뮤텍스로 직렬화됩니다.
+Thread: `[control, runs-here]` — the whole propagation and conversion pipeline **actually runs on the calling thread** and does not return until it finishes. It is serialized with this context's other jobs (render, queries) by the job mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | Offline context handle |
 
-**반환** — `1` = 성공(캐시 발행) / `0` = 실패. 계산 실패·취소·render-only 컨텍스트는 `ST_STATUS_INITIALIZATION_FAILED`("canonical IR computation failed or was canceled").
+**Returns** — `1` = success (cache published) / `0` = failure. Computation failure, cancellation and render-only contexts give `ST_STATUS_INITIALIZATION_FAILED` ("canonical IR computation failed or was canceled").
 
 </details>
 
 <details>
-<summary><code>st_off_ir_archive_save</code> — 현재 canonical IR 캐시 전체를 버전 있는 아카이브 파일로 저장한다</summary>
+<summary><code>st_off_ir_archive_save</code> — Saves the entire current canonical IR cache to a versioned archive file</summary>
 
 ```c
 int st_off_ir_archive_save(STOFF_Context* context, const char* utf8Path);
 ```
 
-**용도** — 계산한 canonical IR 캐시를 파일로 남겨, 나중에 장면·가속구조·전파·IR 변환 없이 같은 결과를 다시 렌더할 수 있게 합니다. 무거운 계산은 한 번만 하고, 렌더(길이·출력 모드·HRTF 변경)는 별도 프로세스나 별도 시점에 하고 싶을 때 씁니다.
+**Purpose** — Keeps the computed canonical IR cache in a file so the same results can later be re-rendered without the scene, acceleration structure, propagation or IR conversion. Use it when you want to do the heavy computation only once and render (changing length, output mode, HRTF) in a separate process or at a separate time.
 
-**언제·어떻게** — `st_off_ir_compute`가 성공해 캐시가 있을 때 부릅니다. DSP는 돌지 않습니다. 임시 파일에 쓰고 검증한 뒤 대상 경로로 발행하며, **이미 있는 파일은 덮어쓰지 않습니다**(그 경우 실패). early 공간 모드 BED로 계산한 캐시면 bed 변형도 함께 저장하고, 현재 렌더 지연 링 길이(`st_off_render_get_max_delay_seconds`)도 기록합니다. 시각화 스냅샷은 저장되지 않습니다. 적재는 `st_off_ir_archive_load_pair`로 합니다. 형식·엔진 버전이 같아야 적재할 수 있고, 호스트는 추가로 아카이브를 만든 DLL과 같은 바이너리(해시)인지 맞춰야 합니다. `ST_BACKEND_ST` 컨텍스트에서만 됩니다. 스레드: `[control, runs-here]` — 직렬화·파일 쓰기가 호출 스레드에서 돕니다.
+**When / how** — Call it when `st_off_ir_compute` has succeeded and a cache exists. No DSP runs. It writes to a temporary file, verifies it and then publishes it to the target path, and **does not overwrite an existing file** (it fails in that case). If the cache was computed with early spatial mode BED, the bed variant is saved too, and the current render delay ring length (`st_off_render_get_max_delay_seconds`) is recorded as well. Visualization snapshots are not saved. Load with `st_off_ir_archive_load_pair`. Loading requires the same format and engine version, and the host must additionally make sure it is the same binary (hash) as the DLL that created the archive. Works only on `ST_BACKEND_ST` contexts. Thread: `[control, runs-here]` — serialization and file writing run on the calling thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `utf8Path` | 저장할 파일 경로(UTF-8, NUL 종료). 비어 있으면 거절. 이미 있는 파일이면 실패 |
+| `context` | Offline context handle |
+| `utf8Path` | Path of the file to save (UTF-8, NUL-terminated). Rejected if empty. Fails if the file already exists |
 
-**반환** — `1` = 성공 / `0` = 실패. 경로가 NULL·빈 문자열이거나 ST 백엔드가 아니면 `ST_STATUS_INVALID_ARGUMENT`, 완전한 canonical 캐시가 없거나 저장에 실패하면 `ST_STATUS_UNAVAILABLE`. 실패해도 대상 경로의 기존 파일은 그대로입니다.
+**Returns** — `1` = success / `0` = failure. A NULL or empty path, or a non-ST backend, gives `ST_STATUS_INVALID_ARGUMENT`; no complete canonical cache or a save failure gives `ST_STATUS_UNAVAILABLE`. On failure, any existing file at the target path is left as is.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_archive_load_pair</code> — 아카이브에서 리스너·소스 쌍 하나를 적재해 렌더 전용 컨텍스트로 만든다</summary>
+<summary><code>st_off_ir_archive_load_pair</code> — Loads one listener/source pair from an archive, making the context render-only</summary>
 
 ```c
 int st_off_ir_archive_load_pair(STOFF_Context* context, const char* utf8Path, STListenerId listener, STSourceId source);
 ```
 
-**용도** — `st_off_ir_archive_save`로 저장한 아카이브에서 기록된 쌍 하나를 꺼내, 장면·BVH·전파·IR 변환 없이 바로 렌더할 수 있게 설치합니다. 계산 비용 없이 저장된 IR을 다시 듣거나 다른 길이·출력 모드로 렌더할 때 씁니다.
+**Purpose** — Takes one recorded pair from an archive saved with `st_off_ir_archive_save` and installs it so it can be rendered right away, without the scene, BVH, propagation or IR conversion. Use it to listen again to a saved IR with no computation cost, or to render it with a different length or output mode.
 
-**언제·어떻게** — 새로 만든 오프라인 컨텍스트에 부르는 것이 전형입니다. 쌍은 새 콜드 렌더러에 설치되고, 그 뒤 컨텍스트는 **render-only**가 됩니다: `st_off_ir_compute`는 거절되고 렌더가 암묵적으로 다시 계산하지 않습니다. `st_off_ir_clear_cache`나 `st_off_trim_memory`(`ST_OFFLINE_TRIM_IR_CACHE`)를 부른 뒤에도 render-only이며, 다시 렌더하려면 다시 적재합니다. 기존 렌더·조회 함수(`st_off_ir_render_*`, `st_off_ir_get_raw_descriptor`, `st_off_ir_copy_raw_*`)는 **아카이브에 기록된 ID**를 그대로 받습니다. 렌더 지연 링 길이는 아카이브에 기록된 값으로 바뀌고(적재 뒤 다시 바꿀 수 있음), early 공간 모드는 바뀌지 않습니다. 시각화 스냅샷은 복원되지 않습니다. 형식·엔진 버전이 같아야 하고, 호스트는 만든 DLL과 같은 바이너리인지도 맞춰야 합니다. `ST_BACKEND_ST` 컨텍스트에서만 됩니다. 스레드: `[control, runs-here]` — 파일 읽기와 설치가 호출 스레드에서 돕니다.
+**When / how** — Typically called on a freshly created offline context. The pair is installed into a new cold renderer, after which the context becomes **render-only**: `st_off_ir_compute` is rejected and renders never recompute implicitly. It remains render-only after `st_off_ir_clear_cache` or `st_off_trim_memory` (`ST_OFFLINE_TRIM_IR_CACHE`); load again to render again. The existing render and query functions (`st_off_ir_render_*`, `st_off_ir_get_raw_descriptor`, `st_off_ir_copy_raw_*`) take **the IDs recorded in the archive** as is. The render delay ring length changes to the value recorded in the archive (it can be changed again after loading); the early spatial mode does not change. Visualization snapshots are not restored. The format and engine version must match, and the host must also make sure it is the same binary as the DLL that created it. Works only on `ST_BACKEND_ST` contexts. Thread: `[control, runs-here]` — file reading and installation run on the calling thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `utf8Path` | 아카이브 파일 경로(UTF-8, NUL 종료). 비어 있으면 거절 |
-| `listener` | 적재할 쌍의 리스너 ID(아카이브에 기록된 값) |
-| `source` | 적재할 쌍의 소스 ID(아카이브에 기록된 값) |
+| `context` | Offline context handle |
+| `utf8Path` | Archive file path (UTF-8, NUL-terminated). Rejected if empty |
+| `listener` | Listener ID of the pair to load (the value recorded in the archive) |
+| `source` | Source ID of the pair to load (the value recorded in the archive) |
 
-**반환** — `1` = 성공 / `0` = 실패. 경로가 NULL·빈 문자열이거나 ST 백엔드가 아니면 `ST_STATUS_INVALID_ARGUMENT`, 쌍이 아카이브에 없거나 형식·버전이 맞지 않거나 적재가 취소되면 `ST_STATUS_UNAVAILABLE`. 실패해도 그 전에 발행된 캐시는 그대로입니다.
+**Returns** — `1` = success / `0` = failure. A NULL or empty path, or a non-ST backend, gives `ST_STATUS_INVALID_ARGUMENT`; a pair missing from the archive, a format or version mismatch, or a canceled load gives `ST_STATUS_UNAVAILABLE`. On failure, the previously published cache is left as is.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_clear_cache</code> — canonical IR 캐시를 비운다</summary>
+<summary><code>st_off_ir_clear_cache</code> — Clears the canonical IR cache</summary>
 
 ```c
 void st_off_ir_clear_cache(STOFF_Context* context);
 ```
 
-**용도** — 발행된 오프라인 조회 산출물(canonical 원시 IR, 아카이브 기록, 시각화 스냅샷)을 비웁니다. 장면·엔진 옵션·전파 작업 버퍼는 남깁니다(작업 버퍼까지 반납하려면 `st_off_trim_memory`).
+**Purpose** — Clears the published offline query outputs (canonical raw IRs, archive records, visualization snapshot). The scene, engine options and propagation work buffers remain (to release the work buffers too, use `st_off_trim_memory`).
 
-**언제·어떻게** — 큰 캐시를 다 쓴 뒤 메모리를 돌려받거나, 옛 결과를 실수로 렌더하지 않게 할 때 부릅니다. 비운 뒤에는 `st_off_ir_compute`를 다시 불러야 렌더·조회가 됩니다(그 전에는 `ST_STATUS_UNAVAILABLE`). 아카이브로 적재한 render-only 컨텍스트는 비운 뒤 다시 적재해야 합니다. `st_off_trim_memory(context, ST_OFFLINE_TRIM_IR_CACHE)`와 같습니다. 스레드: `[control]` — 잡 뮤텍스를 잡으므로 진행 중인 compute·렌더가 끝날 때까지 기다릴 수 있습니다.
+**When / how** — Call it to get memory back after you are done with a large cache, or to avoid accidentally rendering old results. After clearing, call `st_off_ir_compute` again before rendering or querying (until then, `ST_STATUS_UNAVAILABLE`). A render-only context loaded from an archive must be loaded again after clearing. Equivalent to `st_off_trim_memory(context, ST_OFFLINE_TRIM_IR_CACHE)`. Thread: `[control]` — takes the job mutex, so it may wait until an in-progress compute or render finishes.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | Offline context handle |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_trim_memory</code> — 장면·설정은 남기고 IR 캐시·작업 버퍼·렌더 상태 메모리를 반납한다</summary>
+<summary><code>st_off_trim_memory</code> — Releases IR cache, work buffer and render state memory while keeping the scene and settings</summary>
 
 ```c
 int st_off_trim_memory(STOFF_Context* context, uint32_t flags);
 ```
 
-**용도** — 컨텍스트를 놀리는 동안(배치 재사용 풀 등) 쥐고 있는 메모리를 줄입니다. 장면·BVH·재질·소스·리스너·옵션은 남기므로 컨텍스트를 다시 만들 필요가 없고, 다음 compute·렌더는 버퍼를 다시 잡으며 결과는 반납하지 않은 컨텍스트·새 컨텍스트와 비트 동일합니다.
+**Purpose** — Reduces the memory a context holds while idle (in a batch reuse pool, etc.). The scene, BVH, materials, sources, listeners and options remain, so the context need not be recreated; the next compute or render reacquires the buffers, and the results are bit-identical to an untrimmed context or a new context.
 
-**언제·어떻게** — `ST_OFFLINE_TRIM_IR_CACHE`를 고르면 `st_off_ir_clear_cache`와 같아서 다음 렌더 전에 compute가 필요하고(아카이브로 적재한 render-only 컨텍스트는 다시 적재), 고르지 않으면 캐시된 IR을 그대로 렌더할 수 있습니다. 배치에 등록한 컨텍스트는 그 작업의 완료 레코드를 `st_off_batch_poll`로 받은 뒤에 부릅니다. 지원 여부는 `ST_CAP_OFFLINE_TRIM_MEMORY`로 확인합니다. `ST_BACKEND_EXA` 컨텍스트는 백엔드 작업 버퍼를 비우지 않습니다(IR 캐시·실행 프레임은 비웁니다). 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**When / how** — Choosing `ST_OFFLINE_TRIM_IR_CACHE` is equivalent to `st_off_ir_clear_cache`, so a compute is needed before the next render (a render-only context loaded from an archive is loaded again); without it, cached IRs can be rendered as is. For a context registered in a batch, call it after receiving that job's completion record with `st_off_batch_poll`. Check support with `ST_CAP_OFFLINE_TRIM_MEMORY`. `ST_BACKEND_EXA` contexts do not clear backend work buffers (the IR cache and execution frames are cleared). Thread: `[control]` — takes the job mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `flags` | `ST_OFFLINE_TRIM_*` 비트 OR. 0이면 아무것도 하지 않음 |
+| `context` | Offline context handle |
+| `flags` | Bitwise OR of `ST_OFFLINE_TRIM_*`. 0 does nothing |
 
-`flags` 비트:
+`flags` bits:
 
-| 비트 | 비우는 것 |
+| Bit | What it clears |
 |---|---|
-| `ST_OFFLINE_TRIM_IR_CACHE` (1) | `st_off_ir_clear_cache`와 같음 — canonical 원시 IR·아카이브 기록·시각화 스냅샷. 다음 렌더 전에 compute 필요 |
-| `ST_OFFLINE_TRIM_PROPAGATION_SCRATCH` (2) | 전파기·IR 변환기·실행 프레임이 다음 compute를 위해 쥔 최대 크기 작업 버퍼. 크기는 레이 수·반사 차수를 따른다(예: 소스 64×32 ×3, 리스너 64×64, 깊이 4에서 약 23 MB). 캐시된 IR은 그대로 렌더된다 |
-| `ST_OFFLINE_TRIM_RENDER_STATE` (4) | 다음 렌더가 처음부터 다시 만드는 렌더 상태(소스 렌더 상태·경로 상태, 오프라인 렌더 계획) |
-| `ST_OFFLINE_TRIM_ALL` | 셋 다 |
+| `ST_OFFLINE_TRIM_IR_CACHE` (1) | Same as `st_off_ir_clear_cache` — canonical raw IRs, archive records, visualization snapshot. Compute required before the next render |
+| `ST_OFFLINE_TRIM_PROPAGATION_SCRATCH` (2) | Maximum-size work buffers that the propagator, IR converter and execution frames hold for the next compute. Size follows the ray count and reflection order (e.g. about 23 MB at source 64×32 ×3, listener 64×64, depth 4). Cached IRs still render as is |
+| `ST_OFFLINE_TRIM_RENDER_STATE` (4) | Render state that the next render rebuilds from scratch (source render state and path state, offline render plan) |
+| `ST_OFFLINE_TRIM_ALL` | All three |
 
-**반환** — `1` = 성공(`flags` = 0이면 아무것도 하지 않고 1) / `0` = `context` NULL 또는 정의되지 않은 비트(`ST_STATUS_INVALID_ARGUMENT`, 아무것도 비우지 않음).
+**Returns** — `1` = success (with `flags` = 0, does nothing and returns 1) / `0` = `context` NULL or undefined bits (`ST_STATUS_INVALID_ARGUMENT`, nothing cleared).
 
 </details>
 
 <details>
-<summary><code>st_off_ir_get_progress</code> — 진행 중인 계산·렌더의 진행률(0~1)을 읽는다</summary>
+<summary><code>st_off_ir_get_progress</code> — Reads the progress (0–1) of an in-progress computation or render</summary>
 
 ```c
 float st_off_ir_get_progress(const STOFF_Context* context);
 ```
 
-**용도** — `st_off_ir_compute`가 호출 스레드를 붙잡고 도는 동안 **다른 스레드에서** 진행률을 읽기 위한 함수입니다. `st_off_ir_request_cancel`과 함께, 계산 중에 다른 스레드에서 부르도록 의도된 유일한 쌍입니다.
+**Purpose** — Reads progress **from another thread** while `st_off_ir_compute` holds the calling thread. Together with `st_off_ir_request_cancel`, it is the only pair intended to be called from another thread during a computation.
 
-**언제·어떻게** — UI 스레드 등에서 주기적으로 폴링합니다. 진행률은 **1.0에서 시작합니다** — 할 일의 총량이 0이면 "할 일 없음 = 완료"로 1.0을 돌려주므로, 0.0을 기대하는 폴링 루프는 계산이 시작되기 전에 완료로 오판할 수 있습니다. 완료 판정은 `st_off_ir_compute`의 반환으로 하고, 진행률은 표시용으로만 씁니다. 스레드: `[any]` — lock-free atomic 읽기라 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**When / how** — Poll it periodically from a UI thread or similar. Progress **starts at 1.0** — when the total amount of work is 0 it returns 1.0 as "nothing to do = done", so a polling loop that expects 0.0 can mistake it for completion before the computation starts. Decide completion from the return of `st_off_ir_compute` and use progress for display only. Thread: `[any]` — a lock-free atomic read, so it can be called from any thread without blocking.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | Offline context handle |
 
-**반환** — 진행률 `[0, 1]`(완료한 작업량 ÷ 총량, 총량 0이면 1.0). `context`가 NULL이면 `0`.
+**Returns** — Progress `[0, 1]` (completed work ÷ total; 1.0 if the total is 0). `0` if `context` is NULL.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_request_cancel</code> — 진행 중인 계산·렌더를 중단시킨다</summary>
+<summary><code>st_off_ir_request_cancel</code> — Stops an in-progress computation or render</summary>
 
 ```c
 void st_off_ir_request_cancel(STOFF_Context* context);
 ```
 
-**용도** — 오래 걸리는 `st_off_ir_compute`나 렌더를 **다른 스레드에서** 중단시킵니다. `st_off_ir_get_progress`와 함께 lock-free로 부를 수 있는 유일한 쌍입니다.
+**Purpose** — Stops a long-running `st_off_ir_compute` or render **from another thread**. Together with `st_off_ir_get_progress`, it is the only pair that can be called lock-free.
 
-**언제·어떻게** — 계산·렌더가 도는 동안 다른 스레드에서 부릅니다. 부른 시점에 이미 진행 중인 잡만 중단되며, 그 뒤에 새로 시작하는 compute·렌더에는 영향이 없습니다(미리 걸어 둘 수 없습니다). 취소된 compute는 0을 돌려주고 새 캐시를 발행하지 않으므로 이전 캐시가 그대로 남습니다. 취소된 렌더는 0과 `ST_STATUS_UNAVAILABLE`을 돌려줍니다. 배치 작업 전체를 멈추려면 `st_off_batch_cancel`을 씁니다. 스레드: `[any]` — lock-free atomic이라 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**When / how** — Call it from another thread while a computation or render runs. Only jobs already in progress at the time of the call are stopped; compute or render jobs started afterward are unaffected (it cannot be armed in advance). A canceled compute returns 0 and publishes no new cache, so the previous cache remains. A canceled render returns 0 and `ST_STATUS_UNAVAILABLE`. To stop an entire batch job, use `st_off_batch_cancel`. Thread: `[any]` — lock-free atomic, so it can be called from any thread without blocking.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | Offline context handle |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_get_cache_generation</code> — 현재 canonical IR 캐시의 세대 번호를 읽는다</summary>
+<summary><code>st_off_ir_get_cache_generation</code> — Reads the generation number of the current canonical IR cache</summary>
 
 ```c
 uint64_t st_off_ir_get_cache_generation(const STOFF_Context* context);
 ```
 
-**용도** — 캐시가 마지막으로 발행된 세대를 돌려줍니다. 원시 IR 기술자와 모든 렌더 결과 info(`cacheGeneration` 필드)에도 같은 번호가 실리므로, 여러 번 조회·렌더한 결과가 **같은 계산에서 나왔는지** 호스트가 확인할 수 있습니다.
+**Purpose** — Returns the generation at which the cache was last published. The same number is carried in raw IR descriptors and every render result info (the `cacheGeneration` field), so the host can verify that results from several queries and renders **came from the same computation**.
 
-**언제·어떻게** — compute 전에는 0입니다. compute가 성공할 때마다 바뀝니다. 탭 복사·렌더 결과의 `cacheGeneration`과 비교해, 그 사이에 다른 스레드가 다시 계산하지 않았는지 검사하는 데 씁니다. 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**When / how** — 0 before a compute. It changes every time a compute succeeds. Compare it with `cacheGeneration` in tap copies and render results to check that no other thread recomputed in between. Thread: `[control]` — takes the job mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | Offline context handle |
 
-**반환** — 현재 세대 번호. 캐시가 없거나(compute 전) `context`가 NULL이면 `0`.
+**Returns** — The current generation number. `0` if there is no cache (before a compute) or `context` is NULL.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_get_raw_descriptor</code> — 리스너·소스 쌍의 원시 IR 요약(개수·세대·late 잔향 기술자·수송 에너지)을 읽는다</summary>
+<summary><code>st_off_ir_get_raw_descriptor</code> — Reads the raw IR summary (counts, generation, late-reverb descriptor, transport energy) of a listener/source pair</summary>
 
 ```c
 int st_off_ir_get_raw_descriptor(STOFF_Context* context, STListenerId listener, STSourceId source, STRawIRDescriptor* outDescriptor);
 ```
 
-**용도** — canonical 캐시에 있는 쌍 하나의 원시 IR 머리 정보를 돌려줍니다. 탭·셀·연속성 ID 개수(복사 버퍼 크기), 음속·샘플레이트, 캐시 세대, late 잔향 기술자(T60·평균 자유 행로·실내 부피 등), 소스 수송 에너지 수지를 한 번에 얻습니다. 엔진의 렌더를 거치지 않고 기하·통계 데이터를 직접 분석하거나 자체 렌더러에 넣을 때 출발점입니다.
+**Purpose** — Returns the raw IR header of one pair in the canonical cache. In one call you get the tap, cell and continuity ID counts (copy buffer sizes), speed of sound and sample rate, cache generation, late-reverb descriptor (T60, mean free path, room volume, etc.) and the source transport energy balance. It is the starting point for analyzing geometry and statistics data directly, bypassing the engine's render, or for feeding your own renderer.
 
-**언제·어떻게** — `st_off_ir_compute` 뒤(또는 아카이브 적재 뒤)에 부릅니다. 반환된 개수로 버퍼를 잡고 `st_off_ir_copy_raw_early_taps` / `st_off_ir_copy_raw_diffuse_rain_cells` / `st_off_ir_copy_raw_reverb_send_taps` / `st_off_ir_copy_raw_continuity_ids`로 내용을 복사합니다. 원시 IR은 early 공간 모드와 무관하게 항상 exact 정본입니다. 지원 여부는 `ST_CAP_OFFLINE_RAW_IR`로 확인합니다. 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**When / how** — Call it after `st_off_ir_compute` (or after loading an archive). Allocate buffers from the returned counts and copy the contents with `st_off_ir_copy_raw_early_taps` / `st_off_ir_copy_raw_diffuse_rain_cells` / `st_off_ir_copy_raw_reverb_send_taps` / `st_off_ir_copy_raw_continuity_ids`. Raw IRs are always the exact reference regardless of the early spatial mode. Check support with `ST_CAP_OFFLINE_RAW_IR`. Thread: `[control]` — takes the job mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `outDescriptor` | 결과를 받을 구조체. 호출자가 `structSize` = `sizeof(STRawIRDescriptor)`, `apiVersion` = `st_off_get_api_version()`을 채운다 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `source` | Source handle |
+| `outDescriptor` | Struct that receives the result. The caller fills `structSize` = `sizeof(STRawIRDescriptor)`, `apiVersion` = `st_off_get_api_version()` |
 
-**구조체** `STRawIRDescriptor`
+**Struct** `STRawIRDescriptor`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize`, `apiVersion` | 호출자가 채우는 버전 스탬프 |
-| `cacheGeneration` | 이 결과가 속한 캐시 세대 |
-| `listenerId`, `sourceId` | 쌍의 ID |
-| `sampleRate` | 샘플레이트(44100 Hz 고정) |
-| `soundSpeedMetersPerSecond` | 이 계산에 쓴 음속(m/s). 대기 설정에서 유도된 값 |
-| `earlyTapCount` | 원시 초기 탭 수(`st_off_ir_copy_raw_early_taps`의 필요 개수). 기하 경로만 센다 |
-| `reverbSendTapCount` | late 잔향 송출 탭 수(`st_off_ir_copy_raw_reverb_send_taps`의 필요 개수) |
-| `continuityIdCount` | 연속성 ID 총수(`st_off_ir_copy_raw_continuity_ids`의 필요 개수) |
-| `sourceTransportEnergy` | `STRawIRSourceTransportEnergy` — 소스 수송 에너지 수지(아래 표) |
-| `lateReverb` | `STRawIRReverbDescriptor` — late 잔향장 기술자(아래 표) |
-| `diffuseRainCellCount` | 1차 산란 셀 수(`st_off_ir_copy_raw_diffuse_rain_cells`의 필요 개수). 지원 여부는 `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN` |
-| `reserved[5]` | 예약 |
+| `structSize`, `apiVersion` | Version stamp filled by the caller |
+| `cacheGeneration` | Cache generation this result belongs to |
+| `listenerId`, `sourceId` | IDs of the pair |
+| `sampleRate` | Sample rate (fixed at 44100 Hz) |
+| `soundSpeedMetersPerSecond` | Speed of sound used for this computation (m/s). Derived from the atmosphere settings |
+| `earlyTapCount` | Number of raw early taps (required count for `st_off_ir_copy_raw_early_taps`). Counts geometric paths only |
+| `reverbSendTapCount` | Number of late-reverb send taps (required count for `st_off_ir_copy_raw_reverb_send_taps`) |
+| `continuityIdCount` | Total number of continuity IDs (required count for `st_off_ir_copy_raw_continuity_ids`) |
+| `sourceTransportEnergy` | `STRawIRSourceTransportEnergy` — source transport energy balance (table below) |
+| `lateReverb` | `STRawIRReverbDescriptor` — late-reverb field descriptor (table below) |
+| `diffuseRainCellCount` | Number of first-order scattering cells (required count for `st_off_ir_copy_raw_diffuse_rain_cells`). Support is indicated by `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN` |
+| `reserved[5]` | Reserved |
 
-**구조체** `STRawIRSourceTransportEnergy` — 9밴드 배열은 모두 에너지 영역입니다.
+**Struct** `STRawIRSourceTransportEnergy` — all 9-band arrays are in the energy domain.
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `valid` | 1 = 값이 유효 / 0 = 없음 |
-| `emitted[9]` | 소스 수송이 방출한 에너지 |
-| `diffuseReleased[9]` | 확산 에너지로 풀려나 late 잔향 송출로 간 에너지 |
-| `escapedCoherent[9]` | 결맞은 채로 빠져나간 에너지 |
-| `depthRemainder[9]` | 반사 깊이 한도에서 남은 에너지 |
-| `boundaryAndAirLoss[9]` | 경계(흡수)·공기 흡수로 잃은 에너지 |
+| `valid` | 1 = values valid / 0 = none |
+| `emitted[9]` | Energy emitted by source transport |
+| `diffuseReleased[9]` | Energy released as diffuse energy into the late-reverb send |
+| `escapedCoherent[9]` | Energy that escaped while still coherent |
+| `depthRemainder[9]` | Energy remaining at the reflection depth limit |
+| `boundaryAndAirLoss[9]` | Energy lost to boundaries (absorption) and air absorption |
 
-**구조체** `STRawIRReverbDescriptor` — 반사율·공기 항은 에너지 영역, `diffuseFieldPressureGain`·`level`·`dryInputGain`은 압력 영역 선형 배율입니다.
+**Struct** `STRawIRReverbDescriptor` — reflectance and air terms are in the energy domain; `diffuseFieldPressureGain`, `level` and `dryInputGain` are pressure-domain linear multipliers.
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `valid` | 1 = 값이 유효 / 0 = 없음 |
-| `avgReflection[9]` | 평균 반사율(에너지) |
-| `airEnergyGainPerMeanFreePath[9]` | 평균 자유 행로 하나를 지날 때의 공기 흡수 에너지 이득 |
-| `eyringT60Seconds[9]` | Eyring 잔향 시간 T60(초) |
-| `diffuseFieldPressureGain[9]` | 확산장 압력 이득(압력 영역) |
-| `roomVolumeMetersCubed` | 추정 실내 부피(m³) |
-| `meanFreePath` | 평균 자유 행로(m) |
-| `meanFreeFlightTimeSeconds` | 평균 자유 비행 시간(초) |
-| `boundaryHitRatio` | 경계 적중 비율(무차원) |
-| `reserved[2]` | 예약 |
-| `level` | late 레벨(압력 영역) |
-| `dryInputGain` | 드라이 입력 이득(압력 영역) |
+| `valid` | 1 = values valid / 0 = none |
+| `avgReflection[9]` | Average reflectance (energy) |
+| `airEnergyGainPerMeanFreePath[9]` | Air absorption energy gain over one mean free path |
+| `eyringT60Seconds[9]` | Eyring reverberation time T60 (seconds) |
+| `diffuseFieldPressureGain[9]` | Diffuse-field pressure gain (pressure domain) |
+| `roomVolumeMetersCubed` | Estimated room volume (m³) |
+| `meanFreePath` | Mean free path (m) |
+| `meanFreeFlightTimeSeconds` | Mean free flight time (seconds) |
+| `boundaryHitRatio` | Boundary hit ratio (dimensionless) |
+| `reserved[2]` | Reserved |
+| `level` | Late level (pressure domain) |
+| `dryInputGain` | Dry input gain (pressure domain) |
 
-길이·부피 출력은 `sceneRatio`를 반영한 실제 미터 단위입니다.
+Length and volume outputs are in real meters with `sceneRatio` applied.
 
-**반환** — `1` = 성공 / `0` = 실패. `outDescriptor`가 NULL이거나 스탬프가 틀리면 `ST_STATUS_INVALID_ARGUMENT`, 캐시가 없거나 그 쌍이 없으면 `ST_STATUS_UNAVAILABLE`.
+**Returns** — `1` = success / `0` = failure. A NULL `outDescriptor` or a wrong stamp gives `ST_STATUS_INVALID_ARGUMENT`; no cache or no such pair gives `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_copy_raw_early_taps</code> — 쌍의 원시 초기 탭(직접·투과·반사·회절 경로)을 복사한다</summary>
+<summary><code>st_off_ir_copy_raw_early_taps</code> — Copies the raw early taps (direct, transmission, reflection, diffraction paths) of a pair</summary>
 
 ```c
 int st_off_ir_copy_raw_early_taps(STOFF_Context* context, STListenerId listener, STSourceId source, STRawIRTap* outTaps, int tapCapacity);
 ```
 
-**용도** — 기하 경로 하나하나를 에너지 영역 탭으로 내보냅니다(경로 종류, 지연, 9밴드 에너지 이득, 도래 방향, 경로 길이, Doppler 기울기, 경로 ID). 직접음 도착 시각·ITDG·경로 수 같은 기하 지표를 계산하거나 자체 렌더러를 구동할 때 씁니다. 압력이 필요하면 각 밴드 에너지에 `sqrt`를 **한 번** 적용합니다.
+**Purpose** — Exports each geometric path as an energy-domain tap (path type, delay, 9-band energy gain, arrival direction, path length, Doppler slope, path ID). Use it to compute geometric metrics such as direct-sound arrival time, ITDG and path count, or to drive your own renderer. If you need pressure, apply `sqrt` **once** to each band energy.
 
-**언제·어떻게** — 원시 초기 탭은 **기하 경로만**입니다. 압력 IR 렌더에 들어가는 1차 산란(diffuse rain) 셀은 1 ms 셀로 모은 통계 성분이라 여기에 포함되지 않으며(`earlyTapCount`와 연속성 ID도 마찬가지), 따로 `st_off_ir_copy_raw_diffuse_rain_cells`로 받습니다. 그래서 기하 지표가 그 셀에 흔들리지 않습니다. 크기 질의: `outTaps` = NULL, `tapCapacity` = 0으로 부르면 필요한 개수를 돌려줍니다(`STRawIRDescriptor.earlyTapCount`와 같음). 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**When / how** — Raw early taps are **geometric paths only**. The first-order scattering (diffuse rain) cells that go into pressure IR renders are a statistical component gathered into 1 ms cells, so they are not included here (nor in `earlyTapCount` or the continuity IDs); receive them separately with `st_off_ir_copy_raw_diffuse_rain_cells`. Geometric metrics are therefore not perturbed by those cells. Size query: calling with `outTaps` = NULL and `tapCapacity` = 0 returns the required count (same as `STRawIRDescriptor.earlyTapCount`). Thread: `[control]` — takes the job mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `outTaps` | 탭을 받을 호출자 배열. NULL이면 크기 질의(이때 `tapCapacity`는 0이어야 함) |
-| `tapCapacity` | `outTaps` 원소 수. 0 이상 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `source` | Source handle |
+| `outTaps` | Caller array that receives the taps. NULL = size query (`tapCapacity` must then be 0) |
+| `tapCapacity` | Number of elements in `outTaps`. 0 or more |
 
-**구조체** `STRawIRTap` (에너지 영역)
+**Struct** `STRawIRTap` (energy domain)
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
 | `pathType` | 0 = Direct / 1 = Transmission / 2 = Reflection / 3 = Diffraction |
-| `depth` | 상호작용 차수 |
-| `delaySeconds` | 도착 지연(초) |
-| `delaySamples` | 도착 지연(44.1 kHz 샘플, 소수 포함) |
-| `bandEnergyGain[9]` | 9밴드 에너지 이득. 압력은 `sqrt`로 얻는다 |
-| `dirFromListener[3]` | 리스너에서 본 도래 방향 |
-| `matchDirFromListener[3]` | 경로 대응(연속성 매칭)에만 쓰는 리스너 쪽 방향(월드 좌표) |
-| `matchDirFromSource[3]` | 경로 대응(연속성 매칭)에만 쓰는 소스 쪽 방향(월드 좌표) |
-| `pathLengthMeters` | 경로 길이(m, `sceneRatio` 반영) |
-| `relativeSpeed` | 상대 속도(m/s) — `delayChangePerSample` × 음속 |
-| `delayChangePerSample` | 샘플당 지연 변화(Doppler 기울기) |
-| `pathId` | 64비트 토폴로지 기반 경로 ID(같은 경로를 계산 사이에 대응시키는 키) |
-| `interactionSignature` | 같은 `pathId`를 공유하는 물리적 분기를 가르는 상호작용·재질 판별자 |
-| `continuityOffset` | 이 탭의 연속성 ID가 `st_off_ir_copy_raw_continuity_ids` 배열에서 시작하는 인덱스 |
-| `continuityCount` | 이 탭의 연속성 ID 수. 유일한 경로는 0(`pathId`가 곧 그 ID) |
+| `depth` | Interaction order |
+| `delaySeconds` | Arrival delay (seconds) |
+| `delaySamples` | Arrival delay (44.1 kHz samples, fractional) |
+| `bandEnergyGain[9]` | 9-band energy gain. Pressure is obtained with `sqrt` |
+| `dirFromListener[3]` | Arrival direction as seen from the listener |
+| `matchDirFromListener[3]` | Listener-side direction (world coordinates) used only for path correspondence (continuity matching) |
+| `matchDirFromSource[3]` | Source-side direction (world coordinates) used only for path correspondence (continuity matching) |
+| `pathLengthMeters` | Path length (m, `sceneRatio` applied) |
+| `relativeSpeed` | Relative speed (m/s) — `delayChangePerSample` × speed of sound |
+| `delayChangePerSample` | Delay change per sample (Doppler slope) |
+| `pathId` | 64-bit topology-based path ID (key that matches the same path across computations) |
+| `interactionSignature` | Interaction and material discriminator that separates physical branches sharing the same `pathId` |
+| `continuityOffset` | Index at which this tap's continuity IDs start in the `st_off_ir_copy_raw_continuity_ids` array |
+| `continuityCount` | Number of continuity IDs of this tap. 0 for a unique path (`pathId` is that ID) |
 
-**반환** — 복사한(또는 필요한) 탭 수. 실패는 `0`: 용량 음수·`outTaps` NULL인데 용량 0 아님은 `ST_STATUS_INVALID_ARGUMENT`, 용량 부족은 `ST_STATUS_BUFFER_TOO_SMALL`, 캐시·쌍이 없으면 `ST_STATUS_UNAVAILABLE`. 탭이 하나도 없는 정상 결과도 0이므로 구분은 `st_off_get_last_status`로 합니다.
+**Returns** — The number of taps copied (or required). Failure is `0`: negative capacity, or `outTaps` NULL with non-zero capacity, gives `ST_STATUS_INVALID_ARGUMENT`; insufficient capacity gives `ST_STATUS_BUFFER_TOO_SMALL`; no cache or pair gives `ST_STATUS_UNAVAILABLE`. A valid result with no taps is also 0, so distinguish with `st_off_get_last_status`.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_copy_raw_diffuse_rain_cells</code> — 쌍의 1차 산란(diffuse rain) 셀을 복사한다</summary>
+<summary><code>st_off_ir_copy_raw_diffuse_rain_cells</code> — Copies the first-order scattering (diffuse rain) cells of a pair</summary>
 
 ```c
 int st_off_ir_copy_raw_diffuse_rain_cells(STOFF_Context* context, STListenerId listener, STSourceId source, STRawIRDiffuseRainCell* outCells, int cellCapacity);
 ```
 
-**용도** — 산란점에서 리스너로 바로 가는 산란 에너지를 직접음 이후 1 ms 셀로 모은 통계 성분을 내보냅니다. 압력·바이노럴 렌더는 이 셀을 late 스템으로 렌더합니다(기하 경로가 아니므로 `st_off_ir_copy_raw_early_taps`에는 없습니다). 렌더 IR을 원시 성분으로 분해하거나 자체 렌더러에서 1차 산란을 재현할 때 씁니다.
+**Purpose** — Exports the statistical component that gathers scattered energy going straight from scattering points to the listener into 1 ms cells after the direct sound. Pressure and binaural renders render these cells as the late stem (they are not geometric paths, so they are not in `st_off_ir_copy_raw_early_taps`). Use it to decompose a rendered IR into raw components or to reproduce first-order scattering in your own renderer.
 
-**언제·어떻게** — 계약은 다른 원시 복사와 같습니다: `outCells` = NULL, `cellCapacity` = 0이면 필요한 개수(`STRawIRDescriptor.diffuseRainCellCount`와 같음)를 돌려줍니다. 산란이 없으면 0입니다. 렌더 압력 = `polarity` × √(에너지)입니다. 지원 여부는 `st_off_get_capability_word(1)`의 `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN`으로 확인합니다. 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**When / how** — The contract is the same as the other raw copies: with `outCells` = NULL and `cellCapacity` = 0 it returns the required count (same as `STRawIRDescriptor.diffuseRainCellCount`). 0 if there is no scattering. Rendered pressure = `polarity` × √(energy). Check support with `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN` of `st_off_get_capability_word(1)`. Thread: `[control]` — takes the job mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `outCells` | 셀을 받을 호출자 배열. NULL이면 크기 질의(이때 `cellCapacity`는 0이어야 함) |
-| `cellCapacity` | `outCells` 원소 수. 0 이상 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `source` | Source handle |
+| `outCells` | Caller array that receives the cells. NULL = size query (`cellCapacity` must then be 0) |
+| `cellCapacity` | Number of elements in `outCells`. 0 or more |
 
-**구조체** `STRawIRDiffuseRainCell` (에너지 영역)
+**Struct** `STRawIRDiffuseRainCell` (energy domain)
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `pathId` | 셀 번호만으로 정해지는 결정적 ID(같은 셀은 같은 ID) |
-| `cellIndex` | 직접음 이후 1 ms 셀 번호(0부터) |
-| `polarity` | 렌더 압력 부호 +1 / −1(셀마다 결정적) |
-| `delaySeconds` | 셀 안의 에너지 가중 도착 시각(초) |
-| `delaySamples` | 같은 값(44.1 kHz 샘플) |
-| `bandEnergyGain[9]` | 9밴드 에너지 이득 |
-| `dirFromListener[3]` | 에너지 가중 도래 방향(리스너 로컬) |
-| `delayChangePerSample` | 샘플당 지연 변화 |
-| `reserved[4]` | 예약 |
+| `pathId` | Deterministic ID determined by the cell number alone (the same cell has the same ID) |
+| `cellIndex` | 1 ms cell number after the direct sound (from 0) |
+| `polarity` | Render pressure sign +1 / −1 (deterministic per cell) |
+| `delaySeconds` | Energy-weighted arrival time within the cell (seconds) |
+| `delaySamples` | Same value (44.1 kHz samples) |
+| `bandEnergyGain[9]` | 9-band energy gain |
+| `dirFromListener[3]` | Energy-weighted arrival direction (listener local) |
+| `delayChangePerSample` | Delay change per sample |
+| `reserved[4]` | Reserved |
 
-**반환** — 복사한(또는 필요한) 셀 수. 실패는 `0`: 인자 오류는 `ST_STATUS_INVALID_ARGUMENT`, 용량 부족은 `ST_STATUS_BUFFER_TOO_SMALL`, 캐시·쌍이 없으면 `ST_STATUS_UNAVAILABLE`.
+**Returns** — The number of cells copied (or required). Failure is `0`: argument errors give `ST_STATUS_INVALID_ARGUMENT`, insufficient capacity gives `ST_STATUS_BUFFER_TOO_SMALL`, no cache or pair gives `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_copy_raw_reverb_send_taps</code> — 쌍의 late 잔향 송출 탭(확산 에너지 사건)을 복사한다</summary>
+<summary><code>st_off_ir_copy_raw_reverb_send_taps</code> — Copies the late-reverb send taps (diffuse energy events) of a pair</summary>
 
 ```c
 int st_off_ir_copy_raw_reverb_send_taps(STOFF_Context* context, STListenerId listener, STSourceId source, STRawIRReverbSendTap* outTaps, int tapCapacity);
 ```
 
-**용도** — 소스 수송에서 얻은 통계적 확산 에너지 사건(late 잔향 탱크를 여기하는 송출 탭)을 내보냅니다. 엔진 렌더에서는 이 탭들이 압력으로 실현돼 FDN에 들어갑니다. exact 초기 경로(직접·투과·반사·회절)는 FDN에 들어가지 않고 별도 경로로 렌더됩니다. late 잔향의 시간·스펙트럼 입력을 분석하거나 자체 잔향기에 넣을 때 씁니다.
+**Purpose** — Exports the statistical diffuse energy events obtained from source transport (the send taps that excite the late-reverb tank). In the engine render these taps are realized as pressure and fed into the FDN. Exact early paths (direct, transmission, reflection, diffraction) do not go into the FDN and are rendered on a separate path. Use it to analyze the time and spectral input of the late reverb or to feed your own reverberator.
 
-**언제·어떻게** — `outTaps` = NULL, `tapCapacity` = 0이면 필요한 개수(`STRawIRDescriptor.reverbSendTapCount`와 같음)를 돌려줍니다. 렌더 요청의 `reverbSendMask`가 이 탭 중 어느 것이 탱크를 여기할지 고릅니다. 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**When / how** — With `outTaps` = NULL and `tapCapacity` = 0 it returns the required count (same as `STRawIRDescriptor.reverbSendTapCount`). The render request's `reverbSendMask` selects which of these taps excite the tank. Thread: `[control]` — takes the job mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `outTaps` | 탭을 받을 호출자 배열. NULL이면 크기 질의(이때 `tapCapacity`는 0이어야 함) |
-| `tapCapacity` | `outTaps` 원소 수. 0 이상 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `source` | Source handle |
+| `outTaps` | Caller array that receives the taps. NULL = size query (`tapCapacity` must then be 0) |
+| `tapCapacity` | Number of elements in `outTaps`. 0 or more |
 
-**구조체** `STRawIRReverbSendTap` (에너지 영역)
+**Struct** `STRawIRReverbSendTap` (energy domain)
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `sourcePathType` | 소스 쪽 경로 계열 라우팅 태그(현재 소스 수송은 Reflection) |
-| `role` | `STReverbSendRole` — 현재 값은 `ST_REVERB_SEND_OBSERVED_SCATTER`(0) 하나 |
-| `depth` | 안정적인 수송 시간 빈 순번 |
-| `reserved0` | 예약 |
-| `delaySeconds` | 지연(초) |
-| `delaySamples` | 지연(44.1 kHz 샘플) |
-| `bandEnergy[9]` | 9밴드 에너지 |
-| `matchDirFromSource[3]` | 소스 쪽 방향 |
-| `pathLengthMeters` | 경로 길이(m, `sceneRatio` 반영) |
-| `relativeSpeed` | 상대 속도(m/s) |
-| `delayChangePerSample` | 샘플당 지연 변화 |
-| `pathId` | 64비트 경로 ID |
+| `sourcePathType` | Source-side path family routing tag (currently Reflection for source transport) |
+| `role` | `STReverbSendRole` — the only current value is `ST_REVERB_SEND_OBSERVED_SCATTER`(0) |
+| `depth` | Stable transport time-bin ordinal |
+| `reserved0` | Reserved |
+| `delaySeconds` | Delay (seconds) |
+| `delaySamples` | Delay (44.1 kHz samples) |
+| `bandEnergy[9]` | 9-band energy |
+| `matchDirFromSource[3]` | Source-side direction |
+| `pathLengthMeters` | Path length (m, `sceneRatio` applied) |
+| `relativeSpeed` | Relative speed (m/s) |
+| `delayChangePerSample` | Delay change per sample |
+| `pathId` | 64-bit path ID |
 
-**반환** — 복사한(또는 필요한) 탭 수. 실패는 `0`: 인자 오류는 `ST_STATUS_INVALID_ARGUMENT`, 용량 부족은 `ST_STATUS_BUFFER_TOO_SMALL`, 캐시·쌍이 없으면 `ST_STATUS_UNAVAILABLE`.
+**Returns** — The number of taps copied (or required). Failure is `0`: argument errors give `ST_STATUS_INVALID_ARGUMENT`, insufficient capacity gives `ST_STATUS_BUFFER_TOO_SMALL`, no cache or pair gives `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_copy_raw_continuity_ids</code> — 원시 초기 탭들의 연속성 경로 ID 배열을 복사한다</summary>
+<summary><code>st_off_ir_copy_raw_continuity_ids</code> — Copies the continuity path ID array of the raw early taps</summary>
 
 ```c
 int st_off_ir_copy_raw_continuity_ids(STOFF_Context* context, STListenerId listener, STSourceId source, uint64_t* outPathIds, int idCapacity);
 ```
 
-**용도** — 하나의 탭으로 합쳐진 경로가 여러 토폴로지 경로 ID를 가질 때, 같은 경로로 판정된 그 ID들(별칭)을 하나의 평탄한 배열로 내보냅니다. 탭 `i`의 ID는 `outPathIds[taps[i].continuityOffset .. + taps[i].continuityCount)`입니다. 유일한 경로의 탭은 범위가 비어 있습니다(`pathId`가 곧 그 ID). 계산 결과 사이에서 경로 대응을 호스트가 직접 맺을 때, 대표 `pathId`가 바뀌어도 같은 경로임을 알아보는 데 씁니다.
+**Purpose** — When paths merged into one tap carry several topology path IDs, exports those IDs (aliases), judged to be the same path, as one flat array. The IDs of tap `i` are `outPathIds[taps[i].continuityOffset .. + taps[i].continuityCount)`. The range is empty for the tap of a unique path (`pathId` is that ID). Use it when the host matches paths across computation results itself, to recognize the same path even if the representative `pathId` changes.
 
-**언제·어떻게** — `st_off_ir_copy_raw_early_taps`와 같은 캐시 세대에서 함께 복사합니다(1차 산란 셀은 포함되지 않습니다). `outPathIds` = NULL, `idCapacity` = 0이면 필요한 개수(`STRawIRDescriptor.continuityIdCount`와 같음)를 돌려줍니다. 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**When / how** — Copy it together with `st_off_ir_copy_raw_early_taps` from the same cache generation (first-order scattering cells are not included). With `outPathIds` = NULL and `idCapacity` = 0 it returns the required count (same as `STRawIRDescriptor.continuityIdCount`). Thread: `[control]` — takes the job mutex.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `outPathIds` | 64비트 경로 ID를 받을 호출자 배열. NULL이면 크기 질의(이때 `idCapacity`는 0이어야 함) |
-| `idCapacity` | `outPathIds` 원소 수. 0 이상 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `source` | Source handle |
+| `outPathIds` | Caller array that receives the 64-bit path IDs. NULL = size query (`idCapacity` must then be 0) |
+| `idCapacity` | Number of elements in `outPathIds`. 0 or more |
 
-**반환** — 복사한(또는 필요한) ID 수. 실패는 `0`: 인자 오류는 `ST_STATUS_INVALID_ARGUMENT`, 용량 부족은 `ST_STATUS_BUFFER_TOO_SMALL`, 캐시·쌍이 없으면 `ST_STATUS_UNAVAILABLE`.
+**Returns** — The number of IDs copied (or required). Failure is `0`: argument errors give `ST_STATUS_INVALID_ARGUMENT`, insufficient capacity gives `ST_STATUS_BUFFER_TOO_SMALL`, no cache or pair gives `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_init_pressure_request</code> — 압력 IR 요청 구조체를 기본값으로 채운다</summary>
+<summary><code>st_off_ir_init_pressure_request</code> — Fills a pressure IR request struct with defaults</summary>
 
 ```c
 void st_off_ir_init_pressure_request(STOfflinePressureIRRequestOptions* outOptions);
 ```
 
-**용도** — `STOfflinePressureIRRequestOptions`의 버전 스탬프와 기본값을 한 번에 채웁니다. 압력 IR 렌더(`st_off_ir_render_pressure`, `st_off_ir_render_pressure_mixed`, `st_off_batch_add_pressure_render*`)에 넘기기 전에 항상 이 함수로 초기화한 뒤 필요한 필드만 바꿉니다.
+**Purpose** — Fills the version stamp and defaults of `STOfflinePressureIRRequestOptions` in one call. Before passing it to a pressure IR render (`st_off_ir_render_pressure`, `st_off_ir_render_pressure_mixed`, `st_off_batch_add_pressure_render*`), always initialize it with this function and then change only the fields you need.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[any]` — 호출자 구조체만 채우므로 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**When / how** — Can be called at any time. Thread: `[any]` — it only fills the caller's struct, so it can be called from any thread without blocking.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `outOptions` | 채울 구조체. NULL이면 아무것도 하지 않음 |
+| `outOptions` | Struct to fill. Does nothing if NULL |
 
-**구조체** `STOfflinePressureIRRequestOptions`
+**Struct** `STOfflinePressureIRRequestOptions`
 
-| 필드 | 기본값 | 설명 |
+| Field | Default | Description |
 |---|---|---|
-| `structSize` | `sizeof(STOfflinePressureIRRequestOptions)` | 버전 스탬프 |
-| `apiVersion` | `st_off_get_api_version()` 값 | 버전 스탬프 |
-| `outputMode` | `ST_PRESSURE_IR_BROADBAND_MONO`(0) | `STPressureIROutput` — `ST_PRESSURE_IR_BROADBAND_MONO`(0, 광대역 모노 1채널) / `ST_PRESSURE_IR_SEPARATE_BANDS`(1, 9밴드 분리). 같은 요청에서 모노 = 9밴드의 합이 성립한다 |
-| `outputMask` | `ST_OFFLINE_OUTPUT_FULL` | 결과에 넣을 성분. `ST_OFFLINE_OUTPUT_DIRECT`(1) / `TRANSMISSION`(2) / `REFLECTION`(4) / `DIFFRACTION`(8) / `LATE_REVERB`(16)의 OR. 묶음 `ST_OFFLINE_OUTPUT_EARLY_ALL`(초기 4종), `ST_OFFLINE_OUTPUT_FULL`(전부). `LATE_REVERB`는 late 잔향과 1차 산란 셀을 함께 싣는다. `FULL` 밖의 비트는 거절 |
-| `reverbSendMask` | `ST_OFFLINE_REVERB_SEND_ALL` | late 잔향 탱크를 여기할 송출 탭을 초기 경로 4비트(`ST_OFFLINE_OUTPUT_DIRECT`·`TRANSMISSION`·`REFLECTION`·`DIFFRACTION`)로 고른다. `ST_OFFLINE_REVERB_SEND_ALL` = `ST_OFFLINE_OUTPUT_EARLY_ALL`. `EARLY_ALL` 밖의 비트는 거절 |
-| `renderMethod` | 0 | 렌더러 선택자. 압력 IR 렌더러는 하나이며 0·1·2(`ST_PRESSURE_IR_RENDER_SIMULATE` / `SYNTHESIZE_EXACT` / `SIMULATE2`, 레거시 별칭)는 모두 같은 렌더로 가서 결과가 바이트 동일하다. 새 코드는 0. 그 밖의 값은 거절 |
-| `reserved[9]` | 0 | 예약 |
+| `structSize` | `sizeof(STOfflinePressureIRRequestOptions)` | Version stamp |
+| `apiVersion` | Value of `st_off_get_api_version()` | Version stamp |
+| `outputMode` | `ST_PRESSURE_IR_BROADBAND_MONO`(0) | `STPressureIROutput` — `ST_PRESSURE_IR_BROADBAND_MONO` (0, broadband mono, 1 channel) / `ST_PRESSURE_IR_SEPARATE_BANDS` (1, 9 separate bands). Within the same request, mono = sum of the 9 bands holds |
+| `outputMask` | `ST_OFFLINE_OUTPUT_FULL` | Components to include in the result. OR of `ST_OFFLINE_OUTPUT_DIRECT` (1) / `TRANSMISSION` (2) / `REFLECTION` (4) / `DIFFRACTION` (8) / `LATE_REVERB` (16). Groups `ST_OFFLINE_OUTPUT_EARLY_ALL` (the 4 early types) and `ST_OFFLINE_OUTPUT_FULL` (all). `LATE_REVERB` carries the late reverb and the first-order scattering cells together. Bits outside `FULL` are rejected |
+| `reverbSendMask` | `ST_OFFLINE_REVERB_SEND_ALL` | Selects which send taps excite the late-reverb tank using the 4 early-path bits (`ST_OFFLINE_OUTPUT_DIRECT` · `TRANSMISSION` · `REFLECTION` · `DIFFRACTION`). `ST_OFFLINE_REVERB_SEND_ALL` = `ST_OFFLINE_OUTPUT_EARLY_ALL`. Bits outside `EARLY_ALL` are rejected |
+| `renderMethod` | 0 | Renderer selector. There is one pressure IR renderer, and 0, 1 and 2 (`ST_PRESSURE_IR_RENDER_SIMULATE` / `SYNTHESIZE_EXACT` / `SIMULATE2`, legacy aliases) all go to the same render with byte-identical results. New code uses 0. Other values are rejected |
+| `reserved[9]` | 0 | Reserved |
 
-`outputMask`는 들리는(반환되는) 성분을, `reverbSendMask`는 어떤 송출 탭이 late 탱크를 여기할지를 정합니다. 예를 들어 `outputMask` = `ST_OFFLINE_OUTPUT_LATE_REVERB`만 두면 초기 경로를 뺀 late 스템만 얻습니다.
+`outputMask` decides which components are heard (returned), and `reverbSendMask` decides which send taps excite the late tank. For example, setting `outputMask` = `ST_OFFLINE_OUTPUT_LATE_REVERB` only yields just the late stem without the early paths.
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_get_pressure_band_centers</code> — 9밴드 압력 IR의 밴드 중심 주파수(Hz)를 복사한다</summary>
+<summary><code>st_off_ir_get_pressure_band_centers</code> — Copies the band center frequencies (Hz) of 9-band pressure IRs</summary>
 
 ```c
 int st_off_ir_get_pressure_band_centers(float* outHz, int capacity);
 ```
 
-**용도** — `ST_PRESSURE_IR_SEPARATE_BANDS` 결과의 밴드 `b`가 어느 주파수 대역인지 알려 줍니다. 엔진 밴드는 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz의 9개(`ST_FREQUENCY_BANDS`)입니다.
+**Purpose** — Tells which frequency band band `b` of an `ST_PRESSURE_IR_SEPARATE_BANDS` result is. The engine bands are the 9 bands 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz (`ST_FREQUENCY_BANDS`).
 
-**언제·어떻게** — 컨텍스트 없이 언제든 부를 수 있습니다. 밴드 분리 IR을 저장하거나 그래프로 그릴 때 라벨로 씁니다. 지원 여부는 `ST_CAP_OFFLINE_PRESSURE_BAND_METADATA`로 확인합니다. 스레드: `[any]` — 컴파일 상수를 복사합니다.
+**When / how** — Can be called at any time without a context. Use the values as labels when saving or plotting band-separated IRs. Check support with `ST_CAP_OFFLINE_PRESSURE_BAND_METADATA`. Thread: `[any]` — copies compile-time constants.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `outHz` | 중심 주파수를 받을 배열. NULL이면 크기 질의(이때 `capacity`는 0) |
-| `capacity` | `outHz` 원소 수. 9 이상이어야 한다 |
+| `outHz` | Array that receives the center frequencies. NULL = size query (`capacity` is then 0) |
+| `capacity` | Number of elements in `outHz`. Must be 9 or more |
 
-**반환** — 밴드 수 `9`(복사 성공 또는 크기 질의). `capacity`가 9보다 작거나, `outHz` NULL인데 `capacity`가 0이 아니면 `0`.
+**Returns** — The band count `9` (successful copy or size query). `0` if `capacity` is less than 9, or if `outHz` is NULL and `capacity` is not 0.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_render_pressure</code> — 리스너·소스 쌍 하나의 압력 IR(광대역 모노 또는 9밴드)을 렌더한다</summary>
+<summary><code>st_off_ir_render_pressure</code> — Renders the pressure IR (broadband mono or 9 bands) of one listener/source pair</summary>
 
 ```c
 int st_off_ir_render_pressure(STOFF_Context* context, STListenerId listener, STSourceId source, double seconds, const STOfflinePressureIRRequestOptions* options, float* outValues, int capacityValues, STOfflinePressureIRInfo* outInfo);
 ```
 
-**용도** — canonical 캐시의 쌍 하나를 시간 영역 압력 임펄스 응답(RIR)으로 렌더합니다. exact 초기 경로와 송출 탭을 임펄스로 합성하고 late 잔향은 FDN으로 렌더합니다. 음향 분석(T60·C80·EDT 등)이나 측정값과의 비교, 외부 컨볼루션 리버브용 IR 추출에 씁니다. 공간화하지 않은 압력 신호이며 early 공간 모드와 무관하게 항상 exact 정본입니다.
+**Purpose** — Renders one pair from the canonical cache as a time-domain pressure impulse response (RIR). Exact early paths and send taps are synthesized as impulses, and the late reverb is rendered with the FDN. Use it for acoustic analysis (T60, C80, EDT, etc.), comparison with measurements, or extracting IRs for external convolution reverbs. It is an unspatialized pressure signal and is always the exact reference regardless of the early spatial mode.
 
-**언제·어떻게** — `st_off_ir_compute` 뒤에 부릅니다. 결과는 호출자 소유 버퍼에 한 번에 씁니다.
+**When / how** — Call it after `st_off_ir_compute`. The result is written in one go to a caller-owned buffer.
 
-1. 크기 질의: `outValues` = NULL, `capacityValues` = 0으로 부르면 필요한 값 개수를 돌려주고, 쌍이 유효하면 `outInfo`도 채웁니다.
-2. 그 크기로 버퍼를 잡고 다시 부릅니다.
+1. Size query: calling with `outValues` = NULL and `capacityValues` = 0 returns the required value count, and also fills `outInfo` if the pair is valid.
+2. Allocate a buffer of that size and call again.
 
-샘플레이트는 44100 Hz 고정입니다. 길이는 `floor(seconds × 44100)` 프레임이고, 값 개수는 모노면 프레임 수, 밴드 분리면 9 × 프레임 수입니다. 밴드 분리 배치는 `values[band × bandStride + sample]`(`bandStride` = `frameCount`)입니다. 출력은 **정규화하지 않은** 절대 레벨이며 정규화 옵션은 없습니다. 지연 링 한계(`st_off_render_set_max_delay_seconds`, 기본 4 s)보다 늦게 도착하는 exact 경로는 빠집니다. 소스 EQ가 걸려 있으면 같은 필터가 적용됩니다. 같은 요청을 반복 렌더하면 비트 동일합니다. 다른 스레드에서 `st_off_ir_request_cancel`로 중단할 수 있습니다. 지원 여부는 `ST_CAP_OFFLINE_PRESSURE_IR`로 확인합니다. 스레드: `[control, blocking]` — 렌더가 호출 스레드에서 돌고, 이 컨텍스트의 다른 잡과 직렬화됩니다.
+The sample rate is fixed at 44100 Hz. The length is `floor(seconds × 44100)` frames; the value count is the frame count for mono, or 9 × the frame count for separate bands. The band-separated layout is `values[band × bandStride + sample]` (`bandStride` = `frameCount`). Output is absolute level, **not normalized**, and there is no normalization option. Exact paths arriving later than the delay ring limit (`st_off_render_set_max_delay_seconds`, default 4 s) are dropped. If a source EQ is set, the same filter is applied. Rendering the same request repeatedly is bit-identical. It can be stopped from another thread with `st_off_ir_request_cancel`. Check support with `ST_CAP_OFFLINE_PRESSURE_IR`. Thread: `[control, blocking]` — the render runs on the calling thread and is serialized with this context's other jobs.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `seconds` | IR 길이(초). 유한한 양수, 최소 1프레임 |
-| `options` | `st_off_ir_init_pressure_request`로 초기화한 요청. NULL 불가. 필드는 그 항목 참고 |
-| `outValues` | 결과를 받을 호출자 버퍼(float). NULL이면 크기 질의 |
-| `capacityValues` | `outValues`의 float 개수. 크기 질의면 0 |
-| `outInfo` | 결과 메타데이터. NULL 허용. 넘기면 호출자가 `structSize` = `sizeof(STOfflinePressureIRInfo)`, `apiVersion`을 채운다 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `source` | Source handle |
+| `seconds` | IR length (seconds). A finite positive value, at least 1 frame |
+| `options` | Request initialized with `st_off_ir_init_pressure_request`. Must not be NULL. See that entry for the fields |
+| `outValues` | Caller buffer (float) that receives the result. NULL = size query |
+| `capacityValues` | Number of floats in `outValues`. 0 for a size query |
+| `outInfo` | Result metadata. NULL allowed. If passed, the caller fills `structSize` = `sizeof(STOfflinePressureIRInfo)` and `apiVersion` |
 
-**구조체** `STOfflinePressureIRInfo`
+**Struct** `STOfflinePressureIRInfo`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize`, `apiVersion` | 호출자가 채우는 버전 스탬프 |
-| `cacheGeneration` | 렌더에 쓴 캐시 세대 |
-| `listenerId` | 리스너 ID |
-| `sourceId` | 소스 ID. 혼합 렌더는 `-1` |
+| `structSize`, `apiVersion` | Version stamp filled by the caller |
+| `cacheGeneration` | Cache generation used for the render |
+| `listenerId` | Listener ID |
+| `sourceId` | Source ID. `-1` for mixed renders |
 | `sampleRate` | 44100 |
-| `frameCount` | 프레임 수 |
-| `bandCount` | 1(광대역 모노) 또는 9(밴드 분리) |
-| `bandStride` | 밴드 간 간격 = `frameCount` |
-| `valueCount` | 전체 float 개수 = `frameCount × bandCount` |
-| `outputMode` | 실제로 쓴 `STPressureIROutput` |
-| `reverbSendTapCount` | 렌더에 들어간 송출 탭 수(혼합 렌더는 소스별 합) |
-| `outputMask`, `reverbSendMask` | 실제로 쓴 마스크 |
-| `sourceCount` | 렌더에 들어간 소스 수. 솔로 렌더는 1 |
-| `reserved[9]` | 예약 |
+| `frameCount` | Frame count |
+| `bandCount` | 1 (broadband mono) or 9 (separate bands) |
+| `bandStride` | Stride between bands = `frameCount` |
+| `valueCount` | Total float count = `frameCount × bandCount` |
+| `outputMode` | The `STPressureIROutput` actually used |
+| `reverbSendTapCount` | Number of send taps that went into the render (sum per source for mixed renders) |
+| `outputMask`, `reverbSendMask` | The masks actually used |
+| `sourceCount` | Number of sources that went into the render. 1 for a solo render |
+| `reserved[9]` | Reserved |
 
-**반환** — 쓴(또는 필요한) float 개수. 실패는 `0`: 캐시가 없으면 `ST_STATUS_UNAVAILABLE`, 요청·길이·마스크·스탬프가 잘못됐거나 크기 질의에서 쌍이 없으면 `ST_STATUS_INVALID_ARGUMENT`, 버퍼가 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`, 렌더 실패·취소는 `ST_STATUS_UNAVAILABLE`.
+**Returns** — The number of floats written (or required). Failure is `0`: no cache gives `ST_STATUS_UNAVAILABLE`; an invalid request, length, mask or stamp, or a missing pair in a size query, gives `ST_STATUS_INVALID_ARGUMENT`; a too-small buffer gives `ST_STATUS_BUFFER_TOO_SMALL`; render failure or cancellation gives `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_render_pressure_mixed</code> — 리스너 하나와 소스 여러 개를 한 번에 실어 합쳐진 압력 IR 하나를 렌더한다</summary>
+<summary><code>st_off_ir_render_pressure_mixed</code> — Renders one combined pressure IR for one listener and several sources at once</summary>
 
 ```c
 int st_off_ir_render_pressure_mixed(STOFF_Context* context, STListenerId listener, const STSourceId* sources, int32_t sourceCount, double seconds, const STOfflinePressureIRRequestOptions* options, float* outValues, int capacityValues, STOfflinePressureIRInfo* outInfo);
 ```
 
-**용도** — 같은 리스너에 대한 여러 소스의 RIR을 따로 렌더해 더하는 대신, 한 임펄스 렌더에 모두 실어 RIR 하나를 냅니다. 결과는 소스별 `st_off_ir_render_pressure` 결과의 합과 같습니다: exact 탭은 요청 순서대로 같은 출력에 누적되고, 송출은 리스너 쪽에 진폭(부호 포함) 그대로 누적돼 FDN이 한 번만 돕니다. FDN이 선형·시불변이라 late도 솔로 합처럼 결맞게 더해지면서 FDN 비용은 한 번입니다. 여러 음원이 동시에 울리는 장면의 RIR이 필요할 때 씁니다.
+**Purpose** — Instead of rendering the RIRs of several sources for the same listener separately and adding them, puts them all into one impulse render and produces a single RIR. The result equals the sum of the per-source `st_off_ir_render_pressure` results: exact taps accumulate into the same output in request order, and sends accumulate on the listener side with their amplitude (including sign) intact, so the FDN runs only once. Because the FDN is linear and time-invariant, the late part also adds coherently like the solo sum, while the FDN cost is paid once. Use it when you need the RIR of a scene where several sources sound at the same time.
 
-**언제·어떻게** — `st_off_ir_compute` 뒤에 부릅니다. 버퍼·크기 질의 규약, 길이·샘플레이트·정규화 없음은 `st_off_ir_render_pressure`와 같습니다. 그 리스너의 소스 일부만 넣어도 됩니다. 부동소수 합산 순서만 솔로 합과 달라 비트 동일은 아니며, 합산 순서는 `sources` 배열 순서입니다(소스 등록 순서와 무관). 같은 요청의 반복 렌더는 비트 동일하고, `sourceCount` = 1이면 솔로 렌더와 비트 동일합니다. 원시 IR 조회는 여전히 소스별입니다. 지원 여부는 `ST_CAP_OFFLINE_PRESSURE_RENDER_MIXED`로 확인합니다. 스레드: `[control, blocking]` — 렌더가 호출 스레드에서 돕니다.
+**When / how** — Call it after `st_off_ir_compute`. The buffer and size-query conventions, length, sample rate and lack of normalization are the same as `st_off_ir_render_pressure`. You may include only some of that listener's sources. Only the floating-point summation order differs from the solo sum, so it is not bit-identical; the summation order is the order of the `sources` array (independent of source registration order). Repeated renders of the same request are bit-identical, and with `sourceCount` = 1 it is bit-identical to a solo render. Raw IR queries remain per source. Check support with `ST_CAP_OFFLINE_PRESSURE_RENDER_MIXED`. Thread: `[control, blocking]` — the render runs on the calling thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `sources` | 소스 핸들 배열. 중복 없음, 전부 그 리스너의 canonical 쌍이어야 함 |
-| `sourceCount` | 소스 수. `1` 이상 `ST_OFFLINE_PRESSURE_MIXED_MAX_SOURCES`(1024) 이하 |
-| `seconds` | IR 길이(초). 유한한 양수, 최소 1프레임 |
-| `options` | `st_off_ir_init_pressure_request`로 초기화한 요청 |
-| `outValues` | 결과 버퍼. NULL이면 크기 질의 |
-| `capacityValues` | `outValues`의 float 개수. 크기 질의면 0 |
-| `outInfo` | 결과 메타데이터(`STOfflinePressureIRInfo`, 필드는 `st_off_ir_render_pressure` 항목 참고). NULL 허용. `sourceId` = -1, `sourceCount` = 소스 수, `reverbSendTapCount` = 소스별 합 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `sources` | Array of source handles. No duplicates; all must be canonical pairs of that listener |
+| `sourceCount` | Number of sources. At least `1` and at most `ST_OFFLINE_PRESSURE_MIXED_MAX_SOURCES` (1024) |
+| `seconds` | IR length (seconds). A finite positive value, at least 1 frame |
+| `options` | Request initialized with `st_off_ir_init_pressure_request` |
+| `outValues` | Result buffer. NULL = size query |
+| `capacityValues` | Number of floats in `outValues`. 0 for a size query |
+| `outInfo` | Result metadata (`STOfflinePressureIRInfo`; see `st_off_ir_render_pressure` for the fields). NULL allowed. `sourceId` = -1, `sourceCount` = number of sources, `reverbSendTapCount` = sum across sources |
 
-**반환** — 쓴(또는 필요한) float 개수. 실패는 `0`: 캐시가 없으면 `ST_STATUS_UNAVAILABLE`, 중복·미등록 소스·잘못된 요청은 `ST_STATUS_INVALID_ARGUMENT`, 버퍼가 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`, 렌더 실패·취소는 `ST_STATUS_UNAVAILABLE`.
+**Returns** — The number of floats written (or required). Failure is `0`: no cache gives `ST_STATUS_UNAVAILABLE`; duplicate or unregistered sources or an invalid request give `ST_STATUS_INVALID_ARGUMENT`; a too-small buffer gives `ST_STATUS_BUFFER_TOO_SMALL`; render failure or cancellation gives `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_init_binaural_request</code> — 바이노럴 IR 요청 구조체를 기본값으로 채운다</summary>
+<summary><code>st_off_ir_init_binaural_request</code> — Fills a binaural IR request struct with defaults</summary>
 
 ```c
 void st_off_ir_init_binaural_request(STOfflineBinauralIRRequestOptions* outOptions);
 ```
 
-**용도** — `STOfflineBinauralIRRequestOptions`의 버전 스탬프와 기본값을 채웁니다. `st_off_ir_render_binaural`과 `st_off_ir_render_audition_pair`에 넘기기 전에 항상 이 함수로 초기화합니다.
+**Purpose** — Fills the version stamp and defaults of `STOfflineBinauralIRRequestOptions`. Always initialize it with this function before passing it to `st_off_ir_render_binaural` or `st_off_ir_render_audition_pair`.
 
-**언제·어떻게** — 기본 `hrtfType`은 SADIE D2라 외부 자산 파일이 있어야 합니다(`st_off_render_set_spatializer` 항목의 탐색 순서 참고). 자산 없이 쓰려면 `hrtfType`을 `ST_SPATIALIZER_MIT_KEMAR`(1, 내장) 또는 `ST_SPATIALIZER_PANNING`(0)으로 바꿉니다. 스레드: `[any]` — 호출자 구조체만 채웁니다.
+**When / how** — The default `hrtfType` is SADIE D2, which requires the external asset file (see the search order in the `st_off_render_set_spatializer` entry). To use it without the asset, change `hrtfType` to `ST_SPATIALIZER_MIT_KEMAR` (1, built in) or `ST_SPATIALIZER_PANNING` (0). Thread: `[any]` — it only fills the caller's struct.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `outOptions` | 채울 구조체. NULL이면 아무것도 하지 않음 |
+| `outOptions` | Struct to fill. Does nothing if NULL |
 
-**구조체** `STOfflineBinauralIRRequestOptions`
+**Struct** `STOfflineBinauralIRRequestOptions`
 
-| 필드 | 기본값 | 설명 |
+| Field | Default | Description |
 |---|---|---|
-| `structSize` | `sizeof(STOfflineBinauralIRRequestOptions)` | 버전 스탬프 |
-| `apiVersion` | `st_off_get_api_version()` 값 | 버전 스탬프 |
-| `outputMask` | `ST_OFFLINE_OUTPUT_FULL` | 결과에 넣을 성분(`ST_OFFLINE_OUTPUT_*`, `st_off_ir_init_pressure_request` 항목과 같은 뜻) |
-| `reverbSendMask` | `ST_OFFLINE_REVERB_SEND_ALL` | late 탱크를 여기할 송출 탭(초기 경로 4비트) |
+| `structSize` | `sizeof(STOfflineBinauralIRRequestOptions)` | Version stamp |
+| `apiVersion` | Value of `st_off_get_api_version()` | Version stamp |
+| `outputMask` | `ST_OFFLINE_OUTPUT_FULL` | Components to include in the result (`ST_OFFLINE_OUTPUT_*`, same meaning as in the `st_off_ir_init_pressure_request` entry) |
+| `reverbSendMask` | `ST_OFFLINE_REVERB_SEND_ALL` | Send taps that excite the late tank (4 early-path bits) |
 | `hrtfType` | `ST_SPATIALIZER_SADIE_D2_KEMAR`(2) | `STSpatializerType` — `PANNING`(0) / `MIT_KEMAR`(1) / `SADIE_D2_KEMAR`(2) |
-| `reserved[10]` | 0 | 예약 |
+| `reserved[10]` | 0 | Reserved |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_render_binaural</code> — 리스너·소스 쌍 하나의 바이노럴(스테레오 L/R) IR을 렌더한다</summary>
+<summary><code>st_off_ir_render_binaural</code> — Renders the binaural (stereo L/R) IR of one listener/source pair</summary>
 
 ```c
 int st_off_ir_render_binaural(STOFF_Context* context, STListenerId listener, STSourceId source, double seconds, const STOfflineBinauralIRRequestOptions* options, float* outInterleavedLR, int capacityFrames, STOfflineBinauralIRInfo* outInfo);
 ```
 
-**용도** — canonical 캐시의 쌍 하나를 HRTF로 공간화한 2채널 임펄스 응답으로 렌더합니다. 헤드폰 청취용 BRIR을 얻거나 외부 컨볼버에 넣을 때 씁니다. 초기 반사 경로는 렌더 시점의 early 공간 모드를 따릅니다(`st_off_render_set_early_spatial_mode`).
+**Purpose** — Renders one pair from the canonical cache as a 2-channel impulse response spatialized with an HRTF. Use it to obtain a BRIR for headphone listening or to feed an external convolver. Early reflection paths follow the early spatial mode at render time (`st_off_render_set_early_spatial_mode`).
 
-**언제·어떻게** — `st_off_ir_compute` 뒤에 부르며, 크기 질의는 압력 IR과 같은 방식입니다(`outInterleavedLR` = NULL, `capacityFrames` = 0 → 필요한 프레임 수와 `outInfo`). `capacityFrames`는 float 개수가 아니라 **스테레오 프레임 수**이고, 버퍼는 L/R 인터리브(`[L0, R0, L1, R1, …]`)로 프레임 수 × 2개의 float를 담아야 합니다. 길이는 `floor(seconds × 44100)` 프레임, 샘플레이트는 44100 Hz 고정입니다. 리미터와 정규화는 언제나 꺼져 있습니다(정규화 옵션 없음). OBJECTS 모드에서는 경로 페이드와 Doppler도 고정으로 꺼지고, BED 모드는 동기 실시간 bed 경로라 경로 페이드·Doppler·게인 램프가 실시간 기본값으로 켜진 채 정상 상태에서 렌더됩니다(정지 장면에서는 결과에 영향이 없습니다). SADIE D2 자산이 없으면 크기 질의부터 실패합니다. 지원 여부는 `ST_CAP_OFFLINE_BINAURAL_IR`로 확인합니다. 스레드: `[control, blocking]` — 렌더가 호출 스레드에서 돕니다.
+**When / how** — Call it after `st_off_ir_compute`; size queries work as for pressure IRs (`outInterleavedLR` = NULL, `capacityFrames` = 0 → required frame count and `outInfo`). `capacityFrames` is the number of **stereo frames**, not floats, and the buffer must hold frame count × 2 floats, L/R interleaved (`[L0, R0, L1, R1, …]`). The length is `floor(seconds × 44100)` frames, and the sample rate is fixed at 44100 Hz. The limiter and normalization are always off (no normalization option). In OBJECTS mode, path fades and Doppler are also fixed off; BED mode is the synchronous real-time bed path, so it renders in steady state with path fades, Doppler and gain ramps on at their real-time defaults (no effect on the result in a static scene). If the SADIE D2 asset is missing, even the size query fails. Check support with `ST_CAP_OFFLINE_BINAURAL_IR`. Thread: `[control, blocking]` — the render runs on the calling thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `seconds` | IR 길이(초). 유한한 양수, 최소 1프레임 |
-| `options` | `st_off_ir_init_binaural_request`로 초기화한 요청. NULL 불가 |
-| `outInterleavedLR` | L/R 인터리브 결과 버퍼. NULL이면 크기 질의 |
-| `capacityFrames` | 버퍼의 **스테레오 프레임** 수. 크기 질의면 0 |
-| `outInfo` | 결과 메타데이터. NULL 허용. 넘기면 호출자가 `structSize` = `sizeof(STOfflineBinauralIRInfo)`, `apiVersion`을 채운다 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `source` | Source handle |
+| `seconds` | IR length (seconds). A finite positive value, at least 1 frame |
+| `options` | Request initialized with `st_off_ir_init_binaural_request`. Must not be NULL |
+| `outInterleavedLR` | L/R interleaved result buffer. NULL = size query |
+| `capacityFrames` | Number of **stereo frames** in the buffer. 0 for a size query |
+| `outInfo` | Result metadata. NULL allowed. If passed, the caller fills `structSize` = `sizeof(STOfflineBinauralIRInfo)` and `apiVersion` |
 
-**구조체** `STOfflineBinauralIRInfo`
+**Struct** `STOfflineBinauralIRInfo`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize`, `apiVersion` | 호출자가 채우는 버전 스탬프 |
-| `cacheGeneration` | 렌더에 쓴 캐시 세대 |
-| `listenerId`, `sourceId` | 쌍의 ID |
+| `structSize`, `apiVersion` | Version stamp filled by the caller |
+| `cacheGeneration` | Cache generation used for the render |
+| `listenerId`, `sourceId` | IDs of the pair |
 | `sampleRate` | 44100 |
-| `frameCount` | 스테레오 프레임 수 |
-| `channelCount` | 2 고정 |
-| `valueCount` | float 개수 = `frameCount × 2` |
-| `reverbSendTapCount` | 렌더에 들어간 송출 탭 수 |
-| `outputMask`, `reverbSendMask` | 실제로 쓴 마스크 |
-| `hrtfType` | 실제로 쓴 `STSpatializerType` |
-| `earlySpatialMode` | 실제로 쓴 `STEarlySpatialMode`(지원 여부 `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE`) |
-| `reserved[9]` | 예약 |
+| `frameCount` | Number of stereo frames |
+| `channelCount` | Always 2 |
+| `valueCount` | Float count = `frameCount × 2` |
+| `reverbSendTapCount` | Number of send taps that went into the render |
+| `outputMask`, `reverbSendMask` | The masks actually used |
+| `hrtfType` | The `STSpatializerType` actually used |
+| `earlySpatialMode` | The `STEarlySpatialMode` actually used (support: `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE`) |
+| `reserved[9]` | Reserved |
 
-**반환** — 쓴(또는 필요한) 스테레오 프레임 수. 실패는 `0`: 캐시가 없거나 SADIE D2 자산이 없거나 BED 모드인데 캐시에 bed 변형이 없으면 `ST_STATUS_UNAVAILABLE`, 요청·스탬프가 잘못됐거나 크기 질의에서 쌍이 없으면 `ST_STATUS_INVALID_ARGUMENT`, 버퍼가 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`, 렌더 실패·취소는 `ST_STATUS_UNAVAILABLE`.
+**Returns** — The number of stereo frames written (or required). Failure is `0`: no cache, a missing SADIE D2 asset, or BED mode with no bed variant in the cache gives `ST_STATUS_UNAVAILABLE`; an invalid request or stamp, or a missing pair in a size query, gives `ST_STATUS_INVALID_ARGUMENT`; a too-small buffer gives `ST_STATUS_BUFFER_TOO_SMALL`; render failure or cancellation gives `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_ir_render_audition_pair</code> — 드라이 신호를 고정 RIR 컨볼루션과 엔진 렌더 단계로 각각 렌더해 한 쌍으로 돌려준다</summary>
+<summary><code>st_off_ir_render_audition_pair</code> — Renders a dry signal through fixed-RIR convolution and through the engine render stage, returning both as a pair</summary>
 
 ```c
 int st_off_ir_render_audition_pair(STOFF_Context* context, STListenerId listener, STSourceId source, double irSeconds, const STOfflineBinauralIRRequestOptions* options, const float* dryMono, int dryFrames, float* outConvolvedLR, float* outStageLR, int capacityFrames, STOFF_AuditionInfo* outInfo);
 ```
 
-**용도** — 같은 canonical 쌍에서 두 가지 청취 결과를 만듭니다: (1) 바이노럴 IR을 고정 RIR로 렌더해 드라이 신호와 컨볼루션한 결과, (2) 같은 쌍을 엔진의 렌더 단계(실시간 렌더와 공유하는 단계)에 두고 드라이 신호를 직접 통과시킨 결과. 두 결과를 나란히 들어 보거나 비교해, 추출한 IR이 엔진이 실제로 내는 소리를 얼마나 대표하는지 확인할 때 씁니다.
+**Purpose** — Produces two listening results from the same canonical pair: (1) the dry signal convolved with the binaural IR rendered as a fixed RIR, and (2) the dry signal passed directly through the engine's render stage (the stage shared with real-time rendering) with the same pair installed. Listen to or compare the two side by side to check how well the extracted IR represents the sound the engine actually produces.
 
-**언제·어떻게** — `st_off_ir_compute` 뒤에 부릅니다. 두 출력 버퍼는 모두 L/R 인터리브 스테레오 프레임이고, 둘 다 넘기거나 둘 다 NULL이어야 합니다. 둘 다 NULL이면 `capacityFrames`는 0이어야 하고 `dryMono`도 NULL이어도 되며, `dryFrames`로 크기만 계산하는 메타데이터 질의가 됩니다. 출력 길이는 `dryFrames + irFrames − 1` 프레임(`irFrames` = `floor(irSeconds × 44100)`)이고, 각 버퍼는 그 프레임 수 × 2개의 float를 담아야 합니다. 공간화기·마스크·early 공간 모드·리미터/정규화 꺼짐 규칙은 `st_off_ir_render_binaural`과 같습니다. 스레드: `[control, blocking]` — 렌더가 호출 스레드에서 돕니다.
+**When / how** — Call it after `st_off_ir_compute`. Both output buffers are L/R interleaved stereo frames; pass both or leave both NULL. If both are NULL, `capacityFrames` must be 0 and `dryMono` may also be NULL, making it a metadata query that only computes sizes from `dryFrames`. The output length is `dryFrames + irFrames − 1` frames (`irFrames` = `floor(irSeconds × 44100)`), and each buffer must hold that frame count × 2 floats. The rules for the spatializer, masks, early spatial mode and limiter/normalization off are the same as `st_off_ir_render_binaural`. Thread: `[control, blocking]` — the render runs on the calling thread.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `irSeconds` | 컨볼루션에 쓸 IR 길이(초). 유한한 양수, 최소 1프레임 |
-| `options` | `st_off_ir_init_binaural_request`로 초기화한 요청(`STOfflineBinauralIRRequestOptions`, 필드는 그 항목 참고) |
-| `dryMono` | 44.1 kHz 모노 드라이 신호. 렌더할 때 필수, 크기 질의면 NULL 허용 |
-| `dryFrames` | 드라이 신호 프레임 수. 1 이상(크기 질의에도 필요) |
-| `outConvolvedLR` | 고정 RIR 컨볼루션 결과(L/R 인터리브). `outStageLR`와 함께 NULL이면 크기 질의 |
-| `outStageLR` | 엔진 렌더 단계 결과(L/R 인터리브) |
-| `capacityFrames` | 각 버퍼의 스테레오 프레임 수. 크기 질의면 0 |
-| `outInfo` | 결과 메타데이터. NULL 허용. 넘기면 호출자가 `structSize` = `sizeof(STOFF_AuditionInfo)`, `apiVersion`을 채운다 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `source` | Source handle |
+| `irSeconds` | IR length used for the convolution (seconds). A finite positive value, at least 1 frame |
+| `options` | Request initialized with `st_off_ir_init_binaural_request` (`STOfflineBinauralIRRequestOptions`; see that entry for the fields) |
+| `dryMono` | 44.1 kHz mono dry signal. Required when rendering; NULL allowed for a size query |
+| `dryFrames` | Number of dry signal frames. At least 1 (also required for a size query) |
+| `outConvolvedLR` | Fixed-RIR convolution result (L/R interleaved). NULL together with `outStageLR` = size query |
+| `outStageLR` | Engine render stage result (L/R interleaved) |
+| `capacityFrames` | Number of stereo frames in each buffer. 0 for a size query |
+| `outInfo` | Result metadata. NULL allowed. If passed, the caller fills `structSize` = `sizeof(STOFF_AuditionInfo)` and `apiVersion` |
 
-**구조체** `STOFF_AuditionInfo`
+**Struct** `STOFF_AuditionInfo`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize`, `apiVersion` | 호출자가 채우는 버전 스탬프 |
-| `cacheGeneration` | 렌더에 쓴 캐시 세대 |
-| `listenerId`, `sourceId` | 쌍의 ID |
+| `structSize`, `apiVersion` | Version stamp filled by the caller |
+| `cacheGeneration` | Cache generation used for the render |
+| `listenerId`, `sourceId` | IDs of the pair |
 | `sampleRate` | 44100 |
-| `frameCount` | 출력 스테레오 프레임 수 = `dryFrameCount + irFrameCount − 1` |
-| `dryFrameCount` | 드라이 신호 프레임 수 |
-| `irFrameCount` | IR 프레임 수 |
-| `earlySpatialMode` | 실제로 쓴 `STEarlySpatialMode` |
-| `reserved[7]` | 예약 |
+| `frameCount` | Number of output stereo frames = `dryFrameCount + irFrameCount − 1` |
+| `dryFrameCount` | Number of dry signal frames |
+| `irFrameCount` | Number of IR frames |
+| `earlySpatialMode` | The `STEarlySpatialMode` actually used |
+| `reserved[7]` | Reserved |
 
-**반환** — 출력 스테레오 프레임 수. 실패는 `0`: 캐시가 없거나 SADIE D2 자산이 없거나 BED 모드인데 bed 변형이 없으면 `ST_STATUS_UNAVAILABLE`, 버퍼 한쪽만 NULL·`dryFrames` 0 이하·잘못된 요청은 `ST_STATUS_INVALID_ARGUMENT`, 버퍼가 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`, 렌더 실패·취소는 `ST_STATUS_UNAVAILABLE`.
+**Returns** — The number of output stereo frames. Failure is `0`: no cache, a missing SADIE D2 asset, or BED mode with no bed variant gives `ST_STATUS_UNAVAILABLE`; only one buffer NULL, `dryFrames` of 0 or less, or an invalid request gives `ST_STATUS_INVALID_ARGUMENT`; a too-small buffer gives `ST_STATUS_BUFFER_TOO_SMALL`; render failure or cancellation gives `ST_STATUS_UNAVAILABLE`.
 
 </details>
 
 <details>
-<summary><code>st_off_debug_get_snapshot_info</code> — 리스너의 마지막 계산 세대에 대한 진단 스냅샷 요약(경로 수·시각화 버퍼 크기)을 읽는다</summary>
+<summary><code>st_off_debug_get_snapshot_info</code> — Reads the diagnostic snapshot summary (path counts, visualization buffer sizes) for a listener's last computed generation</summary>
 
 ```c
 int st_off_debug_get_snapshot_info(STOFF_Context* context, STListenerId listener, STPropagationSnapshotInfo* outInfo);
 ```
 
-**용도** — 마지막 `st_off_ir_compute`가 그 리스너에 대해 발행한 진단 스냅샷의 요약을 돌려줍니다. 전체·반사·회절 경로 수와 회절 분류 카운터, 시각화 경로·점 개수가 모두 **한 세대에서 온 값**임이 `frameGeneration`으로 보장됩니다. 경로 수 확인과 `st_off_debug_copy_visual_paths` 버퍼 크기 결정에 씁니다.
+**Purpose** — Returns the summary of the diagnostic snapshot that the last `st_off_ir_compute` published for that listener. `frameGeneration` guarantees that the total, reflection and diffraction path counts, the diffraction classification counters and the visualization path and point counts **all come from one generation**. Use it to check path counts and to size buffers for `st_off_debug_copy_visual_paths`.
 
-**언제·어떻게** — 스냅샷은 `st_off_ir_compute`가 발행하므로 그 전에는 0을 돌려줍니다. 시각화 경로·점을 받으려면 compute 전에 `st_off_debug_set_collect_visual_paths`로 수집을 켜 둡니다. 돌려받은 `frameGeneration`을 `st_off_debug_copy_visual_paths`에 그대로 넘기면 같은 세대를 복사하는지 검사할 수 있습니다. 스레드: `[control]` — 잡·시각화 뮤텍스를 잡습니다.
+**When / how** — The snapshot is published by `st_off_ir_compute`, so it returns 0 before that. To receive visualization paths and points, enable collection with `st_off_debug_set_collect_visual_paths` before computing. Passing the returned `frameGeneration` as is to `st_off_debug_copy_visual_paths` lets you check that you copy the same generation. Thread: `[control]` — takes the job and visualization mutexes.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `outInfo` | 결과 구조체. 호출자가 `structSize` = `sizeof(STPropagationSnapshotInfo)`, `apiVersion`을 채운다 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `outInfo` | Result struct. The caller fills `structSize` = `sizeof(STPropagationSnapshotInfo)` and `apiVersion` |
 
-**구조체** `STPropagationSnapshotInfo`
+**Struct** `STPropagationSnapshotInfo`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize`, `apiVersion` | 호출자가 채우는 버전 스탬프 |
-| `frameGeneration` | 이 스냅샷의 세대(오프라인은 IR 캐시 세대) |
-| `collectionMask` | 이 세대를 수집할 때의 `STPathCollectionFlag` 마스크 |
-| `reserved0` | 예약 |
-| `visualPathCount` | 전체 시각화 경로 레코드 수(실패 walk 포함, `ST_VISUAL_PATH_COPY_ALL`의 필요 개수) |
-| `validVisualPathCount` | 완주 경로 레코드 수(`ST_VISUAL_PATH_COPY_VALID_ONLY`의 필요 개수) |
-| `visualPointCount` | 전체 시각화 점 수 |
-| `validVisualPointCount` | 완주 경로의 점 수 |
-| `totalPathCount` | 전체 경로 수 |
-| `reflectionPathCount` | 반사 경로 수 |
-| `diffractionPathCount` | 회절 경로 수 |
-| `sourceSideOnlyPaths` | 소스 쪽 엣지에서만 회절한 경로 수 |
-| `unclassifiedPaths` | 분류되지 않은 회절 경로 수 |
-| `sourceSideEvents` | 소스 쪽 회절 사건 수 |
-| `terminalOnlyPaths` | 리스너 쪽 말단 엣지에서만 회절한 경로 수 |
-| `sourceAndTerminalPaths` | 양쪽 모두에서 회절한 경로 수 |
-| `terminalEvents` | 리스너 쪽 말단 회절 사건 수 |
-| `reserved[4]` | 예약 |
+| `structSize`, `apiVersion` | Version stamp filled by the caller |
+| `frameGeneration` | Generation of this snapshot (the IR cache generation, offline) |
+| `collectionMask` | The `STPathCollectionFlag` mask used when this generation was collected |
+| `reserved0` | Reserved |
+| `visualPathCount` | Total number of visualization path records (including failed walks; required count for `ST_VISUAL_PATH_COPY_ALL`) |
+| `validVisualPathCount` | Number of completed path records (required count for `ST_VISUAL_PATH_COPY_VALID_ONLY`) |
+| `visualPointCount` | Total number of visualization points |
+| `validVisualPointCount` | Number of points of completed paths |
+| `totalPathCount` | Total number of paths |
+| `reflectionPathCount` | Number of reflection paths |
+| `diffractionPathCount` | Number of diffraction paths |
+| `sourceSideOnlyPaths` | Number of paths diffracted only at source-side edges |
+| `unclassifiedPaths` | Number of unclassified diffraction paths |
+| `sourceSideEvents` | Number of source-side diffraction events |
+| `terminalOnlyPaths` | Number of paths diffracted only at listener-side terminal edges |
+| `sourceAndTerminalPaths` | Number of paths diffracted on both sides |
+| `terminalEvents` | Number of listener-side terminal diffraction events |
+| `reserved[4]` | Reserved |
 
-완주 경로와 그 점은 각 배열의 앞부분(prefix)을 차지합니다.
+Completed paths and their points occupy the front (prefix) of each array.
 
-**반환** — `1` = 성공 / `0` = 실패 또는 스냅샷 없음(compute 전, 그 리스너 없음, `outInfo` NULL·스탬프 불일치).
+**Returns** — `1` = success / `0` = failure or no snapshot (before a compute, no such listener, `outInfo` NULL or stamp mismatch).
 
 </details>
 
 <details>
-<summary><code>st_off_debug_copy_visual_paths</code> — 시각화 경로 레코드와 점을 호출자 버퍼로 복사한다</summary>
+<summary><code>st_off_debug_copy_visual_paths</code> — Copies visualization path records and points into caller buffers</summary>
 
 ```c
 int st_off_debug_copy_visual_paths(STOFF_Context* context, STListenerId listener, uint64_t frameGeneration, int copyMode, STVisualPathRecord* outPaths, uint32_t pathCapacity, STVisualPoint* outPoints, uint32_t pointCapacity);
 ```
 
-**용도** — 마지막 계산 세대의 시각화 경로(소스 → 상호작용 지점 → 리스너, 가이드 레이는 리스너 → 적중점)를 레코드 배열과 점 배열로 복사해 3D 뷰에 그릴 수 있게 합니다. 정점 좌표는 씬 단위 그대로라 호스트 씬에 바로 겹쳐 그릴 수 있습니다.
+**Purpose** — Copies the visualization paths of the last computed generation (source → interaction points → listener; guide rays are listener → hit point) into a record array and a point array so they can be drawn in a 3D view. Vertex coordinates are in scene units as is, so they can be overlaid directly on the host scene.
 
-**언제·어떻게** — `st_off_debug_get_snapshot_info`로 개수를 얻어 버퍼를 잡은 뒤 부릅니다. 크기 질의 모드는 없습니다 — 용량이 필요한 개수보다 작으면 실패합니다. `frameGeneration`에 `st_off_debug_get_snapshot_info`가 돌려준 값을 넣으면, 그 사이 새 세대가 발행됐을 때 실패합니다. 0을 넣으면 세대 검사 없이 현재 스냅샷을 복사합니다. 레코드 `i`의 점은 `outPoints[pointOffset .. pointOffset + pointCount)`입니다. 스레드: `[control]` — 잡·시각화 뮤텍스를 잡습니다.
+**When / how** — Get the counts with `st_off_debug_get_snapshot_info`, allocate buffers, then call it. There is no size-query mode — it fails if a capacity is smaller than the required count. Passing the value returned by `st_off_debug_get_snapshot_info` as `frameGeneration` makes it fail if a new generation was published in between. Passing 0 copies the current snapshot without a generation check. The points of record `i` are `outPoints[pointOffset .. pointOffset + pointCount)`. Thread: `[control]` — takes the job and visualization mutexes.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `frameGeneration` | 기대하는 세대(`st_off_debug_get_snapshot_info`의 값). 0 = 검사 없이 현재 스냅샷 |
-| `copyMode` | `STVisualPathCopyMode` — `ST_VISUAL_PATH_COPY_VALID_ONLY`(0, 완주 경로만) / `ST_VISUAL_PATH_COPY_ALL`(1, 실패 walk 포함). 그 밖의 값은 거절 |
-| `outPaths` | 경로 레코드 버퍼. 복사할 경로가 있으면 NULL 불가 |
-| `pathCapacity` | `outPaths` 원소 수. 모드에 맞는 경로 수 이상 |
-| `outPoints` | 점 버퍼. 복사할 점이 있으면 NULL 불가 |
-| `pointCapacity` | `outPoints` 원소 수. 모드에 맞는 점 수 이상 |
+| `context` | Offline context handle |
+| `listener` | Listener handle |
+| `frameGeneration` | Expected generation (the value from `st_off_debug_get_snapshot_info`). 0 = current snapshot without a check |
+| `copyMode` | `STVisualPathCopyMode` — `ST_VISUAL_PATH_COPY_VALID_ONLY` (0, completed paths only) / `ST_VISUAL_PATH_COPY_ALL` (1, including failed walks). Other values are rejected |
+| `outPaths` | Path record buffer. Must not be NULL if there are paths to copy |
+| `pathCapacity` | Number of elements in `outPaths`. At least the path count for the mode |
+| `outPoints` | Point buffer. Must not be NULL if there are points to copy |
+| `pointCapacity` | Number of elements in `outPoints`. At least the point count for the mode |
 
-**구조체** `STVisualPathRecord`
+**Struct** `STVisualPathRecord`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `pointOffset`, `pointCount` | 이 경로의 점이 점 배열에서 차지하는 구간(순서 있는 경로) |
-| `depth` | 상호작용 차수 |
-| `pathKind` | `STPathKind` — `ST_PATH_GUIDE_RAY`(0) / `ST_PATH_DIRECT`(1, 투과 포함) / `ST_PATH_REFLECTION`(2) / `ST_PATH_DIFFRACTION_S`(4, 소스 쪽 엣지) / `ST_PATH_DIFFRACTION_L`(8, 리스너 쪽 말단 엣지) / `ST_PATH_DIFFRACTION_SL`(12) / `ST_PATH_SOURCE_TRANSPORT_RAY`(16). `ST_PATH_DIFFRACTION_UNKNOWN`(3)은 정상적으로는 나오지 않는다 |
-| `soundSourceIndex` | 소스 인덱스. 가이드 레이는 -1 |
-| `valid` | 1 = 완주 / 0 = 중도 실패 walk |
-| `totalLengthMeters` | 경로 전체 길이(m, `sceneRatio` 반영) |
-| `reserved0` | 예약 |
+| `pointOffset`, `pointCount` | Range this path's points occupy in the point array (ordered path) |
+| `depth` | Interaction order |
+| `pathKind` | `STPathKind` — `ST_PATH_GUIDE_RAY` (0) / `ST_PATH_DIRECT` (1, includes transmission) / `ST_PATH_REFLECTION` (2) / `ST_PATH_DIFFRACTION_S` (4, source-side edge) / `ST_PATH_DIFFRACTION_L` (8, listener-side terminal edge) / `ST_PATH_DIFFRACTION_SL` (12) / `ST_PATH_SOURCE_TRANSPORT_RAY` (16). `ST_PATH_DIFFRACTION_UNKNOWN` (3) does not occur normally |
+| `soundSourceIndex` | Source index. -1 for guide rays |
+| `valid` | 1 = completed / 0 = walk that failed midway |
+| `totalLengthMeters` | Total path length (m, `sceneRatio` applied) |
+| `reserved0` | Reserved |
 
-**구조체** `STVisualPoint`
+**Struct** `STVisualPoint`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `x`, `y`, `z` | 정점 좌표(씬 단위 그대로) |
-| `flags` | `STVisualPointFlag` — `ST_VISUAL_POINT_NONE`(0) / `ST_VISUAL_POINT_DIFFRACTION`(1, 회절 지점) |
+| `x`, `y`, `z` | Vertex coordinates (scene units as is) |
+| `flags` | `STVisualPointFlag` — `ST_VISUAL_POINT_NONE` (0) / `ST_VISUAL_POINT_DIFFRACTION` (1, diffraction point) |
 
-**반환** — `1` = 성공 / `0` = 실패. `copyMode`가 잘못됐거나 필요한 버퍼가 NULL이면 `ST_STATUS_INVALID_ARGUMENT`, 스냅샷이 없거나 세대가 바뀌었으면 `ST_STATUS_UNAVAILABLE`, 용량이 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`.
+**Returns** — `1` = success / `0` = failure. An invalid `copyMode` or a NULL required buffer gives `ST_STATUS_INVALID_ARGUMENT`; no snapshot or a changed generation gives `ST_STATUS_UNAVAILABLE`; insufficient capacity gives `ST_STATUS_BUFFER_TOO_SMALL`.
 
 </details>
 
 <details>
-<summary><code>st_off_debug_copy_mesh_accel_nodes</code> — 메시 BLAS의 노드 박스를 시각화용으로 복사한다</summary>
+<summary><code>st_off_debug_copy_mesh_accel_nodes</code> — Copies the node boxes of a mesh BLAS for visualization</summary>
 
 ```c
 int st_off_debug_copy_mesh_accel_nodes(STOFF_Context* context, STMeshId mesh, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 전파가 쓰는 메시 가속구조(BLAS)의 노드 경계 상자를 읽기 전용으로 복사합니다. 가속구조가 메시를 어떻게 나눴는지 디버그 시각화할 때 씁니다. 실시간 `st_rt_debug_copy_mesh_accel_nodes`와 같은 계약이며, 오프라인 컨텍스트도 실시간과 같은 경계 설정으로 BLAS를 지으므로 같은 가속구조 종류면 결과가 같습니다.
+**Purpose** — Copies, read-only, the node bounding boxes of the mesh acceleration structure (BLAS) used by propagation. Use it for debug visualization of how the acceleration structure partitioned a mesh. Same contract as the real-time `st_rt_debug_copy_mesh_accel_nodes`; the offline context builds BLASes with the same bounds settings as real time, so the results match for the same acceleration structure type.
 
-**언제·어떻게** — 메시를 만든 뒤 언제든 부를 수 있습니다. BLAS는 메시 생성 시점의 `st_off_scene_set_accel` 값으로 지어집니다. 노드는 깊이 우선 **전위** 순서이고 루트가 `[0]`(depth 0)이며, 각 노드의 부모는 배열 앞쪽에서 가장 가까운 depth − 1 노드입니다. 좌표는 `st_off_mesh_create`에 넘긴 정점 프레임(메시 로컬)이라 인스턴스로 그리려면 호스트가 오브젝트 변환을 곱합니다. 큰 메시는 수천 노드라 보통 `maxDepth`로 윗단만 봅니다. 버퍼가 모자라면 전위 순서의 앞부분(맨 왼쪽 가지부터)만 쓰이므로, 윗단을 원하면 `maxDepth`로 자릅니다. 지원 여부는 `ST_CAP_ACCEL_DEBUG_NODES`로 확인합니다. 스레드: `[control]` — 씬 read 락만 잡습니다.
+**When / how** — Can be called any time after the mesh is created. The BLAS is built with the `st_off_scene_set_accel` value at mesh creation time. Nodes are in depth-first **pre-order** with the root at `[0]` (depth 0), and each node's parent is the nearest depth − 1 node earlier in the array. Coordinates are in the vertex frame passed to `st_off_mesh_create` (mesh local), so to draw an instance the host multiplies by the object transform. Large meshes have thousands of nodes, so you usually look only at the upper levels with `maxDepth`. If the buffer is too small only the front of the pre-order (starting from the leftmost branch) is written, so to get the upper levels, cut with `maxDepth`. Check support with `ST_CAP_ACCEL_DEBUG_NODES`. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `mesh` | 메시 핸들 |
-| `maxDepth` | 음수 = 전 깊이. 0 이상이면 depth가 `maxDepth` 이하인 노드만 센다·쓴다 |
-| `outNodes` | 노드 버퍼. NULL이면 크기 질의(`nodeCapacity` 무시) |
-| `nodeCapacity` | `outNodes` 원소 수. 앞에서부터 min(전체, `nodeCapacity`)개를 쓴다 |
+| `context` | Offline context handle |
+| `mesh` | Mesh handle |
+| `maxDepth` | Negative = all depths. If 0 or more, only nodes with depth up to `maxDepth` are counted and written |
+| `outNodes` | Node buffer. NULL = size query (`nodeCapacity` ignored) |
+| `nodeCapacity` | Number of elements in `outNodes`. Writes min(total, `nodeCapacity`) nodes from the front |
 
-**구조체** `STAccelNode` (32바이트, 버전 스탬프 없는 배열 원소)
+**Struct** `STAccelNode` (32 bytes, array element without a version stamp)
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `boundsMin[3]`, `boundsMax[3]` | 노드 경계 상자(그 가속구조가 지어진 프레임, `sceneRatio` 변환 없음) |
-| `depth` | 깊이. 루트 = 0 |
-| `primitiveCount` | 리프: 담긴 프리미티브 수(0 이상) / 내부 노드: -1 |
+| `boundsMin[3]`, `boundsMax[3]` | Node bounding box (in the frame the acceleration structure was built in, no `sceneRatio` conversion) |
+| `depth` | Depth. Root = 0 |
+| `primitiveCount` | Leaf: number of contained primitives (0 or more) / internal node: -1 |
 
-가속구조 종류별 의미: BVH 계열(0 BinnedSAH, 2 TinyBVH, 3 LBVH, 4 LBVH_Simd)은 빌드된 이진 트리이고, 4/8-wide 순회 표현은 이 트리를 접은 것이라 그 박스들은 이 목록의 부분집합입니다. KD(1 HybridKD)는 루트 박스를 분할 평면으로 잘라 유도한 박스라 형제 박스가 겹치지 않고 부모를 정확히 나누며, 빈 리프(`primitiveCount` 0)가 있고 여러 리프에 걸친 삼각형은 리프마다 셉니다.
+Meaning per acceleration structure type: the BVH family (0 BinnedSAH, 2 TinyBVH, 3 LBVH, 4 LBVH_Simd) is the built binary tree, and the 4/8-wide traversal representation collapses this tree, so its boxes are a subset of this list. KD (1 HybridKD) boxes are derived by cutting the root box with split planes, so sibling boxes do not overlap and exactly partition the parent; there are empty leaves (`primitiveCount` 0), and a triangle spanning several leaves is counted in each leaf.
 
-**반환** — `maxDepth` 안의 **전체** 노드 수(0 이상) / `-1` = 실패(`context` NULL, 없는 메시는 `ST_STATUS_NOT_FOUND`). 잘린 복사는 전체 수를 그대로 돌려주고 `ST_STATUS_BUFFER_TOO_SMALL`을 남깁니다.
+**Returns** — The **total** number of nodes within `maxDepth` (0 or more) / `-1` = failure (`context` NULL; an unknown mesh gives `ST_STATUS_NOT_FOUND`). A truncated copy still returns the total count and records `ST_STATUS_BUFFER_TOO_SMALL`.
 
 </details>
 
 <details>
-<summary><code>st_off_debug_copy_scene_accel_nodes</code> — 씬 TLAS(오브젝트 인스턴스 가속구조)의 노드 박스를 복사한다</summary>
+<summary><code>st_off_debug_copy_scene_accel_nodes</code> — Copies the node boxes of the scene TLAS (object instance acceleration structure)</summary>
 
 ```c
 int st_off_debug_copy_scene_accel_nodes(STOFF_Context* context, int layer, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 오브젝트 인스턴스 위에 지은 씬 가속구조(TLAS)의 노드 경계 상자를 복사합니다. 씬 전체의 공간 분할을 시각화할 때 씁니다. 실시간 `st_rt_debug_copy_scene_accel_nodes`와 같은 계약입니다.
+**Purpose** — Copies the node bounding boxes of the scene acceleration structure (TLAS) built over object instances. Use it to visualize the spatial partitioning of the whole scene. Same contract as the real-time `st_rt_debug_copy_scene_accel_nodes`.
 
-**언제·어떻게** — 정적 TLAS는 `st_off_build`가 발행한 것이며, 다음 빌드 전까지는 지난 발행본 그대로입니다(스테이징된 정적 변경은 보이지 않습니다). 동적 TLAS는 동적 오브젝트 재구축이 다시 발행합니다. 좌표는 씬(월드) 프레임이고, TLAS 리프의 프리미티브는 삼각형이 아니라 오브젝트 인스턴스입니다. 노드 순서·`maxDepth`·크기 질의·잘림 규약과 `STAccelNode` 필드는 `st_off_debug_copy_mesh_accel_nodes` 항목과 같습니다. 지원 여부는 `ST_CAP_ACCEL_DEBUG_NODES`. 스레드: `[control]` — 씬 read 락만 잡습니다.
+**When / how** — The static TLAS is the one published by `st_off_build` and stays the last published version until the next build (staged static changes are not visible). The dynamic TLAS is republished by dynamic object rebuilds. Coordinates are in the scene (world) frame, and the primitives of TLAS leaves are object instances, not triangles. Node order, `maxDepth`, size-query and truncation conventions and the `STAccelNode` fields are the same as in the `st_off_debug_copy_mesh_accel_nodes` entry. Support is indicated by `ST_CAP_ACCEL_DEBUG_NODES`. Thread: `[control]` — takes only the scene read lock.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `layer` | `STAccelLayer` — `ST_ACCEL_LAYER_STATIC`(0, `st_off_build`가 발행한 정적 TLAS) / `ST_ACCEL_LAYER_DYNAMIC`(1, 동적 오브젝트 TLAS) |
-| `maxDepth` | 음수 = 전 깊이. 0 이상이면 그 깊이까지만 |
-| `outNodes` | 노드 버퍼. NULL이면 크기 질의 |
-| `nodeCapacity` | `outNodes` 원소 수 |
+| `context` | Offline context handle |
+| `layer` | `STAccelLayer` — `ST_ACCEL_LAYER_STATIC` (0, static TLAS published by `st_off_build`) / `ST_ACCEL_LAYER_DYNAMIC` (1, dynamic object TLAS) |
+| `maxDepth` | Negative = all depths. If 0 or more, only up to that depth |
+| `outNodes` | Node buffer. NULL = size query |
+| `nodeCapacity` | Number of elements in `outNodes` |
 
-**반환** — `maxDepth` 안의 전체 노드 수(0 이상). 그 TLAS가 아직 없으면(빌드 전, 해당 종류 오브젝트 없음) 오류가 아니라 `0`. `-1` = 실패(`context` NULL, `layer` 범위 밖은 `ST_STATUS_INVALID_ARGUMENT`).
+**Returns** — The total number of nodes within `maxDepth` (0 or more). If that TLAS does not exist yet (before a build, no objects of that kind), `0` rather than an error. `-1` = failure (`context` NULL; `layer` out of range gives `ST_STATUS_INVALID_ARGUMENT`).
 
 </details>
 
 <details>
-<summary><code>st_off_debug_build_mesh_accel_nodes</code> — 컨텍스트 없이 메시 하나의 BLAS를 지어 노드 박스를 돌려준다</summary>
+<summary><code>st_off_debug_build_mesh_accel_nodes</code> — Builds the BLAS of a single mesh without a context and returns its node boxes</summary>
 
 ```c
 int st_off_debug_build_mesh_accel_nodes(const STMesh* mesh, int accelKind, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 씬이나 컨텍스트를 만들기 전에, 메시 하나에 대해 가속구조가 어떻게 지어질지 미리 볼 수 있게 합니다(호스트 에디터 미리보기 등). 메시 생성과 같은 입력 검증·같은 빌드 경로라 같은 `accelKind`면 컨텍스트가 짓는 BLAS와 같은 트리입니다. 실시간 `st_rt_debug_build_mesh_accel_nodes`와 결과가 같습니다.
+**Purpose** — Lets you preview how the acceleration structure will be built for one mesh before creating a scene or context (host editor previews, etc.). It uses the same input validation and build path as mesh creation, so for the same `accelKind` it is the same tree as the BLAS a context builds. Results match the real-time `st_rt_debug_build_mesh_accel_nodes`.
 
-**언제·어떻게** — 매 호출이 BLAS를 새로 짓습니다(메시 크기에 비례). 결과는 호스트가 캐시합니다. 노드 순서·`maxDepth`·크기 질의·잘림 규약과 `STAccelNode` 필드는 `st_off_debug_copy_mesh_accel_nodes` 항목과 같습니다. 스레드: `[any]` — 전역 상태가 없어 어느 스레드에서나 부를 수 있습니다(빌드 비용만큼 시간이 걸립니다).
+**When / how** — Every call builds a new BLAS (proportional to mesh size). The host caches the result. Node order, `maxDepth`, size-query and truncation conventions and the `STAccelNode` fields are the same as in the `st_off_debug_copy_mesh_accel_nodes` entry. Thread: `[any]` — there is no global state, so it can be called from any thread (it takes as long as the build costs).
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `mesh` | 삼각형 메시(아래 구조체). NULL 불가 |
-| `accelKind` | `st_off_scene_set_accel`의 kind — 0 BinnedSAH / 1 HybridKD / 2 TinyBVH / 3 LBVH / 4 LBVH_Simd. `-1` = 엔진 기본(TinyBVH) |
-| `maxDepth` | 음수 = 전 깊이. 0 이상이면 그 깊이까지만 |
-| `outNodes` | 노드 버퍼. NULL이면 크기 질의 |
-| `nodeCapacity` | `outNodes` 원소 수 |
+| `mesh` | Triangle mesh (struct below). Must not be NULL |
+| `accelKind` | The kind of `st_off_scene_set_accel` — 0 BinnedSAH / 1 HybridKD / 2 TinyBVH / 3 LBVH / 4 LBVH_Simd. `-1` = engine default (TinyBVH) |
+| `maxDepth` | Negative = all depths. If 0 or more, only up to that depth |
+| `outNodes` | Node buffer. NULL = size query |
+| `nodeCapacity` | Number of elements in `outNodes` |
 
-**구조체** `STMesh`
+**Struct** `STMesh`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `numVertices` | 정점 수 |
-| `vertices` | xyz 인터리브 float 배열(`numVertices × 3`개) |
-| `numTriangles` | 삼각형 수 |
-| `triangles` | 정점 인덱스 배열(`numTriangles × 3`개) |
+| `numVertices` | Number of vertices |
+| `vertices` | xyz-interleaved float array (`numVertices × 3` elements) |
+| `numTriangles` | Number of triangles |
+| `triangles` | Vertex index array (`numTriangles × 3` elements) |
 
-**반환** — `maxDepth` 안의 전체 노드 수(0 이상) / `-1` = 실패(mesh·배열 NULL, 개수 0 이하, 비유한 정점, 범위 밖 인덱스, 잘못된 kind, 할당 실패). 컨텍스트가 없으므로 last_status는 남지 않습니다.
+**Returns** — The total number of nodes within `maxDepth` (0 or more) / `-1` = failure (mesh or array NULL, count of 0 or less, non-finite vertex, out-of-range index, invalid kind, allocation failure). There is no context, so no last_status is recorded.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_create</code> — 여러 컨텍스트의 계산·압력 IR 렌더를 병렬 실행할 배치 객체를 만든다</summary>
+<summary><code>st_off_batch_create</code> — Creates a batch object that runs computation and pressure IR renders of several contexts in parallel</summary>
 
 ```c
 STOFF_Batch* st_off_batch_create(int32_t workerCount);
 ```
 
-**용도** — 오프라인 배치 런타임의 시작점입니다. 컨텍스트마다 장면·소스·리스너·옵션을 평소처럼 설정해 둔 뒤 그 컨텍스트들과 압력 IR 렌더 요청을 배치에 한 번 등록하면, 엔진이 자체 **배치 워커** 스레드로 작업마다 `st_off_ir_compute`와 등록된 압력 렌더를 차례로 돌리고 끝난 작업을 폴링으로 돌려줍니다. 많은 장면·위치의 RIR을 대량 생성할 때 호스트가 스레드 풀을 직접 짜지 않아도 됩니다. 결과는 같은 컨텍스트에서 호출 스레드로 `st_off_ir_compute` → `st_off_ir_render_pressure`를 돌린 것과 비트 동일합니다.
+**Purpose** — The starting point of the offline batch runtime. After setting up the scene, sources, listeners and options of each context as usual, register those contexts and their pressure IR render requests with the batch once; the engine then runs `st_off_ir_compute` followed by the registered pressure renders for each job on its own **batch worker** threads and returns finished jobs through polling. When generating RIRs for many scenes and positions in bulk, the host does not need to write its own thread pool. Results are bit-identical to running `st_off_ir_compute` → `st_off_ir_render_pressure` on the same context from the calling thread.
 
-**언제·어떻게** — 수명 주기는 다음과 같습니다.
+**When / how** — The life cycle is as follows.
 
-1. `st_off_batch_create` — 배치 객체 생성(이때는 스레드를 만들지 않음)
-2. `st_off_batch_add_job` — 컨텍스트 하나 = 작업 하나로 등록
-3. `st_off_batch_add_pressure_render` / `st_off_batch_add_pressure_render_mixed` — 작업마다 렌더 요청 등록
-4. `st_off_batch_start` — 배치 워커를 띄우고 즉시 반환(배치당 한 번)
-5. `st_off_batch_poll`(완료 레코드 수신) · `st_off_batch_wait` · `st_off_batch_remaining` — 진행 관찰
-6. `st_off_batch_fetch_pressure` — 완료된 작업의 결과 복사
-7. `st_off_batch_release_job` — 다 받은 작업의 결과 메모리 반납
-8. `st_off_batch_destroy` — 남은 작업 취소, 워커 join, 해제
+1. `st_off_batch_create` — create the batch object (no threads are created at this point)
+2. `st_off_batch_add_job` — register one context = one job
+3. `st_off_batch_add_pressure_render` / `st_off_batch_add_pressure_render_mixed` — register render requests per job
+4. `st_off_batch_start` — launch the batch workers and return immediately (once per batch)
+5. `st_off_batch_poll` (receive completion records) · `st_off_batch_wait` · `st_off_batch_remaining` — observe progress
+6. `st_off_batch_fetch_pressure` — copy the results of completed jobs
+7. `st_off_batch_release_job` — release the result memory of fully received jobs
+8. `st_off_batch_destroy` — cancel remaining jobs, join workers, free
 
-배치는 압력 IR만 다룹니다(바이노럴·오디션 렌더는 컨텍스트 함수로 직접 부릅니다). 배치 워커는 컨텍스트 내부 계산 풀 워커와 별개이며 `STThreadType`에 속하지 않습니다. 지원 여부는 `ST_CAP_OFFLINE_BATCH`로 확인합니다. 스레드: `[any]` — 배치 워커는 start에서 만듭니다.
+The batch handles pressure IRs only (call binaural and audition renders directly with the context functions). Batch workers are separate from the context's internal compute pool workers and do not belong to any `STThreadType`. Check support with `ST_CAP_OFFLINE_BATCH`. Thread: `[any]` — batch workers are created at start.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `workerCount` | 배치 워커 수. 0 이하 = 하드웨어 스레드 수. 실제로 띄우는 수는 작업 수를 넘지 않는다 |
+| `workerCount` | Number of batch workers. 0 or less = number of hardware threads. The number actually launched never exceeds the job count |
 
-**반환** — 배치 핸들. 할당 실패면 NULL.
+**Returns** — The batch handle. NULL on allocation failure.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_destroy</code> — 배치를 취소·정리하고 해제한다</summary>
+<summary><code>st_off_batch_destroy</code> — Cancels, cleans up and frees a batch</summary>
 
 ```c
 void st_off_batch_destroy(STOFF_Batch* batch);
 ```
 
-**용도** — 남은 작업을 취소하고 배치 워커를 모두 join한 뒤 배치와 보관 중인 결과를 해제합니다.
+**Purpose** — Cancels remaining jobs, joins all batch workers, then frees the batch and the results it holds.
 
-**언제·어떻게** — 결과를 다 받은 뒤, 또는 중단하고 싶을 때 부릅니다. 돌아온 뒤에는 배치가 등록된 컨텍스트를 더 참조하지 않습니다. 실행 중인 작업이 취소에 반응해 멈출 때까지 기다리므로 블록됩니다. 스레드: `[any, blocking]` — 어느 스레드에서나 부를 수 있지만 워커 join까지 블록됩니다.
+**When / how** — Call it after receiving all results, or when you want to stop. After it returns, the batch no longer references the registered contexts. It blocks, because it waits until running jobs respond to the cancellation and stop. Thread: `[any, blocking]` — callable from any thread, but blocks until the workers are joined.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들. NULL이면 아무것도 하지 않음 |
+| `batch` | Batch handle. Does nothing if NULL |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_get_last_status</code> — 배치 자체의 마지막 호출 상태 코드를 읽는다</summary>
+<summary><code>st_off_batch_get_last_status</code> — Reads the status code of the batch's own last call</summary>
 
 ```c
 int st_off_batch_get_last_status(const STOFF_Batch* batch);
 ```
 
-**용도** — 배치 함수(`add_*`, `start`, `fetch_pressure`, `release_job` 등)가 실패했을 때 원인을 `STStatus`로 돌려줍니다. 작업별 실패(계산·렌더 실패)는 여기가 아니라 `st_off_batch_get_job_error`로 읽습니다.
+**Purpose** — Returns the cause as an `STStatus` when a batch function (`add_*`, `start`, `fetch_pressure`, `release_job`, etc.) fails. Per-job failures (computation or render failures) are read with `st_off_batch_get_job_error`, not here.
 
-**언제·어떻게** — 배치 함수가 실패 값(-1 / 0)을 돌려준 직후에 부릅니다. 성공한 호출은 `ST_STATUS_OK`로 지웁니다. 스레드: `[any]`.
+**When / how** — Call it right after a batch function returns a failure value (-1 / 0). A successful call clears it to `ST_STATUS_OK`. Thread: `[any]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
+| `batch` | Batch handle |
 
-**반환** — `STStatus` 값(`ST_STATUS_OK`, `ST_STATUS_INVALID_ARGUMENT`, `ST_STATUS_UNAVAILABLE`, `ST_STATUS_BUFFER_TOO_SMALL` 등). `batch`가 NULL이면 `ST_STATUS_INVALID_ARGUMENT`.
+**Returns** — An `STStatus` value (`ST_STATUS_OK`, `ST_STATUS_INVALID_ARGUMENT`, `ST_STATUS_UNAVAILABLE`, `ST_STATUS_BUFFER_TOO_SMALL`, etc.). `ST_STATUS_INVALID_ARGUMENT` if `batch` is NULL.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_get_last_error</code> — 배치 자체의 마지막 오류 메시지를 복사한다</summary>
+<summary><code>st_off_batch_get_last_error</code> — Copies the batch's own last error message</summary>
 
 ```c
 int st_off_batch_get_last_error(const STOFF_Batch* batch, char* outMessage, int32_t capacity);
 ```
 
-**용도** — `st_off_batch_get_last_status`와 짝인 사람이 읽을 수 있는 오류 메시지(영문)를 돌려줍니다.
+**Purpose** — Returns the human-readable error message (English) that pairs with `st_off_batch_get_last_status`.
 
-**언제·어떻게** — 배치 함수가 실패한 직후 로그용으로 부릅니다. 오류가 없으면 빈 문자열입니다. 스레드: `[any]`.
+**When / how** — Call it for logging right after a batch function fails. Empty string if there is no error. Thread: `[any]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들. NULL이면 빈 문자열을 복사 |
-| `outMessage` | 메시지를 받을 버퍼. NUL 종료, `capacity`에 맞춰 자른다 |
-| `capacity` | `outMessage` 바이트 수. 1 이상 |
+| `batch` | Batch handle. Copies an empty string if NULL |
+| `outMessage` | Buffer that receives the message. NUL-terminated, truncated to `capacity` |
+| `capacity` | Byte size of `outMessage`. At least 1 |
 
-**반환** — `1` = 복사함 / `0` = `outMessage`가 NULL이거나 `capacity`가 0 이하.
+**Returns** — `1` = copied / `0` = `outMessage` is NULL or `capacity` is 0 or less.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_worker_count</code> — 배치에 설정된 배치 워커 수를 읽는다</summary>
+<summary><code>st_off_batch_worker_count</code> — Reads the number of batch workers configured for the batch</summary>
 
 ```c
 int32_t st_off_batch_worker_count(const STOFF_Batch* batch);
 ```
 
-**용도** — `st_off_batch_create`에 넘긴 값을 해석한 워커 수(0 이하를 넘겼으면 하드웨어 스레드 수)를 돌려줍니다.
+**Purpose** — Returns the worker count resolved from the value passed to `st_off_batch_create` (the number of hardware threads if 0 or less was passed).
 
-**언제·어떻게** — 언제든 부를 수 있습니다. `st_off_batch_start`는 이 값과 작업 수 중 작은 쪽만큼 워커를 띄웁니다. 완료 레코드의 `workerIndex`는 0부터 이 값 미만입니다. 스레드: `[any]`.
+**When / how** — Can be called at any time. `st_off_batch_start` launches as many workers as the smaller of this value and the job count. The `workerIndex` of completion records ranges from 0 to below this value. Thread: `[any]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
+| `batch` | Batch handle |
 
-**반환** — 워커 수. `batch`가 NULL이면 `0`.
+**Returns** — The worker count. `0` if `batch` is NULL.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_add_job</code> — 컨텍스트 하나를 배치 작업으로 등록한다</summary>
+<summary><code>st_off_batch_add_job</code> — Registers one context as a batch job</summary>
 
 ```c
 int32_t st_off_batch_add_job(STOFF_Batch* batch, STOFF_Context* context);
 ```
 
-**용도** — 장면·소스·리스너·옵션을 다 설정한 오프라인 컨텍스트를 작업 하나로 등록합니다. 작업은 배치 워커 하나에서 `st_off_ir_compute`를 돌린 뒤 그 작업에 등록된 압력 렌더를 등록 순서대로 실행합니다.
+**Purpose** — Registers a fully set up offline context (scene, sources, listeners, options) as one job. A job runs `st_off_ir_compute` on one batch worker and then executes the pressure renders registered to that job in registration order.
 
-**언제·어떻게** — `st_off_batch_start` **전에만** 받습니다. 한 배치 안에서 같은 컨텍스트를 두 작업에 등록하지 않습니다. 컨텍스트 포인터는 **빌린 것**입니다: 등록부터 그 작업의 완료 레코드를 `st_off_batch_poll`로 받을 때까지 그 컨텍스트를 파괴하거나 다른 API를 부르면 안 됩니다. 완료 레코드를 받은 뒤에는 배치가 그 컨텍스트를 다시 참조하지 않으므로 배치가 살아 있어도 호스트가 다시 소유합니다 — 원시 IR 조회, 장면·소스 수정, 파괴, 다른 배치 재등록이 모두 되며, 그 작업의 결과는 배치가 따로 보관하므로 `st_off_batch_fetch_pressure`는 그대로 됩니다. 이 동작은 `ST_CAP_OFFLINE_BATCH_CONTEXT_RETURN`으로 확인하며, 이 비트가 없는 라이브러리에서는 배치를 파괴할 때까지 등록한 컨텍스트에 손대지 않습니다. 스레드: `[control]`.
+**When / how** — Accepted **only before** `st_off_batch_start`. Do not register the same context in two jobs within one batch. The context pointer is **borrowed**: from registration until you receive that job's completion record with `st_off_batch_poll`, you must not destroy the context or call any other API on it. After the completion record is received the batch no longer references the context, so the host owns it again even while the batch is alive — raw IR queries, scene and source changes, destruction and re-registration in another batch all work, and since the batch keeps that job's results separately, `st_off_batch_fetch_pressure` still works. Check this behavior with `ST_CAP_OFFLINE_BATCH_CONTEXT_RETURN`; on libraries without this bit, do not touch registered contexts until the batch is destroyed. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
-| `context` | 등록할 오프라인 컨텍스트(빌려줌) |
+| `batch` | Batch handle |
+| `context` | Offline context to register (lent) |
 
-**반환** — 작업 인덱스(0부터, 등록 순서). 실패는 `-1`: `context`가 유효하지 않거나 이미 start한 배치면 배치 상태에 `ST_STATUS_INVALID_ARGUMENT`.
+**Returns** — The job index (from 0, in registration order). Failure is `-1`: if `context` is invalid or the batch has already started, the batch status gets `ST_STATUS_INVALID_ARGUMENT`.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_add_pressure_render</code> — 작업에 리스너·소스 쌍 하나의 압력 IR 렌더 요청을 추가한다</summary>
+<summary><code>st_off_batch_add_pressure_render</code> — Adds a pressure IR render request for one listener/source pair to a job</summary>
 
 ```c
 int32_t st_off_batch_add_pressure_render(STOFF_Batch* batch, int32_t jobIndex, STListenerId listener, STSourceId source, double seconds, const STOfflinePressureIRRequestOptions* options);
 ```
 
-**용도** — `st_off_ir_render_pressure`의 배치판입니다. 작업이 compute를 끝낸 뒤 이 요청을 렌더하고, 결과를 배치가 보관했다가 `st_off_batch_fetch_pressure`로 내줍니다.
+**Purpose** — Batch version of `st_off_ir_render_pressure`. After the job finishes its compute it renders this request; the batch keeps the result and hands it out through `st_off_batch_fetch_pressure`.
 
-**언제·어떻게** — `st_off_batch_start` 전에 부릅니다. 한 작업에 여러 요청을 넣을 수 있고 등록 순서대로 실행됩니다. 요청 하나가 실패하면 그 작업은 실패로 끝나고 뒤의 렌더는 실행되지 않습니다. 쌍 존재 여부는 렌더 시점에 검사하므로 미등록 쌍은 작업 실패(`st_off_batch_get_job_error`)로 나타납니다. 요청 필드·길이·정규화 없음 등 결과의 뜻은 `st_off_ir_render_pressure`와 같습니다. 스레드: `[control]`.
+**When / how** — Call it before `st_off_batch_start`. A job can hold several requests, executed in registration order. If one request fails, the job ends as failed and later renders are not executed. Pair existence is checked at render time, so an unregistered pair shows up as a job failure (`st_off_batch_get_job_error`). Request fields, length, lack of normalization and other aspects of the result mean the same as in `st_off_ir_render_pressure`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
-| `jobIndex` | `st_off_batch_add_job`이 돌려준 작업 인덱스 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `seconds` | IR 길이(초). 유한한 양수 |
-| `options` | `st_off_ir_init_pressure_request`로 초기화한 요청(`STOfflinePressureIRRequestOptions`, 필드는 그 항목 참고). 등록 시점에 복사 |
+| `batch` | Batch handle |
+| `jobIndex` | Job index returned by `st_off_batch_add_job` |
+| `listener` | Listener handle |
+| `source` | Source handle |
+| `seconds` | IR length (seconds). A finite positive value |
+| `options` | Request initialized with `st_off_ir_init_pressure_request` (`STOfflinePressureIRRequestOptions`; see that entry for the fields). Copied at registration |
 
-**반환** — 그 작업 안의 렌더 인덱스(0부터, 등록 순서). 실패는 `-1`: 잘못된 요청, 없는 작업 인덱스, 이미 start한 배치면 배치 상태에 `ST_STATUS_INVALID_ARGUMENT`.
+**Returns** — The render index within that job (from 0, in registration order). Failure is `-1`: an invalid request, a nonexistent job index or an already started batch sets the batch status to `ST_STATUS_INVALID_ARGUMENT`.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_add_pressure_render_mixed</code> — 작업에 리스너 하나·소스 여러 개의 혼합 압력 IR 렌더 요청을 추가한다</summary>
+<summary><code>st_off_batch_add_pressure_render_mixed</code> — Adds a mixed pressure IR render request for one listener and several sources to a job</summary>
 
 ```c
 int32_t st_off_batch_add_pressure_render_mixed(STOFF_Batch* batch, int32_t jobIndex, STListenerId listener, const STSourceId* sources, int32_t sourceCount, double seconds, const STOfflinePressureIRRequestOptions* options);
 ```
 
-**용도** — `st_off_ir_render_pressure_mixed`의 배치판입니다. 같은 작업의 솔로 렌더와 **같은 렌더 인덱스 공간**을 쓰며, 결과는 `st_off_batch_fetch_pressure`로 받습니다(`info.sourceId` = -1, `info.sourceCount` = 소스 수).
+**Purpose** — Batch version of `st_off_ir_render_pressure_mixed`. It uses **the same render index space** as the job's solo renders, and the result is received with `st_off_batch_fetch_pressure` (`info.sourceId` = -1, `info.sourceCount` = number of sources).
 
-**언제·어떻게** — `st_off_batch_start` 전에 부릅니다. 소스 목록은 등록 시점에 복사하므로 호출 뒤 배열을 재사용해도 됩니다. 핸들 유효성·중복은 등록 시점에 검사하고, 쌍 존재 여부는 작업이 compute를 끝낸 뒤 렌더 시점에 검사하므로 미등록 쌍은 작업 실패(`st_off_batch_get_job_error`)로 나타납니다. 지원 여부는 `ST_CAP_OFFLINE_PRESSURE_RENDER_MIXED`. 스레드: `[control]`.
+**When / how** — Call it before `st_off_batch_start`. The source list is copied at registration, so the array can be reused after the call. Handle validity and duplicates are checked at registration, while pair existence is checked at render time after the job finishes its compute, so an unregistered pair shows up as a job failure (`st_off_batch_get_job_error`). Support is indicated by `ST_CAP_OFFLINE_PRESSURE_RENDER_MIXED`. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
-| `jobIndex` | 작업 인덱스 |
-| `listener` | 리스너 핸들 |
-| `sources` | 소스 핸들 배열. 중복 없음 |
-| `sourceCount` | 소스 수. `1` 이상 `ST_OFFLINE_PRESSURE_MIXED_MAX_SOURCES`(1024) 이하 |
-| `seconds` | IR 길이(초). 유한한 양수 |
-| `options` | `st_off_ir_init_pressure_request`로 초기화한 요청 |
+| `batch` | Batch handle |
+| `jobIndex` | Job index |
+| `listener` | Listener handle |
+| `sources` | Array of source handles. No duplicates |
+| `sourceCount` | Number of sources. At least `1` and at most `ST_OFFLINE_PRESSURE_MIXED_MAX_SOURCES` (1024) |
+| `seconds` | IR length (seconds). A finite positive value |
+| `options` | Request initialized with `st_off_ir_init_pressure_request` |
 
-**반환** — 그 작업 안의 렌더 인덱스. 실패는 `-1`: 잘못된 요청·소스 수 범위 밖·유효하지 않거나 중복된 핸들·없는 작업 인덱스·이미 start한 배치면 배치 상태에 `ST_STATUS_INVALID_ARGUMENT`.
+**Returns** — The render index within that job. Failure is `-1`: an invalid request, a source count out of range, invalid or duplicate handles, a nonexistent job index or an already started batch sets the batch status to `ST_STATUS_INVALID_ARGUMENT`.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_start</code> — 배치 워커를 띄워 등록된 작업 실행을 시작한다</summary>
+<summary><code>st_off_batch_start</code> — Launches batch workers and starts executing the registered jobs</summary>
 
 ```c
 int st_off_batch_start(STOFF_Batch* batch);
 ```
 
-**용도** — 등록을 마감하고 배치 워커를 띄웁니다. 워커는 작업을 하나씩 가져가 compute와 렌더를 돌립니다.
+**Purpose** — Closes registration and launches the batch workers. Workers take jobs one at a time and run compute and renders.
 
-**언제·어떻게** — 작업과 렌더 요청을 모두 등록한 뒤 한 번만 부릅니다. 즉시 돌아오며, 이후 진행은 `st_off_batch_poll` / `st_off_batch_wait` / `st_off_batch_remaining`으로 관찰합니다. start 뒤에는 `add_*`가 거절됩니다. 배치는 다시 start할 수 없으므로 새 일감은 새 배치로 등록합니다. 스레드: `[control]`.
+**When / how** — Call it only once, after registering all jobs and render requests. It returns immediately; observe progress afterward with `st_off_batch_poll` / `st_off_batch_wait` / `st_off_batch_remaining`. After start, `add_*` is rejected. A batch cannot be started again, so register new work in a new batch. Thread: `[control]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
+| `batch` | Batch handle |
 
-**반환** — `1` = 시작 / `0` = 실패(작업이 없거나 이미 start함 → 배치 상태에 `ST_STATUS_INVALID_ARGUMENT`).
+**Returns** — `1` = started / `0` = failure (no jobs or already started → `ST_STATUS_INVALID_ARGUMENT` in the batch status).
 
 </details>
 
 <details>
-<summary><code>st_off_batch_poll</code> — 끝난 작업의 완료 레코드를 꺼낸다</summary>
+<summary><code>st_off_batch_poll</code> — Takes completion records of finished jobs</summary>
 
 ```c
 int32_t st_off_batch_poll(STOFF_Batch* batch, STOfflineBatchCompletion* outCompletions, int32_t capacity);
 ```
 
-**용도** — 작업이 하나 끝날 때마다 생기는 완료 레코드를 최대 `capacity`개 꺼내(큐에서 비우며) 복사합니다. 완료 레코드를 받는 것이 그 작업 결과를 fetch하고 컨텍스트를 돌려받는 조건입니다.
+**Purpose** — Takes (draining them from the queue) and copies up to `capacity` completion records, one of which is produced each time a job finishes. Receiving a job's completion record is the condition for fetching its results and getting the context back.
 
-**언제·어떻게** — start 뒤 아무 스레드에서나 주기적으로 부르거나, `st_off_batch_wait` 뒤에 한꺼번에 비웁니다. 작업마다 레코드는 정확히 한 번 나옵니다. 레코드를 받은 작업에 대해 `st_off_batch_fetch_pressure` → `st_off_batch_release_job`을 부릅니다. 스레드: `[any]`.
+**When / how** — After start, call it periodically from any thread, or drain everything at once after `st_off_batch_wait`. Each job produces exactly one record. For jobs whose record you received, call `st_off_batch_fetch_pressure` → `st_off_batch_release_job`. Thread: `[any]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
-| `outCompletions` | 레코드를 받을 배열. 엔진이 각 레코드의 `structSize`·`apiVersion`을 채운다 |
-| `capacity` | `outCompletions` 원소 수. 1 이상 |
+| `batch` | Batch handle |
+| `outCompletions` | Array that receives the records. The engine fills each record's `structSize` and `apiVersion` |
+| `capacity` | Number of elements in `outCompletions`. At least 1 |
 
-**구조체** `STOfflineBatchCompletion`
+**Struct** `STOfflineBatchCompletion`
 
-| 필드 | 설명 |
+| Field | Description |
 |---|---|
-| `structSize`, `apiVersion` | 엔진이 채우는 버전 스탬프 |
-| `jobIndex` | 끝난 작업의 인덱스 |
-| `status` | 0 = 성공 / 1 = compute·렌더 실패(메시지는 `st_off_batch_get_job_error`) / 2 = 취소 |
-| `renderCount` | 성공한 압력 렌더 수 |
-| `workerIndex` | 그 작업을 돈 배치 워커 번호 |
-| `computeMicros` | 그 작업의 compute 경과 시간(µs) |
-| `renderMicros` | 그 작업의 렌더 경과 시간(µs) |
-| `reserved[8]` | 예약 |
+| `structSize`, `apiVersion` | Version stamp filled by the engine |
+| `jobIndex` | Index of the finished job |
+| `status` | 0 = success / 1 = compute or render failure (message via `st_off_batch_get_job_error`) / 2 = canceled |
+| `renderCount` | Number of successful pressure renders |
+| `workerIndex` | Number of the batch worker that ran the job |
+| `computeMicros` | Elapsed compute time of the job (µs) |
+| `renderMicros` | Elapsed render time of the job (µs) |
+| `reserved[8]` | Reserved |
 
-**반환** — 복사한 레코드 수(0 이상). 새 완료가 없거나 `batch`·`outCompletions`가 NULL이거나 `capacity`가 0 이하면 `0`.
+**Returns** — The number of records copied (0 or more). `0` if there are no new completions, `batch` or `outCompletions` is NULL, or `capacity` is 0 or less.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_wait</code> — 모든 작업이 끝날 때까지(또는 시간 초과까지) 기다린다</summary>
+<summary><code>st_off_batch_wait</code> — Waits until all jobs finish (or until timeout)</summary>
 
 ```c
 int st_off_batch_wait(STOFF_Batch* batch, int32_t timeoutMs);
 ```
 
-**용도** — 폴링 루프 대신 배치 전체의 완료를 블록해서 기다립니다.
+**Purpose** — Blocks waiting for the whole batch to complete instead of a polling loop.
 
-**언제·어떻게** — start 뒤에 부릅니다. 기다림이 끝나도 완료 레코드는 큐에 남아 있으므로 이어서 `st_off_batch_poll`로 비웁니다(레코드를 받아야 fetch·컨텍스트 반환이 됩니다). 스레드: `[any, blocking]` — 어느 스레드에서나 부를 수 있지만 완료 또는 시간 초과까지 블록됩니다.
+**When / how** — Call it after start. Completion records remain in the queue after the wait ends, so drain them next with `st_off_batch_poll` (records must be received before fetching and getting contexts back). Thread: `[any, blocking]` — callable from any thread, but blocks until completion or timeout.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
-| `timeoutMs` | 최대 대기 시간(ms). 음수 = 무한 대기 |
+| `batch` | Batch handle |
+| `timeoutMs` | Maximum wait time (ms). Negative = wait indefinitely |
 
-**반환** — `1` = 모든 작업 완료 / `0` = 시간 초과 또는 `batch` NULL.
+**Returns** — `1` = all jobs complete / `0` = timeout or `batch` NULL.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_remaining</code> — 아직 끝나지 않은 작업 수를 읽는다</summary>
+<summary><code>st_off_batch_remaining</code> — Reads the number of jobs not yet finished</summary>
 
 ```c
 int32_t st_off_batch_remaining(const STOFF_Batch* batch);
 ```
 
-**용도** — 진행 표시나 완료 판정에 쓰는 남은 작업 수를 돌려줍니다.
+**Purpose** — Returns the number of remaining jobs, for progress display or completion checks.
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 끝난(성공·실패·취소) 작업은 빠집니다. 스레드: `[any]`.
+**When / how** — Can be called at any time. Finished jobs (succeeded, failed or canceled) are excluded. Thread: `[any]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
+| `batch` | Batch handle |
 
-**반환** — 끝나지 않은 작업 수. `batch`가 NULL이면 `0`.
+**Returns** — The number of unfinished jobs. `0` if `batch` is NULL.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_cancel</code> — 남은 작업을 취소하고 실행 중인 작업에 취소를 건다</summary>
+<summary><code>st_off_batch_cancel</code> — Cancels remaining jobs and signals cancellation to running jobs</summary>
 
 ```c
 void st_off_batch_cancel(STOFF_Batch* batch);
 ```
 
-**용도** — 배치 전체를 중단합니다. 아직 시작하지 않은 작업은 취소(`status` 2)로 끝나고, 실행 중인 작업의 컨텍스트에는 `st_off_ir_request_cancel`과 같은 취소가 걸립니다.
+**Purpose** — Stops the whole batch. Jobs not yet started end as canceled (`status` 2), and the contexts of running jobs receive the same cancellation as `st_off_ir_request_cancel`.
 
-**언제·어떻게** — 어느 스레드에서나 부를 수 있고 기다리지 않고 돌아옵니다. 실행 중이던 작업은 중단 시점에 따라 실패(`status` 1) 또는 취소(`status` 2)로 끝납니다. 이후에도 모든 작업의 완료 레코드가 나오므로 `st_off_batch_poll`로 받은 뒤 컨텍스트를 돌려받습니다. 중단 전에 끝난 작업의 결과는 그대로 fetch할 수 있습니다. 스레드: `[any]`.
+**When / how** — Callable from any thread; returns without waiting. Jobs that were running end as failed (`status` 1) or canceled (`status` 2) depending on when they stop. Completion records still come out for every job afterward, so receive them with `st_off_batch_poll` and then take the contexts back. Results of jobs that finished before the stop can still be fetched. Thread: `[any]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들. NULL이면 아무것도 하지 않음 |
+| `batch` | Batch handle. Does nothing if NULL |
 
-**반환** — 없음.
+**Returns** — Nothing.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_fetch_pressure</code> — 완료된 작업의 압력 IR 렌더 결과를 호출자 버퍼로 복사한다</summary>
+<summary><code>st_off_batch_fetch_pressure</code> — Copies a completed job's pressure IR render result into a caller buffer</summary>
 
 ```c
 int32_t st_off_batch_fetch_pressure(STOFF_Batch* batch, int32_t jobIndex, int32_t renderIndex, float* outValues, int32_t capacityValues, STOfflinePressureIRInfo* outInfo);
 ```
 
-**용도** — 배치가 보관 중인 렌더 결과(값 배열과 메타데이터)를 꺼냅니다. 배치는 결과를 컨텍스트와 별도로 보관하므로 컨텍스트를 바꾸거나 파괴한 뒤에도 꺼낼 수 있습니다.
+**Purpose** — Retrieves a render result (value array and metadata) held by the batch. The batch keeps results separately from the context, so they can be retrieved even after the context is changed or destroyed.
 
-**언제·어떻게** — 그 작업의 완료 레코드를 `st_off_batch_poll`로 받은 뒤에 부릅니다. `outValues` = NULL이면 값 개수와 `outInfo`만 돌려주므로, 먼저 크기를 얻고 버퍼를 잡아 다시 부릅니다. 값 배치(모노 / `values[band × bandStride + sample]`)와 info 필드는 `st_off_ir_render_pressure`와 같습니다. 다 받은 작업은 `st_off_batch_release_job`으로 반납합니다. 스레드: `[any]`.
+**When / how** — Call it after receiving that job's completion record with `st_off_batch_poll`. With `outValues` = NULL it returns only the value count and `outInfo`, so get the size first, allocate a buffer and call again. The value layout (mono / `values[band × bandStride + sample]`) and info fields are the same as `st_off_ir_render_pressure`. Release fully received jobs with `st_off_batch_release_job`. Thread: `[any]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
-| `jobIndex` | 작업 인덱스 |
-| `renderIndex` | 그 작업의 렌더 인덱스(`add_pressure_render*`의 반환값) |
-| `outValues` | 결과 버퍼. NULL이면 개수·info만 |
-| `capacityValues` | `outValues`의 float 개수 |
-| `outInfo` | 결과 메타데이터(`STOfflinePressureIRInfo`, 필드는 `st_off_ir_render_pressure` 항목 참고). NULL 허용. 넘기면 호출자가 `structSize`·`apiVersion`을 채운다 |
+| `batch` | Batch handle |
+| `jobIndex` | Job index |
+| `renderIndex` | Render index within that job (the return value of `add_pressure_render*`) |
+| `outValues` | Result buffer. NULL = count and info only |
+| `capacityValues` | Number of floats in `outValues` |
+| `outInfo` | Result metadata (`STOfflinePressureIRInfo`; see `st_off_ir_render_pressure` for the fields). NULL allowed. If passed, the caller fills `structSize` and `apiVersion` |
 
-**반환** — 값 개수(복사했거나 필요한 float 수). 실패는 `0`: 렌더가 끝나지 않았거나 실패했거나 이미 반납됐으면 `ST_STATUS_UNAVAILABLE`, 버퍼가 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`, `outInfo` 스탬프가 틀리면 `ST_STATUS_INVALID_ARGUMENT`(모두 배치 상태에 남음).
+**Returns** — The value count (floats copied or required). Failure is `0`: a render that has not finished, failed or was already released gives `ST_STATUS_UNAVAILABLE`; a too-small buffer gives `ST_STATUS_BUFFER_TOO_SMALL`; a wrong `outInfo` stamp gives `ST_STATUS_INVALID_ARGUMENT` (all recorded in the batch status).
 
 </details>
 
 <details>
-<summary><code>st_off_batch_release_job</code> — 완료된 작업의 결과 메모리를 반납한다</summary>
+<summary><code>st_off_batch_release_job</code> — Releases the result memory of a completed job</summary>
 
 ```c
 int st_off_batch_release_job(STOFF_Batch* batch, int32_t jobIndex);
 ```
 
-**용도** — 다 받은 작업의 렌더 결과를 배치에서 지워 메모리를 돌려받습니다. 큰 배치에서 결과를 받는 즉시 반납하면 최대 메모리 사용량이 줄어듭니다.
+**Purpose** — Removes the render results of a fully received job from the batch to get the memory back. In large batches, releasing results as soon as you receive them lowers peak memory use.
 
-**언제·어떻게** — 그 작업의 결과를 `st_off_batch_fetch_pressure`로 다 받은 뒤 부릅니다. 반납한 작업의 결과는 더 fetch할 수 없습니다. 스레드: `[any]`.
+**When / how** — Call it after receiving all of that job's results with `st_off_batch_fetch_pressure`. Results of a released job can no longer be fetched. Thread: `[any]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
-| `jobIndex` | 작업 인덱스 |
+| `batch` | Batch handle |
+| `jobIndex` | Job index |
 
-**반환** — `1` = 반납 / `0` = 작업이 아직 끝나지 않음(배치 상태에 `ST_STATUS_UNAVAILABLE`) 또는 `batch` NULL.
+**Returns** — `1` = released / `0` = the job has not finished yet (`ST_STATUS_UNAVAILABLE` in the batch status) or `batch` NULL.
 
 </details>
 
 <details>
-<summary><code>st_off_batch_get_job_error</code> — 작업별 실패 메시지를 복사한다</summary>
+<summary><code>st_off_batch_get_job_error</code> — Copies the per-job failure message</summary>
 
 ```c
 int st_off_batch_get_job_error(const STOFF_Batch* batch, int32_t jobIndex, char* outMessage, int32_t capacity);
 ```
 
-**용도** — 완료 레코드의 `status`가 1(실패) 또는 2(취소)인 작업의 사유(영문)를 돌려줍니다. 예: compute 실패·취소, 미등록 쌍 등으로 인한 렌더 실패.
+**Purpose** — Returns the reason (English) for a job whose completion record `status` is 1 (failed) or 2 (canceled). Examples: compute failure or cancellation, render failure due to an unregistered pair.
 
-**언제·어떻게** — 완료 레코드를 받은 뒤 부릅니다. 배치 함수 호출 자체의 오류는 `st_off_batch_get_last_status` / `st_off_batch_get_last_error`로 읽습니다. 스레드: `[any]`.
+**When / how** — Call it after receiving the completion record. Errors of batch function calls themselves are read with `st_off_batch_get_last_status` / `st_off_batch_get_last_error`. Thread: `[any]`.
 
-| 파라미터 | 설명 |
+| Parameter | Description |
 |---|---|
-| `batch` | 배치 핸들 |
-| `jobIndex` | 작업 인덱스 |
-| `outMessage` | 메시지를 받을 버퍼. NUL 종료, `capacity`에 맞춰 자른다 |
-| `capacity` | `outMessage` 바이트 수. 1 이상 |
+| `batch` | Batch handle |
+| `jobIndex` | Job index |
+| `outMessage` | Buffer that receives the message. NUL-terminated, truncated to `capacity` |
+| `capacity` | Byte size of `outMessage`. At least 1 |
 
-**반환** — `1` = 메시지가 있음(복사함) / `0` = 메시지 없음(성공한 작업 등) 또는 인자 오류.
+**Returns** — `1` = a message exists (copied) / `0` = no message (e.g. a successful job) or argument error.
 
 </details>
 
@@ -7690,8 +7686,8 @@ The UE · Unity · FMOD · Wwise plug-ins all use BUFFERED.
 ## Platform notes
 
 - **Android**: API 28 or later. Place the per-ABI `.so` in the app's library folder.
-- **iOS**: A single static library (`libsimplest_static.a`) contains both real-time and offline. Link the device / simulator variant accordingly.
-- **Web**: `SimpleSTRealtime.mjs/.wasm` is a pthreads build, so the page and Worker responses need `Cross-Origin-Opener-Policy: same-origin`
+- **iOS**: A single static library (`libsoundtracing_static.a`) contains both real-time and offline. Link the device / simulator variant accordingly.
+- **Web**: `SoundTracingRealtime.mjs/.wasm` is a pthreads build, so the page and Worker responses need `Cross-Origin-Opener-Policy: same-origin`
   and `Cross-Origin-Embedder-Policy: require-corp`. Make `[control]` calls from one Worker only (blocking calls on the main thread fail
   due to the `Atomics.wait` restriction), and exchange audio with an AudioWorklet through a shared ring. If you need a TypeScript facade, use the [Web SDK](./web.md).
 - **Host sample rate**: The engine runs internally at 44.1 kHz; when `hostSampleRate` is set, the engine converts input and output.

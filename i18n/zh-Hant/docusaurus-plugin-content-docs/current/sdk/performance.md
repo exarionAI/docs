@@ -91,7 +91,7 @@ PIPELINED 排程器讓 Direct / Reflection-Diffraction / Reverb lane 以各自�
 
 | 分組 | 指標 | 來源 |
 |---|---|---|
-| 傳播 | 各 lane 的 ms（direct / reflDiff / reverb）、IR 建置 ms | `st_rt_get_timing`（Web `debugSnapshot().simplest.timing`、UE Subsystem） |
+| 傳播 | 各 lane 的 ms（direct / reflDiff / reverb）、IR 建置 ms | `st_rt_get_timing`（Web `debugSnapshot().soundtracing.timing`、UE Subsystem） |
 | 渲染區塊 | `totalUs`、各階段 µs（sourceInput / exactTaps / bed / send / late / output）、activeSources、exactTaps、sendTaps | `st_rt_render_get_process_stats` |
 | IR 發布 | publishSequence 節奏、bed 格數、prepare CPU/wall 比率（搶占 vs 慢核心） | `st_rt_ir_get_stats` |
 | 場景 | 網格、物件、音源、三角形數 | `st_rt_scene_get_stats` |

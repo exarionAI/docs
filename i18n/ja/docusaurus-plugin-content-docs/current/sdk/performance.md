@@ -91,7 +91,7 @@ PIPELINED スケジューラは Direct / Reflection-Diffraction / Reverb レー�
 
 | グループ | 指標 | 出典 |
 |---|---|---|
-| 伝搬 | レーン別 ms（direct / reflDiff / reverb）、IR ビルド ms | `st_rt_get_timing`（Web `debugSnapshot().simplest.timing`、UE Subsystem） |
+| 伝搬 | レーン別 ms（direct / reflDiff / reverb）、IR ビルド ms | `st_rt_get_timing`（Web `debugSnapshot().soundtracing.timing`、UE Subsystem） |
 | レンダーブロック | `totalUs`、ステージ別 µs（sourceInput / exactTaps / bed / send / late / output）、activeSources、exactTaps、sendTaps | `st_rt_render_get_process_stats` |
 | IR 発行 | publishSequence のケイデンス、bed セル数、prepare CPU/wall 比率（プリエンプション vs 遅いコア） | `st_rt_ir_get_stats` |
 | シーン | メッシュ・オブジェクト・音源・三角形数 | `st_rt_scene_get_stats` |

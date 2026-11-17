@@ -13,18 +13,18 @@ description: Sound-Tracing SDK (C/C++) — 全平台共用核心的二進位檔�
 
 | 平台 | 二進位檔 (`Binaries/`) | 連結 |
 |---|---|---|
-| Windows x64 | `Win64/Release/SimpleSTRealtime.dll` + `.lib` | 動態 |
-| macOS (Universal) | `Mac/Release/libSimpleSTRealtime.dylib` | 動態 |
-| Linux x86_64 | `Linux/Release/libSimpleSTRealtime.so` | 動態 |
-| Android (arm64-v8a · armeabi-v7a · x86_64) | `Android/<ABI>/Release/libSimpleSTRealtime.so` | 動態 (API 28+) |
-| iOS (device · simulator) | `IOS/<device\|simulator>/Release/libsimplest_static.a` | 靜態 |
-| Web | `Web/Release/SimpleSTRealtime.mjs` + `.wasm` (pthreads) | WASM 模組 (需要 COOP/COEP) |
+| Windows x64 | `Win64/Release/SoundTracingRealtime.dll` + `.lib` | 動態 |
+| macOS (Universal) | `Mac/Release/libSoundTracingRealtime.dylib` | 動態 |
+| Linux x86_64 | `Linux/Release/libSoundTracingRealtime.so` | 動態 |
+| Android (arm64-v8a · armeabi-v7a · x86_64) | `Android/<ABI>/Release/libSoundTracingRealtime.so` | 動態 (API 28+) |
+| iOS (device · simulator) | `IOS/<device\|simulator>/Release/libsoundtracing_static.a` | 靜態 |
+| Web | `Web/Release/SoundTracingRealtime.mjs` + `.wasm` (pthreads) | WASM 模組 (需要 COOP/COEP) |
 
-用於離線 IR 計算的 `SimpleSTOffline`（同一資料夾，`st_off_*`）也一併包含。標頭檔在所有平台通用。
+用於離線 IR 計算的 `SoundTracingOffline`（同一資料夾，`st_off_*`）也一併包含。標頭檔在所有平台通用。
 
 ```text
-SimpleST/
-├─ Include/SimpleST/ABI/   STRealtime.h · STOffline.h · STTypes.h
+SoundTracing/
+├─ Include/SoundTracing/ABI/   STRealtime.h · STOffline.h · STTypes.h
 ├─ Binaries/<Plat>/Release/
 ├─ Resources/HRTF/          SADIE_D2_44K_16bit_256tap.hrtfbin
 └─ Licenses/
@@ -43,7 +43,7 @@ SimpleST/
 ## 最小使用流程
 
 ```c
-#include <SimpleST/ABI/STRealtime.h>
+#include <SoundTracing/ABI/STRealtime.h>
 
 STRT_CreateOptions opt;
 st_rt_init_create_options(&opt);
@@ -105,159 +105,155 @@ st_rt_destroy(ctx);
 
 依類別整理了即時 DLL（`st_rt_*`，`STRealtime.h`）與離線 DLL（`st_off_*`，`STOffline.h`）的全部匯出函式。展開類別與函式即可查看簽章、用途、呼叫時機與執行緒、參數和回傳值。執行緒標籤的意義見 [執行緒模型](#執行緒模型)；呼叫失敗的原因以 `st_rt_get_last_status` / `st_rt_get_last_error`（離線為 `st_off_*`）讀取。
 
-:::note
-各函式的說明文字目前僅提供韓文；識別子、簽章與數值範圍與語言無關。
-:::
+<details>
+<summary><strong>情境 · 執行期 — 建立、版本·capability、狀態、idle/run、執行緒屬性·清單、記憶體預算、計時</strong> — 24 個</summary>
 
 <details>
-<summary><strong>컨텍스트 · 런타임 — 생성, 버전·capability, 상태, idle/run, 스레드 속성·인벤토리, 메모리 예산, 타이밍</strong> — 24개</summary>
-
-<details>
-<summary><code>st_rt_get_api_version</code> — 이 라이브러리의 ABI 버전 번호를 돌려준다</summary>
+<summary><code>st_rt_get_api_version</code> — 回傳此程式庫的 ABI 版本號</summary>
 
 ```c
 uint32_t st_rt_get_api_version(void);
 ```
 
-**용도** — 로드한 `SimpleSTRealtime` 라이브러리가 호스트가 컴파일한 헤더와 같은 ABI인지 판정하는 기준값입니다. 버전 문자열이 아니라 이 값으로 호환성을 판단합니다.
+**用途** — 判定載入的 `SoundTracingRealtime` 程式庫與主機編譯時的標頭檔是否為同一 ABI 的基準值。以此值而非版本字串判斷相容性。
 
-**언제·어떻게** — 라이브러리를 로드한 직후, 컨텍스트를 만들기 전에 부릅니다. 반환값을 헤더의 `ST_ABI_VERSION`과 비교해 다르면 그 라이브러리를 쓰지 않습니다. 모든 버전 스탬프 구조체의 `apiVersion` 필드에도 같은 값(`ST_ABI_VERSION`)을 넣습니다. 스레드: `[any]` — 컴파일 상수라 어느 스레드에서 불러도 되고 블록하지 않습니다.
+**呼叫方式** — 在載入程式庫後、建立情境前立即呼叫。將回傳值與標頭檔的 `ST_ABI_VERSION` 比較，不同則不使用該程式庫。所有帶版本戳記的結構體的 `apiVersion` 欄位也填入相同的值（`ST_ABI_VERSION`）。執行緒：`[any]` — 為編譯期常數，可在任意執行緒呼叫且不會阻塞。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| (없음) | |
+| (無) | |
 
-**반환** — 라이브러리의 ABI 버전(`ST_ABI_VERSION`, 현재 `6`). 실패하지 않습니다.
+**回傳值** — 程式庫的 ABI 版本（`ST_ABI_VERSION`，目前為 `6`）。不會失敗。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_version_string</code> — 제품 릴리스 버전 문자열을 돌려준다</summary>
+<summary><code>st_rt_get_version_string</code> — 回傳產品發行版本字串</summary>
 
 ```c
 const char* st_rt_get_version_string(void);
 ```
 
-**용도** — 로그·진단 화면에 표시할 사람이 읽는 릴리스 버전입니다. 오프라인 라이브러리의 `st_off_get_version_string`과 같은 형태입니다.
+**用途** — 供日誌·診斷畫面顯示的人類可讀發行版本。與離線程式庫的 `st_off_get_version_string` 形式相同。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. ABI 호환성 판정에는 쓰지 말고 `st_rt_get_api_version`을 씁니다. 스레드: `[any]` — 어느 스레드에서나 블록 없이 호출할 수 있습니다.
+**呼叫方式** — 可隨時呼叫。不要用於 ABI 相容性判定，請使用 `st_rt_get_api_version`。執行緒：`[any]` — 可在任意執行緒無阻塞呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| (없음) | |
+| (無) | |
 
-**반환** — 라이브러리 안의 정적 NUL 종료 문자열. 호출자가 해제하지 않습니다.
+**回傳值** — 程式庫內的靜態 NUL 結尾字串。呼叫端不釋放。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_capabilities</code> — 능력 워드 0(<code>ST_CAP_*</code>)을 돌려준다</summary>
+<summary><code>st_rt_get_capabilities</code> — 回傳能力字組 0（<code>ST_CAP_*</code>）</summary>
 
 ```c
 uint64_t st_rt_get_capabilities(void);
 ```
 
-**용도** — 이 라이브러리가 어떤 기능 표면을 지원하는지 비트로 알려 줍니다. 호스트는 선택 기능(호스트 pull 렌더, 스레드 속성, IR 통계 등)을 쓰기 전에 해당 `ST_CAP_*` 비트를 확인해 기능 유무에 따라 분기합니다.
+**用途** — 以位元告知此程式庫支援哪些功能介面。主機在使用選用功能（主機 pull 渲染、執行緒屬性、IR 統計等）之前，先確認對應的 `ST_CAP_*` 位元，依功能有無進行分支。
 
-**언제·어떻게** — 컨텍스트 없이 언제든 부를 수 있습니다. `st_rt_get_capability_word(0)`과 같은 값입니다. 워드 0의 비트는 `ST_CAP_*` 이름만 해당하며, `ST_CAP1_*` 비트는 반드시 `st_rt_get_capability_word(1)`로 확인합니다(같은 자리 번호라도 워드마다 뜻이 다릅니다). 다음 자리는 옛 능력의 결번이라 절대 세워지지 않습니다: `ST_CAP_RETIRED_MASK`(8·9·10·13·18·20·21·25). 스레드: `[any]` — 컴파일 상수입니다.
+**呼叫方式** — 不需情境，可隨時呼叫。與 `st_rt_get_capability_word(0)` 的值相同。字組 0 的位元只對應 `ST_CAP_*` 名稱，`ST_CAP1_*` 位元務必以 `st_rt_get_capability_word(1)` 確認（即使位置編號相同，各字組的意義也不同）。以下位置是舊能力的缺號，絕不會被設定：`ST_CAP_RETIRED_MASK`（8·9·10·13·18·20·21·25）。執行緒：`[any]` — 為編譯期常數。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| (없음) | |
+| (無) | |
 
-**반환** — 능력 워드 0의 64비트 마스크. 비트 63 `ST_CAP_CAPABILITY_WORDS`가 서 있으면 `st_rt_get_capability_word`로 워드 1 이상을 읽을 수 있습니다.
+**回傳值** — 能力字組 0 的 64 位元遮罩。若設定了位元 63 `ST_CAP_CAPABILITY_WORDS`，即可用 `st_rt_get_capability_word` 讀取字組 1 以上。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_capability_word</code> — 지정한 번호의 능력 워드를 돌려준다</summary>
+<summary><code>st_rt_get_capability_word</code> — 回傳指定編號的能力字組</summary>
 
 ```c
 uint64_t st_rt_get_capability_word(uint32_t word);
 ```
 
-**용도** — 워드 0의 64자리가 모두 찼기 때문에 새 능력은 워드 1부터 `ST_CAP<n>_*` 이름으로 추가됩니다. 이 함수로 워드 번호를 지정해 읽습니다.
+**用途** — 由於字組 0 的 64 個位置已全部用完，新能力從字組 1 起以 `ST_CAP<n>_*` 名稱加入。以此函式指定字組編號讀取。
 
-**언제·어떻게** — 컨텍스트 없이 언제든 부를 수 있습니다. 먼저 `st_rt_get_capabilities()`에 `ST_CAP_CAPABILITY_WORDS`(비트 63)가 있는지 확인합니다. 예를 들어 엔진 쉼(`st_rt_idle`/`st_rt_run`)은 `st_rt_get_capability_word(1) & ST_CAP1_ENGINE_IDLE`, 음원 메모리 예산은 `ST_CAP1_MEMORY_BUDGET`(워드 1의 비트 63)로 확인합니다. 서로 다른 워드의 비트를 섞어 AND 하지 않습니다. 스레드: `[any]` — 컴파일 상수입니다.
+**呼叫方式** — 不需情境，可隨時呼叫。先確認 `st_rt_get_capabilities()` 中有 `ST_CAP_CAPABILITY_WORDS`（位元 63）。例如引擎休眠（`st_rt_idle`/`st_rt_run`）以 `st_rt_get_capability_word(1) & ST_CAP1_ENGINE_IDLE` 確認，音源記憶體預算以 `ST_CAP1_MEMORY_BUDGET`（字組 1 的位元 63）確認。不要混合不同字組的位元做 AND。執行緒：`[any]` — 為編譯期常數。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `word` | 워드 번호. `0` = `st_rt_get_capabilities()`와 같은 값(`ST_CAP_*`), `1` = `ST_CAP1_*`. 헤더가 아는 워드 수는 `ST_CAPABILITY_WORD_COUNT`(현재 `2`) |
+| `word` | 字組編號。`0` = 與 `st_rt_get_capabilities()` 相同的值（`ST_CAP_*`），`1` = `ST_CAP1_*`。標頭檔已知的字組數為 `ST_CAPABILITY_WORD_COUNT`（目前為 `2`） |
 
-**반환** — 해당 워드의 64비트 마스크. 모르는 워드(`word ≥ ST_CAPABILITY_WORD_COUNT`)는 `0`(= 그 능력 없음)입니다.
+**回傳值** — 該字組的 64 位元遮罩。未知字組（`word ≥ ST_CAPABILITY_WORD_COUNT`）為 `0`（= 無該能力）。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_sample_rate</code> — 엔진 내부 샘플레이트를 돌려준다</summary>
+<summary><code>st_rt_get_sample_rate</code> — 回傳引擎內部取樣率</summary>
 
 ```c
 int st_rt_get_sample_rate(void);
 ```
 
-**용도** — 엔진이 내부적으로 쓰는 고정 샘플레이트를 알려 줍니다. 호스트 오디오가 다른 레이트로 돈다면 `STRT_CreateOptions.hostSampleRate`로 엔진이 경계에서 변환하게 합니다.
+**用途** — 告知引擎內部使用的固定取樣率。若主機音訊以其他速率運作，則以 `STRT_CreateOptions.hostSampleRate` 讓引擎在邊界進行轉換。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[any]` — 컴파일 상수입니다.
+**呼叫方式** — 可隨時呼叫。執行緒：`[any]` — 為編譯期常數。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| (없음) | |
+| (無) | |
 
-**반환** — `44100`(Hz, 고정).
+**回傳值** — `44100`（Hz，固定）。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_thread_attributes</code> — 엔진 스레드 종류별 우선순위·코어 선호·affinity를 지정한다</summary>
+<summary><code>st_rt_set_thread_attributes</code> — 依引擎執行緒類型指定優先順序·核心偏好·affinity</summary>
 
 ```c
 int st_rt_set_thread_attributes(int threadType, const STThreadAttributes* attributes);
 ```
 
-**용도** — 게임·미들웨어 호스트가 자기 스레드 배치 정책에 맞춰 엔진이 만드는 스레드의 우선순위·코어 선호·affinity를 종류별로 지정합니다(FMOD `Thread_SetAttributes`와 같은 역할). 컨텍스트와 무관한 **프로세스 전역** 표이며, Realtime 라이브러리와 Offline 라이브러리는 각자 자기 표를 가집니다 — 두 라이브러리를 함께 쓰면 `st_rt_`와 `st_off_` 양쪽에 같은 값을 지정해야 합니다.
+**用途** — 遊戲·中介軟體主機依自身的執行緒配置策略，依類型指定引擎所建立執行緒的優先順序·核心偏好·affinity（與 FMOD `Thread_SetAttributes` 作用相同）。這是與情境無關的 **處理程序全域** 表，Realtime 程式庫與 Offline 程式庫各自擁有自己的表 — 同時使用兩個程式庫時，必須在 `st_rt_` 與 `st_off_` 兩邊指定相同的值。
 
-**언제·어떻게** — **`st_rt_create` 전에** 부르는 것이 계약입니다. 이미 시작된 스레드에는 소급되지 않고, 이후 생기는 스레드(다음 `st_rt_create`, 다음 `st_rt_render_start`, 다음 파일 입력 부착)부터 적용됩니다. 실제 OS 스레드가 있는 종류는 `ST_THREAD_COMPUTE_POOL`(계산 풀) · `ST_THREAD_AUDIO_RENDER`(렌더 스레드) · `ST_THREAD_FILE_DECODER`(파일 디코더) 셋뿐이고, 나머지 값은 공유 계산 풀 위에서 도는 논리 역할이라 저장만 되고 물리 스레드에는 적용되지 않습니다 — 계산 작업의 정책은 `ST_THREAD_COMPUTE_POOL`로 지정합니다. `ST_THREAD_PRIORITY_DEFAULT`는 플랫폼 기본표를 그대로 쓰므로, affinity나 코어 선호만 지정해도 오디오 렌더 스레드의 기본 우선순위 승격은 유지됩니다. 명시 우선순위를 주면 그 값이 대신 적용됩니다. 스레드: `[any]` — 프로세스 전역 표를 짧은 뮤텍스 하나로 갱신합니다.
+**呼叫方式** — 契約是 **在 `st_rt_create` 之前** 呼叫。不追溯套用至已啟動的執行緒，自之後產生的執行緒（下一次 `st_rt_create`、下一次 `st_rt_render_start`、下一次附加檔案輸入）起套用。有實際 OS 執行緒的類型只有 `ST_THREAD_COMPUTE_POOL`（計算集區）· `ST_THREAD_AUDIO_RENDER`（渲染執行緒）· `ST_THREAD_FILE_DECODER`（檔案解碼器）三種，其餘值是在共用計算集區上執行的邏輯角色，只會儲存而不套用到實體執行緒 — 計算工作的策略以 `ST_THREAD_COMPUTE_POOL` 指定。`ST_THREAD_PRIORITY_DEFAULT` 直接使用平台預設表，因此即使只指定 affinity 或核心偏好，音訊渲染執行緒的預設優先順序提升仍會保留。給定明確優先順序時，則改套用該值。執行緒：`[any]` — 以一個短暫的互斥鎖更新處理程序全域表。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `threadType` | `STThreadType` 값 `0`~`10`(아래 표). 범위 밖이면 `0` |
-| `attributes` | 요청값. 호출자가 `structSize = sizeof(STThreadAttributes)`, `apiVersion = ST_ABI_VERSION`을 채운다. `NULL`이면 그 종류를 기본값으로 되돌린다(리셋) |
+| `threadType` | `STThreadType` 值 `0`~`10`（見下表）。超出範圍則為 `0` |
+| `attributes` | 請求值。呼叫端填入 `structSize = sizeof(STThreadAttributes)`、`apiVersion = ST_ABI_VERSION`。若為 `NULL`，則將該類型恢復為預設值（重設） |
 
-**구조체** `STThreadAttributes`
+**結構體** `STThreadAttributes`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` | `sizeof(STThreadAttributes)` |
 | `apiVersion` | `ST_ABI_VERSION` |
-| `priority` | `STThreadPriority`(아래 표). 기본 `ST_THREAD_PRIORITY_DEFAULT`(0) |
-| `flags` | `ST_THREAD_FLAG_*` 조합. 기본 `0` |
-| `affinityMask` | 논리 프로세서 비트마스크, `0` = 지정 없음. **Windows만 존중**합니다. 프로세스 마스크의 부분집합이 아니면 커널이 거절합니다. 64 논리 프로세서를 넘는 머신에서는 현재 프로세서 그룹 안에서만 해석됩니다 |
-| `reserved[4]` | 모두 `0`이어야 합니다 |
+| `priority` | `STThreadPriority`（見下表）。預設 `ST_THREAD_PRIORITY_DEFAULT`（0） |
+| `flags` | `ST_THREAD_FLAG_*` 組合。預設 `0` |
+| `affinityMask` | 邏輯處理器位元遮罩，`0` = 不指定。**僅 Windows 遵守**。若不是處理程序遮罩的子集，核心會拒絕。在超過 64 個邏輯處理器的機器上，僅在目前的處理器群組內解譯 |
+| `reserved[4]` | 必須全部為 `0` |
 
-모든 필드가 `0`(DEFAULT · flags 0 · affinity 0)이면 "지정 없음"과 같습니다.
+所有欄位皆為 `0`（DEFAULT · flags 0 · affinity 0）時等同「不指定」。
 
-**열거형** `STThreadType`
+**列舉** `STThreadType`
 
-| 값 | 이름 | 의미 |
+| 值 | 名稱 | 意義 |
 |---|---|---|
-| `0` | `ST_THREAD_LANE_DIRECT` | 논리 역할: direct 전파 작업(전용 스레드 없음) |
-| `1` | `ST_THREAD_LANE_GUIDE` | 논리 역할: guide 작업 |
-| `2` | `ST_THREAD_LANE_REFLECTION_DIFFRACTION` | 논리 역할: 반사/회절 작업 |
-| `3` | `ST_THREAD_LANE_REVERB` | 논리 역할: 잔향 작업 |
-| `4` | `ST_THREAD_COMPUTE_POOL` | 실제 스레드: 계산 풀 워커. PIPELINED는 `max(3,N)−1`개(Direct 전용 1개 포함), SYNCHRONOUS는 `N>1`일 때 `N`개 |
-| `5` | `ST_THREAD_AUDIO_RENDER` | 실제 스레드: `st_rt_render_start`가 여는 렌더 스레드(`HOST_PULL` 모드에는 없음) |
-| `6` | `ST_THREAD_FILE_DECODER` | 실제 스레드: 파일 디코더, 엔진당 최대 1개 |
-| `7` | `ST_THREAD_ACCEL_BUILD` | 예약값. 가속구조 빌드는 호출 스레드에서 실행되어 별도 워커가 없음 |
-| `8` | `ST_THREAD_IR_CONVERTER` | 논리 역할: IR 변환 작업 |
-| `9` | `ST_THREAD_AU_PREPARE` | 논리 역할: IR 준비 작업 |
-| `10` | `ST_THREAD_SCENE_INPUT` | 논리 역할: 씬 입력 작업 |
-| `11` | `ST_THREAD_TYPE_COUNT` | 종류 수(인자로 쓰지 않음) |
+| `0` | `ST_THREAD_LANE_DIRECT` | 邏輯角色：direct 傳播工作（無專用執行緒） |
+| `1` | `ST_THREAD_LANE_GUIDE` | 邏輯角色：guide 工作 |
+| `2` | `ST_THREAD_LANE_REFLECTION_DIFFRACTION` | 邏輯角色：反射/繞射工作 |
+| `3` | `ST_THREAD_LANE_REVERB` | 邏輯角色：殘響工作 |
+| `4` | `ST_THREAD_COMPUTE_POOL` | 實際執行緒：計算集區工作執行緒。PIPELINED 為 `max(3,N)−1` 個（含 Direct 專用 1 個），SYNCHRONOUS 在 `N>1` 時為 `N` 個 |
+| `5` | `ST_THREAD_AUDIO_RENDER` | 實際執行緒：`st_rt_render_start` 開啟的渲染執行緒（`HOST_PULL` 模式下沒有） |
+| `6` | `ST_THREAD_FILE_DECODER` | 實際執行緒：檔案解碼器，每個引擎最多 1 個 |
+| `7` | `ST_THREAD_ACCEL_BUILD` | 保留值。加速結構建置在呼叫執行緒上執行，沒有獨立工作執行緒 |
+| `8` | `ST_THREAD_IR_CONVERTER` | 邏輯角色：IR 轉換工作 |
+| `9` | `ST_THREAD_AU_PREPARE` | 邏輯角色：IR 準備工作 |
+| `10` | `ST_THREAD_SCENE_INPUT` | 邏輯角色：場景輸入工作 |
+| `11` | `ST_THREAD_TYPE_COUNT` | 類型數（不作為引數使用） |
 
-**열거형** `STThreadPriority`
+**列舉** `STThreadPriority`
 
-| 값 | 이름 | Windows | macOS QoS |
+| 值 | 名稱 | Windows | macOS QoS |
 |---|---|---|---|
-| `0` | `ST_THREAD_PRIORITY_DEFAULT` | 플랫폼 기본표 그대로 | 플랫폼 기본표 그대로 |
+| `0` | `ST_THREAD_PRIORITY_DEFAULT` | 沿用平台預設表 | 沿用平台預設表 |
 | `1` | `ST_THREAD_PRIORITY_LOW` | LOWEST | BACKGROUND |
 | `2` | `ST_THREAD_PRIORITY_BELOW_NORMAL` | BELOW_NORMAL | UTILITY |
 | `3` | `ST_THREAD_PRIORITY_NORMAL` | NORMAL | USER_INITIATED |
@@ -265,179 +261,179 @@ int st_rt_set_thread_attributes(int threadType, const STThreadAttributes* attrib
 | `5` | `ST_THREAD_PRIORITY_HIGH` | HIGHEST | USER_INTERACTIVE |
 | `6` | `ST_THREAD_PRIORITY_TIME_CRITICAL` | TIME_CRITICAL | USER_INTERACTIVE |
 
-**플래그** `ST_THREAD_FLAG_*`
+**旗標** `ST_THREAD_FLAG_*`
 
-| 플래그 | 의미 |
+| 旗標 | 意義 |
 |---|---|
-| `ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES` (`1u << 0`) | 성능 코어 선호 |
-| `ST_THREAD_FLAG_PREFER_EFFICIENCY_CORES` (`1u << 1`) | 효율 코어 선호 |
+| `ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES` (`1u << 0`) | 偏好效能核心 |
+| `ST_THREAD_FLAG_PREFER_EFFICIENCY_CORES` (`1u << 1`) | 偏好節能核心 |
 
-코어 선호는 Windows 11 EcoQoS로 적용되며 macOS에서는 무시됩니다(QoS 클래스가 클러스터 배치를 정합니다). 두 플래그를 동시에 켜면 거절됩니다.
+核心偏好以 Windows 11 EcoQoS 套用，在 macOS 上會被忽略（由 QoS 類別決定叢集配置）。同時開啟兩個旗標會被拒絕。
 
-**반환** — `1` = 성공 / `0` = 실패(`threadType` 범위 밖, `structSize`/`apiVersion` 불일치, `priority` 범위 밖, 코어 선호 플래그 상충, `reserved[]`가 0이 아님). 실패 시 표는 바뀌지 않습니다. 컨텍스트를 받지 않으므로 `st_rt_get_last_status`에는 아무것도 남지 않습니다.
+**回傳值** — `1` = 成功 / `0` = 失敗（`threadType` 超出範圍、`structSize`/`apiVersion` 不符、`priority` 超出範圍、核心偏好旗標衝突、`reserved[]` 不為 0）。失敗時表不會變更。因不接收情境，`st_rt_get_last_status` 不會留下任何內容。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_thread_attributes</code> — 스레드 종류별로 저장된 속성 요청값을 읽는다</summary>
+<summary><code>st_rt_get_thread_attributes</code> — 讀取依執行緒類型儲存的屬性請求值</summary>
 
 ```c
 int st_rt_get_thread_attributes(int threadType, STThreadAttributes* outAttributes);
 ```
 
-**용도** — `st_rt_set_thread_attributes`로 저장한 값을 확인합니다. 실제로 OS에 적용된 값이 아니라 **요청값 그대로**를 돌려줍니다.
+**用途** — 確認以 `st_rt_set_thread_attributes` 儲存的值。回傳的不是實際套用到 OS 的值，而是 **原樣的請求值**。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 한 번도 지정하지 않은 종류는 기본값(priority `DEFAULT` · flags `0` · affinityMask `0`)을 돌려줍니다. 스레드: `[any]` — 프로세스 전역 표를 짧은 뮤텍스 하나로 읽습니다.
+**呼叫方式** — 可隨時呼叫。從未指定過的類型回傳預設值（priority `DEFAULT` · flags `0` · affinityMask `0`）。執行緒：`[any]` — 以一個短暫的互斥鎖讀取處理程序全域表。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `threadType` | `STThreadType` 값 `0`~`10`. 범위 밖이면 `0` |
-| `outAttributes` | 출력. 호출자가 `structSize = sizeof(STThreadAttributes)`, `apiVersion = ST_ABI_VERSION`을 채운다. 성공 시 `priority`·`flags`·`affinityMask`가 채워지고 `reserved[]`는 0이 된다 |
+| `threadType` | `STThreadType` 值 `0`~`10`。超出範圍則為 `0` |
+| `outAttributes` | 輸出。呼叫端填入 `structSize = sizeof(STThreadAttributes)`、`apiVersion = ST_ABI_VERSION`。成功時填入 `priority`·`flags`·`affinityMask`，`reserved[]` 變為 0 |
 
-`STThreadAttributes` 필드는 `st_rt_set_thread_attributes` 항목 참고.
+`STThreadAttributes` 欄位請參閱 `st_rt_set_thread_attributes` 項目。
 
-**반환** — `1` = 성공 / `0` = 거절(`outAttributes`가 `NULL`, 스탬프 불일치, `threadType` 범위 밖).
+**回傳值** — `1` = 成功 / `0` = 拒絕（`outAttributes` 為 `NULL`、戳記不符、`threadType` 超出範圍）。
 
 </details>
 
 <details>
-<summary><code>st_rt_init_create_options</code> — 생성 옵션 구조체를 기본값으로 채운다</summary>
+<summary><code>st_rt_init_create_options</code> — 以預設值填入建立選項結構體</summary>
 
 ```c
 void st_rt_init_create_options(STRT_CreateOptions* outOptions);
 ```
 
-**용도** — `STRT_CreateOptions`를 올바른 버전 스탬프와 기본값으로 초기화합니다. 호스트는 이 함수로 채운 뒤 필요한 필드만 바꿔 `st_rt_create`에 넘깁니다. 이렇게 하면 이후 추가되는 필드도 안전한 기본값(0)으로 채워집니다.
+**用途** — 以正確的版本戳記與預設值初始化 `STRT_CreateOptions`。主機以此函式填好後只修改需要的欄位，再傳給 `st_rt_create`。如此一來，日後新增的欄位也會以安全的預設值（0）填入。
 
-**언제·어떻게** — `st_rt_create` 직전에 부릅니다. `structSize`와 `apiVersion`이 자동으로 채워지고, `scheduler`는 `ST_RT_SCHEDULER_PIPELINED`, 나머지 필드는 모두 `0`(각 필드의 "기본" 의미)입니다. 스레드: `[any]` — 호출자 소유 구조체만 채웁니다.
+**呼叫方式** — 在 `st_rt_create` 之前呼叫。`structSize` 與 `apiVersion` 會自動填入，`scheduler` 為 `ST_RT_SCHEDULER_PIPELINED`，其餘欄位皆為 `0`（各欄位的「預設」意義）。執行緒：`[any]` — 只填入呼叫端擁有的結構體。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `outOptions` | 채울 구조체. `NULL`이면 아무 일도 하지 않는다 |
+| `outOptions` | 要填入的結構體。若為 `NULL` 則不執行任何動作 |
 
-**구조체** `STRT_CreateOptions`
+**結構體** `STRT_CreateOptions`
 
-| 필드 | 형 | 기본 | 설명 |
+| 欄位 | 型別 | 預設 | 說明 |
 |---|---|---|---|
-| `structSize` | `uint32_t` | `sizeof(STRT_CreateOptions)` | 버전 스탬프. 다르면 생성 거절 |
-| `apiVersion` | `uint32_t` | `ST_ABI_VERSION` | 버전 스탬프. 다르면 생성 거절 |
-| `scheduler` | `int32_t` | `ST_RT_SCHEDULER_PIPELINED`(1) | `STRT_Scheduler`. `PIPELINED`(1) = 엔진 워커가 전파·IR을 백그라운드에서 최신 프레임 우선으로 계산하는 실시간 기본 모드. `SYNCHRONOUS`(0) = 호스트가 `st_rt_propagate`를 부르는 스레드에서 파이프라인이 도는 동기 모드(진단·호환용). 생성 후 바꿀 수 없음(`st_rt_get_scheduler`) |
-| `seedValue` | `uint32_t` | `0` | 호환용 필드. 기본 백엔드의 출력에는 영향이 없습니다 |
-| `maxDelaySeconds` | `float` | `0` | 렌더 지연 링 길이(초). `0` = 플랫폼 기본(데스크톱 2.0 s, Android·iOS 1.0 s, Emscripten 0.5 s). 그 외 값은 약 0.0118 s(한 처리 블록 + 8샘플)~60 s, 유한값이어야 함. 생성 후에는 `st_rt_render_set_max_delay_seconds`로 바꿉니다 |
-| `maxComputeThreads` | `uint32_t` | `0` | 전파·IR 계산에 쓸 스레드 수 상한 = 엔진 소유 공유 계산 풀의 폭. `0` = 자동 = `min(퍼포먼스 코어 수, 6)`, 최소 1. 환경변수의 영향을 받지 않습니다. PIPELINED에서는 예산 `N`이 최소 3으로 올려지고 오디오 슬롯 1 + Direct 전용 워커 1 + 일반 워커 `N−2`로 나뉩니다(아래 `st_rt_create`의 스레드 수 표). 지원 여부는 `ST_CAP_MAX_COMPUTE_THREADS` |
-| `sceneRatio` | `float` | `0` | 씬 단위 → 미터 변환 인자. `0` = 기본 1.0(씬 단위 = 미터). 센티미터 호스트는 `0.01f`, 피트 호스트는 `0.3048f`. **생성 전용**이라 런타임 setter가 없습니다. 비유한값·0 이하 값은 거절. 지원 여부는 `ST_CAP_SCENE_RATIO` |
-| `renderOutputMode` | `int32_t` | `ST_RT_RENDER_OUTPUT_DEVICE`(0) | `STRT_RenderOutputMode`(아래 표). 범위 밖은 거절. 지원 여부는 `ST_CAP_HOST_PULL_RENDER` / `ST_CAP_HOST_PULL_BUFFERED` |
-| `hostSampleRate` | `int32_t` | `0` | 호스트 샘플레이트. `0` = 엔진 레이트(44100) — 리샘플러를 만들지 않습니다. 그 외 값이면 엔진이 내장 윈도 sinc 변환기로 스트림 입력(`st_rt_source_write_stream`)과 pull 출력(`st_rt_render_process`)을 변환하며, 공개 API에서 "프레임" 단위로 나오는 값(`write_stream`·`render_process`·`render_get_latency_frames`·`STStreamDesc.capacityFrames`·`STStreamStatus`)이 **전부 이 레이트**가 됩니다. 허용 범위 `[8000, 384000]`. `DEVICE` 모드에서 0이 아닌 값은 거절(장치 경로는 엔진 레이트 고정). 지원 여부는 `ST_CAP_HOST_SAMPLE_RATE` |
-| `backend` | `int32_t` | `ST_BACKEND_ST`(0) | `STBackend` 파이프라인 선택. `ST_BACKEND_ST`(0)이 기본 엔진입니다. `ST_BACKEND_EXA`(1)는 라이브러리가 `ST_CAP_BACKEND_EXA`를 광고할 때만 쓸 수 있고 `SYNCHRONOUS` 스케줄러와 `maxDelaySeconds = 0`이 필요합니다. 그 밖·사용 불가 값은 거절 |
-| `startIdle` | `uint32_t` | `0` | `0` = 생성 직후 `RUNNING`, `1` = 생성 직후 `IDLE` — 호스트가 `st_rt_run`을 불러야 전파·IR·렌더가 돕니다(들려줄 것이 없을 때 계산이 공회전하지 않게). 그 밖 값은 거절. 지원 여부는 `ST_CAP1_ENGINE_IDLE` |
-| `maxSources` | `uint32_t` | `0` | 최대 음원 수. `0` = 플랫폼 기본(데스크톱 128, Android·iOS 48, Emscripten 32). 생성 후에는 `st_rt_set_memory_budget`으로 바꿉니다. 지원 여부는 `ST_CAP1_MEMORY_BUDGET` |
+| `structSize` | `uint32_t` | `sizeof(STRT_CreateOptions)` | 版本戳記。不同則拒絕建立 |
+| `apiVersion` | `uint32_t` | `ST_ABI_VERSION` | 版本戳記。不同則拒絕建立 |
+| `scheduler` | `int32_t` | `ST_RT_SCHEDULER_PIPELINED`(1) | `STRT_Scheduler`。`PIPELINED`(1) = 引擎工作執行緒在背景以最新影格優先計算傳播·IR 的即時預設模式。`SYNCHRONOUS`(0) = 管線在主機呼叫 `st_rt_propagate` 的執行緒上執行的同步模式（診斷·相容用）。建立後無法變更（`st_rt_get_scheduler`） |
+| `seedValue` | `uint32_t` | `0` | 相容用欄位。對預設後端的輸出沒有影響 |
+| `maxDelaySeconds` | `float` | `0` | 渲染延遲環長度（秒）。`0` = 平台預設（桌面 2.0 s，Android·iOS 1.0 s，Emscripten 0.5 s）。其他值為約 0.0118 s（一個處理區塊 + 8 樣本）~60 s，須為有限值。建立後以 `st_rt_render_set_max_delay_seconds` 變更 |
+| `maxComputeThreads` | `uint32_t` | `0` | 傳播·IR 計算可用的執行緒數上限 = 引擎擁有的共用計算集區寬度。`0` = 自動 = `min(效能核心數, 6)`，最少 1。不受環境變數影響。PIPELINED 下預算 `N` 至少提高到 3，分為音訊槽 1 + Direct 專用工作執行緒 1 + 一般工作執行緒 `N−2`（見下方 `st_rt_create` 的執行緒數表）。支援與否見 `ST_CAP_MAX_COMPUTE_THREADS` |
+| `sceneRatio` | `float` | `0` | 場景單位 → 公尺轉換係數。`0` = 預設 1.0（場景單位 = 公尺）。公分主機為 `0.01f`，英尺主機為 `0.3048f`。**僅限建立時**，沒有執行期 setter。非有限值·0 以下的值會被拒絕。支援與否見 `ST_CAP_SCENE_RATIO` |
+| `renderOutputMode` | `int32_t` | `ST_RT_RENDER_OUTPUT_DEVICE`(0) | `STRT_RenderOutputMode`（見下表）。超出範圍則拒絕。支援與否見 `ST_CAP_HOST_PULL_RENDER` / `ST_CAP_HOST_PULL_BUFFERED` |
+| `hostSampleRate` | `int32_t` | `0` | 主機取樣率。`0` = 引擎速率（44100）— 不建立重取樣器。其他值時，引擎以內建窗函數 sinc 轉換器轉換串流輸入（`st_rt_source_write_stream`）與 pull 輸出（`st_rt_render_process`），公開 API 中以「影格」為單位的值（`write_stream`·`render_process`·`render_get_latency_frames`·`STStreamDesc.capacityFrames`·`STStreamStatus`）**全部採用此速率**。允許範圍 `[8000, 384000]`。`DEVICE` 模式下非 0 的值會被拒絕（裝置路徑固定為引擎速率）。支援與否見 `ST_CAP_HOST_SAMPLE_RATE` |
+| `backend` | `int32_t` | `ST_BACKEND_ST`(0) | `STBackend` 管線選擇。`ST_BACKEND_ST`(0) 為預設引擎。`ST_BACKEND_EXA`(1) 僅在程式庫宣告 `ST_CAP_BACKEND_EXA` 時可用，且需要 `SYNCHRONOUS` 排程器與 `maxDelaySeconds = 0`。其他·不可用的值會被拒絕 |
+| `startIdle` | `uint32_t` | `0` | `0` = 建立後立即 `RUNNING`，`1` = 建立後立即 `IDLE` — 主機須呼叫 `st_rt_run` 才會執行傳播·IR·渲染（在沒有要播放的內容時避免計算空轉）。其他值會被拒絕。支援與否見 `ST_CAP1_ENGINE_IDLE` |
+| `maxSources` | `uint32_t` | `0` | 最大音源數。`0` = 平台預設（桌面 128，Android·iOS 48，Emscripten 32）。建立後以 `st_rt_set_memory_budget` 變更。支援與否見 `ST_CAP1_MEMORY_BUDGET` |
 
-**열거형** `STRT_RenderOutputMode`
+**列舉** `STRT_RenderOutputMode`
 
-| 값 | 이름 | 의미 |
+| 值 | 名稱 | 意義 |
 |---|---|---|
-| `0` | `ST_RT_RENDER_OUTPUT_DEVICE` | 기본. `st_rt_render_start`가 출력 장치와 엔진 렌더 스레드를 열고 엔진이 장치까지 직접 출력합니다 |
-| `1` | `ST_RT_RENDER_OUTPUT_HOST_PULL` | 호스트 pull. 엔진은 장치도 렌더 스레드도 만들지 않고, 호스트가 자기 오디오 스레드에서 `st_rt_render_process`를 불러 블록을 가져갑니다. 이 모드에서도 `st_rt_render_start(useHrtf)`는 반드시 불러야 합니다(바이노럴/스피커 선택과 "렌더 허용" 플래그를 겸함) |
-| `2` | `ST_RT_RENDER_OUTPUT_HOST_PULL_BUFFERED` | 엔진 렌더 스레드가 링(8블록 용량·3블록 목표)을 채우고 `st_rt_render_process`는 링에서 복사만 합니다. 호스트 콜백 비용이 memcpy 수준으로 내려가고 지터는 링이 흡수합니다. 블록 처리 자체가 계속 블록 시간을 넘으면 링도 막지 못하며 무음으로 채워집니다. 지연 상한 ≈ 엔진 3블록. `hostSampleRate ≠ 0`이면 변환은 렌더 스레드에서 합니다 |
+| `0` | `ST_RT_RENDER_OUTPUT_DEVICE` | 預設。`st_rt_render_start` 開啟輸出裝置與引擎渲染執行緒，由引擎直接輸出到裝置 |
+| `1` | `ST_RT_RENDER_OUTPUT_HOST_PULL` | 主機 pull。引擎既不建立裝置也不建立渲染執行緒，由主機在自己的音訊執行緒上呼叫 `st_rt_render_process` 取得區塊。此模式下也必須呼叫 `st_rt_render_start(useHrtf)`（兼作雙耳/喇叭選擇與「允許渲染」旗標） |
+| `2` | `ST_RT_RENDER_OUTPUT_HOST_PULL_BUFFERED` | 引擎渲染執行緒填充環（容量 8 區塊·目標 3 區塊），`st_rt_render_process` 只從環中複製。主機回呼成本降至 memcpy 等級，抖動由環吸收。若區塊處理本身持續超過區塊時間，環也無法阻擋，會以靜音填充。延遲上限 ≈ 引擎 3 區塊。`hostSampleRate ≠ 0` 時，轉換在渲染執行緒中進行 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_create</code> — 실시간 컨텍스트(엔진·워커·계산 풀)를 만든다</summary>
+<summary><code>st_rt_create</code> — 建立即時情境（引擎·工作執行緒·計算集區）</summary>
 
 ```c
 STStatus st_rt_create(const STRT_CreateOptions* options, STRT_Context** outContext);
 ```
 
-**용도** — 실시간 엔진 인스턴스 하나를 만듭니다. 씬·소스·리스너·렌더 등 다른 모든 `st_rt_*` 호출은 이 컨텍스트를 받습니다. 스케줄러·계산 스레드 폭·단위 배율·출력 모드·호스트 샘플레이트처럼 실행 중에 바꿀 수 없는 설정은 여기서 확정됩니다.
+**用途** — 建立一個即時引擎實例。場景·音源·聆聽者·渲染等其他所有 `st_rt_*` 呼叫都接收此情境。排程器·計算執行緒寬度·單位倍率·輸出模式·主機取樣率等執行中無法變更的設定在此確定。
 
-**언제·어떻게** — 스레드 속성(`st_rt_set_thread_attributes`)을 쓰려면 그보다 먼저 지정한 뒤 부릅니다. `st_rt_init_create_options`로 옵션을 채우고 필요한 필드만 바꿔 넘깁니다. 성공하면 씬 구성(메시·오브젝트·소스·리스너) → `st_rt_build` → `st_rt_render_start` 순으로 진행하고, 끝나면 `st_rt_destroy`로 해제합니다. 생성 직후 상태는 PIPELINED 스케줄러, 샘플레이트 44100 Hz, 레인 갱신 주기 direct 10 ms / 반사·회절 0 ms / 잔향 4 ms, 엔진 쉼 `RUNNING`(`startIdle = 1`이면 `IDLE`)이며, 기본 백엔드 컨텍스트는 출력단 등라우드니스 보정이 켜진 상태로 시작합니다(`st_rt_render_set_loudness_compensation`으로 끌 수 있습니다). 스레드: `[control, blocking]` — 엔진·워커·계산 풀을 만드는 긴 구간이라 게임 루프나 오디오 스레드에서 부르지 않습니다.
+**呼叫方式** — 若要使用執行緒屬性（`st_rt_set_thread_attributes`），須先指定後再呼叫。以 `st_rt_init_create_options` 填入選項，只修改需要的欄位後傳入。成功後依場景組成（網格·物件·音源·聆聽者）→ `st_rt_build` → `st_rt_render_start` 的順序進行，結束時以 `st_rt_destroy` 釋放。建立後的初始狀態為 PIPELINED 排程器、取樣率 44100 Hz、通道更新週期 direct 10 ms / 反射·繞射 0 ms / 殘響 4 ms、引擎休眠 `RUNNING`（`startIdle = 1` 時為 `IDLE`），預設後端情境以輸出級等響度補償開啟的狀態啟動（可用 `st_rt_render_set_loudness_compensation` 關閉）。執行緒：`[control, blocking]` — 建立引擎·工作執行緒·計算集區的較長區間，不要在遊戲迴圈或音訊執行緒中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `options` | 생성 옵션. `NULL`이면 `st_rt_init_create_options`의 기본값으로 만든다. 직접 채울 때는 `structSize`/`apiVersion` 스탬프가 맞아야 한다 |
-| `outContext` | 출력 핸들. 성공하면 새 컨텍스트, 실패하면 `NULL`이 들어간다. `NULL`을 넘기면 `ST_STATUS_INVALID_ARGUMENT` |
+| `options` | 建立選項。若為 `NULL`，則以 `st_rt_init_create_options` 的預設值建立。自行填寫時 `structSize`/`apiVersion` 戳記必須相符 |
+| `outContext` | 輸出控制代碼。成功時填入新情境，失敗時填入 `NULL`。傳入 `NULL` 則為 `ST_STATUS_INVALID_ARGUMENT` |
 
-`STRT_CreateOptions` 필드는 `st_rt_init_create_options` 항목 참고.
+`STRT_CreateOptions` 欄位請參閱 `st_rt_init_create_options` 項目。
 
-**엔진이 띄우는 스레드 수** — `N`은 SYNCHRONOUS에서는 해석된 `maxComputeThreads` 예산, PIPELINED에서는 `max(3, 해석된 예산)`입니다. 파일 입력(`st_rt_source_set_audio_file`)이 하나라도 있으면 파일 디코더 스레드 1개가 더해지고, 호스트 스트림 입력에는 디코더가 없습니다. 가속구조 빌드는 호출 스레드에서 실행되어 추가 스레드가 없습니다.
+**引擎啟動的執行緒數** — `N` 在 SYNCHRONOUS 下為解析後的 `maxComputeThreads` 預算，在 PIPELINED 下為 `max(3, 解析後的預算)`。只要有一個檔案輸入（`st_rt_source_set_audio_file`），就會多 1 個檔案解碼器執行緒；主機串流輸入沒有解碼器。加速結構建置在呼叫執行緒上執行，沒有額外執行緒。
 
-| 출력 모드 | SYNCHRONOUS | PIPELINED |
+| 輸出模式 | SYNCHRONOUS | PIPELINED |
 |---|---|---|
-| `DEVICE` | 풀 워커 `N`(N=1이면 0, 호출 스레드에서 인라인) + 렌더 1 + 장치 1 | 풀 워커 `N−1`(Direct 전용 1 + 일반 `N−2`) + 렌더 1 + 장치 1 |
-| `HOST_PULL` | 위에서 렌더·장치 스레드가 빠짐 | 위에서 렌더·장치 스레드가 빠짐 |
-| `HOST_PULL_BUFFERED` | 렌더 스레드만 있고 장치 스레드 없음 | 렌더 스레드만 있고 장치 스레드 없음 |
+| `DEVICE` | 集區工作執行緒 `N`（N=1 時為 0，在呼叫執行緒上內嵌）+ 渲染 1 + 裝置 1 | 集區工作執行緒 `N−1`（Direct 專用 1 + 一般 `N−2`）+ 渲染 1 + 裝置 1 |
+| `HOST_PULL` | 上述去掉渲染·裝置執行緒 | 上述去掉渲染·裝置執行緒 |
+| `HOST_PULL_BUFFERED` | 只有渲染執行緒，沒有裝置執行緒 | 只有渲染執行緒，沒有裝置執行緒 |
 
-PIPELINED의 렌더 스레드는 예산 `N` 안의 오디오 슬롯이며 우선순위만 승격됩니다. 실제 수는 `st_rt_get_thread_inventory`로 확인합니다.
+PIPELINED 的渲染執行緒是預算 `N` 內的音訊槽，只提升優先順序。實際數量以 `st_rt_get_thread_inventory` 確認。
 
-**반환** — `STStatus`.
-- `ST_STATUS_OK` — 성공.
-- `ST_STATUS_INVALID_ARGUMENT` — `outContext`가 `NULL`, 또는 옵션 값이 범위 밖(`scheduler`, `maxDelaySeconds`, `sceneRatio`, `renderOutputMode`, `hostSampleRate`, `backend`, `startIdle`).
-- `ST_STATUS_VERSION_MISMATCH` — `structSize`/`apiVersion` 불일치.
-- `ST_STATUS_INITIALIZATION_FAILED` / `ST_STATUS_ALLOCATION_FAILED` — 엔진 초기화·할당 실패.
+**回傳值** — `STStatus`。
+- `ST_STATUS_OK` — 成功。
+- `ST_STATUS_INVALID_ARGUMENT` — `outContext` 為 `NULL`，或選項值超出範圍（`scheduler`、`maxDelaySeconds`、`sceneRatio`、`renderOutputMode`、`hostSampleRate`、`backend`、`startIdle`）。
+- `ST_STATUS_VERSION_MISMATCH` — `structSize`/`apiVersion` 不符。
+- `ST_STATUS_INITIALIZATION_FAILED` / `ST_STATUS_ALLOCATION_FAILED` — 引擎初始化·配置失敗。
 
-실패 사유 문자열은 `st_rt_get_last_error(NULL, ...)`로 읽습니다(같은 호출 스레드의 마지막 실패한 생성).
+失敗原因字串以 `st_rt_get_last_error(NULL, ...)` 讀取（同一呼叫執行緒上最後一次失敗的建立）。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_backend</code> — 컨텍스트가 쓰는 파이프라인 백엔드를 돌려준다</summary>
+<summary><code>st_rt_get_backend</code> — 回傳情境使用的管線後端</summary>
 
 ```c
 int st_rt_get_backend(const STRT_Context* context);
 ```
 
-**용도** — 생성 시 `STRT_CreateOptions.backend`로 선택된 파이프라인을 확인합니다. 실행 중 전환은 지원하지 않습니다.
+**用途** — 確認建立時以 `STRT_CreateOptions.backend` 選擇的管線。不支援執行中切換。
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있습니다. 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**呼叫方式** — 建立後可隨時呼叫。執行緒：`[control]` — 在控制執行緒上呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STBackend` 값(`ST_BACKEND_ST` = 0 / `ST_BACKEND_EXA` = 1). `context`가 `NULL`이면 `-1`.
+**回傳值** — `STBackend` 值（`ST_BACKEND_ST` = 0 / `ST_BACKEND_EXA` = 1）。`context` 為 `NULL` 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_destroy</code> — 컨텍스트를 해제한다(워커 정지·join)</summary>
+<summary><code>st_rt_destroy</code> — 釋放情境（停止·join 工作執行緒）</summary>
 
 ```c
 void st_rt_destroy(STRT_Context* context);
 ```
 
-**용도** — 컨텍스트와 엔진이 소유한 모든 자원(씬, 소스, 워커·계산 풀 스레드, 렌더 출력)을 해제합니다.
+**用途** — 釋放情境與引擎擁有的所有資源（場景、音源、工作執行緒·計算集區執行緒、渲染輸出）。
 
-**언제·어떻게** — 컨텍스트 사용이 끝났을 때 한 번 부릅니다. 호출 뒤 핸들은 무효이므로 다른 스레드가 같은 컨텍스트를 쓰고 있지 않아야 합니다. 스레드: `[control, blocking]` — 워커를 멈추고 join하므로 오디오 스레드에서 부르지 않습니다.
+**呼叫方式** — 情境使用結束時呼叫一次。呼叫後控制代碼即失效，因此不得有其他執行緒正在使用同一情境。執行緒：`[control, blocking]` — 會停止並 join 工作執行緒，因此不要在音訊執行緒中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 해제할 컨텍스트 핸들 |
+| `context` | 要釋放的情境控制代碼 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_last_status</code> — 컨텍스트에 남은 마지막 상태 코드를 읽는다</summary>
+<summary><code>st_rt_get_last_status</code> — 讀取情境中留下的最後狀態碼</summary>
 
 ```c
 STStatus st_rt_get_last_status(const STRT_Context* context);
 ```
 
-**용도** — `int`/`void`를 돌려주는 함수가 실패했을 때 그 사유를 `STStatus`로 확인합니다. 많은 함수가 실패 시 이 진단 필드에 상태를 남깁니다.
+**用途** — 回傳 `int`/`void` 的函式失敗時，以 `STStatus` 確認其原因。許多函式在失敗時會在此診斷欄位留下狀態。
 
-**언제·어떻게** — 실패를 돌려받은 직후 같은 제어 스레드에서 부릅니다. 사람이 읽는 메시지는 `st_rt_get_last_error`로 얻습니다. 오디오 경로(`st_rt_render_process`)가 남긴 상태가 있으면 그것을 먼저 돌려주고 비웁니다. 같은 컨텍스트를 여러 스레드에서 동시에 쓰면 오류 경로의 진단 기록은 직렬화되지 않습니다. 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**呼叫方式** — 收到失敗後，立即在同一控制執行緒上呼叫。人類可讀的訊息以 `st_rt_get_last_error` 取得。若有音訊路徑（`st_rt_render_process`）留下的狀態，會先回傳它並清空。多個執行緒同時使用同一情境時，錯誤路徑的診斷記錄不會被序列化。執行緒：`[control]` — 在控制執行緒上呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 마지막 `STStatus`. `context`가 `NULL`이면 `ST_STATUS_INVALID_CONTEXT`.
+**回傳值** — 最後的 `STStatus`。`context` 為 `NULL` 時為 `ST_STATUS_INVALID_CONTEXT`。
 
-| 값 | 이름 |
+| 值 | 名稱 |
 |---|---|
 | `0` | `ST_STATUS_OK` |
 | `1` | `ST_STATUS_INVALID_CONTEXT` |
@@ -450,7164 +446,7164 @@ STStatus st_rt_get_last_status(const STRT_Context* context);
 | `8` | `ST_STATUS_INVALID_MATERIAL` |
 | `9` | `ST_STATUS_STALE_SNAPSHOT` |
 | `10` | `ST_STATUS_UNAVAILABLE` |
-| `11` | `ST_STATUS_BUDGET_EXCEEDED` — 음원 메모리 예산 초과(`st_rt_source_create`, 거절 정책 `ST_MEMORY_REJECT_NEW`일 때) |
+| `11` | `ST_STATUS_BUDGET_EXCEEDED` — 超出音源記憶體預算（`st_rt_source_create`，拒絕策略為 `ST_MEMORY_REJECT_NEW` 時） |
 
 </details>
 
 <details>
-<summary><code>st_rt_get_last_error</code> — 마지막 오류 메시지 문자열을 복사한다</summary>
+<summary><code>st_rt_get_last_error</code> — 複製最後的錯誤訊息字串</summary>
 
 ```c
 int st_rt_get_last_error(const STRT_Context* context, char* outMessage, int capacity);
 ```
 
-**용도** — 마지막 실패의 사람이 읽는 설명을 얻어 로그에 남깁니다. `context`에 `NULL`을 넘기면 컨텍스트가 없는 `st_rt_create` 실패의 사유를 읽을 수 있습니다.
+**用途** — 取得最後一次失敗的人類可讀說明並記錄到日誌。對 `context` 傳入 `NULL` 時，可讀取沒有情境的 `st_rt_create` 失敗原因。
 
-**언제·어떻게** — 실패 직후 부릅니다. 필요한 크기를 먼저 알고 싶으면 `outMessage = NULL`로 불러 반환값만 받습니다. `context = NULL`일 때는 **이 호출 스레드**에서 마지막으로 실패한 `st_rt_create`의 메시지이며, 다음 `st_rt_create` 호출이 이를 지웁니다. 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**呼叫方式** — 在失敗後立即呼叫。若想先知道所需大小，以 `outMessage = NULL` 呼叫只取得回傳值。`context = NULL` 時為 **此呼叫執行緒** 上最後一次失敗的 `st_rt_create` 的訊息，下一次 `st_rt_create` 呼叫會將其清除。執行緒：`[control]` — 在控制執行緒上呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들. `NULL`이면 이 스레드의 마지막 생성 실패 메시지 |
-| `outMessage` | 출력 버퍼. `NULL`이면 복사하지 않고 크기만 돌려준다 |
-| `capacity` | `outMessage` 바이트 수. 모자라면 `capacity − 1`바이트로 잘라 NUL로 끝낸다 |
+| `context` | 情境控制代碼。若為 `NULL`，則為此執行緒最後一次建立失敗的訊息 |
+| `outMessage` | 輸出緩衝區。若為 `NULL`，則不複製，只回傳大小 |
+| `capacity` | `outMessage` 的位元組數。不足時截斷為 `capacity − 1` 位元組並以 NUL 結尾 |
 
-**반환** — 메시지 전체를 담는 데 필요한 바이트 수(NUL 포함). 반환값이 `capacity`보다 크면 잘린 것입니다.
+**回傳值** — 容納完整訊息所需的位元組數（含 NUL）。回傳值大於 `capacity` 表示已被截斷。
 
 </details>
 
 <details>
-<summary><code>st_rt_is_acoustic_feature_enabled</code> — 개별 음향 기능(공기흡수·전파지연·직접음 차폐)이 켜져 있는지 읽는다</summary>
+<summary><code>st_rt_is_acoustic_feature_enabled</code> — 讀取個別聲學功能（空氣吸收·傳播延遲·直達聲遮蔽）是否開啟</summary>
 
 ```c
 int st_rt_is_acoustic_feature_enabled(const STRT_Context* context, int feature);
 ```
 
-**용도** — `st_rt_set_acoustic_feature_enabled`로 켜고 끈 음향 기능의 현재 상태를 확인합니다. 경로 종류 게이트와 함께 청취 A/B 비교(무엇이 소리에 기여하는지 하나씩 분리)에 씁니다.
+**用途** — 確認以 `st_rt_set_acoustic_feature_enabled` 開關的聲學功能目前狀態。與路徑類型閘門一起用於聆聽 A/B 比較（逐一分離哪些因素對聲音有貢獻）。
 
-**언제·어떻게** — 생성 후 언제든 부릅니다. 기본은 세 기능 모두 켜짐입니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽지만 제어 스레드에서 부릅니다.
+**呼叫方式** — 建立後可隨時呼叫。預設三項功能皆開啟。執行緒：`[control]` — 無鎖讀取引擎狀態，但在控制執行緒上呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION`(0, 대기 감쇠·고역 손실) / `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY`(1, 경로 길이 기반 전파 지연) / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION`(2, 직접음 차폐) |
+| `context` | 情境控制代碼 |
+| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION`（0，大氣衰減·高頻損失）/ `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY`（1，基於路徑長度的傳播延遲）/ `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION`（2，直達聲遮蔽） |
 
-**반환** — `1` = 켜짐 / `0` = 꺼짐 / `-1` = `context`가 `NULL`.
+**回傳值** — `1` = 開啟 / `0` = 關閉 / `-1` = `context` 為 `NULL`。
 
 </details>
 
 <details>
-<summary><code>st_rt_idle</code> — 엔진 전체를 쉬게 한다(계산 정지 후 렌더가 꼬리를 낸 뒤 무음)</summary>
+<summary><code>st_rt_idle</code> — 讓整個引擎休眠（停止計算，渲染輸出尾音後靜音）</summary>
 
 ```c
 int st_rt_idle(STRT_Context* context);
 ```
 
-**용도** — 들려줄 것이 없을 때(재생 정지·일시정지·방 없음) 전파·IR 계산과 렌더 처리를 멈춰 CPU를 돌려받습니다. 캐시와 평활 이력은 보존되므로 `st_rt_run`으로 깨우면 이어서 계산합니다.
+**用途** — 在沒有要播放的內容時（播放停止·暫停·無房間），停止傳播·IR 計算與渲染處理以收回 CPU。快取與平滑歷程會保留，因此以 `st_rt_run` 喚醒後會接續計算。
 
-**언제·어떻게** — 렌더 중 언제든 부를 수 있고 완료를 기다리지 않습니다. 호출하면 전파 레인·IR 조립·IR 준비 작업의 새 실행이 멈춥니다(이미 돌던 1회는 끝까지 갑니다). 렌더는 채택된 IR로 입력과 꼬리를 계속 내다가 다음 조건이 모두 맞으면 처리를 멈추고 0만 냅니다(`DRAINING` → `IDLE`): 재생 중인 입력에 아직 꺼내지 않은 소리가 없음, 모든 소스 입력이 지연선 길이 + 1 s 동안 무음, 출력이 −80 dBFS 아래로 0.5 s 지속. 입력이 계속 소리를 내면 상한(5 s와 "입력 무음 길이 + 2 s" 중 큰 값)에서 한 블록 페이드 뒤 강제로 `IDLE`이 됩니다. 렌더가 돌지 않을 때(`st_rt_render_start` 전, `st_rt_render_stop` 뒤)는 바로 `IDLE`입니다. 쉬는 동안에도 setter는 받고, 재생 요청은 깨운 뒤 반영됩니다. 호스트 스트림·스피커 세트 링은 소비되지 않습니다(쓰기는 링이 찰 때까지 받음). 출력 장치는 그대로 열려 있으므로 오래 쉴 때는 `IDLE`을 확인한 뒤 `st_rt_render_stop`을 부릅니다. SYNCHRONOUS 스케줄러는 계산이 `st_rt_propagate`에서만 돌므로 렌더 쪽만 쉽니다. 지원 여부는 `ST_CAP1_ENGINE_IDLE`. 스레드: `[control]` — 짧은 잠금만 잡습니다.
+**呼叫方式** — 渲染中可隨時呼叫，且不等待完成。呼叫後，傳播通道·IR 組合·IR 準備工作的新執行會停止（已在執行的 1 次會執行到底）。渲染以已採用的 IR 繼續輸出輸入與尾音，直到以下條件全部滿足時才停止處理並只輸出 0（`DRAINING` → `IDLE`）：播放中的輸入沒有尚未取出的聲音、所有音源輸入在延遲線長度 + 1 s 期間皆為靜音、輸出持續低於 −80 dBFS 達 0.5 s。若輸入持續發聲，則在上限（5 s 與「輸入靜音長度 + 2 s」中較大者）時經一個區塊淡出後強制變為 `IDLE`。渲染未執行時（`st_rt_render_start` 之前、`st_rt_render_stop` 之後）立即為 `IDLE`。休眠期間仍接受 setter，播放請求會在喚醒後反映。主機串流·喇叭組環不會被消耗（寫入會持續接受到環滿為止）。輸出裝置維持開啟，因此長時間休眠時請在確認 `IDLE` 後呼叫 `st_rt_render_stop`。SYNCHRONOUS 排程器的計算只在 `st_rt_propagate` 中執行，因此只有渲染端休眠。支援與否見 `ST_CAP1_ENGINE_IDLE`。執行緒：`[control]` — 只持有短暫的鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `1` = 성공(이미 쉬는 중이면 아무 일도 하지 않음) / `0` = `context`가 `NULL`.
+**回傳值** — `1` = 成功（若已在休眠中則不執行任何動作）/ `0` = `context` 為 `NULL`。
 
 </details>
 
 <details>
-<summary><code>st_rt_run</code> — 쉬는 엔진을 깨운다</summary>
+<summary><code>st_rt_run</code> — 喚醒休眠中的引擎</summary>
 
 ```c
 int st_rt_run(STRT_Context* context);
 ```
 
-**용도** — `st_rt_idle`로 쉬게 했거나 `startIdle = 1`로 만든 컨텍스트에서 전파·IR·렌더를 다시 돌립니다.
+**用途** — 在以 `st_rt_idle` 休眠或以 `startIdle = 1` 建立的情境中，重新執行傳播·IR·渲染。
 
-**언제·어떻게** — 재생을 다시 시작할 때 부릅니다. 바로 `RUNNING`이 되고 계산 작업을 깨우며, 쉬는 동안 받아 둔 장면·모션·정책 변경이 그때 반영됩니다. IR 조립의 시간축(평활·히스테리시스)은 쉰 시간을 건너뜁니다. 강제 `IDLE`로 멈췄던 지연선·잔향 상태는 이어서 나오며 첫 블록은 페이드인됩니다. 완료를 기다리지 않습니다. 스레드: `[control]` — 짧은 잠금과 계산 작업 깨우기만 합니다.
+**呼叫方式** — 重新開始播放時呼叫。立即變為 `RUNNING` 並喚醒計算工作，休眠期間收到的場景·運動·策略變更會在此時反映。IR 組合的時間軸（平滑·遲滯）會跳過休眠的時間。因強制 `IDLE` 而停止的延遲線·殘響狀態會接續輸出，第一個區塊會淡入。不等待完成。執行緒：`[control]` — 只做短暫鎖定與喚醒計算工作。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `1` = 성공 / `0` = `context`가 `NULL`.
+**回傳值** — `1` = 成功 / `0` = `context` 為 `NULL`。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_idle_state</code> — 엔진 쉼 상태(RUNNING / DRAINING / IDLE)를 읽는다</summary>
+<summary><code>st_rt_get_idle_state</code> — 讀取引擎休眠狀態（RUNNING / DRAINING / IDLE）</summary>
 
 ```c
 int st_rt_get_idle_state(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_idle` 뒤 렌더가 꼬리를 다 냈는지 확인합니다. 예를 들어 `IDLE`이 된 뒤에 `st_rt_render_stop`으로 장치를 닫습니다.
+**用途** — 確認 `st_rt_idle` 之後渲染是否已輸出完尾音。例如在變成 `IDLE` 後以 `st_rt_render_stop` 關閉裝置。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. `IDLE`은 "새 계산 없음 + 렌더 0 출력"이라는 뜻이며, 진행 중이던 계산 1회까지 끝났다는 뜻은 아닙니다. 스레드: `[any]` — atomic 하나를 읽습니다.
+**呼叫方式** — 可隨時呼叫。`IDLE` 的意思是「沒有新計算 + 渲染輸出 0」，並不表示進行中的那 1 次計算也已結束。執行緒：`[any]` — 讀取一個 atomic。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STRT_IdleState`: `ST_RT_IDLE_RUNNING`(0, 도는 중) / `ST_RT_IDLE_DRAINING`(1, 쉼을 요청받았고 렌더가 남은 소리를 내는 중) / `ST_RT_IDLE_IDLE`(2, 계산 쉼 + 렌더는 0만 냄 — `startIdle = 1`이면 생성 직후 이 상태). `context`가 `NULL`이면 `-1`.
+**回傳值** — `STRT_IdleState`：`ST_RT_IDLE_RUNNING`（0，執行中）/ `ST_RT_IDLE_DRAINING`（1，已收到休眠請求，渲染正在輸出剩餘的聲音）/ `ST_RT_IDLE_IDLE`（2，計算休眠 + 渲染只輸出 0 — `startIdle = 1` 時建立後即為此狀態）。`context` 為 `NULL` 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_scheduler</code> — 컨텍스트의 스케줄러를 돌려준다</summary>
+<summary><code>st_rt_get_scheduler</code> — 回傳情境的排程器</summary>
 
 ```c
 int st_rt_get_scheduler(const STRT_Context* context);
 ```
 
-**용도** — 생성 시 확정된 스케줄러를 확인합니다. 레인 갱신 주기(`st_rt_set_lane_update_interval`)처럼 PIPELINED에서만 의미가 있는 API를 쓸지, `st_rt_propagate`를 직접 돌려야 하는지 판단할 때 씁니다.
+**用途** — 確認建立時確定的排程器。用於判斷是否使用通道更新週期（`st_rt_set_lane_update_interval`）等僅在 PIPELINED 下有意義的 API，或是否需要自行執行 `st_rt_propagate`。
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있습니다. 값은 불변입니다. 스레드: `[any]` — 생성 시 확정된 불변값을 읽습니다.
+**呼叫方式** — 建立後可隨時呼叫。值不可變。執行緒：`[any]` — 讀取建立時確定的不可變值。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STRT_Scheduler`: `ST_RT_SCHEDULER_SYNCHRONOUS`(0) / `ST_RT_SCHEDULER_PIPELINED`(1).
+**回傳值** — `STRT_Scheduler`：`ST_RT_SCHEDULER_SYNCHRONOUS`(0) / `ST_RT_SCHEDULER_PIPELINED`(1)。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_timing</code> — 파이프라인 단계별 최근 소요 시간을 한 번에 읽는다</summary>
+<summary><code>st_rt_get_timing</code> — 一次讀取管線各階段最近的耗時</summary>
 
 ```c
 int st_rt_get_timing(const STRT_Context* context, STTiming* outTiming);
 ```
 
-**용도** — 전파(레인 3분할)·IR 변환·IR 발행·블록 렌더의 최근 1회 소요 시간을 하나의 구조체로 얻어, 호스트 프로파일러나 HUD에 엔진 부하를 표시합니다. 타이밍을 얻는 유일한 표면입니다.
+**用途** — 以一個結構體取得傳播（3 個通道）·IR 轉換·IR 發佈·區塊渲染最近 1 次的耗時，在主機分析器或 HUD 上顯示引擎負載。這是取得計時的唯一介面。
 
-**언제·어떻게** — 언제든 폴링할 수 있습니다(예: 프레임마다). `irPublishSequence`를 두 번 읽은 값과 비교하면 그 사이에 IR이 새로 발행됐는지 알 수 있습니다. 지원 여부는 `ST_CAP_ENGINE_TIMING`(`irPublishSequence`는 `ST_CAP_IR_STATS`). 스레드: `[any]` — atomic만 읽습니다. 단, 스탬프가 틀린 오류 경로는 컨텍스트 진단 버퍼에 기록합니다.
+**呼叫方式** — 可隨時輪詢（例如每個影格）。比較兩次讀取的 `irPublishSequence`，即可得知其間是否發佈了新的 IR。支援與否見 `ST_CAP_ENGINE_TIMING`（`irPublishSequence` 見 `ST_CAP_IR_STATS`）。執行緒：`[any]` — 只讀取 atomic。但戳記錯誤的錯誤路徑會寫入情境診斷緩衝區。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outTiming` | 출력. 호출자가 `structSize = sizeof(STTiming)`, `apiVersion = ST_ABI_VERSION`을 채운다 |
+| `context` | 情境控制代碼 |
+| `outTiming` | 輸出。呼叫端填入 `structSize = sizeof(STTiming)`、`apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STTiming`
+**結構體** `STTiming`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `propagateTotalMs` | 전파 전체(ms). PIPELINED에서는 레인이 서로 다른 워커·주기로 돌므로 세 레인의 합이 아니라 가장 무거운 반사·회절 레인 값과 같습니다(`== propagateReflDiffMs`). SYNCHRONOUS에서는 ≈ direct + reflDiff + reverb |
-| `propagateDirectMs` | Direct 레인(직접음 + 투과) |
-| `propagateReflDiffMs` | 반사·회절 레인(guide 포함) |
-| `propagateReverbMs` | 잔향 레인(확산·소스 수송) |
-| `irBuildMs` | 기하 → IR 변환 |
-| `auralUpdateIrMs` | IR 발행(렌더 측 반영) |
-| `auralProcessMs` | 블록당 렌더 처리 시간(렌더 스레드 또는 호스트 pull 콜백) |
-| `irPublishSequence` | IR 발행 시퀀스의 하위 32비트. `st_rt_ir_get_stats`의 `publishSequence`와 같은 값, `0` = 아직 발행 없음 |
-| `reserved[7]` | 예약 |
+| `structSize` / `apiVersion` | 由呼叫端填入的戳記 |
+| `propagateTotalMs` | 整體傳播（ms）。PIPELINED 下各通道以不同的工作執行緒·週期執行，因此不是三個通道的總和，而是等於最重的反射·繞射通道值（`== propagateReflDiffMs`）。SYNCHRONOUS 下 ≈ direct + reflDiff + reverb |
+| `propagateDirectMs` | Direct 通道（直達聲 + 透射） |
+| `propagateReflDiffMs` | 反射·繞射通道（含 guide） |
+| `propagateReverbMs` | 殘響通道（擴散·音源傳輸） |
+| `irBuildMs` | 幾何 → IR 轉換 |
+| `auralUpdateIrMs` | IR 發佈（渲染端反映） |
+| `auralProcessMs` | 每區塊渲染處理時間（渲染執行緒或主機 pull 回呼） |
+| `irPublishSequence` | IR 發佈序號的低 32 位元。與 `st_rt_ir_get_stats` 的 `publishSequence` 值相同，`0` = 尚未發佈 |
+| `reserved[7]` | 保留 |
 
-아직 한 번도 돌지 않은 단계는 `0`입니다.
+尚未執行過的階段為 `0`。
 
-**반환** — `1` = 성공 / `0` = `context`·`outTiming`이 `NULL`이거나 스탬프 불일치(불일치는 `st_rt_get_last_status`에 `ST_STATUS_VERSION_MISMATCH`).
+**回傳值** — `1` = 成功 / `0` = `context`·`outTiming` 為 `NULL` 或戳記不符（不符時 `st_rt_get_last_status` 為 `ST_STATUS_VERSION_MISMATCH`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_memory_budget</code> — 음원 메모리 예산(최대 음원 수·바이트 상한·거절 정책)을 지정한다</summary>
+<summary><code>st_rt_set_memory_budget</code> — 指定音源記憶體預算（最大音源數·位元組上限·拒絕策略）</summary>
 
 ```c
 int st_rt_set_memory_budget(STRT_Context* context, const STMemoryBudget* budget);
 ```
 
-**용도** — 모바일·웹처럼 메모리가 빠듯한 플랫폼에서 음원 수와 음원별 메모리 합을 상한으로 묶습니다. 음원 하나는 고정 비용(전파·IR 사본·수송·스트림 링)과 지연 링(장면 최장 경로에 비례, 바닥 `ringFloorSeconds` ~ 천장 `st_rt_render_get_max_delay_seconds`), 경로 레인으로 메모리를 씁니다. 예산을 넘는 `st_rt_source_create`는 정책에 따라 거절되거나 가장 먼 음원을 내보내고 받아들여지므로, 생성 뒤에는 새 음원 때문에 메모리가 늘지 않습니다.
+**用途** — 在行動裝置·Web 等記憶體吃緊的平台上，以上限約束音源數與各音源記憶體總和。一個音源的記憶體由固定成本（傳播·IR 副本·傳輸·串流環）、延遲環（與場景最長路徑成正比，下限 `ringFloorSeconds` ~ 上限 `st_rt_render_get_max_delay_seconds`）與路徑通道構成。超出預算的 `st_rt_source_create` 會依策略被拒絕，或逐出最遠的音源後被接受，因此建立後記憶體不會因新音源而增加。
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있습니다. 최대 음원 수만 정하려면 생성 시 `STRT_CreateOptions.maxSources`로도 됩니다. 기존 값을 바탕으로 바꾸려면 `st_rt_get_memory_budget`으로 읽어 필요한 필드만 고친 뒤 set 합니다. 상한을 줄여도 이미 있는 음원은 유지되고 새 생성부터 적용됩니다. 사용량은 `st_rt_get_memory_stats`로 봅니다. 지원 여부는 `ST_CAP1_MEMORY_BUDGET`(능력 워드 1). 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**呼叫方式** — 建立後可隨時呼叫。若只要設定最大音源數，也可在建立時以 `STRT_CreateOptions.maxSources` 指定。若要以現有值為基礎變更，先以 `st_rt_get_memory_budget` 讀取，只修改需要的欄位後再 set。即使調降上限，現有音源仍會保留，自新的建立起套用。使用量以 `st_rt_get_memory_stats` 查看。支援與否見 `ST_CAP1_MEMORY_BUDGET`（能力字組 1）。執行緒：`[control]` — 在控制執行緒上呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `budget` | 새 정책. 호출자가 `structSize = sizeof(STMemoryBudget)`, `apiVersion = ST_ABI_VERSION`을 채운다. `0`인 필드는 기본값을 뜻한다 |
+| `context` | 情境控制代碼 |
+| `budget` | 新策略。呼叫端填入 `structSize = sizeof(STMemoryBudget)`、`apiVersion = ST_ABI_VERSION`。值為 `0` 的欄位表示預設值 |
 
-**구조체** `STMemoryBudget`
+**結構體** `STMemoryBudget`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `maxSources` | 최대 음원 수. `0` = 플랫폼 기본 |
-| `rejectPolicy` | `STMemoryRejectPolicy`: `ST_MEMORY_REJECT_NEW`(0, 기본) = 넘으면 `st_rt_source_create`가 실패 핸들(`v < 0`)과 `ST_STATUS_BUDGET_EXCEEDED`를 돌려준다. `ST_MEMORY_EVICT_FARTHEST`(1) = 리스너에서 가장 먼 음원을 `st_rt_source_destroy`와 같은 경로로 내보내고 새 음원을 받는다(내보낸 id는 `STMemoryStats.lastEvictedSource`) |
-| `sourceBudgetBytes` | 음원별 가변 메모리 합의 상한(바이트) = 추적 바이트 + `fixedPerSourceBytes` × 음원 수. `0` = 무제한(관측만) |
-| `fixedPerSourceBytes` | 음원 하나의 고정 비용 추정치. `0` = 엔진 기본(2.5 MiB). 예산 추정에만 쓰인다 |
-| `ringFloorSeconds` | 입력을 붙인 직후·경로가 없는 음원의 지연 링 크기(초). `0` = 0.25 |
-| `ringGrowthHeadroom` | 링 성장 여유 배율 — 필요 지연 × 이 값(+50 ms, 125 ms 단위 올림). `0` = 1.25 |
-| `allowShrink` | `0` = 링을 줄이지 않음(세션 중 최대치 유지), `1` = 축소 허용 |
-| `reserved[5]` | 모두 `0`이어야 한다 |
+| `structSize` / `apiVersion` | 由呼叫端填入的戳記 |
+| `maxSources` | 最大音源數。`0` = 平台預設 |
+| `rejectPolicy` | `STMemoryRejectPolicy`：`ST_MEMORY_REJECT_NEW`（0，預設）= 超出時 `st_rt_source_create` 回傳失敗控制代碼（`v < 0`）與 `ST_STATUS_BUDGET_EXCEEDED`。`ST_MEMORY_EVICT_FARTHEST`（1）= 以與 `st_rt_source_destroy` 相同的路徑逐出離聆聽者最遠的音源並接受新音源（被逐出的 id 見 `STMemoryStats.lastEvictedSource`） |
+| `sourceBudgetBytes` | 各音源可變記憶體總和的上限（位元組）= 追蹤位元組 + `fixedPerSourceBytes` × 音源數。`0` = 無限制（僅觀測） |
+| `fixedPerSourceBytes` | 一個音源的固定成本估計值。`0` = 引擎預設（2.5 MiB）。僅用於預算估算 |
+| `ringFloorSeconds` | 剛附加輸入·沒有路徑的音源的延遲環大小（秒）。`0` = 0.25 |
+| `ringGrowthHeadroom` | 環成長餘裕倍率 — 所需延遲 × 此值（+50 ms，以 125 ms 為單位進位）。`0` = 1.25 |
+| `allowShrink` | `0` = 不縮小環（維持工作階段中的最大值），`1` = 允許縮小 |
+| `reserved[5]` | 必須全部為 `0` |
 
-**플랫폼 기본값**
+**平台預設值**
 
-| 빌드 타깃 | `maxSources` | `sourceBudgetBytes` | 지연 링 천장 |
+| 建置目標 | `maxSources` | `sourceBudgetBytes` | 延遲環上限 |
 |---|---|---|---|
-| 데스크톱 | 128 | 무제한 | 2.0 s |
+| 桌面 | 128 | 無限制 | 2.0 s |
 | Android · iOS | 48 | 96 MiB | 1.0 s |
-| Emscripten(웹) | 32 | 64 MiB | 0.5 s |
+| Emscripten（Web） | 32 | 64 MiB | 0.5 s |
 
-**반환** — `1` = 적용 / `0` = 거절. 거절 시 상태는 바뀌지 않으며 `st_rt_get_last_status`에 `ST_STATUS_VERSION_MISMATCH`(`budget`이 `NULL`이거나 스탬프 불일치) 또는 `ST_STATUS_INVALID_ARGUMENT`(값이 비유한·범위 밖, `reserved`가 0이 아님)가 남습니다. `context`가 `NULL`이면 `0`.
+**回傳值** — `1` = 已套用 / `0` = 拒絕。拒絕時狀態不變，`st_rt_get_last_status` 會留下 `ST_STATUS_VERSION_MISMATCH`（`budget` 為 `NULL` 或戳記不符）或 `ST_STATUS_INVALID_ARGUMENT`（值為非有限·超出範圍、`reserved` 不為 0）。`context` 為 `NULL` 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_memory_budget</code> — 현재 음원 메모리 예산 정책을 읽는다</summary>
+<summary><code>st_rt_get_memory_budget</code> — 讀取目前的音源記憶體預算策略</summary>
 
 ```c
 int st_rt_get_memory_budget(const STRT_Context* context, STMemoryBudget* outBudget);
 ```
 
-**용도** — 현재 적용 중인 예산 정책(플랫폼 기본값이 채워진 실효값)을 확인하거나, 일부 필드만 바꾸기 위한 출발점으로 씁니다.
+**用途** — 確認目前套用中的預算策略（已填入平台預設值的實際值），或作為只修改部分欄位的起點。
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있습니다. 읽은 구조체를 고쳐 `st_rt_set_memory_budget`에 넘기는 것이 전형적인 패턴입니다. 지원 여부는 `ST_CAP1_MEMORY_BUDGET`. 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**呼叫方式** — 建立後可隨時呼叫。修改讀取到的結構體後傳給 `st_rt_set_memory_budget` 是典型模式。支援與否見 `ST_CAP1_MEMORY_BUDGET`。執行緒：`[control]` — 在控制執行緒上呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outBudget` | 출력. 호출자가 `structSize`/`apiVersion`을 채운다. 성공 시 `reserved[]`는 0이 된다 |
+| `context` | 情境控制代碼 |
+| `outBudget` | 輸出。呼叫端填入 `structSize`/`apiVersion`。成功時 `reserved[]` 變為 0 |
 
-`STMemoryBudget` 필드는 `st_rt_set_memory_budget` 항목 참고.
+`STMemoryBudget` 欄位請參閱 `st_rt_set_memory_budget` 項目。
 
-**반환** — `1` = 성공 / `0` = `context`가 `NULL`, 또는 `outBudget`이 `NULL`이거나 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`).
+**回傳值** — `1` = 成功 / `0` = `context` 為 `NULL`，或 `outBudget` 為 `NULL` 或戳記不符（`ST_STATUS_VERSION_MISMATCH`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_memory_stats</code> — 음원 메모리 사용량·거절·퇴거 통계를 읽는다</summary>
+<summary><code>st_rt_get_memory_stats</code> — 讀取音源記憶體使用量·拒絕·逐出統計</summary>
 
 ```c
 int st_rt_get_memory_stats(const STRT_Context* context, STMemoryStats* outStats);
 ```
 
-**용도** — 예산 대비 현재 사용량을 관측해 예산 값을 정하거나, 거절·퇴거가 일어났는지 확인합니다.
+**用途** — 觀測相對於預算的目前使用量以決定預算值，或確認是否發生了拒絕·逐出。
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있습니다. 제어 쪽 기록과 풀만 읽고 오디오 스레드에는 접근하지 않습니다. 지원 여부는 `ST_CAP1_MEMORY_BUDGET`. 스레드: `[control]` — 제어 스레드에서 부릅니다.
+**呼叫方式** — 建立後可隨時呼叫。只讀取控制端的記錄與集區，不存取音訊執行緒。支援與否見 `ST_CAP1_MEMORY_BUDGET`。執行緒：`[control]` — 在控制執行緒上呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outStats` | 출력. 호출자가 `structSize = sizeof(STMemoryStats)`, `apiVersion = ST_ABI_VERSION`을 채운다 |
+| `context` | 情境控制代碼 |
+| `outStats` | 輸出。呼叫端填入 `structSize = sizeof(STMemoryStats)`、`apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STMemoryStats`
+**結構體** `STMemoryStats`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `sourceCount` | 현재 음원 수 |
-| `maxSources` | 적용 중인 최대 음원 수 |
-| `trackedBytes` | 추적 바이트 = 설치된 지연 링(교체 대기 링 포함) + 경로 레인 추정 + 풀에 보관 중인 링 |
-| `estimatedBytes` | `trackedBytes + fixedPerSourceBytes × sourceCount`. 예산 판정은 이 값이 넘치면 풀 보관 링을 먼저 비우고 다시 잰다 |
-| `sourceBudgetBytes` | 적용 중인 바이트 상한(`0` = 무제한) |
-| `pooledRingBytes` | 재사용을 위해 보관 중인 링 바이트(`trackedBytes`에 포함). 상한 데스크톱 16 MiB · 모바일 8 MiB · 웹 4 MiB, 10 s 미사용 시 해제 |
-| `rejectedCreates` | 예산 초과로 거절된 `st_rt_source_create` 누계 |
-| `evictions` | `ST_MEMORY_EVICT_FARTHEST`로 내보낸 음원 누계 |
-| `lastEvictedSource` | 마지막으로 내보낸 음원 id, `-1` = 없음 |
-| `ringBytesPerSourceMax` | 가장 큰 음원 지연 링 바이트 |
-| `reserved[6]` | 예약 |
+| `structSize` / `apiVersion` | 由呼叫端填入的戳記 |
+| `sourceCount` | 目前音源數 |
+| `maxSources` | 套用中的最大音源數 |
+| `trackedBytes` | 追蹤位元組 = 已安裝的延遲環（含等待替換的環）+ 路徑通道估計 + 集區中保管的環 |
+| `estimatedBytes` | `trackedBytes + fixedPerSourceBytes × sourceCount`。預算判定在此值超出時，會先清空集區保管的環再重新量測 |
+| `sourceBudgetBytes` | 套用中的位元組上限（`0` = 無限制） |
+| `pooledRingBytes` | 為重複使用而保管的環位元組（含於 `trackedBytes`）。上限為桌面 16 MiB · 行動裝置 8 MiB · Web 4 MiB，10 s 未使用即釋放 |
+| `rejectedCreates` | 因超出預算而被拒絕的 `st_rt_source_create` 累計 |
+| `evictions` | 以 `ST_MEMORY_EVICT_FARTHEST` 逐出的音源累計 |
+| `lastEvictedSource` | 最後被逐出的音源 id，`-1` = 無 |
+| `ringBytesPerSourceMax` | 最大的音源延遲環位元組 |
+| `reserved[6]` | 保留 |
 
-**반환** — `1` = 성공 / `0` = `context`가 `NULL`, 또는 `outStats`가 `NULL`이거나 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`).
+**回傳值** — `1` = 成功 / `0` = `context` 為 `NULL`，或 `outStats` 為 `NULL` 或戳記不符（`ST_STATUS_VERSION_MISMATCH`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_ir_get_stats</code> — 마지막 IR 발행 하나의 일관된 계측 스냅샷을 읽는다</summary>
+<summary><code>st_rt_ir_get_stats</code> — 讀取最後一次 IR 發佈的一致性量測快照</summary>
 
 ```c
 int st_rt_ir_get_stats(const STRT_Context* context, STIrStats* outStats);
 ```
 
-**용도** — 호스트에 임베드했을 때 "IR 굽기가 왜 느린가"를 엔진 내부를 보지 않고 가르기 위한 계측입니다. 모든 필드가 같은 발행의 값이라는 것이 계약이며, 다음 셋을 구분할 수 있습니다: ① 일이 많다 → `stagedBedCells`·`mergedBedCells`·`exactTaps`, ② 선점당한다 → `prepareCpuUs` ≪ `prepareTotalUs`(CPU/wall 비율이 낮음), ③ 느린 코어에 있다 → `prepareCpuUs` ≈ `prepareTotalUs`인데 절대값이 큼(`prepareCpuIndex`로 논리 프로세서 확인). 호스트 프레임 사이 `publishSequence` 증가량은 발행 주기를 줍니다.
+**用途** — 嵌入主機時，不需檢視引擎內部即可區分「IR 烘焙為何緩慢」的量測。契約是所有欄位皆為同一次發佈的值，可區分以下三者：① 工作量大 → `stagedBedCells`·`mergedBedCells`·`exactTaps`，② 被搶占 → `prepareCpuUs` ≪ `prepareTotalUs`（CPU/wall 比例低），③ 位於慢速核心 → `prepareCpuUs` ≈ `prepareTotalUs` 但絕對值大（以 `prepareCpuIndex` 確認邏輯處理器）。主機影格之間 `publishSequence` 的增量即為發佈週期。
 
-**언제·어떻게** — 언제든 폴링할 수 있습니다. PIPELINED에서는 장면이 멈추면 발행도 멈춥니다 — 레인 입력과 조립 키가 그대로이고 마지막 변화 뒤 2 s가 지나면 다시 조립하지 않습니다(레인은 계속 돕니다). 무엇이든 바뀌면 바로 조립·발행하고, 그 뒤 2 s 동안은 많아야 50 ms마다 한 번 다시 조립합니다. 그래서 정지 장면에서 "IR이 최신인가"는 `publishSequence` 대신 `settled`로 판단합니다. SYNCHRONOUS에서도 유효합니다(호출 스레드가 굽고 곧바로 채택하므로 CPU/wall 비율이 1에 가깝습니다). 지원 여부는 `ST_CAP_IR_STATS`. 스레드: `[any]` — 락 없는 일관 스냅샷이며 찢어진 값을 내보내지 않습니다.
+**呼叫方式** — 可隨時輪詢。PIPELINED 下場景靜止時發佈也會停止 — 通道輸入與組合鍵不變，且自最後一次變化後經過 2 s，就不再重新組合（通道持續執行）。只要有任何變化就立即組合·發佈，之後 2 s 內最多每 50 ms 重新組合一次。因此在靜止場景中，「IR 是否為最新」要以 `settled` 而非 `publishSequence` 判斷。SYNCHRONOUS 下也有效（呼叫執行緒烘焙後立即採用，因此 CPU/wall 比例接近 1）。支援與否見 `ST_CAP_IR_STATS`。執行緒：`[any]` — 無鎖的一致性快照，不會輸出撕裂的值。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outStats` | 출력. 호출자가 `structSize = sizeof(STIrStats)`, `apiVersion = ST_ABI_VERSION`을 채운다. 거절일 때는 손대지 않는다 |
+| `context` | 情境控制代碼 |
+| `outStats` | 輸出。呼叫端填入 `structSize = sizeof(STIrStats)`、`apiVersion = ST_ABI_VERSION`。拒絕時不會變更 |
 
-**구조체** `STIrStats`
+**結構體** `STIrStats`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `publishSequence` | 렌더가 새 IR을 채택할 때마다 +1. `0` = 아직 발행 없음 |
-| `lastPublishLaneMask` | 직전 발행 이후 기하가 전진한 레인 비트: `ST_IR_LANE_DIRECT`(`1u<<0`) · `ST_IR_LANE_REFLECTION_DIFFRACTION`(`1u<<1`) · `ST_IR_LANE_REVERB`(`1u<<2`), 그리고 기하 비트가 하나도 없을 때만 서는 `ST_IR_LANE_POLICY_ONLY`(`1u<<3`, 새 기하 없이 다시 변환 — IR 정책 변경이거나 조립이 아직 수렴 중) |
-| `stagedBedCells` | early bed 병합 입력 셀 수(소스별 합) |
-| `mergedBedCells` | early bed 병합 출력 셀 수 |
-| `activePartitions` / `maxPartitions` | bed 컨볼루션 파티션 수(활성 / 최대) |
-| `irSpanMs` | 병합 bed IR 길이(ms) |
-| `exactTaps` | exact 경로 탭 수 |
-| `sendTaps` | 잔향 send 탭 수 |
-| `rainTaps` | 1차 산란(diffuse rain) 탭 수 |
-| `prepareMergeUs` | bed 병합·밴드 정규화 시간(µs) |
-| `prepareBakeUs` | bed 시간 영역 굽기 시간(FFT 제외, µs) |
-| `prepareFftUs` | 파티션 FFT 시간(µs) |
-| `prepareTotalUs` | IR 준비 전체 wall 시간(µs). PIPELINED는 굽기 스레드의 준비만, SYNCHRONOUS는 적용까지 포함한 전체라 두 스케줄러 값을 나란히 비교하지 않습니다. 단계 µs 셋의 합은 이보다 작습니다 |
-| `prepareCpuUs` | 같은 구간의 굽기 스레드 CPU 시간(µs). Windows는 해상도가 스케줄러 틱(약 15.6 ms)이라 한 값보다 여러 발행의 비율 추세를 봅니다. POSIX는 훨씬 촘촘합니다 |
-| `prepareCpuIndex` | 준비가 끝난 순간 그 스레드가 있던 논리 프로세서 번호(힌트). 미지원 = `0xFFFFFFFF`(macOS는 항상 이 값) |
-| `directLaneFrames` / `exactLaneFrames` / `reverbLaneFrames` | IR 조립이 받은 레인 프레임 누계(direct · 반사/회절 · 잔향, uint32 순환). 변경(소스 추가·리스너 이동 등) 직후 값을 기록해 두고 +2 이상이 되면, 그 변화 뒤에 시작한 레인 실행 결과가 조립에 들어갔다는 뜻입니다 |
-| `settled` | `1` = 조립이 받은 레인 프레임을 모두 처리했고(수렴) 마지막 발행 IR을 렌더가 채택함 |
-| `reserved[2]` | 모두 0 |
+| `structSize` / `apiVersion` | 由呼叫端填入的戳記 |
+| `publishSequence` | 渲染每採用一次新 IR 即 +1。`0` = 尚未發佈 |
+| `lastPublishLaneMask` | 自上一次發佈以來幾何有推進的通道位元：`ST_IR_LANE_DIRECT`（`1u<<0`）· `ST_IR_LANE_REFLECTION_DIFFRACTION`（`1u<<1`）· `ST_IR_LANE_REVERB`（`1u<<2`），以及僅在沒有任何幾何位元時設定的 `ST_IR_LANE_POLICY_ONLY`（`1u<<3`，沒有新幾何而重新轉換 — IR 策略變更或組合仍在收斂中） |
+| `stagedBedCells` | early bed 合併輸入單元數（各音源總和） |
+| `mergedBedCells` | early bed 合併輸出單元數 |
+| `activePartitions` / `maxPartitions` | bed 摺積分割數（啟用 / 最大） |
+| `irSpanMs` | 合併 bed IR 長度（ms） |
+| `exactTaps` | exact 路徑抽頭數 |
+| `sendTaps` | 殘響 send 抽頭數 |
+| `rainTaps` | 一次散射（diffuse rain）抽頭數 |
+| `prepareMergeUs` | bed 合併·頻帶正規化時間（µs） |
+| `prepareBakeUs` | bed 時域烘焙時間（不含 FFT，µs） |
+| `prepareFftUs` | 分割 FFT 時間（µs） |
+| `prepareTotalUs` | IR 準備整體 wall 時間（µs）。PIPELINED 只計烘焙執行緒的準備，SYNCHRONOUS 是含套用在內的整體，因此不要並列比較兩種排程器的值。三個階段 µs 的總和小於此值 |
+| `prepareCpuUs` | 同一區間的烘焙執行緒 CPU 時間（µs）。Windows 的解析度為排程器 tick（約 15.6 ms），因此要看多次發佈的比例趨勢，而非單一值。POSIX 則精細得多 |
+| `prepareCpuIndex` | 準備完成當下該執行緒所在的邏輯處理器編號（提示）。不支援 = `0xFFFFFFFF`（macOS 一律為此值） |
+| `directLaneFrames` / `exactLaneFrames` / `reverbLaneFrames` | IR 組合收到的通道影格累計（direct · 反射/繞射 · 殘響，uint32 循環）。在變更（新增音源·聆聽者移動等）後立即記下值，若增加 +2 以上，即表示該變化之後開始的通道執行結果已進入組合 |
+| `settled` | `1` = 組合已處理完收到的所有通道影格（收斂），且渲染已採用最後發佈的 IR |
+| `reserved[2]` | 全部為 0 |
 
-`directLaneFrames`~`settled`는 `ST_CAP1_ENGINE_IDLE` 표지로 PIPELINED에서만 의미가 있고(SYNCHRONOUS는 0과 `settled = 1`), 나머지 스냅샷과 따로 읽는 값입니다. bed 관련 8필드(`stagedBedCells`·`mergedBedCells`·`activePartitions`·`maxPartitions`·`irSpanMs`·`prepareMergeUs`·`prepareBakeUs`·`prepareFftUs`)는 early bed 렌더 모드(`STRenderOptions.reserved0 = 1`)에서만 0이 아닙니다 — exact objects 모드(`0`)의 0은 "굽기 단계 자체가 없음"입니다. `exactTaps`·`sendTaps`·`rainTaps`는 모드와 무관하게 채워집니다.
+`directLaneFrames`~`settled` 以 `ST_CAP1_ENGINE_IDLE` 為標誌，僅在 PIPELINED 下有意義（SYNCHRONOUS 為 0 與 `settled = 1`），與其餘快照分開讀取。bed 相關的 8 個欄位（`stagedBedCells`·`mergedBedCells`·`activePartitions`·`maxPartitions`·`irSpanMs`·`prepareMergeUs`·`prepareBakeUs`·`prepareFftUs`）僅在 early bed 渲染模式（`STRenderOptions.reserved0 = 1`）下不為 0 — exact objects 模式（`0`）的 0 表示「根本沒有烘焙階段」。`exactTaps`·`sendTaps`·`rainTaps` 與模式無關都會填入。
 
-**반환** — `1` = 성공(아직 발행이 없으면 `publishSequence = 0`으로 성공) / `0` = 거절: `context`·`outStats`가 `NULL`, 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`), 스냅샷이 동시 발행과 연달아 충돌(`ST_STATUS_UNAVAILABLE` — 드물며 다시 부르면 됩니다).
+**回傳值** — `1` = 成功（尚未發佈時以 `publishSequence = 0` 成功）/ `0` = 拒絕：`context`·`outStats` 為 `NULL`、戳記不符（`ST_STATUS_VERSION_MISMATCH`）、快照與並行發佈連續衝突（`ST_STATUS_UNAVAILABLE` — 很少見，再次呼叫即可）。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_thread_inventory</code> — 컨텍스트가 지금 띄우고 있는 스레드 수를 종류별로 읽는다</summary>
+<summary><code>st_rt_get_thread_inventory</code> — 依類型讀取情境目前啟動的執行緒數</summary>
 
 ```c
 int st_rt_get_thread_inventory(const STRT_Context* context, STThreadInventory* outInventory);
 ```
 
-**용도** — 스레드 속성(`STThreadAttributes`)이 "무엇을 심을지"라면 인벤토리는 "실제로 몇 개가 떠 있는지"입니다. 호스트가 자기 스레드 예산을 추측이 아니라 수치로 세울 수 있게 합니다.
+**用途** — 若執行緒屬性（`STThreadAttributes`）是「要設定什麼」，清單就是「實際有幾個在執行」。讓主機能以數值而非猜測來規劃自己的執行緒預算。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 종류별 카운터는 각각 독립 atomic이라 같은 순간의 스냅샷은 아닙니다 — 스레드가 뜨고 지는 중이면 합이 순간적으로 어긋날 수 있으며 오류가 아닙니다. 출력 장치 스레드(오디오 드라이버)는 별도 경로로 만들어져 인벤토리에 포함되지 않습니다. 지원 여부는 `ST_CAP_THREAD_INVENTORY`. 스레드: `[any]` — 종류별 atomic 카운터만 읽습니다.
+**呼叫方式** — 可隨時呼叫。各類型的計數器是各自獨立的 atomic，因此不是同一瞬間的快照 — 執行緒啟動或結束時總和可能暫時不一致，並非錯誤。輸出裝置執行緒（音訊驅動程式）透過另外的路徑建立，不計入清單。支援與否見 `ST_CAP_THREAD_INVENTORY`。執行緒：`[any]` — 只讀取各類型的 atomic 計數器。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outInventory` | 출력. 호출자가 `structSize = sizeof(STThreadInventory)`, `apiVersion = ST_ABI_VERSION`을 채운다 |
+| `context` | 情境控制代碼 |
+| `outInventory` | 輸出。呼叫端填入 `structSize = sizeof(STThreadInventory)`、`apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STThreadInventory`
+**結構體** `STThreadInventory`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `countByRole[ST_THREAD_TYPE_COUNT]` | `STThreadType` 순서의 스레드 수(인덱스 = 종류). 논리 역할(LANE_*·IR_CONVERTER·AU_PREPARE·SCENE_INPUT)은 계산 풀 위에서 돌아 항상 `0`, `ST_THREAD_ACCEL_BUILD`도 `0` |
-| `reserved[5]` | 예약 |
+| `structSize` / `apiVersion` | 由呼叫端填入的戳記 |
+| `countByRole[ST_THREAD_TYPE_COUNT]` | 依 `STThreadType` 順序的執行緒數（索引 = 類型）。邏輯角色（LANE_*·IR_CONVERTER·AU_PREPARE·SCENE_INPUT）在計算集區上執行，因此一律為 `0`，`ST_THREAD_ACCEL_BUILD` 也為 `0` |
+| `reserved[5]` | 保留 |
 
-`STThreadType` 값은 `st_rt_set_thread_attributes` 항목 참고.
+`STThreadType` 值請參閱 `st_rt_set_thread_attributes` 項目。
 
-전형적인 값(PIPELINED, 계산 풀 예산 `N = max(3, 해석된 예산)`, 파일 소스 있음):
+典型值（PIPELINED，計算集區預算 `N = max(3, 解析後的預算)`，有檔案音源）：
 
-| 출력 모드 | LANE_* | IR_CONVERTER · AU_PREPARE | COMPUTE_POOL | AUDIO_RENDER | FILE_DECODER |
+| 輸出模式 | LANE_* | IR_CONVERTER · AU_PREPARE | COMPUTE_POOL | AUDIO_RENDER | FILE_DECODER |
 |---|---|---|---|---|---|
-| `DEVICE` | 0 | 0 | `N−1`(Direct 전용 1 포함) | 1 | 1 |
+| `DEVICE` | 0 | 0 | `N−1`（含 Direct 專用 1 個） | 1 | 1 |
 | `HOST_PULL` | 0 | 0 | `N−1` | 0 | 1 |
 
-SYNCHRONOUS는 LANE_* 이 모두 0이고, 파일 입력이 없으면 FILE_DECODER는 0입니다.
+SYNCHRONOUS 的 LANE_* 全部為 0，沒有檔案輸入時 FILE_DECODER 為 0。
 
-**반환** — `1` = 성공 / `0` = `context`·`outInventory`가 `NULL`이거나 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`).
+**回傳值** — `1` = 成功 / `0` = `context`·`outInventory` 為 `NULL` 或戳記不符（`ST_STATUS_VERSION_MISMATCH`）。
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>재질 · 메시 · 오브젝트 · 씬</strong> — 17개</summary>
+<summary><strong>材質 · 網格 · 物件 · 場景</strong> — 17 個</summary>
 
 <details>
-<summary><code>st_rt_material_create</code> — 음향 재질 하나를 등록하고 핸들을 받는다</summary>
+<summary><code>st_rt_material_create</code> — 註冊一個聲學材質並取得控制代碼</summary>
 
 ```c
 STMaterialId st_rt_material_create(STRT_Context* context, const STMaterial* material);
 ```
 
-**용도** — 9개 옥타브 밴드의 반사·흡수·투과·산란 계수로 정의한 재질을 엔진에 등록합니다. 메시(`st_rt_mesh_create`)는 이 함수가 돌려준 재질 핸들을 참조해 표면의 음향 특성을 정합니다.
+**用途** — 將以 9 個八度頻帶的反射·吸收·透射·散射係數定義的材質註冊到引擎。網格（`st_rt_mesh_create`）參照此函式回傳的材質控制代碼來決定表面的聲學特性。
 
-**언제·어떻게** — 재질을 쓰는 메시를 만들기 전에 호출합니다. 여러 재질은 이 함수를 반복 호출해 등록하며, 반환 핸들의 `v`는 등록 순서대로 연속입니다. 기본 재질 라이브러리가 필요하면 `st_rt_material_load_defaults`를 함께 씁니다. 스레드: `[control]` — 제어 스레드 전용이며 워커와 배타가 되어 잠깐 블록될 수 있으니 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 在建立使用該材質的網格之前呼叫。多個材質以重複呼叫此函式註冊，回傳控制代碼的 `v` 依註冊順序連續。若需要預設材質庫，可搭配 `st_rt_material_load_defaults` 使用。執行緒：`[control]` — 僅限控制執行緒，會與工作執行緒互斥而可能短暫阻塞，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `material` | 등록할 재질. 호출자가 `structSize = sizeof(STMaterial)`, `apiVersion = ST_ABI_VERSION`을 채웁니다. 계수보다 스탬프를 먼저 검증합니다 |
+| `context` | 情境控制代碼 |
+| `material` | 要註冊的材質。呼叫端填入 `structSize = sizeof(STMaterial)`、`apiVersion = ST_ABI_VERSION`。先驗證戳記再驗證係數 |
 
-**구조체** `STMaterial`
+**結構體** `STMaterial`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` | `sizeof(STMaterial)` — 호출자가 채움 |
-| `apiVersion` | `ST_ABI_VERSION` — 호출자가 채움 |
-| `reflection[ST_FREQUENCY_BANDS]` | 밴드별 반사 에너지 비율, `[0, 1]` |
-| `absorption[ST_FREQUENCY_BANDS]` | 밴드별 흡수 에너지 비율, `[0, 1]` |
-| `transmission[ST_FREQUENCY_BANDS]` | 밴드별 투과 에너지 비율, `[0, 1]` |
-| `scattering[ST_FREQUENCY_BANDS]` | 반사 에너지 중 확산(diffuse)으로 가는 비율, `[0, 1]`. R+A+T 합에는 들어가지 않습니다 |
-| `reserved[8]` | 예약 |
+| `structSize` | `sizeof(STMaterial)` — 由呼叫端填入 |
+| `apiVersion` | `ST_ABI_VERSION` — 由呼叫端填入 |
+| `reflection[ST_FREQUENCY_BANDS]` | 各頻帶反射能量比例，`[0, 1]` |
+| `absorption[ST_FREQUENCY_BANDS]` | 各頻帶吸收能量比例，`[0, 1]` |
+| `transmission[ST_FREQUENCY_BANDS]` | 各頻帶透射能量比例，`[0, 1]` |
+| `scattering[ST_FREQUENCY_BANDS]` | 反射能量中轉為擴散（diffuse）的比例，`[0, 1]`。不計入 R+A+T 總和 |
+| `reserved[8]` | 保留 |
 
-- 밴드는 `ST_FREQUENCY_BANDS` = 9개(63 · 125 · 250 · 500 · 1000 · 2000 · 4000 · 8000 · 16000 Hz) 고정입니다.
-- 모든 계수는 **에너지 도메인**(무차원 에너지 비율)입니다. 압력 진폭이 아닙니다.
-- 밴드마다 `|R + A + T − 1| <= ST_MATERIAL_ENERGY_BALANCE_TOLERANCE`(0.001)를 만족해야 합니다. 엔진은 값을 유도·정규화·클램프·보간하지 않으므로, 합이 1이 되도록 호출자가 맞춰 넣어야 합니다.
+- 頻帶固定為 `ST_FREQUENCY_BANDS` = 9 個（63 · 125 · 250 · 500 · 1000 · 2000 · 4000 · 8000 · 16000 Hz）。
+- 所有係數皆為 **能量域**（無因次能量比例），而非壓力振幅。
+- 每個頻帶都必須滿足 `|R + A + T − 1| <= ST_MATERIAL_ENERGY_BALANCE_TOLERANCE`（0.001）。引擎不會推導·正規化·箝制·內插這些值，因此須由呼叫端調整使總和為 1。
 
-**반환** — 재질 핸들(`STMaterialId`, `struct { int32_t v; }`). 메시·오브젝트 핸들(`STMeshId`·`STObjectId`)도 같은 꼴의 서로 다른 타입이라 섞어 넣으면 컴파일 오류가 납니다. 실패하면 `v < 0`이고 `st_rt_get_last_status`에 원인이 남습니다: `material`이 NULL이면 `ST_STATUS_INVALID_ARGUMENT`, 스탬프 불일치면 `ST_STATUS_VERSION_MISMATCH`, 비유한 값·범위 밖 값·R+A+T 합 불일치면 `ST_STATUS_INVALID_MATERIAL`.
+**回傳值** — 材質控制代碼（`STMaterialId`，`struct { int32_t v; }`）。網格·物件控制代碼（`STMeshId`·`STObjectId`）也是相同形式的不同型別，混用會產生編譯錯誤。失敗時 `v < 0`，`st_rt_get_last_status` 會留下原因：`material` 為 NULL 時為 `ST_STATUS_INVALID_ARGUMENT`，戳記不符時為 `ST_STATUS_VERSION_MISMATCH`，非有限值·超出範圍的值·R+A+T 總和不符時為 `ST_STATUS_INVALID_MATERIAL`。
 
 </details>
 
 <details>
-<summary><code>st_rt_material_load_defaults</code> — 기본 재질 라이브러리를 한 번에 등록한다</summary>
+<summary><code>st_rt_material_load_defaults</code> — 一次註冊預設材質庫</summary>
 
 ```c
 STMaterialId st_rt_material_load_defaults(STRT_Context* context);
 ```
 
-**용도** — 엔진에 내장된 기본 재질 라이브러리를 통째로 등록합니다. 재질 계수를 직접 준비하지 않고 바로 씬을 구성할 때 씁니다.
+**用途** — 將引擎內建的預設材質庫整批註冊。用於不自行準備材質係數而直接組成場景的情況。
 
-**언제·어떻게** — 메시를 만들기 전에 호출합니다. 반환값은 라이브러리의 **첫 재질** 핸들이며, 나머지 재질은 `v+1`, `v+2` … 순서대로 연속입니다. `st_rt_material_create`로 등록한 재질과 함께 써도 됩니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 在建立網格之前呼叫。回傳值是材質庫 **第一個材質** 的控制代碼，其餘材質依 `v+1`、`v+2` … 的順序連續。可與以 `st_rt_material_create` 註冊的材質並用。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 라이브러리 첫 재질의 핸들. 실패하면 `v < 0`.
+**回傳值** — 材質庫第一個材質的控制代碼。失敗時 `v < 0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_set_edge_split_collinear_overlaps</code> — 공선으로 겹치는 음향 엣지의 분할 여부를 정한다</summary>
+<summary><code>st_rt_scene_set_edge_split_collinear_overlaps</code> — 決定是否分割共線重疊的聲學邊緣</summary>
 
 ```c
 void st_rt_scene_set_edge_split_collinear_overlaps(STRT_Context* context, int enabled);
 ```
 
-**용도** — 메시를 만들 때 컴파일되는 음향 엣지(회절 엣지) 토폴로지에서, 한 직선 위에 겹쳐 놓인(공선 중첩) 엣지를 분할해 다룰지 정하는 씬 빌드 옵션입니다. 지원 여부는 capability 비트 `ST_CAP_ACOUSTIC_EDGE_BUILD_OPTIONS`로 확인합니다.
+**用途** — 場景建置選項，決定在建立網格時編譯的聲學邊緣（繞射邊緣）拓撲中，是否將重疊於同一直線上（共線重疊）的邊緣分割處理。支援與否以 capability 位元 `ST_CAP_ACOUSTIC_EDGE_BUILD_OPTIONS` 確認。
 
-**언제·어떻게** — 메시 생성 시점의 값이 쓰이므로 **이 호출 뒤에 만드는 메시에만** 적용됩니다. 이미 만든 메시의 토폴로지는 바뀌지 않으니 `st_rt_mesh_create` 전에 설정합니다. 기본은 꺼짐입니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 使用的是網格建立當下的值，因此 **只套用到此呼叫之後建立的網格**。已建立網格的拓撲不會變更，請在 `st_rt_mesh_create` 之前設定。預設為關閉。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | `0` = 끔(기본) / 0 이외 = 켬 |
+| `context` | 情境控制代碼 |
+| `enabled` | `0` = 關閉（預設）/ 0 以外 = 開啟 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_set_solid_wedge_gate</code> — 회절 쐐기의 오리엔티드 기각 게이트를 켜고 끈다</summary>
+<summary><code>st_rt_scene_set_solid_wedge_gate</code> — 開關繞射楔的定向剔除閘門</summary>
 
 ```c
 void st_rt_scene_set_solid_wedge_gate(STRT_Context* context, int enabled);
 ```
 
-**용도** — 두 면이 만나는 회절 쐐기(wedge)에서, 메시의 와인딩(법선 방향)으로 볼록·오목을 가려 쐐기의 고체 쪽으로 들어가는 회절 경로를 기각하는 게이트입니다. 지원 여부는 capability 비트 `ST_CAP_EXPERIMENTAL_SOLID_WEDGE_GATE`로 확인합니다.
+**用途** — 在兩面相交的繞射楔（wedge）上，依網格的繞序（法線方向）區分凸·凹，剔除進入楔實體側的繞射路徑的閘門。支援與否以 capability 位元 `ST_CAP_EXPERIMENTAL_SOLID_WEDGE_GATE` 確認。
 
-**언제·어떻게** — 기본은 꺼짐입니다. 전파 단계에서 판정하므로 기존 메시에도 적용됩니다. 켜면 판정이 메시 와인딩에 의존하므로, 메시 하나 안에서 와인딩을 일관되게 유지하고 법선이 공기 쪽을 향하게 해야 합니다 — 와인딩을 뒤집으면 볼록·오목이 바뀌어 기각되는 회절 경로 집합이 반대가 됩니다(`st_rt_mesh_create`의 와인딩 안내 참고). 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設為關閉。在傳播階段判定，因此也會套用到現有網格。開啟後判定依賴網格繞序，因此必須在一個網格內保持繞序一致，並讓法線朝向空氣側 — 反轉繞序會使凸·凹互換，被剔除的繞射路徑集合也會相反（參閱 `st_rt_mesh_create` 的繞序說明）。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | `0` = 끔(기본) / 0 이외 = 켬 |
+| `context` | 情境控制代碼 |
+| `enabled` | `0` = 關閉（預設）/ 0 以外 = 開啟 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_set_accel</code> — 메시·정적 씬 가속구조 종류를 고른다</summary>
+<summary><code>st_rt_scene_set_accel</code> — 選擇網格·靜態場景加速結構類型</summary>
 
 ```c
 int st_rt_scene_set_accel(STRT_Context* context, int kind);
 ```
 
-**용도** — 메시 BLAS와 정적 씬 가속구조에 쓸 구조 종류를 선택합니다. 엔진은 생성 시 `SIMPLEST_ACCEL` 환경변수도 읽지만, 이 함수로 호스트가 자기 프로세스 환경을 바꾸지 않고 같은 선택을 할 수 있습니다.
+**用途** — 選擇網格 BLAS 與靜態場景加速結構使用的結構類型。引擎在建立時也會讀取 `SOUNDTRACING_ACCEL` 環境變數，但透過此函式，主機不必變更自身處理程序環境即可做相同選擇。
 
-**언제·어떻게** — 오브젝트를 추가하기 전에 호출합니다. 이후의 빌드에만 적용되며 기존 메시의 BLAS는 생성 시점의 값으로 지어진 그대로입니다. 기본값은 `2`(TinyBVH)입니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 在新增物件之前呼叫。只套用到之後的建置，現有網格的 BLAS 維持以建立當下的值建置的狀態。預設值為 `2`（TinyBVH）。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `kind` | `0` = BinnedSAH / `1` = HybridKD / `2` = TinyBVH(기본) / `3` = LBVH / `4` = LBVH_Simd |
+| `context` | 情境控制代碼 |
+| `kind` | `0` = BinnedSAH / `1` = HybridKD / `2` = TinyBVH（預設）/ `3` = LBVH / `4` = LBVH_Simd |
 
-**반환** — `1` = 적용 / `0` = `kind`가 범위 밖이거나 컨텍스트가 없음.
+**回傳值** — `1` = 已套用 / `0` = `kind` 超出範圍或沒有情境。
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_set_triangle_intersection</code> — 삼각형 교차 커널을 고른다</summary>
+<summary><code>st_rt_scene_set_triangle_intersection</code> — 選擇三角形相交核心</summary>
 
 ```c
 int st_rt_scene_set_triangle_intersection(STRT_Context* context, int kind);
 ```
 
-**용도** — 레이-삼각형 교차 판정에 쓸 커널을 선택합니다. 세 커널 모두 양면 교차입니다.
+**用途** — 選擇射線-三角形相交判定所用的核心。三種核心皆為雙面相交。
 
-**언제·어떻게** — 커널은 `st_rt_mesh_create` 시점에 메시에 고정되므로 **이 호출 뒤에 추가하는 메시에만** 적용됩니다(기존 메시 소급 없음). 메시마다 다른 커널을 쓰는 구성도 유효합니다. 기본은 `0`(MollerTrumbore)입니다. 현재 값은 `st_rt_scene_get_triangle_intersection`으로 읽습니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 核心在 `st_rt_mesh_create` 時固定於網格，因此 **只套用到此呼叫之後新增的網格**（不追溯現有網格）。各網格使用不同核心的組態也有效。預設為 `0`（MollerTrumbore）。目前值以 `st_rt_scene_get_triangle_intersection` 讀取。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `kind` | `0` = MollerTrumbore(기본) / `1` = PluckerAdaptive / `2` = Watertight |
+| `context` | 情境控制代碼 |
+| `kind` | `0` = MollerTrumbore（預設）/ `1` = PluckerAdaptive / `2` = Watertight |
 
-**반환** — `1` = 적용 / `0` = 잘못된 `kind` 또는 컨텍스트 없음.
+**回傳值** — `1` = 已套用 / `0` = 無效的 `kind` 或沒有情境。
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_get_triangle_intersection</code> — 현재 삼각형 교차 커널 설정을 읽는다</summary>
+<summary><code>st_rt_scene_get_triangle_intersection</code> — 讀取目前的三角形相交核心設定</summary>
 
 ```c
 int st_rt_scene_get_triangle_intersection(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_scene_set_triangle_intersection`으로 지정한 값, 즉 다음에 만들 메시에 적용될 교차 커널을 조회합니다.
+**用途** — 查詢以 `st_rt_scene_set_triangle_intersection` 指定的值，即將套用到下一個建立之網格的相交核心。
 
-**언제·어떻게** — 언제든 호출할 수 있습니다. 이미 만든 메시는 각자 생성 시점의 커널을 유지하므로, 반환값이 기존 메시의 커널과 같다는 보장은 없습니다. 스레드: `[control]` — 씬 read 락만 잡는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**呼叫方式** — 可隨時呼叫。已建立的網格各自維持建立當下的核心，因此不保證回傳值與現有網格的核心相同。執行緒：`[control]` — 只持有場景 read 鎖的查詢。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `0` = MollerTrumbore / `1` = PluckerAdaptive / `2` = Watertight. 컨텍스트가 없으면 `-1`.
+**回傳值** — `0` = MollerTrumbore / `1` = PluckerAdaptive / `2` = Watertight。沒有情境時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_get_stats</code> — 라이브 메시·오브젝트·소스·삼각형 수를 조회한다</summary>
+<summary><code>st_rt_scene_get_stats</code> — 查詢存活的網格·物件·音源·三角形數</summary>
 
 ```c
 int st_rt_scene_get_stats(STRT_Context* context, STSceneStats* outStats);
 ```
 
-**용도** — 현재 살아 있는 음향 씬의 인벤토리(메시·오브젝트·소스 개수와 삼각형 수)를 한 번의 read 락 스냅샷으로 돌려줍니다. 모든 값이 같은 시점의 씬을 기술하므로 진단·메모리 규모 파악에 씁니다. 지원 여부는 capability 비트 `ST_CAP_SCENE_STATS`로 확인합니다.
+**用途** — 以一次 read 鎖快照回傳目前存活的聲學場景清單（網格·物件·音源數量與三角形數）。所有值描述同一時間點的場景，用於診斷·掌握記憶體規模。支援與否以 capability 位元 `ST_CAP_SCENE_STATS` 確認。
 
-**언제·어떻게** — 씬 구성 중이든 렌더 중이든 제어 스레드에서 언제든 호출할 수 있습니다. 스레드: `[control]` — 씬 read 락만 잡는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**呼叫方式** — 無論是場景組成中或渲染中，皆可隨時在控制執行緒上呼叫。執行緒：`[control]` — 只持有場景 read 鎖的查詢。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outStats` | 결과를 받을 구조체. 호출자가 `structSize = sizeof(STSceneStats)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | 情境控制代碼 |
+| `outStats` | 接收結果的結構體。呼叫端填入 `structSize = sizeof(STSceneStats)`、`apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STSceneStats`
+**結構體** `STSceneStats`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` | `sizeof(STSceneStats)` — 호출자가 채움 |
-| `apiVersion` | `ST_ABI_VERSION` — 호출자가 채움 |
-| `meshCount` | 라이브 메시 수 |
-| `objectCount` | 라이브 오브젝트 수. destroy가 성공하는 즉시 줄어듭니다 |
-| `sourceCount` | 라이브 소스 수. 비활성(disabled) 소스도 포함하며 destroy가 성공하는 즉시 줄어듭니다 |
-| `reserved0` | 예약 |
-| `triangleCount` | 라이브 오브젝트가 참조하는 메시의 삼각형을 **인스턴스별로** 합친 값. 100개 삼각형 메시를 오브젝트 3개가 공유하면 300 |
-| `uniqueTriangleCount` | 라이브 메시 리소스를 **한 번씩만** 합친 값(위 예에서 100). 기하·가속구조 메모리 규모를 볼 때 씁니다 |
-| `reserved[4]` | 예약 |
+| `structSize` | `sizeof(STSceneStats)` — 由呼叫端填入 |
+| `apiVersion` | `ST_ABI_VERSION` — 由呼叫端填入 |
+| `meshCount` | 存活網格數 |
+| `objectCount` | 存活物件數。destroy 成功即立即減少 |
+| `sourceCount` | 存活音源數。包含停用（disabled）音源，destroy 成功即立即減少 |
+| `reserved0` | 保留 |
+| `triangleCount` | 存活物件所參照網格的三角形 **依實例** 加總的值。100 個三角形的網格由 3 個物件共用時為 300 |
+| `uniqueTriangleCount` | 存活網格資源 **各只計一次** 加總的值（上例為 100）。用於檢視幾何·加速結構的記憶體規模 |
+| `reserved[4]` | 保留 |
 
-**반환** — `1` = 성공 / `0` = `context`·`outStats`가 NULL(`ST_STATUS_INVALID_ARGUMENT`)이거나 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`).
+**回傳值** — `1` = 成功 / `0` = `context`·`outStats` 為 NULL（`ST_STATUS_INVALID_ARGUMENT`）或戳記不符（`ST_STATUS_VERSION_MISMATCH`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_scene_raycast</code> — 엔진 가속구조로 최근접 히트를 질의한다</summary>
+<summary><code>st_rt_scene_raycast</code> — 以引擎加速結構查詢最近命中</summary>
 
 ```c
 int st_rt_scene_raycast(STRT_Context* context, const float origin[3], const float direction[3], float maxDistanceMeters, STRayHit* outHit);
 ```
 
-**용도** — 전파 계산이 쓰는 바로 그 가속구조(정적+동적 오브젝트 모두)에 레이를 쏘아 가장 가까운 히트 하나를 돌려줍니다. 읽기 전용 질의라 파이프라인 상태를 바꾸지 않으므로, 호스트가 엔진이 실제로 보는 음향 기하를 확인하거나 자체 로직(가림 판정·디버그 표시 등)에 쓸 수 있습니다. 지원 여부는 capability 비트 `ST_CAP_SCENE_RAYCAST`로 확인합니다.
+**用途** — 向傳播計算所使用的同一加速結構（含靜態+動態物件）發射射線，回傳最近的一個命中。為唯讀查詢，不改變管線狀態，因此主機可用來確認引擎實際看到的聲學幾何，或用於自身邏輯（遮擋判定·除錯顯示等）。支援與否以 capability 位元 `ST_CAP_SCENE_RAYCAST` 確認。
 
-**언제·어떻게** — `st_rt_build`로 가속구조를 지은 뒤에 의미가 있습니다. 빌드 전이면 오류 없이 미스를 돌려줍니다. 씬 read 락만 잡으므로 `ST_RT_SCHEDULER_PIPELINED`에서도 워커와 함께 돌 수 있습니다. 스레드: `[control]` — 씬 read 락만 잡는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**呼叫方式** — 在以 `st_rt_build` 建置加速結構之後才有意義。建置前呼叫會無錯誤地回傳未命中。只持有場景 read 鎖，因此在 `ST_RT_SCHEDULER_PIPELINED` 下也能與工作執行緒並行。執行緒：`[control]` — 只持有場景 read 鎖的查詢。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `origin` | 레이 원점, 월드 좌표 3성분(씬 단위). 유한해야 합니다 |
-| `direction` | 레이 방향 3성분. 엔진이 정규화하므로 단위벡터일 필요는 없지만 유한하고 0벡터가 아니어야 합니다 |
-| `maxDistanceMeters` | 최대 거리(미터, 씬 단위 × `sceneRatio` 규약). `<= 0` 또는 비유한 값이면 무한 |
-| `outHit` | 결과를 받을 구조체. 호출자가 `structSize = sizeof(STRayHit)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | 情境控制代碼 |
+| `origin` | 射線原點，世界座標 3 分量（場景單位）。須為有限值 |
+| `direction` | 射線方向 3 分量。引擎會正規化，因此不必是單位向量，但須為有限值且非零向量 |
+| `maxDistanceMeters` | 最大距離（公尺，場景單位 × `sceneRatio` 規約）。`<= 0` 或非有限值時為無限 |
+| `outHit` | 接收結果的結構體。呼叫端填入 `structSize = sizeof(STRayHit)`、`apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STRayHit`
+**結構體** `STRayHit`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` | `sizeof(STRayHit)` — 호출자가 채움 |
-| `apiVersion` | `ST_ABI_VERSION` — 호출자가 채움 |
-| `hit` | `1` = 히트 / `0` = 미스 |
-| `distanceMeters` | 원점에서 히트점까지 거리(미터). 씬 거리 × `sceneRatio`(생성 옵션, 기본 1) |
-| `point[3]` | 히트점. 씬 프레임 좌표 그대로(단위 변환 없음) |
-| `normal[3]` | 히트 삼각형의 단위 기하 법선. 항상 **레이 원점 쪽**을 향하도록 정렬되며, 메시 와인딩이 주는 부호는 유지되지 않습니다 |
-| `objectId` | 히트한 오브젝트 id(`STObjectId`의 `v` 값). 미스면 `-1` |
-| `meshId` | 그 오브젝트의 메시 id(`STMeshId`의 `v` 값). 미스면 `-1` |
-| `triangleIndex` | 메시 로컬 삼각형 인덱스. 미스면 `-1` |
-| `materialIndex` | 그 삼각형의 재질 인덱스(`STMaterialId`의 `v` 값). 미스면 `-1` |
-| `reserved[6]` | 예약 |
+| `structSize` | `sizeof(STRayHit)` — 由呼叫端填入 |
+| `apiVersion` | `ST_ABI_VERSION` — 由呼叫端填入 |
+| `hit` | `1` = 命中 / `0` = 未命中 |
+| `distanceMeters` | 從原點到命中點的距離（公尺）。場景距離 × `sceneRatio`（建立選項，預設 1） |
+| `point[3]` | 命中點。維持場景座標系座標（無單位轉換） |
+| `normal[3]` | 命中三角形的單位幾何法線。一律對齊為朝向 **射線原點側**，不保留網格繞序給出的正負號 |
+| `objectId` | 命中的物件 id（`STObjectId` 的 `v` 值）。未命中時為 `-1` |
+| `meshId` | 該物件的網格 id（`STMeshId` 的 `v` 值）。未命中時為 `-1` |
+| `triangleIndex` | 網格區域三角形索引。未命中時為 `-1` |
+| `materialIndex` | 該三角形的材質索引（`STMaterialId` 的 `v` 值）。未命中時為 `-1` |
+| `reserved[6]` | 保留 |
 
-미스(`hit == 0`)이면 `distanceMeters`·`point`·`normal`은 0이고 네 id는 모두 `-1`입니다. `0`은 유효한 id이므로 미스 표식으로 쓰지 않습니다. id 필드는 핸들 구조체가 아닌 `int32_t`입니다.
+未命中（`hit == 0`）時 `distanceMeters`·`point`·`normal` 為 0，四個 id 皆為 `-1`。`0` 是有效的 id，因此不作為未命中標記。id 欄位是 `int32_t` 而非控制代碼結構體。
 
-**반환** — `1` = 호출 성공(히트 여부는 `outHit->hit`로 판단 — 미스는 실패가 아닙니다) / `0` = 실패: `context`·포인터 NULL, 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`), `origin`·`direction` 비유한 또는 `direction`이 0벡터(`ST_STATUS_INVALID_ARGUMENT`).
+**回傳值** — `1` = 呼叫成功（是否命中以 `outHit->hit` 判斷 — 未命中並非失敗）/ `0` = 失敗：`context`·指標為 NULL、戳記不符（`ST_STATUS_VERSION_MISMATCH`）、`origin`·`direction` 非有限值或 `direction` 為零向量（`ST_STATUS_INVALID_ARGUMENT`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_mesh_create</code> — 삼각형 메시를 등록하고 핸들을 받는다</summary>
+<summary><code>st_rt_mesh_create</code> — 註冊三角形網格並取得控制代碼</summary>
 
 ```c
 STMeshId st_rt_mesh_create(STRT_Context* context, const STMesh* mesh, STMaterialId material, const int32_t* triangleMaterialIndices);
 ```
 
-**용도** — 음향 기하로 쓸 삼각형 메시를 등록합니다. 메시는 기하 리소스이고, 씬에 실제로 놓으려면 `st_rt_object_create`/`st_rt_object_create_q`로 이 메시를 참조하는 오브젝트(인스턴스)를 만듭니다. 메시 하나를 여러 오브젝트가 공유할 수 있습니다.
+**用途** — 註冊作為聲學幾何使用的三角形網格。網格是幾何資源，要實際放入場景，需以 `st_rt_object_create`/`st_rt_object_create_q` 建立參照此網格的物件（實例）。一個網格可由多個物件共用。
 
-**언제·어떻게** — 쓸 재질을 먼저 등록한 뒤 호출합니다. 재질 지정은 둘 중 하나입니다.
+**呼叫方式** — 先註冊要使用的材質後再呼叫。材質指定方式為以下兩者之一。
 
-- `triangleMaterialIndices == NULL`: 메시 전체가 `material` 하나를 씁니다.
-- `triangleMaterialIndices != NULL`: 삼각형마다 재질을 지정합니다(배열 길이 `mesh->numTriangles`). 이때 `material` 인자는 무시됩니다. 지원 여부는 `ST_CAP_PER_TRIANGLE_MATERIALS`로 확인합니다.
+- `triangleMaterialIndices == NULL`：整個網格使用單一 `material`。
+- `triangleMaterialIndices != NULL`：為每個三角形指定材質（陣列長度 `mesh->numTriangles`）。此時忽略 `material` 引數。支援與否以 `ST_CAP_PER_TRIANGLE_MATERIALS` 確認。
 
-교차 커널(`st_rt_scene_set_triangle_intersection`), 엣지 분할 옵션(`st_rt_scene_set_edge_split_collinear_overlaps`), 가속구조 종류(`st_rt_scene_set_accel`)는 이 호출 시점의 값으로 메시에 고정됩니다. 입력 배열은 호출 중에 복사되므로 반환 뒤 해제해도 됩니다. 스레드: `[control, blocking]` — 음향 엣지 토폴로지를 컴파일하는 긴 배타 구간이므로 게임 루프·오디오 스레드에서 부르지 마십시오.
+相交核心（`st_rt_scene_set_triangle_intersection`）、邊緣分割選項（`st_rt_scene_set_edge_split_collinear_overlaps`）、加速結構類型（`st_rt_scene_set_accel`）以此呼叫當下的值固定於網格。輸入陣列在呼叫期間複製，因此回傳後即可釋放。執行緒：`[control, blocking]` — 編譯聲學邊緣拓撲的較長獨佔區間，請勿在遊戲迴圈·音訊執行緒中呼叫。
 
-와인딩: 교차는 양면이고 반사·투과는 와인딩과 무관하지만, 회절 엣지 판정 일부(두께 0 판의 엣지 채택, `st_rt_scene_set_solid_wedge_gate`)는 와인딩에 의존합니다. 메시 하나 안에서 와인딩을 **일관되게** 유지하고, 가능하면 법선이 공기 쪽을 향하게 하십시오. 좌표계를 미러링해 가져올 때는 인덱스 순서도 함께 뒤집어야 합니다.
+繞序：相交為雙面，反射·透射與繞序無關，但部分繞射邊緣判定（零厚度板的邊緣採用、`st_rt_scene_set_solid_wedge_gate`）依賴繞序。請在一個網格內 **一致地** 保持繞序，並盡可能讓法線朝向空氣側。鏡像座標系匯入時，索引順序也必須一併反轉。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 메시 기하(`STMesh`). NULL 불가 |
-| `material` | 메시 전체 재질 핸들. `triangleMaterialIndices`가 NULL일 때만 쓰이며 등록된 재질이어야 합니다 |
-| `triangleMaterialIndices` | 삼각형별 재질 인덱스 배열(`numTriangles`개, 각 원소는 등록된 `STMaterialId`의 `v` 값) 또는 NULL |
+| `context` | 情境控制代碼 |
+| `mesh` | 網格幾何（`STMesh`）。不可為 NULL |
+| `material` | 整個網格的材質控制代碼。僅在 `triangleMaterialIndices` 為 NULL 時使用，須為已註冊的材質 |
+| `triangleMaterialIndices` | 各三角形材質索引陣列（`numTriangles` 個，每個元素為已註冊 `STMaterialId` 的 `v` 值）或 NULL |
 
-**구조체** `STMesh`
+**結構體** `STMesh`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `numVertices` | 정점 수(> 0) |
-| `vertices` | 정점 좌표 xyz 인터리브 배열, `numVertices * 3`개 float. 씬 단위(메시 로컬 프레임) |
-| `numTriangles` | 삼각형 수(> 0) |
-| `triangles` | 삼각형 정점 인덱스 배열, `numTriangles * 3`개 int. 각 값은 `[0, numVertices)` |
+| `numVertices` | 頂點數（> 0） |
+| `vertices` | 頂點座標 xyz 交錯陣列，`numVertices * 3` 個 float。場景單位（網格區域座標系） |
+| `numTriangles` | 三角形數（> 0） |
+| `triangles` | 三角形頂點索引陣列，`numTriangles * 3` 個 int。各值在 `[0, numVertices)` 內 |
 
-**반환** — 메시 핸들. 실패하면 `v < 0`: `mesh`·배열 포인터가 NULL이거나 개수가 0 이하면 `ST_STATUS_INVALID_ARGUMENT`, 인덱스 범위 밖·등록되지 않은 재질 등으로 메시가 거절되면 `ST_STATUS_INVALID_MATERIAL`.
+**回傳值** — 網格控制代碼。失敗時 `v < 0`：`mesh`·陣列指標為 NULL 或數量在 0 以下時為 `ST_STATUS_INVALID_ARGUMENT`，因索引超出範圍·未註冊的材質等原因網格被拒絕時為 `ST_STATUS_INVALID_MATERIAL`。
 
 </details>
 
 <details>
-<summary><code>st_rt_object_create</code> — 메시를 행렬 변환으로 씬에 배치한다</summary>
+<summary><code>st_rt_object_create</code> — 以矩陣變換將網格放入場景</summary>
 
 ```c
 STObjectId st_rt_object_create(STRT_Context* context, STMeshId mesh, const STTransform* transform, int isDynamic);
 ```
 
-**용도** — 등록된 메시를 월드 변환과 함께 씬에 놓는 오브젝트(인스턴스)를 만듭니다. 전파 계산과 `st_rt_scene_raycast`는 오브젝트만 봅니다. 회전을 쿼터니언으로 주려면 `st_rt_object_create_q`를 씁니다.
+**用途** — 建立將已註冊網格連同世界變換放入場景的物件（實例）。傳播計算與 `st_rt_scene_raycast` 只看物件。若要以四元數指定旋轉，請使用 `st_rt_object_create_q`。
 
-**언제·어떻게** — `st_rt_mesh_create` 뒤에 호출합니다. `isDynamic`으로 정적/동적을 정합니다.
+**呼叫方式** — 在 `st_rt_mesh_create` 之後呼叫。以 `isDynamic` 決定靜態/動態。
 
-- 정적(`0`): `st_rt_build`(정적+동적 전체 빌드)가 발행하는 정적 TLAS에 들어갑니다. 추가·제거·변환 변경은 다음 `st_rt_build` 전까지 발행된 정적 구조에 반영되지 않습니다. 움직이지 않는 벽·바닥 등 건축 기하에 씁니다.
-- 동적(`1`): 동적 오브젝트 TLAS에 들어가며, 변환 변경이 전체 빌드 없이 동적 재구축(refit, `st_rt_build_dynamic`)으로 반영됩니다. 문·차량 등 움직이는 기하에 씁니다.
+- 靜態（`0`）：放入 `st_rt_build`（靜態+動態完整建置）發佈的靜態 TLAS。新增·移除·變換變更在下一次 `st_rt_build` 之前不會反映到已發佈的靜態結構。用於牆壁·地板等不移動的建築幾何。
+- 動態（`1`）：放入動態物件 TLAS，變換變更不需完整建置，以動態重建（refit，`st_rt_build_dynamic`）反映。用於門·車輛等移動的幾何。
 
-스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 배치할 메시 핸들 |
-| `transform` | 로컬→월드 변환(`STTransform`). NULL이면 항등 변환 |
-| `isDynamic` | `0` = 정적 / 0 이외 = 동적 |
+| `context` | 情境控制代碼 |
+| `mesh` | 要放置的網格控制代碼 |
+| `transform` | 區域→世界變換（`STTransform`）。若為 NULL 則為恆等變換 |
+| `isDynamic` | `0` = 靜態 / 0 以外 = 動態 |
 
-**구조체** `STTransform`
+**結構體** `STTransform`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `m00, m01, m02` | 3x3 회전·스케일 행렬 1행 |
-| `m10, m11, m12` | 2행 |
-| `m20, m21, m22` | 3행 |
-| `tx, ty, tz` | 평행이동(씬 단위) |
+| `m00, m01, m02` | 3x3 旋轉·縮放矩陣第 1 列 |
+| `m10, m11, m12` | 第 2 列 |
+| `m20, m21, m22` | 第 3 列 |
+| `tx, ty, tz` | 平移（場景單位） |
 
-행 우선(row-major)이며 점을 **열벡터로** 곱합니다: `x' = m00*x + m01*y + m02*z + tx`, `y' = m10*x + m11*y + m12*z + ty`, `z' = m20*x + m21*y + m22*z + tz` (`m00*x + m10*y + m20*z` 꼴이 아닙니다). 비균등 스케일과 행렬식이 음수인 변환(거울·음수 스케일)도 받습니다. 성분이 비유한이거나 역행렬을 만들 수 없는 변환은 거절됩니다. 좌표계는 왼손, +Y up, +Z forward, +X right입니다.
+列優先（row-major），點以 **行向量** 相乘：`x' = m00*x + m01*y + m02*z + tx`、`y' = m10*x + m11*y + m12*z + ty`、`z' = m20*x + m21*y + m22*z + tz`（不是 `m00*x + m10*y + m20*z` 的形式）。也接受非等比縮放與行列式為負的變換（鏡像·負縮放）。分量為非有限值或無法求反矩陣的變換會被拒絕。座標系為左手系，+Y up、+Z forward、+X right。
 
-**반환** — 오브젝트 핸들. 실패하면 `v < 0`(없는 메시, 쓸 수 없는 변환 등).
+**回傳值** — 物件控制代碼。失敗時 `v < 0`（不存在的網格、無法使用的變換等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_object_create_q</code> — 메시를 위치·쿼터니언·스케일로 씬에 배치한다</summary>
+<summary><code>st_rt_object_create_q</code> — 以位置·四元數·縮放將網格放入場景</summary>
 
 ```c
 STObjectId st_rt_object_create_q(STRT_Context* context, STMeshId mesh, const float position[3], const float quatXYZW[4], const float scale[3], int isDynamic);
 ```
 
-**용도** — `st_rt_object_create`와 같은 오브젝트를 만들되, 변환을 위치·회전 쿼터니언·스케일(TRS)로 받습니다. 게임 엔진의 트랜스폼을 행렬로 바꾸지 않고 바로 넘길 때 씁니다.
+**用途** — 建立與 `st_rt_object_create` 相同的物件，但以位置·旋轉四元數·縮放（TRS）接收變換。用於不將遊戲引擎的變換轉為矩陣而直接傳入的情況。
 
-**언제·어떻게** — `st_rt_mesh_create` 뒤에 호출합니다. 정적/동적의 의미와 빌드 반영 시점은 `st_rt_object_create`와 같습니다. 이후 변환은 `st_rt_object_set_transform_q`로 갱신합니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 在 `st_rt_mesh_create` 之後呼叫。靜態/動態的意義與建置反映時機與 `st_rt_object_create` 相同。之後的變換以 `st_rt_object_set_transform_q` 更新。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 배치할 메시 핸들 |
-| `position` | 월드 위치 xyz(씬 단위). NULL 불가 |
-| `quatXYZW` | 로컬→월드 회전 쿼터니언, **XYZW 순서**. 엔진이 정규화하며 노름이 `1e-12` 미만이면 항등 회전으로 대체합니다. NULL 불가 |
-| `scale` | 축별 스케일 xyz. 회전에 열 스케일로 합성되며(R·S) 비균등 스케일을 허용합니다. NULL 불가 |
-| `isDynamic` | `0` = 정적 / 0 이외 = 동적 |
+| `context` | 情境控制代碼 |
+| `mesh` | 要放置的網格控制代碼 |
+| `position` | 世界位置 xyz（場景單位）。不可為 NULL |
+| `quatXYZW` | 區域→世界旋轉四元數，**XYZW 順序**。由引擎正規化，範數小於 `1e-12` 時以恆等旋轉取代。不可為 NULL |
+| `scale` | 各軸縮放 xyz。以行縮放合成到旋轉中（R·S），允許非等比縮放。不可為 NULL |
+| `isDynamic` | `0` = 靜態 / 0 以外 = 動態 |
 
-**반환** — 오브젝트 핸들. 실패하면 `v < 0`(포인터 NULL, 없는 메시, 쓸 수 없는 변환 등).
+**回傳值** — 物件控制代碼。失敗時 `v < 0`（指標為 NULL、不存在的網格、無法使用的變換等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_object_set_transform</code> — 오브젝트의 행렬 변환을 바꾼다</summary>
+<summary><code>st_rt_object_set_transform</code> — 變更物件的矩陣變換</summary>
 
 ```c
 void st_rt_object_set_transform(STRT_Context* context, STObjectId object, const STTransform* transform);
 ```
 
-**용도** — 이미 배치한 오브젝트의 로컬→월드 변환을 행렬로 갱신합니다.
+**用途** — 以矩陣更新已放置物件的區域→世界變換。
 
-**언제·어떻게** — 오브젝트를 움직일 때 호출합니다. 동적 오브젝트는 전체 빌드 없이 동적 재구축으로 반영됩니다. 정적 오브젝트의 변경은 대기 상태로 두었다가 다음 `st_rt_build`에서 반영되므로, 매 프레임 움직이는 기하는 동적(`isDynamic = 1`)으로 만드십시오. 쿼터니언으로 주려면 `st_rt_object_set_transform_q`를 씁니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 移動物件時呼叫。動態物件不需完整建置，以動態重建反映。靜態物件的變更會保持待處理狀態，於下一次 `st_rt_build` 時反映，因此每個影格都會移動的幾何請建立為動態（`isDynamic = 1`）。若要以四元數指定，請使用 `st_rt_object_set_transform_q`。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 대상 오브젝트 핸들 |
-| `transform` | 새 변환. `STTransform` 필드는 `st_rt_object_create` 항목 참고. NULL이면 아무것도 하지 않습니다 |
+| `context` | 情境控制代碼 |
+| `object` | 目標物件控制代碼 |
+| `transform` | 新變換。`STTransform` 欄位請參閱 `st_rt_object_create` 項目。若為 NULL 則不執行任何動作 |
 
-**반환** — 없음. 없는 오브젝트나 쓸 수 없는 변환(비유한·역행렬 불가)은 무시됩니다.
+**回傳值** — 無。不存在的物件或無法使用的變換（非有限值·無法求反矩陣）會被忽略。
 
 </details>
 
 <details>
-<summary><code>st_rt_object_set_transform_q</code> — 오브젝트 변환을 위치·쿼터니언·스케일로 바꾼다</summary>
+<summary><code>st_rt_object_set_transform_q</code> — 以位置·四元數·縮放變更物件變換</summary>
 
 ```c
 void st_rt_object_set_transform_q(STRT_Context* context, STObjectId object, const float position[3], const float quatXYZW[4], const float scale[3]);
 ```
 
-**용도** — `st_rt_object_set_transform`의 TRS판입니다. 게임 엔진 트랜스폼(위치·쿼터니언·스케일)을 그대로 넘겨 오브젝트를 갱신합니다.
+**用途** — `st_rt_object_set_transform` 的 TRS 版本。直接傳入遊戲引擎的變換（位置·四元數·縮放）來更新物件。
 
-**언제·어떻게** — 정적/동적별 반영 시점은 `st_rt_object_set_transform`과 같습니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 靜態/動態各自的反映時機與 `st_rt_object_set_transform` 相同。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 대상 오브젝트 핸들 |
-| `position` | 월드 위치 xyz(씬 단위) |
-| `quatXYZW` | 로컬→월드 회전 쿼터니언, **XYZW 순서**. 엔진이 정규화하며 노름이 `1e-12` 미만이면 항등 회전으로 대체합니다 |
-| `scale` | 축별 스케일 xyz(R·S 합성, 비균등 허용) |
+| `context` | 情境控制代碼 |
+| `object` | 目標物件控制代碼 |
+| `position` | 世界位置 xyz（場景單位） |
+| `quatXYZW` | 區域→世界旋轉四元數，**XYZW 順序**。由引擎正規化，範數小於 `1e-12` 時以恆等旋轉取代 |
+| `scale` | 各軸縮放 xyz（R·S 合成，允許非等比） |
 
-**반환** — 없음. 포인터 중 하나라도 NULL이면 아무것도 하지 않으며, 없는 오브젝트나 쓸 수 없는 변환은 무시됩니다.
+**回傳值** — 無。任一指標為 NULL 時不執行任何動作，不存在的物件或無法使用的變換會被忽略。
 
 </details>
 
 <details>
-<summary><code>st_rt_mesh_destroy</code> — 메시와 그 메시를 쓰는 오브젝트를 제거한다</summary>
+<summary><code>st_rt_mesh_destroy</code> — 移除網格及使用該網格的物件</summary>
 
 ```c
 int st_rt_mesh_destroy(STRT_Context* context, STMeshId mesh);
 ```
 
-**용도** — 등록한 메시 리소스를 씬에서 제거합니다. 이 메시를 참조하던 오브젝트도 함께 해제됩니다.
+**用途** — 從場景移除已註冊的網格資源。參照此網格的物件也會一併釋放。
 
-**언제·어떻게** — 더 이상 쓰지 않는 기하를 정리할 때 호출합니다. 정적 오브젝트가 함께 제거되면 다음 `st_rt_build` 전까지 발행된 정적 구조에 남아 있으므로, 제거 뒤 `st_rt_build`를 호출해 반영하십시오. 제거된 핸들은 다시 쓰지 않습니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 清理不再使用的幾何時呼叫。若一併移除了靜態物件，在下一次 `st_rt_build` 之前它們仍留在已發佈的靜態結構中，因此請在移除後呼叫 `st_rt_build` 以反映。已移除的控制代碼不得再使用。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 제거할 메시 핸들 |
+| `context` | 情境控制代碼 |
+| `mesh` | 要移除的網格控制代碼 |
 
-**반환** — `1` = 제거됨 / `0` = 컨텍스트가 없거나 없는 메시.
+**回傳值** — `1` = 已移除 / `0` = 沒有情境或網格不存在。
 
 </details>
 
 <details>
-<summary><code>st_rt_object_destroy</code> — 오브젝트를 씬에서 제거한다</summary>
+<summary><code>st_rt_object_destroy</code> — 從場景移除物件</summary>
 
 ```c
 int st_rt_object_destroy(STRT_Context* context, STObjectId object);
 ```
 
-**용도** — 배치한 오브젝트(인스턴스)를 씬에서 뺍니다. 참조하던 메시 리소스는 남습니다.
+**用途** — 將已放置的物件（實例）從場景中移出。所參照的網格資源會保留。
 
-**언제·어떻게** — 성공 즉시 `st_rt_scene_get_stats`의 `objectCount`가 줄어듭니다. 정적 오브젝트는 다음 `st_rt_build` 전까지 발행된 정적 구조에 남아 있으므로, 제거 뒤 `st_rt_build`를 호출해 반영하십시오. 동적 오브젝트는 동적 재구축에서 빠집니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 成功後 `st_rt_scene_get_stats` 的 `objectCount` 立即減少。靜態物件在下一次 `st_rt_build` 之前仍留在已發佈的靜態結構中，因此請在移除後呼叫 `st_rt_build` 以反映。動態物件會從動態重建中移除。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 제거할 오브젝트 핸들 |
+| `context` | 情境控制代碼 |
+| `object` | 要移除的物件控制代碼 |
 
-**반환** — `1` = 제거됨 / `0` = 컨텍스트가 없거나 없는(이미 제거된) 오브젝트.
+**回傳值** — `1` = 已移除 / `0` = 沒有情境或物件不存在（已被移除）。
 
 </details>
 
 <details>
-<summary><code>st_rt_mesh_set_material</code> — 메시 전체의 재질을 런타임에 바꾼다</summary>
+<summary><code>st_rt_mesh_set_material</code> — 在執行期變更整個網格的材質</summary>
 
 ```c
 int st_rt_mesh_set_material(STRT_Context* context, STMeshId mesh, STMaterialId material);
 ```
 
-**용도** — 이미 등록한 메시의 재질을 다른 재질 하나로 교체합니다. 메시를 다시 만들지 않고 표면 음향 특성만 바꿀 때 씁니다.
+**用途** — 將已註冊網格的材質替換為另一個材質。用於不重建網格、只變更表面聲學特性的情況。
 
-**언제·어떻게** — 씬 구성 뒤 언제든 호출할 수 있습니다. 메시의 모든 삼각형이 `material`을 쓰게 되며, 생성 시 삼각형별로 지정한 재질도 이 하나로 바뀝니다. 재질이 유효하지 않으면 기존 재질을 그대로 둡니다. 이 메시를 쓰는 모든 오브젝트에 반영됩니다. 스레드: `[control]` — 제어 스레드 전용, 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 場景組成後可隨時呼叫。網格的所有三角形都會改用 `material`，建立時依三角形指定的材質也會換成這一個。材質無效時維持原有材質。會反映到使用此網格的所有物件。執行緒：`[control]` — 僅限控制執行緒，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 대상 메시 핸들 |
-| `material` | 새 재질 핸들(등록된 재질) |
+| `context` | 情境控制代碼 |
+| `mesh` | 目標網格控制代碼 |
+| `material` | 新材質控制代碼（已註冊的材質） |
 
-**반환** — `1` = 변경됨 / `0` = 컨텍스트가 없거나, 없는 메시이거나, 등록되지 않은 재질.
+**回傳值** — `1` = 已變更 / `0` = 沒有情境、網格不存在，或材質未註冊。
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>음원 — 생성, 위치·방향·속도, 지향성, 경로 게이트·볼륨, 레이 예산</strong> — 21개</summary>
+<summary><strong>音源 — 建立、位置·方向·速度、指向性、路徑閘門·音量、射線預算</strong> — 21 個</summary>
 
 <details>
-<summary><code>st_rt_source_create</code> — 음원을 만들고 핸들을 돌려준다</summary>
+<summary><code>st_rt_source_create</code> — 建立音源並回傳控制代碼</summary>
 
 ```c
 STSourceId st_rt_source_create(STRT_Context* context, const STSourceDesc* source);
 ```
 
-**용도** — 씬에 음원 하나를 등록하고 이후 모든 `st_rt_source_*` 호출에 쓰는 `STSourceId` 핸들을 돌려줍니다. 위치·방향·속도·압력 배율·지향 프로필·동적/정적 여부를 한 번에 정합니다.
+**用途** — 在場景中註冊一個音源，並回傳之後所有 `st_rt_source_*` 呼叫使用的 `STSourceId` 控制代碼。一次決定位置·方向·速度·壓力倍率·指向設定檔·動態/靜態與否。
 
-**언제·어떻게** — 컨텍스트를 만든 뒤 언제든 부릅니다. 만든 뒤 오디오 입력(`st_rt_source_set_audio_file`, `st_rt_source_attach_stream` 등)을 붙이고, 움직이는 음원은 매 프레임 `st_rt_source_set_position` / `st_rt_source_set_velocity`로 갱신합니다. 생성 직후 상태: source energy 1.0, 경로 볼륨 4종 1.0, 경로 종류 게이트 5종 모두 켜짐, 활성(enabled), 쉼 아님(`ST_RT_IDLE_RUNNING`), 지향성 테이블 없음, 수송 갱신 단계 수 0(기본), 수송 레이 격자 16 × 8, 소스별 최대 깊이 4. orientation은 `direction`에 맞는 roll 없는 최소 회전으로 맞춰집니다(`direction`이 `{0,0,1}`이면 항등). 스레드: `[control]` — 씬 락을 잡을 수 있으니 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 建立情境後可隨時呼叫。建立後附加音訊輸入（`st_rt_source_set_audio_file`、`st_rt_source_attach_stream` 等），移動的音源則每個影格以 `st_rt_source_set_position` / `st_rt_source_set_velocity` 更新。建立後的初始狀態：source energy 1.0、4 種路徑音量 1.0、5 種路徑類型閘門全部開啟、啟用（enabled）、非休眠（`ST_RT_IDLE_RUNNING`）、無指向性表、傳輸更新步數 0（預設）、傳輸射線網格 16 × 8、各音源最大深度 4。orientation 會設為對應 `direction` 的無 roll 最小旋轉（`direction` 為 `{0,0,1}` 時為恆等）。執行緒：`[control]` — 可能持有場景鎖，因此不要在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 생성 기술자 `STSourceDesc`(아래). NULL이면 실패. 이 구조체에는 `structSize` / `apiVersion` 스탬프가 없습니다 |
+| `context` | 情境控制代碼 |
+| `source` | 建立描述子 `STSourceDesc`（見下方）。NULL 則失敗。此結構體沒有 `structSize` / `apiVersion` 戳記 |
 
-**구조체** `STSourceDesc`
+**結構體** `STSourceDesc`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `positionX`, `positionY`, `positionZ` | 월드 위치. **씬 단위 그대로**(엔진이 `sceneRatio`로 미터 환산). 유한값이어야 합니다 |
-| `directionX`, `directionY`, `directionZ` | 소스 정면(forward) 방향. 엔진이 정규화하고, 이 방향에 맞춰 소스 orientation(로컬 forward = +Z)을 roll 없이 설정합니다. 0벡터면 +Z. 유한값이어야 합니다 |
-| `velocityX`, `velocityY`, `velocityZ` | 소스 속도, 씬 단위/초. Doppler 계산 전에 m/s로 환산됩니다. 유한값이어야 합니다 |
-| `intensity` | 무차원 **선형 압력(pressure) 배율**. 음향 인텐시티(W/m²)·SPL(dB)·보정된 Pa가 아닙니다. 유한하고 0 이상이어야 합니다. 에너지 영역 배율은 별도로 `st_rt_source_set_energy`로 줍니다 |
-| `directional` | `0` = 무지향(전 밴드 onAxis = offAxis = 1). `0` 아님 = 간이 지향 프로필(onAxis = 1, offAxis = 0). 밴드별로 세밀하게 정하려면 생성 뒤 `st_rt_source_set_axis_attenuation` 또는 `st_rt_source_set_directivity`를 씁니다 |
-| `isDynamic` | `1` = 동적 소스(잔향을 매 프레임 다시 계산), `0` = 정적 소스(잔향을 캐시해 재사용). 수송 갱신 단계 수의 기본값도 이 값으로 갈립니다(`st_rt_source_set_transport_refresh_steps` 참고) |
+| `positionX`, `positionY`, `positionZ` | 世界位置。**維持場景單位**（引擎以 `sceneRatio` 換算為公尺）。須為有限值 |
+| `directionX`, `directionY`, `directionZ` | 音源正面（forward）方向。由引擎正規化，並依此方向無 roll 地設定音源 orientation（區域 forward = +Z）。零向量時為 +Z。須為有限值 |
+| `velocityX`, `velocityY`, `velocityZ` | 音源速度，場景單位/秒。在 Doppler 計算前換算為 m/s。須為有限值 |
+| `intensity` | 無因次 **線性壓力（pressure）倍率**。不是聲強（W/m²）·SPL（dB）·校正後的 Pa。須為有限值且 0 以上。能量域倍率另以 `st_rt_source_set_energy` 指定 |
+| `directional` | `0` = 無指向（全頻帶 onAxis = offAxis = 1）。非 `0` = 簡易指向設定檔（onAxis = 1，offAxis = 0）。若要依頻帶細部設定，建立後使用 `st_rt_source_set_axis_attenuation` 或 `st_rt_source_set_directivity` |
+| `isDynamic` | `1` = 動態音源（每個影格重新計算殘響），`0` = 靜態音源（快取並重複使用殘響）。傳輸更新步數的預設值也依此值區分（參閱 `st_rt_source_set_transport_refresh_steps`） |
 
-**반환** — 성공 시 `v >= 0`인 `STSourceId`. 실패는 **`v < 0`**이고 `st_rt_get_last_status`로 사유를 봅니다.
-- `ST_STATUS_INVALID_ARGUMENT` — `source`가 NULL, 위치·방향·속도·`intensity`에 비유한값, `intensity < 0`, 그 밖에 엔진이 거절한 경우.
-- `ST_STATUS_BUDGET_EXCEEDED` — 음원 메모리 예산(`STRT_CreateOptions.maxSources`, `st_rt_set_memory_budget`의 `maxSources` · `sourceBudgetBytes`)을 넘었을 때. 정책이 `ST_MEMORY_REJECT_NEW`(기본)일 때만 나며, `ST_MEMORY_EVICT_FARTHEST`면 리스너에서 가장 먼 음원을 `st_rt_source_destroy`와 같은 경로로 내보내고 새 음원을 받습니다(내보낸 id는 `STMemoryStats.lastEvictedSource`). 지원 여부는 `st_rt_get_capability_word(1)`의 `ST_CAP1_MEMORY_BUDGET`으로 확인합니다.
+**回傳值** — 成功時為 `v >= 0` 的 `STSourceId`。失敗為 **`v < 0`**，以 `st_rt_get_last_status` 查看原因。
+- `ST_STATUS_INVALID_ARGUMENT` — `source` 為 NULL、位置·方向·速度·`intensity` 有非有限值、`intensity < 0`，或其他引擎拒絕的情況。
+- `ST_STATUS_BUDGET_EXCEEDED` — 超出音源記憶體預算（`STRT_CreateOptions.maxSources`、`st_rt_set_memory_budget` 的 `maxSources` · `sourceBudgetBytes`）時。僅在策略為 `ST_MEMORY_REJECT_NEW`（預設）時發生；若為 `ST_MEMORY_EVICT_FARTHEST`，則以與 `st_rt_source_destroy` 相同的路徑逐出離聆聽者最遠的音源並接受新音源（被逐出的 id 見 `STMemoryStats.lastEvictedSource`）。支援與否以 `st_rt_get_capability_word(1)` 的 `ST_CAP1_MEMORY_BUDGET` 確認。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_position</code> — 음원 위치를 옮긴다</summary>
+<summary><code>st_rt_source_set_position</code> — 移動音源位置</summary>
 
 ```c
 void st_rt_source_set_position(STRT_Context* context, STSourceId source, float x, float y, float z);
 ```
 
-**용도** — 음원의 월드 위치를 갱신합니다. 움직이는 음원을 게임 오브젝트에 붙여 따라가게 할 때 씁니다.
+**用途** — 更新音源的世界位置。用於讓移動的音源附著於遊戲物件並跟隨。
 
-**언제·어떻게** — 게임 루프에서 매 프레임 불러도 됩니다. 속도를 아는 호스트는 `st_rt_source_set_velocity`도 함께 갱신합니다. 스레드: `[control]` — `ST_RT_SCHEDULER_PIPELINED`에서는 모션 큐에 넣고 돌아오며, 오디오 콜백에서는 부르지 않습니다. 스피커 세트 멤버 소스에는 쓸 수 없습니다(무시되고 `last_status` = `ST_STATUS_INVALID_ARGUMENT`) — 세트의 포즈 갱신을 씁니다.
+**呼叫方式** — 可在遊戲迴圈中每個影格呼叫。知道速度的主機也一併更新 `st_rt_source_set_velocity`。執行緒：`[control]` — `ST_RT_SCHEDULER_PIPELINED` 下放入運動佇列後返回，不要在音訊回呼中呼叫。不可用於喇叭組成員音源（會被忽略，`last_status` = `ST_STATUS_INVALID_ARGUMENT`）— 請使用組的姿態更新。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `x`, `y`, `z` | 새 월드 위치, **씬 단위**(좌표 변환 없이 그대로) |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `x`, `y`, `z` | 新的世界位置，**場景單位**（不做座標轉換，原樣使用） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_direction</code> — 음원 정면 방향을 바꾼다</summary>
+<summary><code>st_rt_source_set_direction</code> — 變更音源正面方向</summary>
 
 ```c
 void st_rt_source_set_direction(STRT_Context* context, STSourceId source, float x, float y, float z);
 ```
 
-**용도** — 음원의 정면(forward) 방향을 바꿉니다. 콘 감쇠(`st_rt_source_set_axis_attenuation`)와 지향성 테이블(`st_rt_source_set_directivity`)이 이 방향을 기준으로 적용됩니다.
+**用途** — 變更音源的正面（forward）方向。錐形衰減（`st_rt_source_set_axis_attenuation`）與指向性表（`st_rt_source_set_directivity`）以此方向為基準套用。
 
-**언제·어떻게** — 언제든 부릅니다. 이 setter는 소스 orientation을 "+Z에서 그 방향으로 가는 **roll 없는 최소 회전**"으로 함께 갱신합니다. roll이 필요한 지향성 테이블(좌우가 비대칭인 음원 등)은 이 함수 대신 `st_rt_source_set_orientation_q`를 씁니다. 스레드: `[control]`. 스피커 세트 멤버 소스에는 쓸 수 없습니다(무시, `ST_STATUS_INVALID_ARGUMENT`).
+**呼叫方式** — 可隨時呼叫。此 setter 會一併將音源 orientation 更新為「從 +Z 轉向該方向的 **無 roll 最小旋轉**」。需要 roll 的指向性表（左右不對稱的音源等）請改用 `st_rt_source_set_orientation_q`。執行緒：`[control]`。不可用於喇叭組成員音源（忽略，`ST_STATUS_INVALID_ARGUMENT`）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `x`, `y`, `z` | 월드 기준 정면 방향 벡터. 좌표계는 +X right · +Y up · +Z forward |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `x`, `y`, `z` | 以世界為基準的正面方向向量。座標系為 +X right · +Y up · +Z forward |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_velocity</code> — 음원 속도를 준다</summary>
+<summary><code>st_rt_source_set_velocity</code> — 指定音源速度</summary>
 
 ```c
 void st_rt_source_set_velocity(STRT_Context* context, STSourceId source, float x, float y, float z);
 ```
 
-**용도** — 음원의 이동 속도를 갱신합니다. 엔진은 이 값을 Doppler 계산에 씁니다.
+**用途** — 更新音源的移動速度。引擎將此值用於 Doppler 計算。
 
-**언제·어떻게** — 위치 갱신과 같은 주기로 부릅니다. 스레드: `[control]` — `ST_RT_SCHEDULER_PIPELINED`에서는 모션 큐에 넣고 돌아옵니다. 스피커 세트 멤버 소스에는 쓸 수 없습니다(무시, `ST_STATUS_INVALID_ARGUMENT`).
+**呼叫方式** — 以與位置更新相同的週期呼叫。執行緒：`[control]` — `ST_RT_SCHEDULER_PIPELINED` 下放入運動佇列後返回。不可用於喇叭組成員音源（忽略，`ST_STATUS_INVALID_ARGUMENT`）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `x`, `y`, `z` | 속도 벡터, **씬 단위/초**. 엔진이 `sceneRatio`로 m/s로 환산합니다 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `x`, `y`, `z` | 速度向量，**場景單位/秒**。引擎以 `sceneRatio` 換算為 m/s |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_destroy</code> — 음원을 지운다</summary>
+<summary><code>st_rt_source_destroy</code> — 刪除音源</summary>
 
 ```c
 int st_rt_source_destroy(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 음원을 씬에서 제거하고 그 렌더 상태를 정리합니다. 음원 메모리 예산에서 자리를 돌려받는 것도 이 호출입니다.
+**用途** — 從場景移除音源並清理其渲染狀態。從音源記憶體預算中收回名額也是透過此呼叫。
 
-**언제·어떻게** — 더 쓰지 않는 음원에 부릅니다. 렌더 중이면 3 ms 램프로 소리를 내린 뒤 렌더 상태를 거둡니다. 지운 소스의 소스별 쉼(`st_rt_source_idle`) 설정도 함께 사라집니다. 스레드: `[control]`. 스피커 세트 멤버 소스는 지울 수 없습니다(`0`, `ST_STATUS_INVALID_ARGUMENT`) — 세트를 지웁니다.
+**呼叫方式** — 對不再使用的音源呼叫。渲染中時以 3 ms 斜坡降低聲音後收回渲染狀態。被刪除音源的個別休眠（`st_rt_source_idle`）設定也會一併消失。執行緒：`[control]`。喇叭組成員音源無法刪除（`0`，`ST_STATUS_INVALID_ARGUMENT`）— 請刪除組。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 지울 음원 핸들 |
+| `context` | 情境控制代碼 |
+| `source` | 要刪除的音源控制代碼 |
 
-**반환** — `1` = 제거됨 / `0` = 실패(컨텍스트 NULL, 없는 음원, 스피커 세트 멤버).
+**回傳值** — `1` = 已移除 / `0` = 失敗（情境為 NULL、音源不存在、喇叭組成員）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_path_enabled</code> — 음원 하나의 경로 종류를 켜고 끈다</summary>
+<summary><code>st_rt_source_set_path_enabled</code> — 開關單一音源的路徑類型</summary>
 
 ```c
 void st_rt_source_set_path_enabled(STRT_Context* context, STSourceId source, int pathType, int enabled);
 ```
 
-**용도** — 음원 하나에 대해 특정 경로 종류(직접·투과·반사·회절·잔향)를 계산·기여에서 빼거나 다시 넣습니다. 전역 게이트 `st_rt_set_path_type_enabled`의 소스별 판입니다. 특정 음원만 잔향을 빼는 식의 연출이나 청취 A/B 비교에 씁니다.
+**用途** — 對單一音源將特定路徑類型（直達·透射·反射·繞射·殘響）從計算·貢獻中移除或重新加入。是全域閘門 `st_rt_set_path_type_enabled` 的個別音源版本。用於只移除特定音源殘響之類的演出效果或聆聽 A/B 比較。
 
-**언제·어떻게** — 언제든 부릅니다. 기본은 5종 모두 켜짐입니다. 경로를 완전히 빼는 대신 크기만 줄이려면 `st_rt_source_set_path_volume`(`STSourceVolumeKind`: `ST_SOURCE_VOLUME_DIRECT`(0, 투과 포함) / `REFLECTION`(1) / `DIFFRACTION`(2) / `REVERB`(3), 선형 압력 배율)을 씁니다. 스레드: `[control]`.
+**呼叫方式** — 可隨時呼叫。預設 5 種全部開啟。若不完全移除路徑而只降低大小，請使用 `st_rt_source_set_path_volume`（`STSourceVolumeKind`：`ST_SOURCE_VOLUME_DIRECT`（0，含透射）/ `REFLECTION`（1）/ `DIFFRACTION`（2）/ `REVERB`（3），線性壓力倍率）。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb. 범위 밖은 무시됩니다 |
-| `enabled` | `0` = 끔, `0` 아님 = 켬 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb。超出範圍會被忽略 |
+| `enabled` | `0` = 關閉，非 `0` = 開啟 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_is_path_enabled</code> — 음원 하나의 경로 종류 게이트를 읽는다</summary>
+<summary><code>st_rt_source_is_path_enabled</code> — 讀取單一音源的路徑類型閘門</summary>
 
 ```c
 int st_rt_source_is_path_enabled(STRT_Context* context, STSourceId source, int pathType);
 ```
 
-**용도** — `st_rt_source_set_path_enabled`로 정한 소스별 경로 게이트의 현재 값을 조회합니다.
+**用途** — 查詢以 `st_rt_source_set_path_enabled` 設定的個別音源路徑閘門目前值。
 
-**언제·어떻게** — 언제든 부릅니다. 스레드: `[control]` — 씬 read 락만 잡는 순수 질의입니다.
+**呼叫方式** — 可隨時呼叫。執行緒：`[control]` — 只持有場景 read 鎖的純查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
 | `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb |
 
-**반환** — `1` = 켜짐 / `0` = 꺼짐. 컨텍스트 NULL, 없는 음원, 범위 밖 `pathType`도 `0`입니다.
+**回傳值** — `1` = 開啟 / `0` = 關閉。情境為 NULL、音源不存在、`pathType` 超出範圍時也為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_energy</code> — 음원의 에너지 배율을 정한다</summary>
+<summary><code>st_rt_source_set_energy</code> — 設定音源的能量倍率</summary>
 
 ```c
 int st_rt_source_set_energy(STRT_Context* context, STSourceId source, float energy);
 ```
 
-**용도** — 음원의 상대 방사 에너지를 **energy-domain**(무차원 에너지 비율) 배율로 정합니다. `STSourceDesc::intensity`(압력 배율)와 별개의 배율이며, 지향성 테이블을 `ST_DIRECTIVITY_POWER_MEAN`으로 정규화했을 때 총 방사 파워를 잡는 자리이기도 합니다.
+**用途** — 以 **energy-domain**（無因次能量比例）倍率設定音源的相對輻射能量。這是與 `STSourceDesc::intensity`（壓力倍率）分開的倍率，也是將指向性表以 `ST_DIRECTIVITY_POWER_MEAN` 正規化時設定總輻射功率的位置。
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 기본값은 1.0입니다. 에너지와 압력의 관계는 **energy = gain²**입니다 — 압력 이득 g를 원하면 `g * g`를 넣습니다(예: −6 dB, g ≈ 0.5 → energy ≈ 0.25). 엔진은 렌더 경계에서 한 번만 제곱근을 취합니다. 스레드: `[control]`.
+**呼叫方式** — 建立後可隨時呼叫。預設值為 1.0。能量與壓力的關係為 **energy = gain²** — 若要壓力增益 g，則填入 `g * g`（例：−6 dB，g ≈ 0.5 → energy ≈ 0.25）。引擎只在渲染邊界取一次平方根。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `energy` | 에너지 배율. 유한하고 0 이상. 기본 1.0 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `energy` | 能量倍率。有限值且 0 以上。預設 1.0 |
 
-**반환** — `1` = 적용 / `0` = 실패(컨텍스트 NULL, 비유한값 또는 음수, 없는 음원).
+**回傳值** — `1` = 已套用 / `0` = 失敗（情境為 NULL、非有限值或負數、音源不存在）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_energy</code> — 음원의 에너지 배율을 읽는다</summary>
+<summary><code>st_rt_source_get_energy</code> — 讀取音源的能量倍率</summary>
 
 ```c
 float st_rt_source_get_energy(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_set_energy`로 정한 에너지 배율(energy-domain)을 조회합니다.
+**用途** — 查詢以 `st_rt_source_set_energy` 設定的能量倍率（energy-domain）。
 
-**언제·어떻게** — 언제든 부릅니다. 스레드: `[control]` — 씬 read 락만 잡는 순수 질의입니다.
+**呼叫方式** — 可隨時呼叫。執行緒：`[control]` — 只持有場景 read 鎖的純查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
 
-**반환** — 현재 에너지 배율(기본 1.0). 컨텍스트 NULL이거나 없는 음원이면 `-1.0`.
+**回傳值** — 目前的能量倍率（預設 1.0）。情境為 NULL 或音源不存在時為 `-1.0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_enabled</code> — 음원 전체를 켜고 끈다</summary>
+<summary><code>st_rt_source_set_enabled</code> — 開關整個音源</summary>
 
 ```c
 void st_rt_source_set_enabled(STRT_Context* context, STSourceId source, int enabled);
 ```
 
-**용도** — 음원을 지우지 않고 전파 계산에서 통째로 빼거나 다시 넣는 마스터 스위치입니다. 경로 종류별 게이트(`st_rt_source_set_path_enabled`)보다 위에 있습니다.
+**用途** — 不刪除音源而將其整個從傳播計算中移除或重新加入的主開關。位於各路徑類型閘門（`st_rt_source_set_path_enabled`）之上。
 
-**언제·어떻게** — 언제든 부릅니다. 생성 직후는 켜짐입니다. 클립을 트리거(`st_rt_source_trigger`)할 음원은 켜 둔 채로 씁니다. 들려줄 것이 잠시 없는 음원을 상태째 쉬게 하려면 `st_rt_source_idle`을 씁니다. 스레드: `[control]`.
+**呼叫方式** — 可隨時呼叫。建立後為開啟。要觸發片段（`st_rt_source_trigger`）的音源請保持開啟使用。若要讓暫時沒有內容可播放的音源連同狀態一起休眠，請使用 `st_rt_source_idle`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `enabled` | `0` = 끔, `0` 아님 = 켬 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `enabled` | `0` = 關閉，非 `0` = 開啟 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_ray_count</code> — 음원의 수송 레이 격자 크기를 정한다</summary>
+<summary><code>st_rt_source_set_ray_count</code> — 設定音源的傳輸射線網格大小</summary>
 
 ```c
 void st_rt_source_set_ray_count(STRT_Context* context, STSourceId source, int width, int height);
 ```
 
-**용도** — 이 음원이 쏘는 수송(diffuse transport) 레이 격자 N = `width` × `height`를 정합니다. 음원별로 품질과 계산 비용을 맞추는 손잡이입니다.
+**用途** — 設定此音源發射的傳輸（diffuse transport）射線網格 N = `width` × `height`。是依音源調整品質與計算成本的旋鈕。
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 기본 격자는 16 × 8입니다. 레이 수가 늘수록 비용이 늘며, 그 비용을 여러 전파에 나누려면 `st_rt_source_set_transport_refresh_steps`를 함께 씁니다. 값이 0 이하이거나 엔진의 수송 예산(격자·깊이에 따른 상한)을 넘으면 거절되고 `last_status`에 `ST_STATUS_INVALID_ARGUMENT`가 남습니다(사유는 `st_rt_get_last_error`). 스레드: `[control]`.
+**呼叫方式** — 建立後可隨時呼叫。預設網格為 16 × 8。射線數越多成本越高，若要將該成本分攤到多次傳播，請搭配 `st_rt_source_set_transport_refresh_steps`。值在 0 以下或超過引擎的傳輸預算（依網格·深度的上限）時會被拒絕，`last_status` 留下 `ST_STATUS_INVALID_ARGUMENT`（原因見 `st_rt_get_last_error`）。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `width` | 격자 가로 레이 수, 1 이상. 기본 16 |
-| `height` | 격자 세로 레이 수, 1 이상. 기본 8 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `width` | 網格橫向射線數，1 以上。預設 16 |
+| `height` | 網格縱向射線數，1 以上。預設 8 |
 
-**반환** — 없음. 성공 여부는 `st_rt_get_last_status`로 확인합니다.
+**回傳值** — 無。成功與否以 `st_rt_get_last_status` 確認。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_depth</code> — 음원별 최대 반사 깊이를 정한다</summary>
+<summary><code>st_rt_source_set_depth</code> — 設定各音源的最大反射深度</summary>
 
 ```c
 void st_rt_source_set_depth(STRT_Context* context, STSourceId source, int depth);
 ```
 
-**용도** — 이 음원 수송 레이의 최대 반사(바운스) 깊이를 정합니다. `st_rt_source_set_ray_count`와 함께 음원별 품질·비용을 정하는 손잡이입니다.
+**用途** — 設定此音源傳輸射線的最大反射（反彈）深度。與 `st_rt_source_set_ray_count` 一起作為決定各音源品質·成本的旋鈕。
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 소스별 기본값은 4입니다. 엔진의 수송 예산을 넘거나 허용 범위 밖이면 거절되고 `last_status`에 `ST_STATUS_INVALID_ARGUMENT`가 남습니다(사유는 `st_rt_get_last_error`). 스레드: `[control]`.
+**呼叫方式** — 建立後可隨時呼叫。各音源預設值為 4。超過引擎的傳輸預算或超出允許範圍時會被拒絕，`last_status` 留下 `ST_STATUS_INVALID_ARGUMENT`（原因見 `st_rt_get_last_error`）。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `depth` | 최대 반사 깊이. 기본 4 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `depth` | 最大反射深度。預設 4 |
 
-**반환** — 없음. 성공 여부는 `st_rt_get_last_status`로 확인합니다.
+**回傳值** — 無。成功與否以 `st_rt_get_last_status` 確認。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_transport_refresh_steps</code> — 수송 레이 격자를 몇 번의 전파에 나눠 갱신할지 정한다</summary>
+<summary><code>st_rt_source_set_transport_refresh_steps</code> — 設定傳輸射線網格分幾次傳播更新</summary>
 
 ```c
 int st_rt_source_set_transport_refresh_steps(STRT_Context* context, STSourceId source, int steps);
 ```
 
-**용도** — 이 음원의 수송 레이 격자 N(= `width` × `height`)을 **n번의 전파에 걸쳐** 갱신하게 합니다. 한 전파가 교체하는 레이는 ceil(N/n)개이고 전체 비용은 Σ N/n입니다. 엔진은 전역 예산 상한을 두지 않으므로, 음원이 많을 때 비용은 호스트가 n으로 통제합니다. 지원 여부는 `ST_CAP_SOURCE_TRANSPORT_REFRESH_STEPS`로 확인합니다.
+**用途** — 讓此音源的傳輸射線網格 N（= `width` × `height`）**分 n 次傳播** 更新。一次傳播替換的射線為 ceil(N/n) 條，整體成本為 Σ N/n。引擎不設全域預算上限，因此音源多時由主機以 n 控制成本。支援與否以 `ST_CAP_SOURCE_TRANSPORT_REFRESH_STEPS` 確認。
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 격자를 나누면 갱신되지 않은 레이의 방향이 전파 사이에 유지돼 잔향 탭이 매끄럽게 이어지고, `steps = 1`은 매 전파 전 격자를 다시 깔아 그 연속성을 끊는 대신 완전히 결정적입니다. IR 재변환은 유발하지 않지만 값이 바뀌면 씬 스냅샷을 다시 발행해 워커에 전달하고, 수송 캐시는 다음 전파에서 다시 만들어집니다. 스레드: `[control]`.
+**呼叫方式** — 建立後可隨時呼叫。分割網格時，未更新射線的方向在傳播之間保持，使殘響抽頭平滑銜接；`steps = 1` 則每次傳播重鋪整個網格，以斷開該連續性為代價換取完全決定性。不會觸發 IR 重新轉換，但值變更時會重新發佈場景快照並傳給工作執行緒，傳輸快取會在下一次傳播時重建。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `steps` | `0` = 기본(스케줄러와 `isDynamic`이 정함 — `ST_RT_SCHEDULER_PIPELINED`는 동적 8 · 정적 16, `ST_RT_SCHEDULER_SYNCHRONOUS`는 동적 1 · 정적 16) / `1` = 매 전파 전량 재추적(저장소를 만들지 않는 결정적 경로) / `2` 이상 = n번으로 나눠 갱신, 사용 시 `[1, N]`으로 clamp. 음수는 거절 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `steps` | `0` = 預設（由排程器與 `isDynamic` 決定 — `ST_RT_SCHEDULER_PIPELINED` 為動態 8 · 靜態 16，`ST_RT_SCHEDULER_SYNCHRONOUS` 為動態 1 · 靜態 16）/ `1` = 每次傳播全量重新追蹤（不建立儲存區的決定性路徑）/ `2` 以上 = 分 n 次更新，使用時 clamp 到 `[1, N]`。負數會被拒絕 |
 
-**반환** — `1` = 성공 / `0` = 실패. 음수 `steps`는 `ST_STATUS_INVALID_ARGUMENT`, 없는 음원은 `ST_STATUS_NOT_FOUND`.
+**回傳值** — `1` = 成功 / `0` = 失敗。負數 `steps` 為 `ST_STATUS_INVALID_ARGUMENT`，音源不存在為 `ST_STATUS_NOT_FOUND`。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_transport_refresh_steps</code> — 수송 갱신 단계 수 저장값을 읽는다</summary>
+<summary><code>st_rt_source_get_transport_refresh_steps</code> — 讀取傳輸更新步數的儲存值</summary>
 
 ```c
 int st_rt_source_get_transport_refresh_steps(const STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_set_transport_refresh_steps`로 저장한 값을 조회합니다.
+**用途** — 查詢以 `st_rt_source_set_transport_refresh_steps` 儲存的值。
 
-**언제·어떻게** — 언제든 부릅니다. 돌려주는 값은 **저장값 그대로**(0 포함)이며, 스케줄러 기본과 격자 clamp를 거친 실효 n이 아닙니다. 스레드: `[control]` — 씬 read 락만 잡는 순수 질의입니다.
+**呼叫方式** — 可隨時呼叫。回傳的是 **原樣的儲存值**（含 0），而非經過排程器預設與網格 clamp 的實際 n。執行緒：`[control]` — 只持有場景 read 鎖的純查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
 
-**반환** — 저장된 단계 수(`0` = 기본). 실패 시 `-1`.
+**回傳值** — 儲存的步數（`0` = 預設）。失敗時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_axis_attenuation</code> — 콘(on/off-axis) 지향 감쇠를 밴드별로 정한다</summary>
+<summary><code>st_rt_source_set_axis_attenuation</code> — 依頻帶設定錐形（on/off-axis）指向衰減</summary>
 
 ```c
 void st_rt_source_set_axis_attenuation(STRT_Context* context, STSourceId source, const float onAxis[ST_FREQUENCY_BANDS], const float offAxis[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 음원의 정면(on-axis)과 측후면(off-axis) 방사를 9밴드별로 정하는 간단한 콘 지향성입니다. 측정 지향성 자료가 없을 때 음원의 대략적인 방향성을 줍니다.
+**用途** — 依 9 個頻帶設定音源正面（on-axis）與側後方（off-axis）輻射的簡易錐形指向性。在沒有量測指向性資料時，提供音源大致的方向性。
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 기본은 무지향(전 밴드 1.0)입니다. 무지향은 `onAxis[] = offAxis[] = 1.0`, 단순 지향은 `onAxis[] = 1.0` / `offAxis[] = 0.0`을 넣습니다(`STSourceDesc::directional`의 두 프로필과 같습니다). 정면 방향은 `st_rt_source_set_direction` / `st_rt_source_set_orientation_q`가 정합니다. 지향성 테이블(`st_rt_source_set_directivity`)이 붙어 있는 동안에는 테이블이 쓰이고, 이 콘 값은 보존됐다가 테이블을 떼면 다시 쓰입니다. 스레드: `[control]`. 스피커 세트 멤버 소스에는 쓸 수 없습니다(무시, `ST_STATUS_INVALID_ARGUMENT`).
+**呼叫方式** — 建立後可隨時呼叫。預設為無指向（全頻帶 1.0）。無指向填入 `onAxis[] = offAxis[] = 1.0`，簡單指向填入 `onAxis[] = 1.0` / `offAxis[] = 0.0`（與 `STSourceDesc::directional` 的兩種設定檔相同）。正面方向由 `st_rt_source_set_direction` / `st_rt_source_set_orientation_q` 決定。附加了指向性表（`st_rt_source_set_directivity`）期間使用該表，此錐形值會被保留，移除表後再次使用。執行緒：`[control]`。不可用於喇叭組成員音源（忽略，`ST_STATUS_INVALID_ARGUMENT`）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `onAxis` | 정면 방사 감쇠, `ST_FREQUENCY_BANDS`(9)개, 밴드 63 Hz … 16 kHz. NULL이면 아무것도 바꾸지 않습니다 |
-| `offAxis` | 측후면 방사 감쇠, 9개. NULL이면 아무것도 바꾸지 않습니다 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `onAxis` | 正面輻射衰減，`ST_FREQUENCY_BANDS`（9）個，頻帶 63 Hz … 16 kHz。若為 NULL 則不變更任何內容 |
+| `offAxis` | 側後方輻射衰減，9 個。若為 NULL 則不變更任何內容 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_orientation_q</code> — 음원 로컬 프레임을 쿼터니언으로 정한다</summary>
+<summary><code>st_rt_source_set_orientation_q</code> — 以四元數設定音源區域座標系</summary>
 
 ```c
 int st_rt_source_set_orientation_q(STRT_Context* context, STSourceId source, const float quatXYZW[4]);
 ```
 
-**용도** — 음원 로컬 프레임을 월드에 얹는 회전을 단위 쿼터니언(로컬→월드)으로 정합니다. `st_rt_source_set_direction`과 달리 **roll까지** 표현하므로, 좌우가 비대칭인 지향성 테이블의 프레임을 정확히 정할 때 씁니다. 지원 여부는 `ST_CAP_SOURCE_DIRECTIVITY`로 확인합니다.
+**用途** — 以單位四元數（區域→世界）設定將音源區域座標系置於世界中的旋轉。與 `st_rt_source_set_direction` 不同，**連 roll 都能表達**，因此用於精確設定左右不對稱的指向性表的座標系。支援與否以 `ST_CAP_SOURCE_DIRECTIVITY` 確認。
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 로컬축은 forward = +Z / up = +Y / right = +X입니다. `st_rt_source_set_direction`과 양방향으로 동기화됩니다 — 이 함수를 부르면 direction = forward(q)로 함께 갱신되고, `st_rt_source_set_direction`을 부르면 orientation이 roll 없는 최소 회전으로 바뀝니다(마지막에 부른 쪽이 이깁니다). 쿼터니언은 엔진이 정규화하므로 대략 정규화된 값을 넣어도 됩니다. 지향성 테이블(`st_rt_source_set_directivity`)과 짝으로 씁니다. 스레드: `[control]`. 스피커 세트 멤버 소스는 `0`(`ST_STATUS_INVALID_ARGUMENT`)입니다.
+**呼叫方式** — 建立後可隨時呼叫。區域軸為 forward = +Z / up = +Y / right = +X。與 `st_rt_source_set_direction` 雙向同步 — 呼叫此函式時 direction = forward(q) 會一併更新；呼叫 `st_rt_source_set_direction` 時 orientation 會變為無 roll 的最小旋轉（以最後呼叫者為準）。四元數由引擎正規化，因此填入大致正規化的值即可。與指向性表（`st_rt_source_set_directivity`）成對使用。執行緒：`[control]`。喇叭組成員音源為 `0`（`ST_STATUS_INVALID_ARGUMENT`）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `quatXYZW` | 로컬→월드 회전 쿼터니언, **X, Y, Z, W 순서**(`st_rt_object_create_q`와 같은 순서) |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `quatXYZW` | 區域→世界旋轉四元數，**X, Y, Z, W 順序**（與 `st_rt_object_create_q` 相同順序） |
 
-**반환** — `1` = 성공 / `0` = 실패. `ST_STATUS_INVALID_ARGUMENT`(비유한 성분 또는 퇴화, norm &lt; 1e-12), `ST_STATUS_NOT_FOUND`(없는 음원).
+**回傳值** — `1` = 成功 / `0` = 失敗。`ST_STATUS_INVALID_ARGUMENT`（非有限分量或退化，norm &lt; 1e-12）、`ST_STATUS_NOT_FOUND`（音源不存在）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_directivity</code> — 음원에 지향성 테이블을 붙이거나 뗀다</summary>
+<summary><code>st_rt_source_set_directivity</code> — 為音源附加或移除指向性表</summary>
 
 ```c
 int st_rt_source_set_directivity(STRT_Context* context, STSourceId source, const STSourceDirectivity* table);
 ```
 
-**용도** — 측정 자료 등에서 얻은 방향별·밴드별 방사 에너지 테이블을 음원에 붙입니다. 콘 공식(`st_rt_source_set_axis_attenuation`)으로 표현할 수 없는 실제 음원의 지향 패턴을 쓸 때 필요합니다. 지원 여부는 `ST_CAP_SOURCE_DIRECTIVITY`로 확인합니다.
+**用途** — 將從量測資料等取得的各方向·各頻帶輻射能量表附加到音源。使用無法以錐形公式（`st_rt_source_set_axis_attenuation`）表達的實際音源指向模式時需要。支援與否以 `ST_CAP_SOURCE_DIRECTIVITY` 確認。
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 엔진이 테이블을 **복사**하고 정규화 스칼라도 이 호출에서 한 번 계산하므로, 돌아온 뒤 호스트 버퍼는 해제해도 됩니다. 테이블이 붙어 있는 동안에는 콘 감쇠 대신 테이블이 쓰이고, `table = NULL`로 떼면 보존돼 있던 콘 값으로 돌아갑니다. 테이블 조회 방향은 소스 로컬 프레임 기준이므로 `st_rt_source_set_orientation_q`와 짝으로 씁니다. 스레드: `[control]`. 스피커 세트 멤버 소스는 `0`(`ST_STATUS_INVALID_ARGUMENT`)입니다.
+**呼叫方式** — 建立後可隨時呼叫。引擎會 **複製** 表，且正規化純量也在此呼叫中計算一次，因此返回後即可釋放主機緩衝區。附加表期間以表取代錐形衰減，以 `table = NULL` 移除後回到保留的錐形值。表的查詢方向以音源區域座標系為基準，因此與 `st_rt_source_set_orientation_q` 成對使用。執行緒：`[control]`。喇叭組成員音源為 `0`（`ST_STATUS_INVALID_ARGUMENT`）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
-| `table` | 지향성 테이블 `STSourceDirectivity`(아래). 호출자가 `structSize` / `apiVersion`을 채웁니다. NULL = 테이블 제거 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
+| `table` | 指向性表 `STSourceDirectivity`（見下方）。呼叫端填入 `structSize` / `apiVersion`。NULL = 移除表 |
 
-**구조체** `STSourceDirectivity`
+**結構體** `STSourceDirectivity`
 
-소스 로컬 프레임(forward = +Z, up = +Y, right = +X)의 등각 방위각(az) × 고도각(el) 노드 격자 × 9밴드 **에너지** 테이블입니다. 방향 규약은 엔진 전역과 같습니다: az = atan2(x, z)(정면 0°, 오른쪽 +90°), el = asin(y)(위 = +). 노드는 az_i = i × 360/`azCount`(360°에서 wrap), el_j = −90 + j × 180/(`elCount` − 1)이고, 조회는 az wrap · el clamp 쌍선형 보간입니다. `elCount`가 홀수면 수평면(el = 0)이 노드 위에 놓이며, 권장 격자는 5° 간격(`azCount` = 72, `elCount` = 37)입니다.
+音源區域座標系（forward = +Z，up = +Y，right = +X）的等角方位角（az）× 仰角（el）節點網格 × 9 頻帶 **能量** 表。方向規約與引擎全域相同：az = atan2(x, z)（正面 0°，右側 +90°），el = asin(y)（上 = +）。節點為 az_i = i × 360/`azCount`（於 360° wrap），el_j = −90 + j × 180/(`elCount` − 1)，查詢為 az wrap · el clamp 雙線性內插。`elCount` 為奇數時水平面（el = 0）落在節點上，建議網格為 5° 間隔（`azCount` = 72，`elCount` = 37）。
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` | 호출자가 `sizeof(STSourceDirectivity)`로 채웁니다 |
-| `apiVersion` | 호출자가 `ST_ABI_VERSION`으로 채웁니다 |
-| `azCount` | 방위각 노드 수, `[3, 361]` |
-| `elCount` | 고도각 노드 수, `[2, 181]` |
-| `levelMode` | `STDirectivityLevelMode` — 테이블의 절대 레벨 해석(아래) |
-| `reserved0` | 예약 |
-| `energy` | 테이블 데이터, `elCount` × `azCount` × `ST_FREQUENCY_BANDS`개 float. 레이아웃은 `[el][az][band]`(band가 가장 빠른 축). **energy-domain**(pressure가 아님), 모든 값이 유한하고 0 이상이어야 합니다 |
-| `reserved[6]` | 예약 |
+| `structSize` | 呼叫端填入 `sizeof(STSourceDirectivity)` |
+| `apiVersion` | 呼叫端填入 `ST_ABI_VERSION` |
+| `azCount` | 方位角節點數，`[3, 361]` |
+| `elCount` | 仰角節點數，`[2, 181]` |
+| `levelMode` | `STDirectivityLevelMode` — 表的絕對電平解譯（見下方） |
+| `reserved0` | 保留 |
+| `energy` | 表資料，`elCount` × `azCount` × `ST_FREQUENCY_BANDS` 個 float。配置為 `[el][az][band]`（band 為最快變動的軸）。**energy-domain**（非 pressure），所有值須為有限值且 0 以上 |
+| `reserved[6]` | 保留 |
 
-**열거형** `STDirectivityLevelMode` — raw 테이블은 그대로 두고, 엔진이 설정 시 한 번 계산하는 밴드별 정규화 스칼라만 바꿉니다.
+**列舉** `STDirectivityLevelMode` — 保持 raw 表不變，只變更引擎在設定時計算一次的各頻帶正規化純量。
 
-| 값 | 설명 |
+| 值 | 說明 |
 |---|---|
-| `ST_DIRECTIVITY_ABSOLUTE` (0) | 정규화 없음, 값을 그대로 씁니다. 절대 레벨까지 담긴 측정 테이블용 |
-| `ST_DIRECTIVITY_POWER_MEAN` (1) | 밴드별 구면 파워 평균이 1이 되도록 정규화(등방사파워). 지향 패턴만 쓰고 총 방사 파워는 `intensity` / `st_rt_source_set_energy`로 따로 잡을 때. **기본 권장** |
-| `ST_DIRECTIVITY_ON_AXIS` (2) | 정면(az = 0, el = 0) 값이 1이 되도록 정규화. 게임 툴의 콘 관례와 같은 자리 |
+| `ST_DIRECTIVITY_ABSOLUTE` (0) | 不正規化，直接使用值。用於包含絕對電平的量測表 |
+| `ST_DIRECTIVITY_POWER_MEAN` (1) | 正規化使各頻帶球面功率平均為 1（等輻射功率）。只使用指向模式，總輻射功率另以 `intensity` / `st_rt_source_set_energy` 設定時使用。**預設建議** |
+| `ST_DIRECTIVITY_ON_AXIS` (2) | 正規化使正面（az = 0，el = 0）值為 1。與遊戲工具的錐形慣例相同的位置 |
 
-**반환** — `1` = 성공(테이블 제거 성공 포함) / `0` = 실패. `last_status`:
-- `ST_STATUS_VERSION_MISMATCH` — `table`의 `structSize` / `apiVersion` 불일치.
-- `ST_STATUS_INVALID_ARGUMENT` — `levelMode`가 `STDirectivityLevelMode` 밖, `azCount` · `elCount` 범위 밖, `energy`가 NULL, `energy`에 비유한·음수 원소(사유는 `st_rt_get_last_error`), 스피커 세트 멤버.
-- `ST_STATUS_NOT_FOUND` — 없는 음원.
+**回傳值** — `1` = 成功（含移除表成功）/ `0` = 失敗。`last_status`：
+- `ST_STATUS_VERSION_MISMATCH` — `table` 的 `structSize` / `apiVersion` 不符。
+- `ST_STATUS_INVALID_ARGUMENT` — `levelMode` 不在 `STDirectivityLevelMode` 內、`azCount` · `elCount` 超出範圍、`energy` 為 NULL、`energy` 有非有限·負數元素（原因見 `st_rt_get_last_error`）、喇叭組成員。
+- `ST_STATUS_NOT_FOUND` — 音源不存在。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_idle</code> — 음원 하나를 쉬게 한다</summary>
+<summary><code>st_rt_source_idle</code> — 讓單一音源休眠</summary>
 
 ```c
 int st_rt_source_idle(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 엔진 전체 쉼(`st_rt_idle`)과 별개로 음원 하나만 계산·렌더를 멈춥니다. 재생이 끝났지만 곧 다시 쓸 음원을 지우지 않고 비용 없이 붙잡아 둘 때 씁니다. 지원 여부는 `st_rt_get_capability_word(1)`의 `ST_CAP1_ENGINE_IDLE`로 확인합니다.
+**用途** — 與引擎整體休眠（`st_rt_idle`）分開，只停止單一音源的計算·渲染。用於播放已結束但很快會再使用的音源，不刪除而以零成本保留。支援與否以 `st_rt_get_capability_word(1)` 的 `ST_CAP1_ENGINE_IDLE` 確認。
 
-**언제·어떻게** — 그 음원이 들려줄 것을 멈춘 뒤(stop · pause · 0 쓰기) 부릅니다. 만든 직후 음원은 RUNNING입니다(엔진 전체가 IDLE이어도).
-- 부르면 전파 레인(direct · 반사/회절 · 잔향)이 그 음원을 더 계산하지 않고 마지막 결과를 얼립니다. 쉬는 동안 리스너나 음원이 움직여도 그 음원의 전파 경로는 옛 자리 그대로이고, 방(정적·동적 기하)이 바뀌면 한 번 다시 계산해 다시 얼립니다.
-- `ST_RT_IDLE_DRAINING` 동안 렌더는 그 음원의 남은 소리(꼬리)를 냅니다. 입력이 계속 소리를 내면 DRAINING으로 계속 렌더합니다.
-- 입력이 지연선 길이(max delay) + 1 s 동안 무음이면 `ST_RT_IDLE_IDLE`이 되어, 렌더가 그 음원의 입력을 읽지도 렌더하지도 않고 IR 조립에서도 빠집니다(공유 잔향 탱크의 꼬리는 이어집니다).
-- 동시에 쉴 수 있는 음원은 128개까지입니다. 같은 값을 다시 부르면 아무 일도 하지 않습니다.
-- 전파를 얼리는 것은 `ST_RT_SCHEDULER_PIPELINED`입니다. `ST_RT_SCHEDULER_SYNCHRONOUS`에서는 `st_rt_propagate`가 쉬는 음원도 계산하고 렌더 쪽 쉼만 같습니다.
-- 스피커 세트 멤버는 세트가 쉼을 소유하므로 `st_rt_speaker_set_idle` / `_run`을 씁니다.
+**呼叫方式** — 在該音源停止要播放的內容後（stop · pause · 寫入 0）呼叫。剛建立的音源為 RUNNING（即使引擎整體為 IDLE）。
+- 呼叫後，傳播通道（direct · 反射/繞射 · 殘響）不再計算該音源並凍結最後的結果。休眠期間即使聆聽者或音源移動，該音源的傳播路徑仍維持舊位置；房間（靜態·動態幾何）變更時則重新計算一次後再凍結。
+- `ST_RT_IDLE_DRAINING` 期間，渲染輸出該音源剩餘的聲音（尾音）。若輸入持續發聲，則以 DRAINING 持續渲染。
+- 輸入在延遲線長度（max delay）+ 1 s 期間為靜音時變為 `ST_RT_IDLE_IDLE`，渲染既不讀取也不渲染該音源的輸入，也從 IR 組合中移除（共用殘響槽的尾音會延續）。
+- 可同時休眠的音源最多 128 個。以相同值再次呼叫則不執行任何動作。
+- 凍結傳播的是 `ST_RT_SCHEDULER_PIPELINED`。`ST_RT_SCHEDULER_SYNCHRONOUS` 下 `st_rt_propagate` 也會計算休眠中的音源，只有渲染端的休眠相同。
+- 喇叭組成員的休眠由組擁有，請使用 `st_rt_speaker_set_idle` / `_run`。
 
-스레드: `[control]` — 씬 락을 잡습니다.
+執行緒：`[control]` — 持有場景鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 쉬게 할 음원 핸들 |
+| `context` | 情境控制代碼 |
+| `source` | 要休眠的音源控制代碼 |
 
-**반환** — `1` = 성공 / `0` = 실패: 컨텍스트 NULL, 없는 음원(`ST_STATUS_NOT_FOUND`), 스피커 세트 멤버(`ST_STATUS_INVALID_ARGUMENT`), 동시 쉼 표가 가득 참(`ST_STATUS_UNAVAILABLE`, 아무것도 바뀌지 않음).
+**回傳值** — `1` = 成功 / `0` = 失敗：情境為 NULL、音源不存在（`ST_STATUS_NOT_FOUND`）、喇叭組成員（`ST_STATUS_INVALID_ARGUMENT`）、同時休眠表已滿（`ST_STATUS_UNAVAILABLE`，不變更任何內容）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_run</code> — 쉬던 음원을 다시 돌린다</summary>
+<summary><code>st_rt_source_run</code> — 讓休眠中的音源重新執行</summary>
 
 ```c
 int st_rt_source_run(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_idle`로 쉬게 한 음원을 다시 계산·렌더하게 합니다. 지원 여부는 `ST_CAP1_ENGINE_IDLE`로 확인합니다.
+**用途** — 讓以 `st_rt_source_idle` 休眠的音源重新計算·渲染。支援與否以 `ST_CAP1_ENGINE_IDLE` 確認。
 
-**언제·어떻게** — 그 음원을 다시 재생하기 직전에 부릅니다. 다음 전파부터 다시 계산하고 다음 블록부터 렌더합니다. 붙잡아 둔 IR로 바로 소리를 내고, 그 음원을 담은 다음 IR(조립 한 주기 뒤)부터 새 결과를 씁니다. 쉬는 동안 읽지 않은 호스트 스트림 프레임은 그 자리부터 이어서 나갑니다. 이미 RUNNING이면 아무 일도 하지 않습니다. 스레드: `[control]` — 씬 락을 잡습니다.
+**呼叫方式** — 在重新播放該音源之前呼叫。自下一次傳播起重新計算，自下一個區塊起渲染。以保留的 IR 立即發聲，自包含該音源的下一個 IR（組合一個週期後）起使用新結果。休眠期間未讀取的主機串流影格會從該位置接續輸出。已為 RUNNING 時不執行任何動作。執行緒：`[control]` — 持有場景鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 깨울 음원 핸들 |
+| `context` | 情境控制代碼 |
+| `source` | 要喚醒的音源控制代碼 |
 
-**반환** — `1` = 성공 / `0` = 실패: 컨텍스트 NULL, 없는 음원(`ST_STATUS_NOT_FOUND`), 스피커 세트 멤버(`ST_STATUS_INVALID_ARGUMENT`).
+**回傳值** — `1` = 成功 / `0` = 失敗：情境為 NULL、音源不存在（`ST_STATUS_NOT_FOUND`）、喇叭組成員（`ST_STATUS_INVALID_ARGUMENT`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_idle_state</code> — 음원의 쉼 상태를 읽는다</summary>
+<summary><code>st_rt_source_get_idle_state</code> — 讀取音源的休眠狀態</summary>
 
 ```c
 int st_rt_source_get_idle_state(const STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 음원 하나의 쉼 상태를 조회합니다. `st_rt_source_idle` 뒤 꼬리가 다 나갔는지 확인할 때 씁니다.
+**用途** — 查詢單一音源的休眠狀態。用於確認 `st_rt_source_idle` 之後尾音是否已全部輸出。
 
-**언제·어떻게** — 언제든 부릅니다. 쉼을 부탁하지 않았으면 RUNNING, 렌더가 남은 소리를 내는 중이면 DRAINING, 다 비웠으면 IDLE입니다. 렌더가 돌지 않거나 엔진 전체가 IDLE이면 쉼을 부탁한 음원은 IDLE입니다. 스레드: `[control]` — 씬 read 락만 잡습니다.
+**呼叫方式** — 可隨時呼叫。未請求休眠時為 RUNNING，渲染正在輸出剩餘聲音時為 DRAINING，全部清空後為 IDLE。渲染未執行或引擎整體為 IDLE 時，已請求休眠的音源為 IDLE。執行緒：`[control]` — 只持有場景 read 鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
 
-**반환** — `STRT_IdleState` 값: `ST_RT_IDLE_RUNNING`(0) / `ST_RT_IDLE_DRAINING`(1) / `ST_RT_IDLE_IDLE`(2). 없는 음원이나 컨텍스트 NULL이면 `-1`.
+**回傳值** — `STRT_IdleState` 值：`ST_RT_IDLE_RUNNING`(0) / `ST_RT_IDLE_DRAINING`(1) / `ST_RT_IDLE_IDLE`(2)。音源不存在或情境為 NULL 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_position_seconds</code> — 음원 입력의 재생 위치를 초로 읽는다</summary>
+<summary><code>st_rt_source_get_position_seconds</code> — 以秒讀取音源輸入的播放位置</summary>
 
 ```c
 double st_rt_source_get_position_seconds(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 음원에 붙인 파일 입력의 현재 재생 위치를 소스 시간(초)으로 조회합니다. 재생 UI의 진행 표시나 `st_rt_source_seek`과 짝을 맞출 때 씁니다. 지원 여부는 `ST_CAP_SOURCE_PLAYBACK_CONTROL`로 확인합니다.
+**用途** — 以音源時間（秒）查詢附加於音源的檔案輸入目前播放位置。用於播放 UI 的進度顯示，或與 `st_rt_source_seek` 搭配。支援與否以 `ST_CAP_SOURCE_PLAYBACK_CONTROL` 確認。
 
-**언제·어떻게** — 오디오 입력을 붙인 뒤 언제든 부릅니다. 값은 소스 시간 기준 초이며 `hostSampleRate`나 피치와 무관합니다. 호스트 스트림 같은 라이브 PCM 입력은 타임라인을 호스트가 소유하므로 위치가 없습니다. 스레드: `[control]`.
+**呼叫方式** — 附加音訊輸入後可隨時呼叫。值是以音源時間為基準的秒數，與 `hostSampleRate` 或音高無關。主機串流等即時 PCM 輸入的時間軸由主機擁有，因此沒有位置。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 대상 음원 핸들 |
+| `context` | 情境控制代碼 |
+| `source` | 目標音源控制代碼 |
 
-**반환** — 재생 위치(초). 없는 음원이거나 라이브 입력이면 `-1`.
+**回傳值** — 播放位置（秒）。音源不存在或為即時輸入時為 `-1`。
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>음원 — 오디오 입력(파일·클립·스트림), 재생 제어, 소스 EQ</strong> — 27개</summary>
+<summary><strong>音源 — 音訊輸入（檔案·片段·串流）、播放控制、音源 EQ</strong> — 27 個</summary>
 
 <details>
-<summary><code>st_rt_source_clear_audio</code> — 소스에서 오디오 입력(파일·클립·호스트 스트림)을 떼어 냅니다</summary>
+<summary><code>st_rt_source_clear_audio</code> — 從音源移除音訊輸入（檔案·片段·主機串流）</summary>
 
 ```c
 int st_rt_source_clear_audio(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 소스에 붙은 오디오 입력을 분리합니다. 소스와 렌더 슬롯은 그대로 남고 그 소스만 무음이 됩니다. 파일 입력(`st_rt_source_set_audio_file` 계열)과 호스트 스트림(`st_rt_source_attach_stream`) 모두 "오디오 입력"이므로 둘 다 이 함수로 뗍니다.
+**用途** — 分離附加於音源的音訊輸入。音源與渲染槽維持不變，只有該音源變為靜音。檔案輸入（`st_rt_source_set_audio_file` 系列）與主機串流（`st_rt_source_attach_stream`）都屬於「音訊輸入」，因此兩者都以此函式移除。
 
-**언제·어떻게** — 소스를 지우지 않고 소리만 끊거나, 다른 입력으로 바꾸기 전에 비워 둘 때 씁니다. 분리는 3 ms 램프로 내려갑니다. 스트림을 분리한 뒤의 `st_rt_source_write_stream`은 아무것도 쓰지 않고 `0`을 돌려줍니다. 같은 소스에 `st_rt_source_write_stream`과 동시에 부르지 마십시오. 소스를 지우는 `st_rt_source_destroy`도 입력을 함께 분리하므로 그 전에 이 함수를 부를 필요는 없습니다. 스피커 세트 멤버 소스에는 거절됩니다(`ST_STATUS_INVALID_ARGUMENT`). 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 用於不刪除音源而只切斷聲音，或在換成其他輸入前先清空。分離以 3 ms 斜坡降低。分離串流後的 `st_rt_source_write_stream` 不寫入任何內容並回傳 `0`。請勿對同一音源與 `st_rt_source_write_stream` 同時呼叫。刪除音源的 `st_rt_source_destroy` 也會一併分離輸入，因此不需在其之前呼叫此函式。喇叭組成員音源會被拒絕（`ST_STATUS_INVALID_ARGUMENT`）。執行緒：`[control]` — 請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id(`STSourceId`, `st_rt_source_create`가 돌려준 값) |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id（`STSourceId`，`st_rt_source_create` 回傳的值） |
 
-**반환** — `1` = 분리함 / `0` = 실패(컨텍스트 NULL, 없는 소스, 스피커 세트 멤버 등).
+**回傳值** — `1` = 已分離 / `0` = 失敗（情境為 NULL、音源不存在、喇叭組成員等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_eq</code> — 소스 원음에 9밴드 그래픽 EQ를 겁니다</summary>
+<summary><code>st_rt_source_set_eq</code> — 對音源原音套用 9 頻帶圖形 EQ</summary>
 
 ```c
 int st_rt_source_set_eq(STRT_Context* context, STSourceId source, const float gainsDb[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 소스 신호에 밴드별 게인을 걸어 음색을 보정합니다. 필터는 크로스오버 앞, 즉 소스 신호 자체에 걸리므로 그 소스의 직접·투과·반사·회절·잔향 송출이 모두 같은 필터를 거칩니다(실제 스피커 신호 체인에 EQ를 단 것과 같습니다). 출력단 EQ(`st_rt_render_set_eq`)와 같은 필터 설계이고 오프라인 `st_off_source_set_eq`와 같은 구현입니다.
+**用途** — 對音源訊號套用各頻帶增益以修正音色。濾波器套用於分頻器之前，即音源訊號本身，因此該音源的直達·透射·反射·繞射·殘響送出全部經過相同的濾波器（等同於在實際喇叭訊號鏈上加裝 EQ）。與輸出級 EQ（`st_rt_render_set_eq`）為相同的濾波器設計，與離線 `st_off_source_set_eq` 為相同的實作。
 
-**언제·어떻게** — 소스를 만든 뒤 언제든, 재생 중에도 부를 수 있습니다. IR을 무효화하지 않고 렌더 스레드에 할당 없는 명령으로 전달됩니다. 재생 중에 바꾸면 필터 상태를 유지한 채 계수만 즉시 바뀝니다(매끄러운 램프는 하지 않습니다 — 클릭 없는 전환이 필요하면 `st_rt_source_set_parametric_eq`를 쓰십시오). 이 함수와 `st_rt_source_set_parametric_eq`는 **같은 소스 EQ**를 바꾸며 마지막에 부른 쪽이 이깁니다. `gainsDb = NULL`을 넘기면 EQ를 끄고 지웁니다(파라메트릭으로 건 설정도 이것으로 지웁니다). 설정은 소스를 지울 때까지 유지됩니다. 스피커 세트 멤버 소스에도 걸 수 있습니다. 지원 여부는 `ST_CAP_SOURCE_EQ`(`st_rt_get_capability_word(0)`)로 확인합니다. 스레드: `[control]` — 씬 read 락과 렌더 제어 락을 잠깐 잡으므로 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 建立音源後可隨時呼叫，播放中亦可。不會使 IR 失效，以無配置的命令傳給渲染執行緒。播放中變更時，保持濾波器狀態並立即只變更係數（不做平滑斜坡 — 若需要無爆音的切換，請使用 `st_rt_source_set_parametric_eq`）。此函式與 `st_rt_source_set_parametric_eq` 變更的是 **同一個音源 EQ**，以最後呼叫者為準。傳入 `gainsDb = NULL` 會關閉並清除 EQ（以參數式設定的內容也以此清除）。設定會保持到刪除音源為止。也可套用於喇叭組成員音源。支援與否以 `ST_CAP_SOURCE_EQ`（`st_rt_get_capability_word(0)`）確認。執行緒：`[control]` — 會短暫持有場景 read 鎖與渲染控制鎖，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `gainsDb` | `ST_FREQUENCY_BANDS`(9)개 게인(dB), 밴드 순서 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz. 각 값은 유한하고 `[-ST_SOURCE_EQ_MAX_GAIN_DB, +ST_SOURCE_EQ_MAX_GAIN_DB]`(±24 dB) 안이어야 합니다 — 밖이면 클램프하지 않고 거절합니다. `NULL` 또는 전 밴드 0 dB면 EQ를 끕니다(EQ가 없는 결과와 비트 동일) |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `gainsDb` | `ST_FREQUENCY_BANDS`（9）個增益（dB），頻帶順序 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz。各值須為有限值且在 `[-ST_SOURCE_EQ_MAX_GAIN_DB, +ST_SOURCE_EQ_MAX_GAIN_DB]`（±24 dB）內 — 超出時不箝制而是拒絕。`NULL` 或全頻帶 0 dB 時關閉 EQ（與無 EQ 的結果位元相同） |
 
-**필터 정의** — 밴드마다 RBJ peaking biquad 하나(Q = 1.414, 약 1옥타브)를 밴드 오름차순으로 직렬 연결합니다. 표본률은 엔진 내부 44100 Hz 고정이며 호스트 표본률(`hostSampleRate`)과 무관합니다. `|g| ≤ 1e-4 dB`인 밴드는 건너뜁니다. 이웃 밴드의 응답이 겹치므로(피킹 필터 스커트) 밴드 중심에서 정확히 지정 게인이 되게 하려면 호스트가 게인을 보정해 넣어야 합니다.
+**濾波器定義** — 每個頻帶一個 RBJ peaking biquad（Q = 1.414，約 1 個八度），依頻帶由低到高串聯。取樣率固定為引擎內部 44100 Hz，與主機取樣率（`hostSampleRate`）無關。`|g| ≤ 1e-4 dB` 的頻帶會略過。相鄰頻帶的響應會重疊（峰值濾波器裙帶），因此若要在頻帶中心精確達到指定增益，需由主機修正增益後填入。
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(비유한 값 또는 `|g| > 24`, 아무것도 바꾸지 않음) / `ST_STATUS_NOT_FOUND`(소스 없음) / `ST_STATUS_UNAVAILABLE`(이 컨텍스트의 백엔드가 소스 EQ를 지원하지 않음).
+**回傳值** — `1` = 成功 / `0` = 失敗。失敗時 `st_rt_get_last_status`：`ST_STATUS_INVALID_ARGUMENT`（非有限值或 `|g| > 24`，不變更任何內容）/ `ST_STATUS_NOT_FOUND`（無音源）/ `ST_STATUS_UNAVAILABLE`（此情境的後端不支援音源 EQ）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_eq</code> — 소스 EQ를 9밴드 게인으로 읽습니다</summary>
+<summary><code>st_rt_source_get_eq</code> — 以 9 頻帶增益讀取音源 EQ</summary>
 
 ```c
 int st_rt_source_get_eq(STRT_Context* context, STSourceId source, float outGainsDb[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 현재 소스 EQ를 9밴드 그래픽 뷰로 돌려줍니다. 소스 EQ는 하나이고 이 함수는 그 밴드 목록을 9밴드 게인으로 보여 주는 호환 뷰입니다.
+**用途** — 以 9 頻帶圖形檢視回傳目前的音源 EQ。音源 EQ 只有一個，此函式是將其頻帶清單以 9 頻帶增益呈現的相容檢視。
 
-**언제·어떻게** — EQ가 없거나 꺼져 있으면 전부 0을 씁니다. 9밴드 모양(canonical 중심 주파수·Q 1.414 `ST_PARAMETRIC_EQ_PEAKING` 9개·프리앰프 0·켜짐)이면 그 게인을 씁니다. 그 밖의 파라메트릭 설정이면 9밴드로 표현할 수 없으므로 `0` + `ST_STATUS_UNAVAILABLE`을 돌려주고 `outGainsDb`는 건드리지 않습니다. `UNAVAILABLE`의 뜻을 가르려면 `st_rt_source_get_parametric_eq`를 부르십시오 — 성공하면 "파라메트릭 설정이라 9밴드로 못 읽음"이고(설정은 그쪽으로 읽습니다), 같은 `UNAVAILABLE`로 실패하면 백엔드가 소스 EQ를 지원하지 않는 것입니다. 스레드: `[control]`.
+**呼叫方式** — EQ 不存在或已關閉時全部寫入 0。若為 9 頻帶形狀（canonical 中心頻率·Q 1.414 的 `ST_PARAMETRIC_EQ_PEAKING` 9 個·前級 0·開啟），則寫入該增益。若為其他參數式設定，因無法以 9 頻帶表達，回傳 `0` + `ST_STATUS_UNAVAILABLE`，且不變更 `outGainsDb`。若要區分 `UNAVAILABLE` 的意義，請呼叫 `st_rt_source_get_parametric_eq` — 成功表示「為參數式設定，無法以 9 頻帶讀取」（設定請以該函式讀取），以相同的 `UNAVAILABLE` 失敗則表示後端不支援音源 EQ。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `outGainsDb` | 호출자 소유 `float[ST_FREQUENCY_BANDS]` 출력 버퍼(63…16k Hz 순서, dB). `NULL`이면 거절 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `outGainsDb` | 呼叫端擁有的 `float[ST_FREQUENCY_BANDS]` 輸出緩衝區（63…16k Hz 順序，dB）。`NULL` 則拒絕 |
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(`outGainsDb`가 NULL) / `ST_STATUS_NOT_FOUND`(소스 없음) / `ST_STATUS_UNAVAILABLE`(위 두 경우).
+**回傳值** — `1` = 成功 / `0` = 失敗。失敗時 `st_rt_get_last_status`：`ST_STATUS_INVALID_ARGUMENT`（`outGainsDb` 為 NULL）/ `ST_STATUS_NOT_FOUND`（無音源）/ `ST_STATUS_UNAVAILABLE`（上述兩種情況）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_parametric_eq</code> — 소스 원음에 최대 16밴드 파라메트릭 EQ를 겁니다</summary>
+<summary><code>st_rt_source_set_parametric_eq</code> — 對音源原音套用最多 16 頻帶參數式 EQ</summary>
 
 ```c
 int st_rt_source_set_parametric_eq(STRT_Context* context, STSourceId source, const STParametricEqBand* bands, int32_t bandCount, float preampDb, int32_t enabled);
 ```
 
-**용도** — 소스 신호에 밴드 종류·주파수·게인·Q를 직접 정한 파라메트릭 EQ를 겁니다. 거는 자리는 `st_rt_source_set_eq`와 같고(크로스오버 앞, 그 소스의 모든 경로) **같은 EQ**입니다. 가상 스피커처럼 소스마다 다른 주파수 보정이 필요할 때 씁니다.
+**用途** — 對音源訊號套用直接指定頻帶類型·頻率·增益·Q 的參數式 EQ。套用位置與 `st_rt_source_set_eq` 相同（分頻器之前，該音源的所有路徑），且為 **同一個 EQ**。用於如虛擬喇叭般各音源需要不同頻率修正的情況。
 
-**언제·어떻게** — 소스를 만든 뒤 언제든, 재생 중에도 부를 수 있습니다. IR을 무효화하지 않고 렌더 스레드에 할당 없는 명령으로 전달됩니다. 값이 바뀌면 옛 설정과 새 설정을 20 ms 동안 나란히 돌려 출력을 크로스페이드하므로 클릭이 나지 않습니다. 그 사이 또 바뀌면 가장 최근 값 하나만 기다렸다가 이어서 넘어갑니다. 이 함수와 `st_rt_source_set_eq`는 모두 소스 EQ의 목록 전체를 바꾸며 마지막 setter가 이깁니다. 꺼진 목록·효과 없는 목록도 저장되어 getter가 그대로 돌려줍니다 — 끄고 지우려면 `st_rt_source_set_eq(context, source, NULL)`을 부릅니다. 스피커 세트 멤버 소스(`st_rt_speaker_set_get_source`로 받은 id)에도 그대로 걸 수 있어 가상 스피커마다 다른 보정을 줄 수 있습니다. AutoEq `ParametricEQ.txt`는 `st_rt_render_parse_autoeq_parametric`로 읽어 결과를 그대로 넘길 수 있습니다. 설정은 소스를 지울 때까지 유지됩니다. 지원 여부는 `ST_CAP1_SOURCE_PARAMETRIC_EQ`(`st_rt_get_capability_word(1)`)로 확인합니다. 스레드: `[control]` — 씬 read 락과 렌더 제어 락을 잡습니다.
+**呼叫方式** — 建立音源後可隨時呼叫，播放中亦可。不會使 IR 失效，以無配置的命令傳給渲染執行緒。值變更時，新舊設定會並行執行 20 ms 並交叉淡化輸出，因此不會產生爆音。期間若再次變更，只等待最新的一個值並接續切換。此函式與 `st_rt_source_set_eq` 都會變更音源 EQ 的整個清單，以最後的 setter 為準。關閉的清單·無效果的清單也會被儲存，getter 原樣回傳 — 若要關閉並清除，請呼叫 `st_rt_source_set_eq(context, source, NULL)`。也可直接套用於喇叭組成員音源（以 `st_rt_speaker_set_get_source` 取得的 id），為每個虛擬喇叭給予不同的修正。AutoEq `ParametricEQ.txt` 可以 `st_rt_render_parse_autoeq_parametric` 讀取後直接傳入結果。設定會保持到刪除音源為止。支援與否以 `ST_CAP1_SOURCE_PARAMETRIC_EQ`（`st_rt_get_capability_word(1)`）確認。執行緒：`[control]` — 持有場景 read 鎖與渲染控制鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `bands` | `STParametricEqBand` 배열(`bandCount`개). `bandCount = 0`이면 `NULL`이어도 됩니다 |
-| `bandCount` | 밴드 수, `[0, ST_PARAMETRIC_EQ_MAX_BANDS]`(0~16). 범위 밖은 거절 |
-| `preampDb` | 밴드 앞에 거는 선형 게인(dB), `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]` = `[-48, +12]`. 주 용도는 클리핑 방지용 음수 값입니다 |
-| `enabled` | `0` = 목록은 저장하되 통과(EQ 없음과 같음) / 그 밖 = 켬 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `bands` | `STParametricEqBand` 陣列（`bandCount` 個）。`bandCount = 0` 時可為 `NULL` |
+| `bandCount` | 頻帶數，`[0, ST_PARAMETRIC_EQ_MAX_BANDS]`（0~16）。超出範圍則拒絕 |
+| `preampDb` | 套用於頻帶之前的線性增益（dB），`[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]` = `[-48, +12]`。主要用途是防止削波的負值 |
+| `enabled` | `0` = 儲存清單但直通（等同無 EQ）/ 其他 = 開啟 |
 
-**구조체** `STParametricEqBand` (32바이트, 배열 원소라 버전 스탬프 없음)
+**結構體** `STParametricEqBand`（32 位元組，為陣列元素故無版本戳記）
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `type` | `STParametricEqType` — `ST_PARAMETRIC_EQ_PEAKING`(0) / `LOW_SHELF`(1) / `HIGH_SHELF`(2) / `LOW_PASS`(3) / `HIGH_PASS`(4) / `NOTCH`(5). 알 수 없는 값은 거절 |
-| `enabled` | `0` = 이 밴드 건너뜀(항등) / 그 밖 = 켬 |
-| `frequencyHz` | PEAKING·NOTCH는 중심, 셸프는 중점, LP·HP는 코너 주파수. `[ST_PARAMETRIC_EQ_MIN_FREQUENCY_HZ, min(ST_PARAMETRIC_EQ_MAX_FREQUENCY_HZ, 0.49·Fs)]` = 20 Hz ~ 20 kHz(Fs = 44100) |
-| `gainDb` | PEAKING·LOW_SHELF·HIGH_SHELF만 씁니다(LP·HP·NOTCH는 값만 저장). `[-ST_PARAMETRIC_EQ_MAX_GAIN_DB, +ST_PARAMETRIC_EQ_MAX_GAIN_DB]` = ±24 dB |
-| `q` | `[ST_PARAMETRIC_EQ_MIN_Q, ST_PARAMETRIC_EQ_MAX_Q]` = 0.1 ~ 30. LOW_SHELF·HIGH_SHELF는 `[0.1, ST_PARAMETRIC_EQ_MAX_SHELF_Q]` = 0.1 ~ 3 — 큰 게인의 셸프에 큰 Q를 주면 모서리에 큰 공진 피크가 생기고, 소스 EQ는 리미터 앞이라 막을 것이 없습니다 |
-| `reserved[3]` | 반드시 0(아니면 거절) |
+| `type` | `STParametricEqType` — `ST_PARAMETRIC_EQ_PEAKING`(0) / `LOW_SHELF`(1) / `HIGH_SHELF`(2) / `LOW_PASS`(3) / `HIGH_PASS`(4) / `NOTCH`(5)。未知值則拒絕 |
+| `enabled` | `0` = 略過此頻帶（恆等）/ 其他 = 開啟 |
+| `frequencyHz` | PEAKING·NOTCH 為中心頻率，擱架為中點頻率，LP·HP 為轉角頻率。`[ST_PARAMETRIC_EQ_MIN_FREQUENCY_HZ, min(ST_PARAMETRIC_EQ_MAX_FREQUENCY_HZ, 0.49·Fs)]` = 20 Hz ~ 20 kHz（Fs = 44100） |
+| `gainDb` | 僅 PEAKING·LOW_SHELF·HIGH_SHELF 使用（LP·HP·NOTCH 只儲存值）。`[-ST_PARAMETRIC_EQ_MAX_GAIN_DB, +ST_PARAMETRIC_EQ_MAX_GAIN_DB]` = ±24 dB |
+| `q` | `[ST_PARAMETRIC_EQ_MIN_Q, ST_PARAMETRIC_EQ_MAX_Q]` = 0.1 ~ 30。LOW_SHELF·HIGH_SHELF 為 `[0.1, ST_PARAMETRIC_EQ_MAX_SHELF_Q]` = 0.1 ~ 3 — 對大增益的擱架給予大 Q 會在轉角產生大的共振峰，而音源 EQ 位於限幅器之前，沒有東西能擋住 |
+| `reserved[3]` | 必須為 0（否則拒絕） |
 
-**필터 정의** — 밴드마다 RBJ Audio EQ Cookbook 2차 섹션 하나이고, 체인은 프리앰프 → 밴드 0…`bandCount-1` 직렬입니다. 표본률은 엔진 내부 44100 Hz입니다. `enabled = 0`인 밴드와 `|gainDb| ≤ 1e-4`인 PEAKING·셸프 밴드는 정확히 항등입니다. 전체가 꺼져 있거나 효과가 없으면(전 밴드 항등 + 프리앰프 0 dB) 전환 램프가 끝난 뒤부터 EQ가 없는 결과와 비트 동일합니다.
+**濾波器定義** — 每個頻帶一個 RBJ Audio EQ Cookbook 二階節，鏈為前級 → 頻帶 0…`bandCount-1` 串聯。取樣率為引擎內部 44100 Hz。`enabled = 0` 的頻帶與 `|gainDb| ≤ 1e-4` 的 PEAKING·擱架頻帶精確為恆等。整體關閉或無效果時（全頻帶恆等 + 前級 0 dB），自切換斜坡結束後起與無 EQ 的結果位元相同。
 
-**값 검증** — 비유한 값·알 수 없는 `type`·`reserved ≠ 0`·`bandCount` 범위 밖·(`bandCount > 0`인데) `bands` NULL은 거절하고 아무것도 바꾸지 않습니다. 유한한 값이 범위를 벗어나면 **클램프**하고, getter는 클램프된 실효값을 돌려줍니다(9밴드 `st_rt_source_set_eq`는 클램프하지 않고 거절하는 것과 다릅니다).
+**值驗證** — 非有限值·未知的 `type`·`reserved ≠ 0`·`bandCount` 超出範圍·（`bandCount > 0` 時）`bands` 為 NULL 會被拒絕且不變更任何內容。有限值超出範圍時會被 **箝制**，getter 回傳箝制後的實際值（與 9 頻帶 `st_rt_source_set_eq` 不箝制而拒絕不同）。
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(위 검증) / `ST_STATUS_NOT_FOUND`(소스 없음) / `ST_STATUS_UNAVAILABLE`(이 컨텍스트의 백엔드가 소스 EQ를 지원하지 않음).
+**回傳值** — `1` = 成功 / `0` = 失敗。失敗時 `st_rt_get_last_status`：`ST_STATUS_INVALID_ARGUMENT`（上述驗證）/ `ST_STATUS_NOT_FOUND`（無音源）/ `ST_STATUS_UNAVAILABLE`（此情境的後端不支援音源 EQ）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_parametric_eq</code> — 소스 EQ의 밴드 목록·프리앰프·켜짐을 읽습니다</summary>
+<summary><code>st_rt_source_get_parametric_eq</code> — 讀取音源 EQ 的頻帶清單·前級·開啟狀態</summary>
 
 ```c
 int st_rt_source_get_parametric_eq(STRT_Context* context, STSourceId source, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outEnabled);
 ```
 
-**용도** — 소스 EQ의 현재 설정을 클램프된 실효값으로 돌려줍니다. `st_rt_source_set_eq`(9밴드)로 건 설정도 9개 `ST_PARAMETRIC_EQ_PEAKING` 밴드로 읽힙니다. EQ가 없으면 0밴드·꺼짐입니다.
+**用途** — 以箝制後的實際值回傳音源 EQ 的目前設定。以 `st_rt_source_set_eq`（9 頻帶）套用的設定也會讀成 9 個 `ST_PARAMETRIC_EQ_PEAKING` 頻帶。沒有 EQ 時為 0 頻帶·關閉。
 
-**언제·어떻게** — 출력 규약은 `st_rt_render_get_parametric_eq`와 같습니다. `outBands = NULL`이면 크기 질의로 동작해 밴드는 쓰지 않고 개수·프리앰프·켜짐만 채운 뒤 `1`을 돌려줍니다. `bandCapacity`를 `ST_PARAMETRIC_EQ_MAX_BANDS`(16)로 주면 늘 들어갑니다. 반환된 밴드의 `reserved`는 0으로 채워집니다. 스레드: `[control]` — 씬 read 락과 렌더 제어 락을 잡습니다.
+**呼叫方式** — 輸出規約與 `st_rt_render_get_parametric_eq` 相同。`outBands = NULL` 時作為大小查詢，不寫入頻帶，只填入數量·前級·開啟狀態後回傳 `1`。以 `ST_PARAMETRIC_EQ_MAX_BANDS`（16）作為 `bandCapacity` 一定放得下。回傳頻帶的 `reserved` 以 0 填入。執行緒：`[control]` — 持有場景 read 鎖與渲染控制鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `outBands` | 호출자 소유 `STParametricEqBand` 배열. `NULL`이면 크기 질의. 필드는 `st_rt_source_set_parametric_eq` 항목 참고 |
-| `bandCapacity` | `outBands` 원소 수. 음수면 거절. 밴드 수보다 작으면 `0` + `ST_STATUS_BUFFER_TOO_SMALL`(개수·프리앰프·켜짐은 씀) |
-| `outBandCount` | 밴드 수를 받을 포인터. `NULL`이면 건너뜀 |
-| `outPreampDb` | 프리앰프(dB)를 받을 포인터. `NULL`이면 건너뜀 |
-| `outEnabled` | 켜짐(`0`/`1`)을 받을 포인터. `NULL`이면 건너뜀 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `outBands` | 呼叫端擁有的 `STParametricEqBand` 陣列。`NULL` 則為大小查詢。欄位請參閱 `st_rt_source_set_parametric_eq` 項目 |
+| `bandCapacity` | `outBands` 元素數。負數則拒絕。小於頻帶數時為 `0` + `ST_STATUS_BUFFER_TOO_SMALL`（仍寫入數量·前級·開啟狀態） |
+| `outBandCount` | 接收頻帶數的指標。`NULL` 則略過 |
+| `outPreampDb` | 接收前級（dB）的指標。`NULL` 則略過 |
+| `outEnabled` | 接收開啟狀態（`0`/`1`）的指標。`NULL` 則略過 |
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(`bandCapacity < 0`) / `ST_STATUS_BUFFER_TOO_SMALL` / `ST_STATUS_NOT_FOUND`(소스 없음) / `ST_STATUS_UNAVAILABLE`(이 컨텍스트의 백엔드가 소스 EQ를 지원하지 않음).
+**回傳值** — `1` = 成功 / `0` = 失敗。失敗時 `st_rt_get_last_status`：`ST_STATUS_INVALID_ARGUMENT`（`bandCapacity < 0`）/ `ST_STATUS_BUFFER_TOO_SMALL` / `ST_STATUS_NOT_FOUND`（無音源）/ `ST_STATUS_UNAVAILABLE`（此情境的後端不支援音源 EQ）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_path_volume</code> — 소스의 경로 종류별 볼륨을 정합니다</summary>
+<summary><code>st_rt_source_set_path_volume</code> — 設定音源各路徑類型的音量</summary>
 
 ```c
 int st_rt_source_set_path_volume(STRT_Context* context, STSourceId source, int volumeKind, float volume);
 ```
 
-**용도** — 한 소스의 직접음·반사·회절·잔향 기여를 따로 키우거나 줄입니다. 값은 선형 압력 배율입니다. 직접음 볼륨은 투과 경로도 포함하고, 잔향 볼륨은 리스너가 공유하는 후기 잔향에 **이 소스가 보내는 양**만 조절합니다.
+**用途** — 分別放大或縮小單一音源的直達聲·反射·繞射·殘響貢獻。值為線性壓力倍率。直達聲音量也包含透射路徑，殘響音量只調整 **此音源送往** 聆聽者共用的後期殘響的量。
 
-**언제·어떻게** — 소스를 만든 뒤 언제든 부릅니다. 생성 직후 4종 모두 `1.0`입니다. 경로를 완전히 빼려면 `st_rt_source_set_path_enabled`를, 소스 전체 레벨은 `st_rt_source_set_volume`을 씁니다. 스피커 세트 멤버 소스에도 걸 수 있습니다. 지원 여부는 `ST_CAP_SOURCE_PATH_VOLUME`으로 확인합니다. 스레드: `[control]` — 씬 read 락만 잡습니다.
+**呼叫方式** — 建立音源後可隨時呼叫。建立後 4 種皆為 `1.0`。若要完全移除路徑請使用 `st_rt_source_set_path_enabled`，音源整體電平請使用 `st_rt_source_set_volume`。也可套用於喇叭組成員音源。支援與否以 `ST_CAP_SOURCE_PATH_VOLUME` 確認。執行緒：`[control]` — 只持有場景 read 鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `volumeKind` | `STSourceVolumeKind` — `ST_SOURCE_VOLUME_DIRECT`(0, 투과 포함) / `ST_SOURCE_VOLUME_REFLECTION`(1) / `ST_SOURCE_VOLUME_DIFFRACTION`(2) / `ST_SOURCE_VOLUME_REVERB`(3, 공유 후기 잔향으로의 송출). 그 밖은 거절 |
-| `volume` | 선형 압력 배율, 유한한 `0` 이상. 기본 `1.0` |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `volumeKind` | `STSourceVolumeKind` — `ST_SOURCE_VOLUME_DIRECT`（0，含透射）/ `ST_SOURCE_VOLUME_REFLECTION`（1）/ `ST_SOURCE_VOLUME_DIFFRACTION`（2）/ `ST_SOURCE_VOLUME_REVERB`（3，送往共用後期殘響）。其他則拒絕 |
+| `volume` | 線性壓力倍率，有限值且 `0` 以上。預設 `1.0` |
 
-**반환** — `1` = 적용 / `0` = 실패(알 수 없는 `volumeKind`, 비유한·음수 `volume`, 없는 소스).
+**回傳值** — `1` = 已套用 / `0` = 失敗（未知的 `volumeKind`、非有限·負數 `volume`、音源不存在）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_path_volume</code> — 소스의 경로 종류별 볼륨을 읽습니다</summary>
+<summary><code>st_rt_source_get_path_volume</code> — 讀取音源各路徑類型的音量</summary>
 
 ```c
 float st_rt_source_get_path_volume(STRT_Context* context, STSourceId source, int volumeKind);
 ```
 
-**용도** — `st_rt_source_set_path_volume`으로 정한 경로 종류별 선형 볼륨을 돌려줍니다.
+**用途** — 回傳以 `st_rt_source_set_path_volume` 設定的各路徑類型線性音量。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]` — 씬 read 락만 잡습니다.
+**呼叫方式** — 可隨時呼叫。執行緒：`[control]` — 只持有場景 read 鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
 | `volumeKind` | `STSourceVolumeKind` — `DIRECT`(0) / `REFLECTION`(1) / `DIFFRACTION`(2) / `REVERB`(3) |
 
-**반환** — 선형 볼륨(기본 `1.0`). 알 수 없는 `volumeKind`나 컨텍스트 NULL이면 `-1`.
+**回傳值** — 線性音量（預設 `1.0`）。未知的 `volumeKind` 或情境為 NULL 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_audio_file</code> — 오디오 파일을 열어 소스의 입력으로 붙입니다</summary>
+<summary><code>st_rt_source_set_audio_file</code> — 開啟音訊檔案並附加為音源的輸入</summary>
 
 ```c
 int st_rt_source_set_audio_file(STRT_Context* context, STSourceId source, const char* audioPath, int loop);
 ```
 
-**용도** — 엔진이 파일을 직접 열고 디코드해 소스 입력으로 씁니다. 호스트가 PCM을 다루지 않아도 되는 가장 간단한 입력 방식입니다.
+**用途** — 由引擎直接開啟並解碼檔案作為音源輸入。是主機不需處理 PCM 的最簡單輸入方式。
 
-**언제·어떻게** — 소스를 만든 뒤 부르고, 붙인 직후는 정지 상태라 `st_rt_source_play`부터 소리가 납니다. 채널은 모노로 섞이고(스테레오 = 1/√2·L + 1/√2·R) 엔진 레이트 44.1 kHz로 변환됩니다. 같은 소스에 호스트 스트림이 붙어 있으면 파일 입력이 스트림을 밀어냅니다(이후 `st_rt_source_write_stream`은 `0`). 반복 횟수는 나중에 `st_rt_source_set_loop_count`로 바꿀 수 있습니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control, blocking]` — 파일 열기와 디코더 생성을 하므로 게임 루프·오디오 스레드에서 부르지 마십시오.
+**呼叫方式** — 建立音源後呼叫，附加後立即為停止狀態，從 `st_rt_source_play` 起才發聲。聲道混為單聲道（立體聲 = 1/√2·L + 1/√2·R）並轉換為引擎速率 44.1 kHz。同一音源若已附加主機串流，檔案輸入會將其取代（之後 `st_rt_source_write_stream` 為 `0`）。重複次數之後可以 `st_rt_source_set_loop_count` 變更。喇叭組成員音源會被拒絕。執行緒：`[control, blocking]` — 會開啟檔案並建立解碼器，請勿在遊戲迴圈·音訊執行緒中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `audioPath` | 파일 경로, **UTF-8**(Windows에서도 — 한글 경로 가능). 지원: WAV(PCM·float·ADPCM·µ-law·A-law, RF64·W64), FLAC, MP3, Ogg Vorbis. Ogg Opus·AAC/M4A·ALAC·WMA는 열지 못해 실패합니다 |
-| `loop` | `0` = 한 번 재생 / 그 밖 = 무한 반복 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `audioPath` | 檔案路徑，**UTF-8**（Windows 亦同 — 可使用韓文路徑）。支援：WAV（PCM·float·ADPCM·µ-law·A-law，RF64·W64）、FLAC、MP3、Ogg Vorbis。Ogg Opus·AAC/M4A·ALAC·WMA 無法開啟而失敗 |
+| `loop` | `0` = 播放一次 / 其他 = 無限重複 |
 
-**반환** — `1` = 입력을 붙임 / `0` = 실패(경로 NULL, 열 수 없는 파일·지원하지 않는 포맷, 없는 소스, 스피커 세트 멤버 등).
+**回傳值** — `1` = 已附加輸入 / `0` = 失敗（路徑為 NULL、無法開啟的檔案·不支援的格式、音源不存在、喇叭組成員等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_audio_asset</code> — 호스트 에셋 시스템의 인코딩 파일을 스트리밍 입력으로 붙입니다</summary>
+<summary><code>st_rt_source_set_audio_asset</code> — 將主機資產系統的編碼檔案附加為串流輸入</summary>
 
 ```c
 int st_rt_source_set_audio_asset(STRT_Context* context, STSourceId source, const char* assetName, const STAudioAssetIO* io, int repeatCount);
 ```
 
-**용도** — 게임 엔진의 팩 파일·가상 파일 시스템처럼 OS 경로로 열 수 없는 오디오를 호스트 콜백으로 읽게 합니다. `st_rt_source_set_audio_file`과 같은 디코더(WAV/FLAC/MP3/Vorbis)를 쓰며, 파일 전체를 미리 읽지 않고 탐색 가능한 스트림으로 디코드합니다.
+**用途** — 讓遊戲引擎的封裝檔·虛擬檔案系統等無法以 OS 路徑開啟的音訊透過主機回呼讀取。使用與 `st_rt_source_set_audio_file` 相同的解碼器（WAV/FLAC/MP3/Vorbis），不預先讀取整個檔案，而以可搜尋的串流解碼。
 
-**언제·어떻게** — 재생 규약은 `st_rt_source_set_audio_file`과 같습니다(붙인 직후 정지, `st_rt_source_play`로 시작). 콜백 표는 복사되지만, `userData`와 호스트 에셋 시스템은 입력이 붙어 있는 동안 살아 있어야 합니다. `open`/`close`는 제어 스레드에서, `read`/`seek`은 이 호출 중의 탐색 과정과 단일 디코더 워커 스레드에서 불립니다. 콜백은 예외를 던지거나 엔진 API를 다시 부르면 안 됩니다. `close`는 성공한 `open`마다 한 번 불립니다(디코더 초기화 실패 포함). 서로 다른 컨텍스트는 동시에 디코드할 수 있습니다. 붙이기에 실패하면 이전 입력이 유지됩니다. 지원 여부는 `ST_CAP_AUDIO_ASSET_IO`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control, blocking]`.
+**呼叫方式** — 播放規約與 `st_rt_source_set_audio_file` 相同（附加後立即停止，以 `st_rt_source_play` 開始）。回呼表會被複製，但 `userData` 與主機資產系統在輸入附加期間必須保持存活。`open`/`close` 在控制執行緒上呼叫，`read`/`seek` 在此呼叫中的探測過程與單一解碼器工作執行緒上呼叫。回呼不得拋出例外或再次呼叫引擎 API。每次成功的 `open` 都會呼叫一次 `close`（含解碼器初始化失敗）。不同情境可同時解碼。附加失敗時保留先前的輸入。支援與否以 `ST_CAP_AUDIO_ASSET_IO` 確認。喇叭組成員音源會被拒絕。執行緒：`[control, blocking]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `assetName` | `io->open`에 그대로 넘길 에셋 이름 |
-| `io` | `STAudioAssetIO` 콜백 표. 호출자가 `structSize = sizeof(STAudioAssetIO)`, `apiVersion = ST_ABI_VERSION`을 채우고 `reserved`는 0 |
-| `repeatCount` | 추가 반복 횟수 — `0` = 한 번 / `-1` = 무한 / 양수 N = N번 더 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `assetName` | 原樣傳給 `io->open` 的資產名稱 |
+| `io` | `STAudioAssetIO` 回呼表。呼叫端填入 `structSize = sizeof(STAudioAssetIO)`、`apiVersion = ST_ABI_VERSION`，`reserved` 為 0 |
+| `repeatCount` | 額外重複次數 — `0` = 一次 / `-1` = 無限 / 正數 N = 再重複 N 次 |
 
-**구조체** `STAudioAssetIO`
+**結構體** `STAudioAssetIO`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` | `sizeof(STAudioAssetIO)` |
 | `apiVersion` | `ST_ABI_VERSION` |
-| `userData` | 모든 콜백의 첫 인자로 전달되는 호스트 포인터 |
-| `open` | `void* open(void* userData, const char* assetName)` — 에셋을 열고 핸들을 돌려줍니다 |
-| `read` | `uint64_t read(void* userData, void* handle, void* output, uint64_t bytes)` — 읽은 바이트 수를 돌려줍니다(`0` = EOF, 요청보다 크면 안 됨) |
-| `seek` | `int seek(void* userData, void* handle, int64_t offset, int origin)` — `origin` `0` = 처음 기준 / `1` = 현재 위치 기준. `1` = 성공 / `0` = 오류 |
-| `close` | `void close(void* userData, void* handle)` — 핸들을 닫습니다 |
+| `userData` | 作為所有回呼第一個引數傳入的主機指標 |
+| `open` | `void* open(void* userData, const char* assetName)` — 開啟資產並回傳控制代碼 |
+| `read` | `uint64_t read(void* userData, void* handle, void* output, uint64_t bytes)` — 回傳讀取的位元組數（`0` = EOF，不得大於請求量） |
+| `seek` | `int seek(void* userData, void* handle, int64_t offset, int origin)` — `origin` `0` = 以開頭為基準 / `1` = 以目前位置為基準。`1` = 成功 / `0` = 錯誤 |
+| `close` | `void close(void* userData, void* handle)` — 關閉控制代碼 |
 | `reserved[2]` | 0 |
 
-**반환** — `1` = 입력을 붙임 / `0` = 실패(이전 입력 유지).
+**回傳值** — `1` = 已附加輸入 / `0` = 失敗（保留先前的輸入）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_audio_clip</code> — 짧은 파일을 통째로 디코드해 캐시 클립으로 붙입니다</summary>
+<summary><code>st_rt_source_set_audio_clip</code> — 將短檔案整個解碼並附加為快取片段</summary>
 
 ```c
 int st_rt_source_set_audio_clip(STRT_Context* context, STSourceId source, const char* audioPath);
 ```
 
-**용도** — 짧은 소리를 한 번만 44.1 kHz 모노 PCM으로 전부 디코드해 소스에 캐시합니다. 같은 소리를 반복해서 낼 때 소스를 새로 만들거나 다시 디코드하지 않고, 살아 있는 소스에서 `st_rt_source_trigger`(한 번씩) 또는 `st_rt_source_set_retrigger_interval`(일정 간격)로 다시 시작하기 위한 입력입니다.
+**用途** — 將短聲音只解碼一次，全部轉為 44.1 kHz 單聲道 PCM 並快取於音源。用於反覆發出相同聲音時，不重新建立音源或重新解碼，而在存活的音源上以 `st_rt_source_trigger`（每次一發）或 `st_rt_source_set_retrigger_interval`（固定間隔）重新開始的輸入。
 
-**언제·어떻게** — 포맷·다운믹스는 `st_rt_source_set_audio_file`과 같고, 디코드된 길이는 최대 60초입니다. 붙이기에 실패하면 이전 입력이 유지됩니다. 성공하면 클립은 일시정지 상태로 시작하고 재시작 간격 `0`, EOF 반복 횟수 `0`이 되며, 소스의 볼륨·피치는 그대로 유지됩니다. 지원 여부는 `ST_CAP_SOURCE_RETRIGGER`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control, blocking]` — 파일 전체를 디코드하므로 게임 루프·오디오 스레드에서 부르지 마십시오.
+**呼叫方式** — 格式·降混與 `st_rt_source_set_audio_file` 相同，解碼後長度最多 60 秒。附加失敗時保留先前的輸入。成功時片段以暫停狀態開始，重新開始間隔為 `0`、EOF 重複次數為 `0`，音源的音量·音高維持不變。支援與否以 `ST_CAP_SOURCE_RETRIGGER` 確認。喇叭組成員音源會被拒絕。執行緒：`[control, blocking]` — 會解碼整個檔案，請勿在遊戲迴圈·音訊執行緒中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `audioPath` | 파일 경로(UTF-8). 지원 포맷은 `st_rt_source_set_audio_file` 항목 참고 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `audioPath` | 檔案路徑（UTF-8）。支援格式請參閱 `st_rt_source_set_audio_file` 項目 |
 
-**반환** — `1` = 클립을 붙임 / `0` = 실패(이전 입력 유지).
+**回傳值** — `1` = 已附加片段 / `0` = 失敗（保留先前的輸入）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_audio_clip_asset</code> — 호스트 에셋을 통째로 디코드해 캐시 클립으로 붙입니다</summary>
+<summary><code>st_rt_source_set_audio_clip_asset</code> — 將主機資產整個解碼並附加為快取片段</summary>
 
 ```c
 int st_rt_source_set_audio_clip_asset(STRT_Context* context, STSourceId source, const char* assetName, const STAudioAssetIO* io);
 ```
 
-**용도** — `st_rt_source_set_audio_clip`의 에셋 버전입니다. 호스트 콜백(`STAudioAssetIO`)으로 읽은 인코딩 데이터를 44.1 kHz 모노 PCM으로 전부 디코드해 캐시합니다.
+**用途** — `st_rt_source_set_audio_clip` 的資產版本。將透過主機回呼（`STAudioAssetIO`）讀取的編碼資料全部解碼為 44.1 kHz 單聲道 PCM 並快取。
 
-**언제·어떻게** — 동작·제약(최대 60초, 일시정지로 시작, 간격 `0`·EOF 반복 `0`, 볼륨·피치 유지, 실패 시 이전 입력 유지)은 `st_rt_source_set_audio_clip`과 같습니다. 캐시 클립이므로 콜백은 이 호출 안에서 모두 불리고 닫힙니다 — `userData`는 이 함수가 반환할 때까지만 유효하면 됩니다. 지원 여부는 `ST_CAP_SOURCE_RETRIGGER`와 `ST_CAP_AUDIO_ASSET_IO`로 확인합니다. 스레드: `[control, blocking]`.
+**呼叫方式** — 行為·限制（最多 60 秒、以暫停開始、間隔 `0`·EOF 重複 `0`、維持音量·音高、失敗時保留先前的輸入）與 `st_rt_source_set_audio_clip` 相同。由於是快取片段，回呼全部在此呼叫內被呼叫並關閉 — `userData` 只需在此函式返回前有效。支援與否以 `ST_CAP_SOURCE_RETRIGGER` 與 `ST_CAP_AUDIO_ASSET_IO` 確認。執行緒：`[control, blocking]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `assetName` | `io->open`에 넘길 에셋 이름 |
-| `io` | `STAudioAssetIO` 콜백 표(호출자가 `structSize`/`apiVersion`을 채움). 필드는 `st_rt_source_set_audio_asset` 항목 참고 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `assetName` | 傳給 `io->open` 的資產名稱 |
+| `io` | `STAudioAssetIO` 回呼表（呼叫端填入 `structSize`/`apiVersion`）。欄位請參閱 `st_rt_source_set_audio_asset` 項目 |
 
-**반환** — `1` = 클립을 붙임 / `0` = 실패(이전 입력 유지).
+**回傳值** — `1` = 已附加片段 / `0` = 失敗（保留先前的輸入）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_retrigger_interval</code> — 캐시 클립을 일정 간격으로 다시 시작하게 합니다</summary>
+<summary><code>st_rt_source_set_retrigger_interval</code> — 讓快取片段以固定間隔重新開始</summary>
 
 ```c
 int st_rt_source_set_retrigger_interval(STRT_Context* context, STSourceId source, double seconds);
 ```
 
-**용도** — 같은 캐시 클립을 시작-시작 간격 `seconds`마다 출력 시각 기준으로 다시 시작합니다. 제어 스레드의 호출 타이밍에 흔들리지 않는 규칙적인 반복음이 필요할 때 씁니다. 재시작해도 음향 경로·지연·잔향 상태는 유지됩니다.
+**用途** — 以輸出時刻為基準，每隔開始-開始間隔 `seconds` 重新開始同一個快取片段。用於需要不受控制執行緒呼叫時機影響的規律重複聲。重新開始時聲學路徑·延遲·殘響狀態仍會保持。
 
-**언제·어떻게** — `st_rt_source_set_audio_clip`/`_clip_asset`으로 붙인 캐시 클립에만 쓸 수 있습니다. 간격은 가장 가까운 44.1 kHz 출력 표본으로 반올림되며 피치는 간격을 바꾸지 않습니다. 변경은 다음 입력 읽기 경계에서 적용되고 새 간격 하나를 온전히 시작합니다. EOF 뒤에 켜면 클립이 다시 시작됩니다. 같은 (양자화된) 간격을 다시 걸면 진행 중인 클럭은 그대로입니다. `0`을 주면 이후 재시작을 취소하고 지금 울리는 샷은 끝까지 냅니다. `st_rt_source_play`가 시작·재개, `st_rt_source_pause`가 클럭을 멈추고, `st_rt_source_stop`은 일시정지·되감기를 하되 간격 설정은 유지합니다. EOF 반복(`st_rt_source_set_loop_count`)과 양수 간격은 함께 쓸 수 없습니다. 재시작 시 커서 리셋은 3 ms 전환으로 이어지고, 끝나지 않은 이전 샷은 섞이지 않고 교체됩니다. 지원 여부는 `ST_CAP_SOURCE_RETRIGGER`로 확인합니다. 스레드: `[control]`.
+**呼叫方式** — 僅可用於以 `st_rt_source_set_audio_clip`/`_clip_asset` 附加的快取片段。間隔四捨五入到最接近的 44.1 kHz 輸出樣本，音高不改變間隔。變更在下一個輸入讀取邊界套用，並完整開始一個新間隔。在 EOF 之後開啟會重新開始片段。再次設定相同（量化後的）間隔時，進行中的時脈保持不變。給予 `0` 則取消之後的重新開始，目前正在播放的一發會播完。`st_rt_source_play` 開始·恢復，`st_rt_source_pause` 停止時脈，`st_rt_source_stop` 會暫停·倒帶但保留間隔設定。EOF 重複（`st_rt_source_set_loop_count`）與正數間隔不可並用。重新開始時游標重設以 3 ms 切換銜接，尚未結束的前一發不會混合而是被替換。支援與否以 `ST_CAP_SOURCE_RETRIGGER` 確認。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id(캐시 클립이 붙은 소스) |
-| `seconds` | 시작-시작 간격(초). 양수 범위는 출력 1표본 ~ 3600 s. `0` = 끔(기본) |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id（已附加快取片段的音源） |
+| `seconds` | 開始-開始間隔（秒）。正數範圍為輸出 1 樣本 ~ 3600 s。`0` = 關閉（預設） |
 
-**반환** — `1` = 성공 / `0` = 실패(잘못된 값, 없는 소스, 캐시 클립이 아닌 입력 등).
+**回傳值** — `1` = 成功 / `0` = 失敗（無效值、音源不存在、非快取片段的輸入等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_retrigger_interval</code> — 캐시 클립의 재시작 간격을 읽습니다</summary>
+<summary><code>st_rt_source_get_retrigger_interval</code> — 讀取快取片段的重新開始間隔</summary>
 
 ```c
 double st_rt_source_get_retrigger_interval(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_set_retrigger_interval`로 건 간격을 양자화된 실효값(초)으로 돌려줍니다.
+**用途** — 以量化後的實際值（秒）回傳以 `st_rt_source_set_retrigger_interval` 設定的間隔。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]`.
+**呼叫方式** — 可隨時呼叫。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
 
-**반환** — 양자화된 간격(초). `0` = 꺼짐 / `-1` = 소스 없음 또는 캐시 클립이 아님.
+**回傳值** — 量化後的間隔（秒）。`0` = 關閉 / `-1` = 無音源或非快取片段。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_trigger</code> — 캐시 클립을 한 번 처음부터 울리도록 요청합니다</summary>
+<summary><code>st_rt_source_trigger</code> — 請求快取片段從頭播放一次</summary>
 
 ```c
 int st_rt_source_trigger(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 살아 있는 소스의 캐시 클립을 외부 이벤트 한 번에 맞춰 처음부터 다시 시작합니다. 디코드도 소스 생성도 하지 않으므로 짧은 소리를 자주 낼 때 소스를 새로 만드는 대신 씁니다. 재시작해도 음향 지연·반사·잔향 이력은 그대로 이어집니다.
+**用途** — 配合一次外部事件，讓存活音源的快取片段從頭重新開始。既不解碼也不建立音源，因此在頻繁發出短聲音時用來取代建立新音源。重新開始時聲學延遲·反射·殘響歷程仍會延續。
 
-**언제·어떻게** — 캐시 클립이 붙어 있고 재시작 간격 `0`, EOF 반복 횟수 `0`이어야 합니다. 별도의 `st_rt_source_play`는 필요 없습니다. 요청은 컨텍스트의 초기 음장이 소비된 뒤 다음 엔진 블록에서 시작되며, 그 전에 여러 번 요청하면 한 번으로 합쳐집니다. `st_rt_source_pause`/`st_rt_source_stop`, 성공한 `st_rt_source_seek`, 간격·반복 설정 변경은 대기 중인 요청을 취소합니다. 렌더되도록 소스를 켜 둔 상태(`st_rt_source_set_enabled`)로 유지하십시오. 커서는 입력 읽기 경계에서 3 ms 전환으로 리셋되고 끝나지 않은 이전 샷은 교체됩니다. `1`은 큐에 들어갔다는 뜻이지 장치에서 이미 재생됐다는 뜻이 아닙니다. 지원 여부는 `ST_CAP_SOURCE_TRIGGER`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control]`.
+**呼叫方式** — 必須已附加快取片段，且重新開始間隔為 `0`、EOF 重複次數為 `0`。不需另外呼叫 `st_rt_source_play`。請求在情境的初始聲場被消耗後，於下一個引擎區塊開始；在此之前的多次請求會合併為一次。`st_rt_source_pause`/`st_rt_source_stop`、成功的 `st_rt_source_seek`、間隔·重複設定變更會取消等待中的請求。請將音源保持在開啟狀態（`st_rt_source_set_enabled`）以便渲染。游標在輸入讀取邊界以 3 ms 切換重設，尚未結束的前一發會被替換。`1` 表示已進入佇列，而非已在裝置上播放。支援與否以 `ST_CAP_SOURCE_TRIGGER` 確認。喇叭組成員音源會被拒絕。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id(캐시 클립이 붙은 소스) |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id（已附加快取片段的音源） |
 
-**반환** — `1` = 큐에 넣음 / `0` = 거절(캐시 클립이 아님, 간격·반복이 0이 아님, 없는 소스 등).
+**回傳值** — `1` = 已加入佇列 / `0` = 拒絕（非快取片段、間隔·重複不為 0、音源不存在等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_seek</code> — 파일 입력의 재생 위치를 옮깁니다</summary>
+<summary><code>st_rt_source_seek</code> — 移動檔案輸入的播放位置</summary>
 
 ```c
 int st_rt_source_seek(STRT_Context* context, STSourceId source, double seconds);
 ```
 
-**용도** — 파일·에셋·클립 입력의 재생 커서를 소스 시간 기준 `seconds`로 옮깁니다.
+**用途** — 將檔案·資產·片段輸入的播放游標移到以音源時間為基準的 `seconds`。
 
-**언제·어떻게** — 위치는 원본 파일 프레임 단위로 내림되며, 재생/일시정지 상태는 유지됩니다. 디코더·피치 선읽기를 버리고 설정된 반복 횟수를 새로 채웁니다. 압축 포맷의 탐색 정확도는 코덱에 따라 제한됩니다. 호스트 스트림(라이브 PCM)은 호스트가 타임라인을 소유하므로 거절됩니다. 현재 위치는 `st_rt_source_get_position_seconds`로 읽습니다(초 단위, `hostSampleRate`·피치와 무관). 성공한 탐색은 대기 중인 `st_rt_source_trigger` 요청을 취소합니다. 지원 여부는 `ST_CAP_SOURCE_PLAYBACK_CONTROL`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control, blocking]`.
+**呼叫方式** — 位置以原始檔案影格為單位無條件捨去，播放/暫停狀態維持不變。捨棄解碼器·音高預讀，並重新填滿已設定的重複次數。壓縮格式的搜尋精度依編解碼器而受限。主機串流（即時 PCM）的時間軸由主機擁有，因此會被拒絕。目前位置以 `st_rt_source_get_position_seconds` 讀取（秒為單位，與 `hostSampleRate`·音高無關）。成功的搜尋會取消等待中的 `st_rt_source_trigger` 請求。支援與否以 `ST_CAP_SOURCE_PLAYBACK_CONTROL` 確認。喇叭組成員音源會被拒絕。執行緒：`[control, blocking]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `seconds` | 소스 시간 위치(초). 유한한 `0` 이상 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `seconds` | 音源時間位置（秒）。有限值且 `0` 以上 |
 
-**반환** — `1` = 성공 / `0` = 실패(잘못된 값, 없는 소스, 파일 입력이 아님 등).
+**回傳值** — `1` = 成功 / `0` = 失敗（無效值、音源不存在、非檔案輸入等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_loop_count</code> — 파일 입력의 반복 횟수를 정합니다</summary>
+<summary><code>st_rt_source_set_loop_count</code> — 設定檔案輸入的重複次數</summary>
 
 ```c
 int st_rt_source_set_loop_count(STRT_Context* context, STSourceId source, int repeatCount);
 ```
 
-**용도** — 파일·에셋·클립 입력이 끝에 닿았을 때 처음으로 돌아가 몇 번 더 재생할지 정합니다.
+**用途** — 設定檔案·資產·片段輸入到達結尾時回到開頭再播放幾次。
 
-**언제·어떻게** — 현재 커서 위치에서 반복 예산을 새로 채웁니다. `st_rt_source_stop`은 되감으면서 이 예산을 복원합니다. 호스트 스트림(라이브 PCM)은 거절됩니다. 캐시 클립에서는 양수 재시작 간격(`st_rt_source_set_retrigger_interval`)과 함께 쓸 수 없고, 반복 설정을 바꾸면 대기 중인 `st_rt_source_trigger` 요청이 취소됩니다(트리거는 반복 횟수 `0`을 요구합니다). 지원 여부는 `ST_CAP_SOURCE_PLAYBACK_CONTROL`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control, blocking]`.
+**呼叫方式** — 從目前游標位置重新填滿重複預算。`st_rt_source_stop` 在倒帶時會恢復此預算。主機串流（即時 PCM）會被拒絕。快取片段不可與正數重新開始間隔（`st_rt_source_set_retrigger_interval`）並用，變更重複設定會取消等待中的 `st_rt_source_trigger` 請求（觸發要求重複次數為 `0`）。支援與否以 `ST_CAP_SOURCE_PLAYBACK_CONTROL` 確認。喇叭組成員音源會被拒絕。執行緒：`[control, blocking]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `repeatCount` | 추가 반복 횟수 — `0` = 한 번 / `-1` = 무한 / 양수 N = N번 더. `-1` 미만은 거절 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `repeatCount` | 額外重複次數 — `0` = 一次 / `-1` = 無限 / 正數 N = 再重複 N 次。小於 `-1` 則拒絕 |
 
-**반환** — `1` = 성공 / `0` = 실패(잘못된 값, 없는 소스, 파일 입력이 아님 등).
+**回傳值** — `1` = 成功 / `0` = 失敗（無效值、音源不存在、非檔案輸入等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_loop_count</code> — 파일 입력의 반복 횟수를 읽습니다</summary>
+<summary><code>st_rt_source_get_loop_count</code> — 讀取檔案輸入的重複次數</summary>
 
 ```c
 int st_rt_source_get_loop_count(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 설정된 추가 반복 횟수를 돌려줍니다.
+**用途** — 回傳已設定的額外重複次數。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]`.
+**呼叫方式** — 可隨時呼叫。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
 
-**반환** — 반복 횟수(`0` 이상). `-1` = 무한 / `-2` = 소스 없음 또는 지원하지 않는 입력.
+**回傳值** — 重複次數（`0` 以上）。`-1` = 無限 / `-2` = 無音源或不支援的輸入。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_volume</code> — 소스 입력의 볼륨을 정합니다</summary>
+<summary><code>st_rt_source_set_volume</code> — 設定音源輸入的音量</summary>
 
 ```c
 int st_rt_source_set_volume(STRT_Context* context, STSourceId source, float volume);
 ```
 
-**용도** — 소스 입력 신호에 선형 압력 게인을 겁니다. 음향 경로·DSP 처리 **앞**에 걸리므로 그 소스의 모든 경로(직접·반사·회절·잔향 송출)가 함께 바뀝니다.
+**用途** — 對音源輸入訊號套用線性壓力增益。套用於聲學路徑·DSP 處理 **之前**，因此該音源的所有路徑（直達·反射·繞射·殘響送出）會一起改變。
 
-**언제·어떻게** — 오디오 입력이 붙은 소스에 언제든, 재생 중에도 부를 수 있습니다. 바뀐 값은 3 ms 램프로 넘어갑니다. 경로 종류별 비율은 `st_rt_source_set_path_volume`으로 따로 정합니다. 지원 여부는 `ST_CAP_SOURCE_PLAYBACK_CONTROL`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다(멤버 레벨은 스피커 세트 API가 정합니다). 스레드: `[control]`.
+**呼叫方式** — 對已附加音訊輸入的音源可隨時呼叫，播放中亦可。變更的值以 3 ms 斜坡過渡。各路徑類型的比例另以 `st_rt_source_set_path_volume` 設定。支援與否以 `ST_CAP_SOURCE_PLAYBACK_CONTROL` 確認。喇叭組成員音源會被拒絕（成員電平由喇叭組 API 決定）。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `volume` | 선형 압력 게인, `[0, 16]`, 기본 `1`. 범위 밖·비유한 값은 거절 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `volume` | 線性壓力增益，`[0, 16]`，預設 `1`。超出範圍·非有限值則拒絕 |
 
-**반환** — `1` = 성공 / `0` = 실패(범위 밖 값, 없는 소스 또는 오디오 입력 없음 등).
+**回傳值** — `1` = 成功 / `0` = 失敗（超出範圍的值、音源不存在或沒有音訊輸入等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_volume</code> — 소스 입력의 볼륨을 읽습니다</summary>
+<summary><code>st_rt_source_get_volume</code> — 讀取音源輸入的音量</summary>
 
 ```c
 float st_rt_source_get_volume(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_set_volume`으로 정한 선형 볼륨을 돌려줍니다. 램프 중이면 램프의 목표값입니다.
+**用途** — 回傳以 `st_rt_source_set_volume` 設定的線性音量。斜坡進行中時為斜坡的目標值。
 
-**언제·어떻게** — 언제든 부를 수 있고, 스피커 세트 멤버 소스에도 쓸 수 있습니다. 스레드: `[control]`.
+**呼叫方式** — 可隨時呼叫，也可用於喇叭組成員音源。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
 
-**반환** — 선형 볼륨(기본 `1`). `-1` = 소스 없음.
+**回傳值** — 線性音量（預設 `1`）。`-1` = 無音源。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_set_pitch</code> — 소스 입력의 재생 속도(피치)를 정합니다</summary>
+<summary><code>st_rt_source_set_pitch</code> — 設定音源輸入的播放速度（音高）</summary>
 
 ```c
 int st_rt_source_set_pitch(STRT_Context* context, STSourceId source, float ratio);
 ```
 
-**용도** — 입력을 재생 속도 비율로 빠르게/느리게 읽어 피치를 바꿉니다. 시간 늘이기는 하지 않으므로 파일의 재생 길이나 호스트 스트림 링의 소비 속도가 함께 바뀝니다.
+**用途** — 以播放速度比例加快/放慢讀取輸入以改變音高。不做時間伸縮，因此檔案的播放長度或主機串流環的消耗速度也會一起改變。
 
-**언제·어떻게** — 오디오 입력이 붙은 소스에 언제든 부를 수 있습니다. 호스트가 이미 자체적으로 피치를 바꾼 신호를 넣는다면 이중으로 걸리지 않게 하십시오. 1이 아닌 비율은 대역 제한 sinc 보간을 쓰며 최대 67프레임의 선읽기가 생깁니다. 캐시 클립의 재시작 간격은 피치의 영향을 받지 않습니다. 지원 여부는 `ST_CAP_SOURCE_PLAYBACK_CONTROL`로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control]` — 필터 계수를 만들므로 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 對已附加音訊輸入的音源可隨時呼叫。若主機輸入的是已自行變更音高的訊號，請避免重複套用。非 1 的比例使用頻寬受限 sinc 內插，會產生最多 67 影格的預讀。快取片段的重新開始間隔不受音高影響。支援與否以 `ST_CAP_SOURCE_PLAYBACK_CONTROL` 確認。喇叭組成員音源會被拒絕。執行緒：`[control]` — 會建立濾波器係數，請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `ratio` | 재생 속도 비율, `[0.25, 4]`, 기본 `1`. 범위 밖·비유한 값은 거절 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `ratio` | 播放速度比例，`[0.25, 4]`，預設 `1`。超出範圍·非有限值則拒絕 |
 
-**반환** — `1` = 성공 / `0` = 실패(범위 밖 값, 없는 소스 또는 오디오 입력 없음 등).
+**回傳值** — `1` = 成功 / `0` = 失敗（超出範圍的值、音源不存在或沒有音訊輸入等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_pitch</code> — 소스 입력의 재생 속도 비율을 읽습니다</summary>
+<summary><code>st_rt_source_get_pitch</code> — 讀取音源輸入的播放速度比例</summary>
 
 ```c
 float st_rt_source_get_pitch(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — `st_rt_source_set_pitch`로 정한 재생 속도 비율을 돌려줍니다.
+**用途** — 回傳以 `st_rt_source_set_pitch` 設定的播放速度比例。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]`.
+**呼叫方式** — 可隨時呼叫。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
 
-**반환** — 재생 속도 비율(기본 `1`). `-1` = 소스 없음.
+**回傳值** — 播放速度比例（預設 `1`）。`-1` = 無音源。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_attach_stream</code> — 호스트가 PCM을 밀어 넣는 스트림 입력을 소스에 붙입니다</summary>
+<summary><code>st_rt_source_attach_stream</code> — 為音源附加由主機推入 PCM 的串流輸入</summary>
 
 ```c
 int st_rt_source_attach_stream(STRT_Context* context, STSourceId source, const STStreamDesc* desc);
 ```
 
-**용도** — 음성 채팅·합성음·외부 미들웨어 출력처럼 호스트가 실시간으로 만드는 모노 PCM을 소스 입력으로 씁니다. 파일 입력이 "엔진이 파일을 연다"라면 이쪽은 "호스트가 PCM을 민다"입니다. 렌더 주도권과 오디오 장치는 그대로 엔진이 쥐며, 엔진 렌더 스레드가 512프레임 블록을 당길 때 소스별 링버퍼에서 읽어 갑니다(호스트 푸시 렌더가 아닙니다).
+**用途** — 將語音聊天·合成音·外部中介軟體輸出等由主機即時產生的單聲道 PCM 作為音源輸入。若檔案輸入是「引擎開啟檔案」，這裡就是「主機推入 PCM」。渲染主導權與音訊裝置仍由引擎掌握，引擎渲染執行緒拉取 512 影格區塊時，從各音源的環形緩衝區讀取（並非主機推送渲染）。
 
-**언제·어떻게** — 소스를 만든 뒤 부르고, 이어서 `st_rt_source_write_stream`으로 PCM을 공급합니다. 수명·재생 규약은 파일 입력과 같습니다: 붙인 직후는 정지 상태이고 `st_rt_source_play`부터 소리가 나며, `st_rt_source_pause`/`st_rt_source_stop`도 그대로 먹습니다(`stop`은 링에 쌓인 프레임을 버립니다 — 라이브 스트림에 "처음으로 되감기"는 없습니다). 분리는 `st_rt_source_clear_audio`가 하고, `st_rt_source_destroy`도 스트림을 분리해 슬롯을 반납합니다. 같은 소스에 파일 입력을 붙이면 파일이 스트림을 밀어내고, 반대로 이 함수는 파일 입력을 밀어냅니다. 동시에 붙어 있을 수 있는 스트림은 64개이며, 반납된 슬롯은 다음 attach가 재사용합니다(누적 카운터는 attach마다 0에서 다시 셉니다). 링 할당은 이 호출에서 한 번만 일어납니다. 스트림에서는 `st_rt_source_seek`·`st_rt_source_set_loop_count`가 거절됩니다. 지원 여부는 `ST_CAP_SOURCE_STREAM_INPUT`(실시간 전용)으로 확인합니다. 스피커 세트 멤버 소스에는 거절됩니다. 스레드: `[control]` — 씬 read 락과 재생 뮤텍스를 잡습니다. 같은 소스에 대해 `st_rt_source_write_stream`과 동시에 부르지 마십시오(다른 소스끼리는 무관).
+**呼叫方式** — 建立音源後呼叫，接著以 `st_rt_source_write_stream` 供應 PCM。生命週期·播放規約與檔案輸入相同：附加後立即為停止狀態，從 `st_rt_source_play` 起發聲，`st_rt_source_pause`/`st_rt_source_stop` 也同樣有效（`stop` 會捨棄環中累積的影格 — 即時串流沒有「倒帶到開頭」）。分離由 `st_rt_source_clear_audio` 負責，`st_rt_source_destroy` 也會分離串流並歸還槽位。對同一音源附加檔案輸入時，檔案會取代串流；反之此函式也會取代檔案輸入。可同時附加的串流為 64 個，歸還的槽位由下一次 attach 重複使用（累計計數器每次 attach 都從 0 重新計數）。環的配置只在此呼叫中發生一次。串流上 `st_rt_source_seek`·`st_rt_source_set_loop_count` 會被拒絕。支援與否以 `ST_CAP_SOURCE_STREAM_INPUT`（僅即時）確認。喇叭組成員音源會被拒絕。執行緒：`[control]` — 持有場景 read 鎖與播放互斥鎖。請勿對同一音源與 `st_rt_source_write_stream` 同時呼叫（不同音源之間無影響）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
-| `desc` | `STStreamDesc`. 호출자가 `structSize = sizeof(STStreamDesc)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
+| `desc` | `STStreamDesc`。呼叫端填入 `structSize = sizeof(STStreamDesc)`、`apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STStreamDesc`
+**結構體** `STStreamDesc`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` | `sizeof(STStreamDesc)` |
 | `apiVersion` | `ST_ABI_VERSION` |
-| `sampleRate` | 입력 표본률. 엔진 레이트(`st_rt_get_sample_rate`, 44100)여야 합니다. 단, `STRT_CreateOptions.hostSampleRate`를 지정한 컨텍스트에서는 그 값이어야 하며, 엔진이 소스마다 호스트→엔진 변환기를 링 앞단에 겁니다 |
-| `channels` | `1`만 허용(모노 전용) |
-| `capacityFrames` | 링 크기, **호스트 프레임**(= `sampleRate` 기준). `0` = 기본 8192 호스트 프레임(엔진 레이트에서 약 186 ms), 그 밖은 `[512, 1048576]`. 엔진은 이를 엔진 프레임으로 환산(반올림)한 뒤 2의 거듭제곱으로 올려 잡으므로 실제 용량은 요청보다 큽니다 — `STStreamStatus.capacityFrames`로 확인하십시오 |
+| `sampleRate` | 輸入取樣率。須為引擎速率（`st_rt_get_sample_rate`，44100）。但在指定了 `STRT_CreateOptions.hostSampleRate` 的情境中須為該值，引擎會在各音源的環前端加上主機→引擎轉換器 |
+| `channels` | 只允許 `1`（僅單聲道） |
+| `capacityFrames` | 環大小，**主機影格**（= 以 `sampleRate` 為基準）。`0` = 預設 8192 主機影格（引擎速率下約 186 ms），其他為 `[512, 1048576]`。引擎將其換算（四捨五入）為引擎影格後進位到 2 的冪次，因此實際容量大於請求 — 請以 `STStreamStatus.capacityFrames` 確認 |
 | `reserved[5]` | 0 |
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_VERSION_MISMATCH`(`desc` 스탬프 불일치) / `ST_STATUS_INVALID_ARGUMENT`(`sampleRate`가 위 규칙과 다름, `channels ≠ 1`, `capacityFrames`가 0도 `[512, 1048576]`도 아님) / `ST_STATUS_NOT_FOUND`(소스 없음) / `ST_STATUS_UNAVAILABLE`(동시 스트림 슬롯 64개 소진).
+**回傳值** — `1` = 成功 / `0` = 失敗。失敗時 `st_rt_get_last_status`：`ST_STATUS_VERSION_MISMATCH`（`desc` 戳記不符）/ `ST_STATUS_INVALID_ARGUMENT`（`sampleRate` 不符上述規則、`channels ≠ 1`、`capacityFrames` 既非 0 也不在 `[512, 1048576]` 內）/ `ST_STATUS_NOT_FOUND`（無音源）/ `ST_STATUS_UNAVAILABLE`（64 個同時串流槽位已用盡）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_write_stream</code> — 스트림 입력 링에 모노 PCM을 씁니다</summary>
+<summary><code>st_rt_source_write_stream</code> — 將單聲道 PCM 寫入串流輸入環</summary>
 
 ```c
 int st_rt_source_write_stream(STRT_Context* context, STSourceId source, const float* mono, int frames);
 ```
 
-**용도** — `st_rt_source_attach_stream`으로 붙인 소스의 링버퍼에 모노 float PCM을 넣습니다. 블로킹하지 않으며 락도 할당도 하지 않으므로 호스트 오디오 스레드에서 직접 부를 수 있습니다.
+**用途** — 將單聲道 float PCM 放入以 `st_rt_source_attach_stream` 附加之音源的環形緩衝區。不阻塞，也不鎖定或配置，因此可直接在主機音訊執行緒上呼叫。
 
-**언제·어떻게** — 소스당 **단일 생산자**를 전제로 렌더 스레드와 SPSC로 만납니다 — 한 소스에는 한 스레드만 쓰십시오. 같은 소스에 대해 `st_rt_source_attach_stream`/`st_rt_source_clear_audio`와 동시에 부르지 마십시오(다른 소스끼리는 무관). 실패해도 진단 버퍼(`st_rt_get_last_status`)를 건드리지 않고 `0`으로만 알립니다. 비유한 샘플(NaN/Inf)은 검사하지 않으므로 유한성 보장은 호스트 책임입니다. 반환값의 뜻이 `hostSampleRate` 지정 여부에 따라 다르니 아래를 구분해 읽으십시오. 스레드: `[any]` — 어느 스레드에서 불러도 되고 블록하지 않습니다.
+**呼叫方式** — 以每個音源 **單一生產者** 為前提，與渲染執行緒以 SPSC 銜接 — 一個音源只由一個執行緒寫入。請勿對同一音源與 `st_rt_source_attach_stream`/`st_rt_source_clear_audio` 同時呼叫（不同音源之間無影響）。失敗時也不會動到診斷緩衝區（`st_rt_get_last_status`），只以 `0` 告知。不檢查非有限樣本（NaN/Inf），因此確保有限性是主機的責任。回傳值的意義依是否指定 `hostSampleRate` 而不同，請依下方區分解讀。執行緒：`[any]` — 可在任意執行緒呼叫且不會阻塞。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 스트림이 붙은 소스 id |
-| `mono` | 모노 float PCM 버퍼(`frames`개) |
-| `frames` | 쓸 프레임 수, **호스트 프레임**(`STStreamDesc.sampleRate` 기준) |
+| `context` | 即時情境控制代碼 |
+| `source` | 已附加串流的音源 id |
+| `mono` | 單聲道 float PCM 緩衝區（`frames` 個） |
+| `frames` | 要寫入的影格數，**主機影格**（以 `STStreamDesc.sampleRate` 為基準） |
 
-**반환** — 쓴 프레임 수. 스트림이 붙어 있지 않거나 분리된 뒤면 `0`.
+**回傳值** — 寫入的影格數。未附加串流或已分離時為 `0`。
 
-- `hostSampleRate == 0`(변환 없음): 실제로 링에 들어간 프레임 수(`0`…`frames`). 링이 가득 차면 나머지는 버려지고 `droppedFrames`에 누적됩니다. 반환이 `frames`보다 작으면 남은 몫을 다음 호출에 다시 밀어도 되므로 백프레셔 신호로 쓸 수 있습니다.
-- `hostSampleRate ≠ 0`(리샘플 경로): 항상 `frames`. 변환기가 입력을 전부 소비하므로 같은 프레임을 다시 밀면 안 됩니다(신호가 겹칩니다). 넘쳐 버려진 몫은 `droppedFrames`로만 보고되며 반환값에는 백프레셔 신호가 없습니다 — `st_rt_source_get_stream_status`의 `queuedFrames`/`capacityFrames`를 보고 공급량을 조절하십시오(예: `queuedFrames`가 용량의 3/4을 넘으면 미는 양을 줄임).
+- `hostSampleRate == 0`（無轉換）：實際進入環的影格數（`0`…`frames`）。環滿時其餘會被捨棄並累計到 `droppedFrames`。回傳值小於 `frames` 時，可將剩餘部分在下一次呼叫再推入，因此可作為背壓訊號使用。
+- `hostSampleRate ≠ 0`（重取樣路徑）：一律為 `frames`。轉換器會消耗全部輸入，因此不得再次推入相同影格（訊號會重疊）。溢出被捨棄的部分只透過 `droppedFrames` 回報，回傳值沒有背壓訊號 — 請查看 `st_rt_source_get_stream_status` 的 `queuedFrames`/`capacityFrames` 來調整供應量（例：`queuedFrames` 超過容量的 3/4 時減少推入量）。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_get_stream_status</code> — 스트림 입력 링의 잔량·언더런·드롭 통계를 읽습니다</summary>
+<summary><code>st_rt_source_get_stream_status</code> — 讀取串流輸入環的剩餘量·欠載·捨棄統計</summary>
 
 ```c
 int st_rt_source_get_stream_status(const STRT_Context* context, STSourceId source, STStreamStatus* outStatus);
 ```
 
-**용도** — 스트림 링에 쌓인 양과 누적 언더런·드롭·기록량을 돌려줍니다. 리샘플 경로(`hostSampleRate ≠ 0`)에서는 `st_rt_source_write_stream` 반환값에 백프레셔 신호가 없으므로 `queuedFrames`와 `capacityFrames`의 비가 유일한 공급 조절 신호입니다.
+**用途** — 回傳串流環中累積的量，以及累計的欠載·捨棄·寫入量。在重取樣路徑（`hostSampleRate ≠ 0`）中，`st_rt_source_write_stream` 的回傳值沒有背壓訊號，因此 `queuedFrames` 與 `capacityFrames` 的比例是唯一的供應調整訊號。
 
-**언제·어떻게** — 정상 경로는 atomic 읽기만 하므로 오디오 스레드를 포함한 어느 스레드에서든 부를 수 있습니다. 단, 스탬프가 틀리거나 스트림이 없는 오류 경로는 컨텍스트의 진단 버퍼에 쓰며 이 쓰기는 스레드 간에 직렬화되지 않습니다 — 인자를 올바르게 채우면 닿지 않습니다. 스레드: `[any]`.
+**呼叫方式** — 正常路徑只做 atomic 讀取，因此可在包含音訊執行緒在內的任意執行緒呼叫。但戳記錯誤或沒有串流的錯誤路徑會寫入情境的診斷緩衝區，且此寫入在執行緒之間不會被序列化 — 正確填入引數就不會觸及。執行緒：`[any]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 스트림이 붙은 소스 id |
-| `outStatus` | `STStreamStatus` 출력. 호출자가 `structSize = sizeof(STStreamStatus)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | 即時情境控制代碼 |
+| `source` | 已附加串流的音源 id |
+| `outStatus` | `STStreamStatus` 輸出。呼叫端填入 `structSize = sizeof(STStreamStatus)`、`apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STStreamStatus`
+**結構體** `STStreamStatus`
 
-프레임 필드 다섯 개는 모두 **호스트 프레임**(`STStreamDesc.sampleRate` = `hostSampleRate`, 지정하지 않았으면 44100 기준)입니다. 환산은 조회 시점에 한 번 반올림하므로 오차가 누적되지 않습니다. 48 kHz 호스트에서는 `capacityFrames`가 2의 거듭제곱이 아니니(예: 엔진 8192 → 호스트 8916) 링 크기를 2의 거듭제곱으로 가정하지 마십시오. 누적 카운터 3개는 attach 시점부터의 합이고, 다시 attach하면 0에서 셉니다.
+五個影格欄位皆為 **主機影格**（以 `STStreamDesc.sampleRate` = `hostSampleRate`，未指定時以 44100 為基準）。換算在查詢時四捨五入一次，因此誤差不會累積。48 kHz 主機下 `capacityFrames` 不是 2 的冪次（例：引擎 8192 → 主機 8916），因此不要假設環大小為 2 的冪次。3 個累計計數器是自 attach 時起的總和，重新 attach 會從 0 計數。
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` | `sizeof(STStreamStatus)` |
 | `apiVersion` | `ST_ABI_VERSION` |
-| `queuedFrames` | 지금 링에 쌓여 있는 프레임 |
-| `capacityFrames` | 엔진이 실제로 잡은 링 용량 |
-| `underrunFrames` | 누계: 링이 비어 무음으로 채운 프레임 |
-| `droppedFrames` | 누계: 링이 가득 차 버린 프레임 |
-| `totalWrittenFrames` | 누계: 실제로 링에 들어간 프레임 |
-| `reserved[6]` | 예약 |
+| `queuedFrames` | 目前環中累積的影格 |
+| `capacityFrames` | 引擎實際配置的環容量 |
+| `underrunFrames` | 累計：環為空而以靜音填充的影格 |
+| `droppedFrames` | 累計：環已滿而捨棄的影格 |
+| `totalWrittenFrames` | 累計：實際進入環的影格 |
+| `reserved[6]` | 保留 |
 
-**반환** — `1` = 성공 / `0` = 실패. 실패 시 `st_rt_get_last_status`: `ST_STATUS_VERSION_MISMATCH`(스탬프 불일치) / `ST_STATUS_NOT_FOUND`(스트림이 붙어 있지 않음). `outStatus`나 컨텍스트가 NULL이어도 `0`.
+**回傳值** — `1` = 成功 / `0` = 失敗。失敗時 `st_rt_get_last_status`：`ST_STATUS_VERSION_MISMATCH`（戳記不符）/ `ST_STATUS_NOT_FOUND`（未附加串流）。`outStatus` 或情境為 NULL 時也為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_play</code> — 소스 입력의 재생을 시작하거나 재개합니다</summary>
+<summary><code>st_rt_source_play</code> — 開始或恢復音源輸入的播放</summary>
 
 ```c
 void st_rt_source_play(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 파일·에셋·클립·스트림 입력의 재생을 시작합니다. 입력을 붙인 직후는 정지 상태이므로 소리를 내려면 이 함수를 불러야 합니다.
+**用途** — 開始檔案·資產·片段·串流輸入的播放。附加輸入後立即為停止狀態，因此要發聲必須呼叫此函式。
 
-**언제·어떻게** — 오디오 입력을 붙인 뒤 부릅니다. 실제 소리는 그 소스의 첫 IR이 렌더러에 닿은 뒤부터 납니다. 일시정지 상태면 그 위치에서 재개하고, 캐시 클립의 재시작 간격 클럭도 시작·재개합니다. `st_rt_source_trigger`로만 울리는 클립에는 필요 없습니다. 스피커 세트 멤버 소스에는 무시됩니다. 스레드: `[control]` — 재생 뮤텍스를 잡습니다.
+**呼叫方式** — 附加音訊輸入後呼叫。實際聲音在該音源的第一個 IR 到達渲染器後才發出。若為暫停狀態則從該位置恢復，快取片段的重新開始間隔時脈也會開始·恢復。只以 `st_rt_source_trigger` 播放的片段不需要此呼叫。喇叭組成員音源會被忽略。執行緒：`[control]` — 持有播放互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_pause</code> — 소스 입력의 재생을 일시정지합니다</summary>
+<summary><code>st_rt_source_pause</code> — 暫停音源輸入的播放</summary>
 
 ```c
 void st_rt_source_pause(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 현재 커서 위치를 유지한 채 재생을 멈춥니다. `st_rt_source_play`로 같은 위치에서 재개합니다.
+**用途** — 保持目前游標位置並停止播放。以 `st_rt_source_play` 從同一位置恢復。
 
-**언제·어떻게** — 커서는 즉시 멈추고, 출력은 마지막 파형 끝점을 3 ms 램프로 0까지 내려 클릭 없이 끊깁니다. 이미 방에 퍼진 잔향은 계속 울릴 수 있습니다. 캐시 클립의 재시작 클럭도 멈추며, 대기 중인 `st_rt_source_trigger` 요청은 취소됩니다. 스피커 세트 멤버 소스에는 무시됩니다. 스레드: `[control]` — 재생 뮤텍스를 잡습니다.
+**呼叫方式** — 游標立即停止，輸出以 3 ms 斜坡將最後的波形終點降至 0，無爆音地切斷。已在房間中擴散的殘響可能持續作響。快取片段的重新開始時脈也會停止，等待中的 `st_rt_source_trigger` 請求會被取消。喇叭組成員音源會被忽略。執行緒：`[control]` — 持有播放互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_source_stop</code> — 소스 입력의 재생을 멈추고 처음으로 되돌립니다</summary>
+<summary><code>st_rt_source_stop</code> — 停止音源輸入的播放並回到開頭</summary>
 
 ```c
 void st_rt_source_stop(STRT_Context* context, STSourceId source);
 ```
 
-**용도** — 재생을 멈추고 커서를 처음으로 되감습니다. 다음 `st_rt_source_play`는 처음부터 재생합니다.
+**用途** — 停止播放並將游標倒帶到開頭。下一次 `st_rt_source_play` 從開頭播放。
 
-**언제·어떻게** — 출력은 `st_rt_source_pause`와 같이 3 ms 램프로 끊기고, 이미 방에 퍼진 잔향은 계속 울릴 수 있습니다. 파일 입력은 되감기와 함께 설정된 반복 횟수를 복원합니다. 캐시 클립은 재시작 간격 설정을 유지하고, 대기 중인 `st_rt_source_trigger` 요청은 취소됩니다. 호스트 스트림은 되감을 처음이 없으므로 링에 쌓인 프레임을 버립니다. 스피커 세트 멤버 소스에는 무시됩니다. 스레드: `[control]` — 재생 뮤텍스를 잡습니다.
+**呼叫方式** — 輸出與 `st_rt_source_pause` 相同以 3 ms 斜坡切斷，已在房間中擴散的殘響可能持續作響。檔案輸入在倒帶的同時恢復已設定的重複次數。快取片段保留重新開始間隔設定，等待中的 `st_rt_source_trigger` 請求會被取消。主機串流沒有可倒帶的開頭，因此會捨棄環中累積的影格。喇叭組成員音源會被忽略。執行緒：`[control]` — 持有播放互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 실시간 컨텍스트 핸들 |
-| `source` | 대상 소스 id |
+| `context` | 即時情境控制代碼 |
+| `source` | 目標音源 id |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>리스너 · 전파 · 음향 정책</strong> — 27개</summary>
+<summary><strong>聆聽者 · 傳播 · 聲學策略</strong> — 27 個</summary>
 
 <details>
-<summary><code>st_rt_listener_set_position</code> — 리스너 위치를 설정한다</summary>
+<summary><code>st_rt_listener_set_position</code> — 設定聆聽者位置</summary>
 
 ```c
 void st_rt_listener_set_position(STRT_Context* context, float x, float y, float z);
 ```
 
-**용도** — 리스너(청취자)의 월드 위치를 바꿉니다. 모든 소스의 직접음·반사·회절·잔향 경로가 이 위치를 끝점으로 계산됩니다.
+**用途** — 變更聆聽者的世界位置。所有音源的直達聲·反射·繞射·殘響路徑都以此位置為終點計算。
 
-**언제·어떻게** — 게임 루프에서 카메라나 플레이어 머리 위치가 바뀔 때마다 부릅니다. 방향은 `st_rt_listener_set_rotation` / `st_rt_listener_set_rotation_ypr` / `st_rt_listener_set_orientation_q`로 따로 주며, 위치를 바꿔도 방향은 유지됩니다. 좌표는 **씬 단위 그대로** 넣습니다(`STRT_CreateOptions.sceneRatio`로 미터 변환은 엔진이 합니다). 스레드: `[control]` — 제어 스레드에서 부르고 오디오 콜백에서는 부르지 마십시오. `ST_RT_SCHEDULER_PIPELINED`에서는 씬을 직접 잠그지 않고 모션 큐에 넣고 돌아오며, 전파 워커가 다음 사이클에 가장 최근 값을 반영합니다. `ST_RT_SCHEDULER_SYNCHRONOUS`에서는 다음 `st_rt_propagate`가 새 위치를 봅니다.
+**呼叫方式** — 在遊戲迴圈中，每當攝影機或玩家頭部位置變更時呼叫。方向另以 `st_rt_listener_set_rotation` / `st_rt_listener_set_rotation_ypr` / `st_rt_listener_set_orientation_q` 指定，變更位置時方向維持不變。座標以 **場景單位原樣** 填入（以 `STRT_CreateOptions.sceneRatio` 轉換為公尺由引擎負責）。執行緒：`[control]` — 在控制執行緒上呼叫，不要在音訊回呼中呼叫。`ST_RT_SCHEDULER_PIPELINED` 下不直接鎖定場景，而是放入運動佇列後返回，傳播工作執行緒在下一個週期反映最新值。`ST_RT_SCHEDULER_SYNCHRONOUS` 下，下一次 `st_rt_propagate` 會看到新位置。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `x` | 월드 X 좌표(씬 단위, +X = right) |
-| `y` | 월드 Y 좌표(씬 단위, +Y = up) |
-| `z` | 월드 Z 좌표(씬 단위, +Z = forward) |
+| `context` | 情境控制代碼 |
+| `x` | 世界 X 座標（場景單位，+X = right） |
+| `y` | 世界 Y 座標（場景單位，+Y = up） |
+| `z` | 世界 Z 座標（場景單位，+Z = forward） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_velocity</code> — 리스너 속도를 설정한다(도플러용)</summary>
+<summary><code>st_rt_listener_set_velocity</code> — 設定聆聽者速度（用於都卜勒）</summary>
 
 ```c
 void st_rt_listener_set_velocity(STRT_Context* context, float x, float y, float z);
 ```
 
-**용도** — 리스너의 이동 속도 벡터를 알려 줍니다. 엔진은 소스·리스너 속도로 경로별 도플러 슬로프를 계산합니다.
+**用途** — 告知聆聽者的移動速度向量。引擎以音源·聆聽者速度計算各路徑的都卜勒斜率。
 
-**언제·어떻게** — 위치와 함께 매 프레임 갱신하는 것이 일반적입니다. 속도는 **씬 단위/초**로 넣으며, 엔진이 `sceneRatio`를 곱해 m/s로 바꾼 뒤 음속으로 나눕니다. 정지한 리스너는 `(0, 0, 0)`입니다. 도플러 피치 렌더 자체는 `STRenderOptions.useDoppler`, 움직이는 소스의 방사 이득은 `st_rt_set_doppler_gain_mode`가 담당합니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오. `PIPELINED`에서는 모션 큐에 들어가 다음 전파 사이클에 반영됩니다.
+**呼叫方式** — 一般與位置一起每個影格更新。速度以 **場景單位/秒** 填入，引擎乘以 `sceneRatio` 轉換為 m/s 後除以音速。靜止的聆聽者為 `(0, 0, 0)`。都卜勒音高渲染本身由 `STRenderOptions.useDoppler` 負責，移動音源的輻射增益由 `st_rt_set_doppler_gain_mode` 負責。執行緒：`[control]` — 請勿在音訊回呼中呼叫。`PIPELINED` 下放入運動佇列，於下一個傳播週期反映。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `x` | 속도 X 성분(씬 단위/초) |
-| `y` | 속도 Y 성분(씬 단위/초) |
-| `z` | 속도 Z 성분(씬 단위/초) |
+| `context` | 情境控制代碼 |
+| `x` | 速度 X 分量（場景單位/秒） |
+| `y` | 速度 Y 分量（場景單位/秒） |
+| `z` | 速度 Z 分量（場景單位/秒） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_rotation</code> — 리스너 방향을 yaw·pitch(라디안)로 설정한다</summary>
+<summary><code>st_rt_listener_set_rotation</code> — 以 yaw·pitch（弧度）設定聆聽者方向</summary>
 
 ```c
 void st_rt_listener_set_rotation(STRT_Context* context, float yaw, float pitch);
 ```
 
-**용도** — 리스너의 머리 방향을 yaw·pitch로 정합니다. 공간화(패닝·HRTF·스피커 디코딩)의 방위각·고도각이 이 방향을 기준으로 계산됩니다. roll(머리 기울임)은 표현하지 않습니다.
+**用途** — 以 yaw·pitch 設定聆聽者的頭部方向。空間化（平移·HRTF·喇叭解碼）的方位角·仰角以此方向為基準計算。不表達 roll（頭部傾斜）。
 
-**언제·어떻게** — 카메라 회전이 바뀔 때마다 부릅니다. 각도는 **라디안**입니다. 회전 행렬은 `R = Ry(yaw)·Rx(pitch)`이고, `yaw = 0, pitch = 0`이면 forward = +Z, up = +Y, right = +X(항등)입니다. **yaw 양수 = 오른쪽으로 돈다**(위에서 내려다봐서 시계 방향), **pitch 양수 = 아래를 본다**. 방향 벡터 `d`에서 역으로 구하려면 `yaw = atan2f(d.x, d.z); pitch = -asinf(d.y);`를 씁니다. 엔진 좌표계는 Unity와 같으므로 Unity 호스트는 변환 없이 넣으면 되고, forward를 −Z로 두는 호스트(OpenGL식 카메라)는 Z를 뒤집거나 yaw에 180도를 더해 넣어야 합니다. 리스너 방향 setter 세 개(`st_rt_listener_set_rotation`, `st_rt_listener_set_rotation_ypr`, `st_rt_listener_set_orientation_q`)는 같은 방향 값을 덮어쓰며 **마지막에 부른 쪽이 이깁니다**. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오. `PIPELINED`에서는 모션 큐로 들어갑니다.
+**呼叫方式** — 每當攝影機旋轉變更時呼叫。角度為 **弧度**。旋轉矩陣為 `R = Ry(yaw)·Rx(pitch)`，`yaw = 0, pitch = 0` 時 forward = +Z、up = +Y、right = +X（恆等）。**yaw 正值 = 向右轉**（從上往下看為順時針），**pitch 正值 = 往下看**。要從方向向量 `d` 反求，使用 `yaw = atan2f(d.x, d.z); pitch = -asinf(d.y);`。引擎座標系與 Unity 相同，因此 Unity 主機不需轉換即可填入；將 forward 設為 −Z 的主機（OpenGL 式攝影機）須反轉 Z 或在 yaw 上加 180 度後填入。三個聆聽者方向 setter（`st_rt_listener_set_rotation`、`st_rt_listener_set_rotation_ypr`、`st_rt_listener_set_orientation_q`）會覆寫同一個方向值，**以最後呼叫者為準**。執行緒：`[control]` — 請勿在音訊回呼中呼叫。`PIPELINED` 下放入運動佇列。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `yaw` | +Y축 회전(라디안). 양수 = 오른쪽으로 돈다 |
-| `pitch` | +X축 회전(라디안). 양수 = 아래를 본다 |
+| `context` | 情境控制代碼 |
+| `yaw` | 繞 +Y 軸旋轉（弧度）。正值 = 向右轉 |
+| `pitch` | 繞 +X 軸旋轉（弧度）。正值 = 往下看 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_orientation_q</code> — 리스너 방향을 쿼터니언(XYZW)으로 설정한다(roll 포함)</summary>
+<summary><code>st_rt_listener_set_orientation_q</code> — 以四元數（XYZW）設定聆聽者方向（含 roll）</summary>
 
 ```c
 int st_rt_listener_set_orientation_q(STRT_Context* context, const float quatXYZW[4]);
 ```
 
-**용도** — 리스너 방향을 로컬→월드 단위 쿼터니언으로 줍니다. yaw·pitch로는 표현할 수 없는 roll(머리 기울임)까지 담을 수 있어, VR 헤드 트래킹처럼 호스트가 이미 쿼터니언을 가진 경우에 그대로 넘길 수 있습니다.
+**用途** — 以區域→世界單位四元數指定聆聽者方向。可包含 yaw·pitch 無法表達的 roll（頭部傾斜），因此在 VR 頭部追蹤等主機已有四元數的情況下可直接傳入。
 
-**언제·어떻게** — 로컬 축은 forward = +Z · up = +Y · right = +X입니다. 성분 순서는 **XYZW**이고 정규화는 엔진이 하므로 호스트가 미리 정규화할 필요는 없습니다. 검증은 `st_rt_source_set_orientation_q`와 같습니다. `st_rt_listener_set_rotation(yaw, pitch)`는 `q = q_y(yaw) · q_x(pitch)`인 roll 0 경우와 같습니다. 리스너 방향 setter 세 개는 **마지막에 부른 쪽이 이깁니다**. 지원 여부는 `st_rt_get_capability_word(1)`의 `ST_CAP1_LISTENER_ORIENTATION_Q` 비트로 확인합니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오. `PIPELINED`에서는 모션 큐로 들어갑니다.
+**呼叫方式** — 區域軸為 forward = +Z · up = +Y · right = +X。分量順序為 **XYZW**，正規化由引擎負責，主機不需事先正規化。驗證與 `st_rt_source_set_orientation_q` 相同。`st_rt_listener_set_rotation(yaw, pitch)` 等同於 `q = q_y(yaw) · q_x(pitch)` 的 roll 0 情況。三個聆聽者方向 setter **以最後呼叫者為準**。支援與否以 `st_rt_get_capability_word(1)` 的 `ST_CAP1_LISTENER_ORIENTATION_Q` 位元確認。執行緒：`[control]` — 請勿在音訊回呼中呼叫。`PIPELINED` 下放入運動佇列。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `quatXYZW` | 로컬→월드 회전 쿼터니언 `[x, y, z, w]`. 비유한 성분이 있거나 노름이 퇴화(`norm < 1e-12`)하면 거절 |
+| `context` | 情境控制代碼 |
+| `quatXYZW` | 區域→世界旋轉四元數 `[x, y, z, w]`。有非有限分量或範數退化（`norm < 1e-12`）則拒絕 |
 
-**반환** — `1` = 적용 / `0` = 실패. 비유한·퇴화 쿼터니언이면 아무것도 바꾸지 않고 `st_rt_get_last_status`에 `ST_STATUS_INVALID_ARGUMENT`를 남깁니다.
+**回傳值** — `1` = 已套用 / `0` = 失敗。非有限·退化的四元數不變更任何內容，並在 `st_rt_get_last_status` 留下 `ST_STATUS_INVALID_ARGUMENT`。
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_rotation_ypr</code> — 리스너 방향을 yaw·pitch·roll(라디안)로 설정한다</summary>
+<summary><code>st_rt_listener_set_rotation_ypr</code> — 以 yaw·pitch·roll（弧度）設定聆聽者方向</summary>
 
 ```c
 int st_rt_listener_set_rotation_ypr(STRT_Context* context, float yaw, float pitch, float roll);
 ```
 
-**용도** — `st_rt_listener_set_rotation`에 roll을 더한 오일러 각 버전입니다. 머리 기울임을 오일러 각으로 다루는 호스트용입니다.
+**用途** — 在 `st_rt_listener_set_rotation` 上加入 roll 的歐拉角版本。供以歐拉角處理頭部傾斜的主機使用。
 
-**언제·어떻게** — 회전 행렬은 `R = Ry(yaw)·Rx(pitch)·Rz(roll)`이며, Unity `Quaternion.Euler(pitch, yaw, roll)`(도를 라디안으로 바꾼 값)과 같은 순서입니다. yaw·pitch의 뜻은 `st_rt_listener_set_rotation`과 같고(yaw 양수 = 오른쪽으로 돈다, pitch 양수 = 아래를 본다), **roll 양수 = right 축이 위로 기운다**(머리가 왼쪽으로 기울고 오른쪽 귀가 올라간다). `roll = 0`이면 `st_rt_listener_set_rotation(yaw, pitch)`와 같은 행렬입니다. 리스너 방향 setter 세 개는 **마지막에 부른 쪽이 이깁니다**. 지원 여부는 `ST_CAP1_LISTENER_ORIENTATION_Q`(능력 워드 1)로 확인합니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오. `PIPELINED`에서는 모션 큐로 들어갑니다.
+**呼叫方式** — 旋轉矩陣為 `R = Ry(yaw)·Rx(pitch)·Rz(roll)`，與 Unity `Quaternion.Euler(pitch, yaw, roll)`（將度轉為弧度的值）順序相同。yaw·pitch 的意義與 `st_rt_listener_set_rotation` 相同（yaw 正值 = 向右轉，pitch 正值 = 往下看），**roll 正值 = right 軸向上傾**（頭部向左傾，右耳抬起）。`roll = 0` 時與 `st_rt_listener_set_rotation(yaw, pitch)` 為相同矩陣。三個聆聽者方向 setter **以最後呼叫者為準**。支援與否以 `ST_CAP1_LISTENER_ORIENTATION_Q`（能力字組 1）確認。執行緒：`[control]` — 請勿在音訊回呼中呼叫。`PIPELINED` 下放入運動佇列。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `yaw` | +Y축 회전(라디안). 양수 = 오른쪽으로 돈다 |
-| `pitch` | +X축 회전(라디안). 양수 = 아래를 본다 |
-| `roll` | +Z축 회전(라디안). 양수 = right 축이 위로(머리가 왼쪽으로 기움) |
+| `context` | 情境控制代碼 |
+| `yaw` | 繞 +Y 軸旋轉（弧度）。正值 = 向右轉 |
+| `pitch` | 繞 +X 軸旋轉（弧度）。正值 = 往下看 |
+| `roll` | 繞 +Z 軸旋轉（弧度）。正值 = right 軸向上（頭部向左傾） |
 
-**반환** — `1` = 적용 / `0` = 실패. 비유한 값이 있으면 아무것도 바꾸지 않고 `ST_STATUS_INVALID_ARGUMENT`를 남깁니다.
+**回傳值** — `1` = 已套用 / `0` = 失敗。有非有限值時不變更任何內容，並留下 `ST_STATUS_INVALID_ARGUMENT`。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_path_type_enabled</code> — 경로 종류별 전파를 전역으로 켜고 끈다</summary>
+<summary><code>st_rt_set_path_type_enabled</code> — 全域開關各路徑類型的傳播</summary>
 
 ```c
 void st_rt_set_path_type_enabled(STRT_Context* context, int pathType, int enabled);
 ```
 
-**용도** — 직접음·투과·반사·회절·잔향 중 특정 종류의 경로를 엔진 전체에서 계산하지 않게 합니다. 어떤 성분이 소리에 얼마나 기여하는지 하나씩 분리해 들어 보거나, 필요 없는 종류를 빼서 비용을 줄일 때 씁니다.
+**用途** — 讓整個引擎不計算直達聲·透射·反射·繞射·殘響中特定類型的路徑。用於逐一分離聆聽各成分對聲音貢獻多少，或移除不需要的類型以降低成本。
 
-**언제·어떻게** — 기본값은 5종 전부 켜짐입니다. 전파 단계의 게이트이므로 끈 종류는 경로 자체가 만들어지지 않습니다(렌더 단계 게이트인 `STRenderOptions.render*`와 다릅니다). 소스 하나에만 적용하려면 `st_rt_source_set_path_enabled`를 씁니다. `st_rt_set_acoustic_feature_enabled`와 조합하면 "사운드 트레이싱 끔" 기준선을 설정만으로 만들 수 있습니다 — 반사·회절·잔향을 끄고 음향 기능 세 가지를 모두 끄면 거리 감쇠와 패닝만 남습니다. 스레드: `[control]` — 씬 write 락을 잡으므로 워커와 잠깐 경합할 수 있습니다. 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設值為 5 種全部開啟。這是傳播階段的閘門，因此關閉的類型根本不會產生路徑（與渲染階段閘門 `STRenderOptions.render*` 不同）。若只套用到單一音源，請使用 `st_rt_source_set_path_enabled`。與 `st_rt_set_acoustic_feature_enabled` 組合，只需設定即可建立「關閉聲音追蹤」基準線 — 關閉反射·繞射·殘響並關閉三項聲學功能後，只剩下距離衰減與平移。執行緒：`[control]` — 持有場景 write 鎖，因此可能與工作執行緒短暫競爭。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb. 범위 밖 값은 무시 |
-| `enabled` | `0` = 끔, 그 외 = 켬 |
+| `context` | 情境控制代碼 |
+| `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb。超出範圍的值會被忽略 |
+| `enabled` | `0` = 關閉，其他 = 開啟 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_acoustic_feature_enabled</code> — 공기 흡수·전파 지연·직접음 차폐를 개별로 켜고 끈다</summary>
+<summary><code>st_rt_set_acoustic_feature_enabled</code> — 個別開關空氣吸收·傳播延遲·直達聲遮蔽</summary>
 
 ```c
 int st_rt_set_acoustic_feature_enabled(STRT_Context* context, int feature, int enabled);
 ```
 
-**용도** — 개별 음향 기능을 끄고 켜서 청취 A/B 비교를 할 수 있게 합니다. 경로 종류 게이트(`st_rt_set_path_type_enabled`)와 함께 "무엇이 소리에 기여하는지"를 하나씩 분리해 들려주기 위한 표면입니다.
+**用途** — 開關個別聲學功能以進行聆聽 A/B 比較。與路徑類型閘門（`st_rt_set_path_type_enabled`）一起，是用來逐一分離播放「哪些因素對聲音有貢獻」的介面。
 
-**언제·어떻게** — 기본값은 세 기능 모두 켜짐(물리 그대로)입니다. 반사·회절·잔향 경로를 끄고 세 기능을 모두 끄면 거리 감쇠와 스테레오 패닝만 남는 기준선이 됩니다. 현재 값은 `st_rt_is_acoustic_feature_enabled`로 읽습니다. 이 함수는 **IR 재변환 유발** setter입니다 — 호출만으로 IR 변환 파이프라인이 다시 돌아 새 IR이 발행되므로(`PIPELINED`는 워커를 깨움), 값이 바뀔 때만 부르십시오. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設值為三項功能全部開啟（依物理原樣）。關閉反射·繞射·殘響路徑並關閉三項功能後，就成為只剩距離衰減與立體聲平移的基準線。目前值以 `st_rt_is_acoustic_feature_enabled` 讀取。此函式是 **會觸發 IR 重新轉換** 的 setter — 僅呼叫就會重新執行 IR 轉換管線並發佈新 IR（`PIPELINED` 會喚醒工作執行緒），因此只在值變更時呼叫。執行緒：`[control]` — 請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION`(0) = 대기 감쇠(고역 손실) / `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY`(1) = 경로 길이 기반 전파 지연 / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION`(2) = 직접음 차폐(가시성 검사) |
-| `enabled` | `0` = 끔, 그 외 = 켬 |
+| `context` | 情境控制代碼 |
+| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION`(0) = 大氣衰減（高頻損失）/ `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY`(1) = 基於路徑長度的傳播延遲 / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION`(2) = 直達聲遮蔽（可見性檢查） |
+| `enabled` | `0` = 關閉，其他 = 開啟 |
 
-**반환** — `1` = 적용 / `0` = `feature`가 범위 밖이거나 실패.
+**回傳值** — `1` = 已套用 / `0` = `feature` 超出範圍或失敗。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_late_coupling</code> — 리스너–소스 확산장 결합에 따른 잔향 감쇠를 세부 설정한다</summary>
+<summary><code>st_rt_set_late_coupling</code> — 細部設定依聆聽者–音源擴散場耦合的殘響衰減</summary>
 
 ```c
 int st_rt_set_late_coupling(STRT_Context* context, float floorDb, float visibleLow, float visibleHigh, float sendNormalizeTrim, int rainDirectionWalk);
 ```
 
-**용도** — 리스너가 소스의 확산장에 얼마나 결합돼 있는지에 따라 late reverb(FDN) 주입을 감쇠합니다. 잔향 탱크는 완전히 섞인 단일 공간이라 기본적으로 어디서든 같은 크기로 들리는데, ㄷ자·ㅁ자처럼 모퉁이 너머로 갈라진 공간에서 "소스에서 멀어졌는데 잔향이 그대로이거나 오히려 커지는" 문제를 고치기 위한 옵션입니다.
+**用途** — 依聆聽者與音源擴散場的耦合程度衰減 late reverb（FDN）注入。殘響槽是完全混合的單一空間，預設在任何位置聽起來大小都相同；此選項用於修正在匚字形·口字形等繞過轉角而分隔的空間中，「遠離音源後殘響仍不變甚至變大」的問題。
 
-**언제·어떻게** — 대부분은 `st_rt_set_late_coupling_preset`으로 충분하고, 세부 조정이 필요할 때만 이 함수를 씁니다. 결합 감쇠(`floorDb`)·send 평탄화(`sendNormalizeTrim`)·방향 표본 수집(`rainDirectionWalk`)은 함께 쓰도록 설계됐습니다 — 평탄화 없이 결합만 켜면 멀어질수록 잔향 주입이 커지는 역전이 남고, 방향 표본 수집을 끄면 갈라진 공간 건너편의 잔향 방향 정보가 부족해집니다. 개별 파라미터 구성은 앞으로 바뀔 수 있으므로 가능하면 프리셋을 쓰십시오. 현재 값은 `st_rt_get_late_coupling`으로 읽습니다. **IR 재변환 유발** setter입니다(호출하면 IR이 다시 변환·발행됨). 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 大多數情況 `st_rt_set_late_coupling_preset` 就足夠，只在需要細部調整時使用此函式。耦合衰減（`floorDb`）·send 平坦化（`sendNormalizeTrim`）·方向樣本收集（`rainDirectionWalk`）設計為一起使用 — 不做平坦化只開啟耦合，會留下越遠殘響注入越大的反轉；關閉方向樣本收集，分隔空間另一側的殘響方向資訊會不足。個別參數的組成日後可能變更，因此盡可能使用預設組。目前值以 `st_rt_get_late_coupling` 讀取。這是 **會觸發 IR 重新轉換** 的 setter（呼叫後 IR 會重新轉換·發佈）。執行緒：`[control]` — 請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `floorDb` | 완전 차단 시 감쇠 깊이(dB, 0 이상). `0` = 결합 감쇠 끔. 기본 `9` |
-| `visibleLow` | 가시 비율이 이 값 아래면 완전 차단으로 보고 `floorDb`만큼 감쇠. `[0, 1)`. `0` → 기본 `0.05` |
-| `visibleHigh` | 가시 비율이 이 값 위면 같은 공간으로 보고 **정확히 0 dB**. `[0, 1]`. `0` → 기본 `0.60` |
-| `sendNormalizeTrim` | 잔향 send 총합 평탄화 트림(0 이상). `0` = 평탄화 안 함. 기본 `0.75` |
-| `rainDirectionWalk` | `1`(기본) = 잔향 방향 표본을 계속 모은다(에너지는 나르지 않음) / `0` = 끔 |
+| `context` | 情境控制代碼 |
+| `floorDb` | 完全阻斷時的衰減深度（dB，0 以上）。`0` = 關閉耦合衰減。預設 `9` |
+| `visibleLow` | 可見比例低於此值時視為完全阻斷，衰減 `floorDb`。`[0, 1)`。`0` → 預設 `0.05` |
+| `visibleHigh` | 可見比例高於此值時視為同一空間，**精確為 0 dB**。`[0, 1]`。`0` → 預設 `0.60` |
+| `sendNormalizeTrim` | 殘響 send 總和平坦化修整（0 以上）。`0` = 不平坦化。預設 `0.75` |
+| `rainDirectionWalk` | `1`（預設）= 持續收集殘響方向樣本（不搬運能量）/ `0` = 關閉 |
 
-**반환** — `1` = 적용 / `0` = 범위 밖(비유한·음수, `visibleLow >= 1`, `visibleHigh > 1`) 또는 실패. 실패하면 값은 바뀌지 않습니다.
+**回傳值** — `1` = 已套用 / `0` = 超出範圍（非有限·負數、`visibleLow >= 1`、`visibleHigh > 1`）或失敗。失敗時值不變。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_late_coupling</code> — 현재 late 결합 감쇠 설정을 읽는다</summary>
+<summary><code>st_rt_get_late_coupling</code> — 讀取目前的 late 耦合衰減設定</summary>
 
 ```c
 int st_rt_get_late_coupling(const STRT_Context* context, float* outFloorDb, float* outVisibleLow, float* outVisibleHigh, float* outSendNormalizeTrim, int* outRainDirectionWalk);
 ```
 
-**용도** — `st_rt_set_late_coupling` / `st_rt_set_late_coupling_preset`으로 걸린 현재 값을 돌려줍니다. 프리셋이 실제로 어떤 값을 채웠는지 확인하거나 UI에 표시할 때 씁니다.
+**用途** — 回傳以 `st_rt_set_late_coupling` / `st_rt_set_late_coupling_preset` 套用的目前值。用於確認預設組實際填入了哪些值，或顯示於 UI。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 필요 없는 출력 인자는 `NULL`로 넘기면 건너뜁니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**呼叫方式** — 可隨時呼叫。不需要的輸出引數傳入 `NULL` 即會略過。執行緒：`[control]` — 無鎖讀取引擎狀態的查詢。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outFloorDb` | 완전 차단 감쇠 깊이(dB)를 받을 포인터. `NULL` 허용 |
-| `outVisibleLow` | 완전 차단 무릎점을 받을 포인터. `NULL` 허용 |
-| `outVisibleHigh` | 같은 공간(0 dB) 무릎점을 받을 포인터. `NULL` 허용 |
-| `outSendNormalizeTrim` | send 평탄화 트림을 받을 포인터. `NULL` 허용 |
-| `outRainDirectionWalk` | 방향 표본 수집 여부(`1`/`0`)를 받을 포인터. `NULL` 허용 |
+| `context` | 情境控制代碼 |
+| `outFloorDb` | 接收完全阻斷衰減深度（dB）的指標。允許 `NULL` |
+| `outVisibleLow` | 接收完全阻斷拐點的指標。允許 `NULL` |
+| `outVisibleHigh` | 接收同一空間（0 dB）拐點的指標。允許 `NULL` |
+| `outSendNormalizeTrim` | 接收 send 平坦化修整的指標。允許 `NULL` |
+| `outRainDirectionWalk` | 接收是否收集方向樣本（`1`/`0`）的指標。允許 `NULL` |
 
-**반환** — `1` = 성공(출력 포인터에 현재 값을 씀) / `0` = 컨텍스트가 없음.
+**回傳值** — `1` = 成功（將目前值寫入輸出指標）/ `0` = 沒有情境。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_late_coupling_preset</code> — late 결합 감쇠를 권장 프리셋으로 한 번에 설정한다</summary>
+<summary><code>st_rt_set_late_coupling_preset</code> — 以建議預設組一次設定 late 耦合衰減</summary>
 
 ```c
 int st_rt_set_late_coupling_preset(STRT_Context* context, int preset);
 ```
 
-**용도** — `st_rt_set_late_coupling`의 다섯 값을 권장 조합으로 한 번에 채웁니다. 프리셋은 감쇠 바닥 깊이만 다르고 나머지(무릎 두 점·평탄화 트림·방향 표본 수집)는 같은 권장값입니다.
+**用途** — 以建議組合一次填入 `st_rt_set_late_coupling` 的五個值。各預設組只有衰減底限深度不同，其餘（兩個拐點·平坦化修整·方向樣本收集）為相同的建議值。
 
-**언제·어떻게** — 엔진 기본 상태는 `ST_LATE_COUPLING_DEFAULT`와 같습니다. 어느 프리셋이든 리스너가 소스와 같은 공간에 있으면 감쇠는 정확히 0 dB이고, 단일 방에서는 사실상 차이가 나지 않습니다 — 차이는 모퉁이 너머로 갈라진 공간에서만 나므로 선택은 청감의 문제입니다. 개별 조정이 필요하면 `st_rt_set_late_coupling`을 씁니다. **IR 재변환 유발** setter입니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 引擎預設狀態與 `ST_LATE_COUPLING_DEFAULT` 相同。無論哪個預設組，聆聽者與音源在同一空間時衰減精確為 0 dB，在單一房間中實際上沒有差異 — 差異只出現在繞過轉角而分隔的空間中，因此選擇屬於聽感問題。若需要個別調整，請使用 `st_rt_set_late_coupling`。這是 **會觸發 IR 重新轉換** 的 setter。執行緒：`[control]` — 請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `preset` | `ST_LATE_COUPLING_OFF`(0) = 결합 감쇠·평탄화·방향 표본 수집 전부 끔 / `ST_LATE_COUPLING_SUBTLE`(1) = 바닥 6 dB / `ST_LATE_COUPLING_DEFAULT`(2) = 바닥 9 dB(엔진 기본) / `ST_LATE_COUPLING_STRONG`(3) = 바닥 12 dB |
+| `context` | 情境控制代碼 |
+| `preset` | `ST_LATE_COUPLING_OFF`(0) = 耦合衰減·平坦化·方向樣本收集全部關閉 / `ST_LATE_COUPLING_SUBTLE`(1) = 底限 6 dB / `ST_LATE_COUPLING_DEFAULT`(2) = 底限 9 dB（引擎預設）/ `ST_LATE_COUPLING_STRONG`(3) = 底限 12 dB |
 
-**반환** — `1` = 적용 / `0` = `preset`이 범위 밖이거나 실패.
+**回傳值** — `1` = 已套用 / `0` = `preset` 超出範圍或失敗。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_physical_distance_attenuation</code> — 물리 거리 감쇠의 기준 거리·최소 거리를 설정한다</summary>
+<summary><code>st_rt_set_physical_distance_attenuation</code> — 設定物理距離衰減的參考距離·最小距離</summary>
 
 ```c
 void st_rt_set_physical_distance_attenuation(STRT_Context* context, float referenceDistanceMeters, float minDistanceMeters);
 ```
 
-**용도** — 경로 길이에 따른 거리 감쇠(구면 확산)의 기준점을 정합니다. 엔진의 거리 감쇠 법칙은 물리적 압력 확산 하나이며, 압력 이득은 `referenceDistanceMeters / max(거리, minDistanceMeters)`입니다. 즉 기준 거리에서 이득 1(0 dB)이 됩니다.
+**用途** — 設定依路徑長度的距離衰減（球面擴散）的基準點。引擎的距離衰減法則只有物理壓力擴散一種，壓力增益為 `referenceDistanceMeters / max(距離, minDistanceMeters)`。也就是在參考距離處增益為 1（0 dB）。
 
-**언제·어떻게** — 기본값은 기준 거리 1.0 m · 최소 거리 1.0 m입니다(1 m 안쪽에서는 더 커지지 않음). `minDistanceMeters`를 기준 거리보다 작게 주면 근접장 부스트가 생깁니다(예: 기준 1, 최소 0.25 → 최대 이득 4배). 두 값은 **미터**로 주며 `sceneRatio`가 적용되지 않습니다(비교 대상인 경로 길이가 이미 미터로 변환되어 있기 때문). **IR 재변환 유발** setter입니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設值為參考距離 1.0 m · 最小距離 1.0 m（1 m 以內不再變大）。將 `minDistanceMeters` 設得比參考距離小會產生近場增強（例：參考 1，最小 0.25 → 最大增益 4 倍）。兩個值以 **公尺** 指定，不套用 `sceneRatio`（因為比較對象的路徑長度已轉換為公尺）。這是 **會觸發 IR 重新轉換** 的 setter。執行緒：`[control]` — 請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `referenceDistanceMeters` | 이득 1이 되는 기준 거리(m). 기본 `1.0` |
-| `minDistanceMeters` | 거리 하한(m). 이보다 가까워도 이 거리로 계산. 기본 `1.0` |
+| `context` | 情境控制代碼 |
+| `referenceDistanceMeters` | 增益為 1 的參考距離（m）。預設 `1.0` |
+| `minDistanceMeters` | 距離下限（m）。比此更近也以此距離計算。預設 `1.0` |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_atmosphere</code> — 대기 조건(온도·습도·기압)을 설정한다</summary>
+<summary><code>st_rt_set_atmosphere</code> — 設定大氣條件（溫度·濕度·氣壓）</summary>
 
 ```c
 void st_rt_set_atmosphere(STRT_Context* context, float temperatureC, float relativeHumidityPercent, float pressureKPa);
 ```
 
-**용도** — 공기 흡수와 음속 계산에 쓰는 대기 상태를 정합니다. 음속은 고정 상수가 아니라 이 대기 값에서 유도되며, 밴드별 공기 흡수(고역 손실)는 ISO 9613-1 순음 흡수 공식으로 계산됩니다. 덥고 건조한 사막, 춥고 습한 실외처럼 환경에 따라 원거리 고역 감쇠와 지연이 달라지는 것을 표현할 수 있습니다.
+**用途** — 設定用於空氣吸收與音速計算的大氣狀態。音速並非固定常數，而是由此大氣值推導，各頻帶空氣吸收（高頻損失）以 ISO 9613-1 純音吸收公式計算。可表現如炎熱乾燥的沙漠、寒冷潮濕的戶外等，遠距離高頻衰減與延遲隨環境而異的情形。
 
-**언제·어떻게** — 기본값은 20.0 °C · 50.0 % RH · 101.325 kPa입니다. 레벨 로드나 날씨 변경처럼 값이 바뀔 때만 부릅니다. 공기 흡수 자체를 끄려면 `st_rt_set_acoustic_feature_enabled(ST_ACOUSTIC_FEATURE_AIR_ABSORPTION, 0)`을 씁니다. **IR 재변환 유발** setter입니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設值為 20.0 °C · 50.0 % RH · 101.325 kPa。只在載入關卡或天氣變化等值變更時呼叫。若要關閉空氣吸收本身，請使用 `st_rt_set_acoustic_feature_enabled(ST_ACOUSTIC_FEATURE_AIR_ABSORPTION, 0)`。這是 **會觸發 IR 重新轉換** 的 setter。執行緒：`[control]` — 請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `temperatureC` | 기온(°C). 기본 `20.0` |
-| `relativeHumidityPercent` | 상대 습도(%, 0~100). 기본 `50.0` |
-| `pressureKPa` | 대기압(kPa). 기본 `101.325` |
+| `context` | 情境控制代碼 |
+| `temperatureC` | 氣溫（°C）。預設 `20.0` |
+| `relativeHumidityPercent` | 相對濕度（%，0~100）。預設 `50.0` |
+| `pressureKPa` | 大氣壓（kPa）。預設 `101.325` |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_doppler_gain_mode</code> — 움직이는 소스의 도플러 방사 이득 모드를 설정한다</summary>
+<summary><code>st_rt_set_doppler_gain_mode</code> — 設定移動音源的都卜勒輻射增益模式</summary>
 
 ```c
 int st_rt_set_doppler_gain_mode(STRT_Context* context, int mode);
 ```
 
-**용도** — 소스가 움직일 때 진행 방향 쪽으로 소리가 더 크게, 반대쪽으로 더 작게 방사되는 효과(이동 단극자 근사)를 켜고 끕니다. 가변 지연에 의한 도플러 **피치** 변화(`STRenderOptions.useDoppler`)와는 별개의 스위치입니다.
+**用途** — 開關音源移動時朝行進方向輻射較大聲、朝反方向輻射較小聲的效果（移動單極近似）。與可變延遲造成的都卜勒 **音高** 變化（`STRenderOptions.useDoppler`）是不同的開關。
 
-**언제·어떻게** — 기본값은 `ST_DOPPLER_GAIN_MOVING_MONOPOLE`입니다. 정지한 소스에서는 이득이 1이라 영향이 없고, IR 변환 때 경로마다 한 번 계산하므로 렌더 비용은 들지 않습니다. 현재 값은 `st_rt_get_doppler_gain_mode`로 읽습니다. 지원 여부는 `ST_CAP_DOPPLER_GAIN_MODE`로 확인합니다. **IR 재변환 유발** setter입니다(같은 값을 다시 넣으면 아무 일도 하지 않습니다). 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設值為 `ST_DOPPLER_GAIN_MOVING_MONOPOLE`。靜止的音源增益為 1，沒有影響；在 IR 轉換時每條路徑計算一次，因此不產生渲染成本。目前值以 `st_rt_get_doppler_gain_mode` 讀取。支援與否以 `ST_CAP_DOPPLER_GAIN_MODE` 確認。這是 **會觸發 IR 重新轉換** 的 setter（再次填入相同值則不執行任何動作）。執行緒：`[control]` — 請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mode` | `STDopplerGainMode` — `ST_DOPPLER_GAIN_OFF`(0) = 방사 이득 없음 / `ST_DOPPLER_GAIN_MOVING_MONOPOLE`(1) = 이동 단극자 근사: 압력 `D^2`, 에너지 `D^4`, `D = 1/(1 - Mr)`(소스 속도의 방사 방향 마하 수 `Mr`), 경로의 방사 방향마다 따로 계산 |
+| `context` | 情境控制代碼 |
+| `mode` | `STDopplerGainMode` — `ST_DOPPLER_GAIN_OFF`(0) = 無輻射增益 / `ST_DOPPLER_GAIN_MOVING_MONOPOLE`(1) = 移動單極近似：壓力 `D^2`，能量 `D^4`，`D = 1/(1 - Mr)`（音源速度在輻射方向上的馬赫數 `Mr`），依路徑的每個輻射方向分別計算 |
 
-**반환** — `1` = 적용 / `0` = `mode`가 범위 밖이거나 실패.
+**回傳值** — `1` = 已套用 / `0` = `mode` 超出範圍或失敗。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_doppler_gain_mode</code> — 현재 도플러 방사 이득 모드를 읽는다</summary>
+<summary><code>st_rt_get_doppler_gain_mode</code> — 讀取目前的都卜勒輻射增益模式</summary>
 
 ```c
 int st_rt_get_doppler_gain_mode(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_set_doppler_gain_mode`로 설정된 현재 모드를 돌려줍니다.
+**用途** — 回傳以 `st_rt_set_doppler_gain_mode` 設定的目前模式。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**呼叫方式** — 可隨時呼叫。執行緒：`[control]` — 無鎖讀取引擎狀態的查詢。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STDopplerGainMode` 값(`0` = `ST_DOPPLER_GAIN_OFF`, `1` = `ST_DOPPLER_GAIN_MOVING_MONOPOLE`).
+**回傳值** — `STDopplerGainMode` 值（`0` = `ST_DOPPLER_GAIN_OFF`，`1` = `ST_DOPPLER_GAIN_MOVING_MONOPOLE`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_early_late_band_energy_targets</code> — 초기 반사·잔향의 밴드별 에너지 배율을 따로 설정한다</summary>
+<summary><code>st_rt_set_early_late_band_energy_targets</code> — 分別設定早期反射·殘響的各頻帶能量倍率</summary>
 
 ```c
 int st_rt_set_early_late_band_energy_targets(STRT_Context* context, const float earlyBandEnergy[ST_FREQUENCY_BANDS], const float lateBandEnergy[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 초기(early) 성분과 잔향(late) 성분의 주파수 밴드별 에너지를 서로 독립적으로 조정합니다. 예를 들어 잔향의 고역만 줄이거나 초기 반사의 저역만 키우는 식의 음색 보정을 재질을 건드리지 않고 할 수 있습니다.
+**用途** — 彼此獨立地調整早期（early）成分與殘響（late）成分的各頻帶能量。例如只降低殘響的高頻，或只提高早期反射的低頻等音色修正，可在不動到材質的情況下進行。
 
-**언제·어떻게** — 두 배열을 **한 번에 교체**합니다(한쪽만 바꾸려면 다른 쪽에 현재 값을 다시 넣습니다). 배열은 63, 125, 250, 500, 1k, 2k, 4k, 8k, 16k Hz 순서의 9개 값이며 **energy-domain** 배율입니다(`2.0` ≈ +3 dB, `0.5` ≈ −3 dB). early 배열은 개별 경로(exact/early tap)에만, late 배열은 잔향 send·탱크 구동에만 적용되며 둘이 서로 곱해지지 않습니다. 기본값은 전부 `1.0`(중립)입니다. 지원 여부는 `ST_CAP_EARLY_LATE_BAND_ENERGY`로 확인합니다. **IR 재변환 유발** setter입니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — **一次替換** 兩個陣列（若只要變更其中一個，另一個請再填入目前值）。陣列為依 63、125、250、500、1k、2k、4k、8k、16k Hz 順序的 9 個值，為 **energy-domain** 倍率（`2.0` ≈ +3 dB，`0.5` ≈ −3 dB）。early 陣列只套用於個別路徑（exact/early tap），late 陣列只套用於殘響 send·槽驅動，兩者不會互相相乘。預設值全部為 `1.0`（中性）。支援與否以 `ST_CAP_EARLY_LATE_BAND_ENERGY` 確認。這是 **會觸發 IR 重新轉換** 的 setter。執行緒：`[control]` — 請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `earlyBandEnergy` | 초기 성분 밴드별 에너지 배율 9개. 비유한 값은 `1.0`으로, 나머지는 `[0, 16]`으로 정규화. `NULL` 불가 |
-| `lateBandEnergy` | 잔향 성분 밴드별 에너지 배율 9개. 정규화 규칙 동일. `NULL` 불가 |
+| `context` | 情境控制代碼 |
+| `earlyBandEnergy` | 早期成分各頻帶能量倍率 9 個。非有限值正規化為 `1.0`，其餘正規化到 `[0, 16]`。不可為 `NULL` |
+| `lateBandEnergy` | 殘響成分各頻帶能量倍率 9 個。正規化規則相同。不可為 `NULL` |
 
-**반환** — `1` = 적용 / `0` = 배열 중 하나가 `NULL`이거나 실패.
+**回傳值** — `1` = 已套用 / `0` = 任一陣列為 `NULL` 或失敗。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_max_depth</code> — 반사·회절 경로의 전역 최대 차수를 설정한다</summary>
+<summary><code>st_rt_set_max_depth</code> — 設定反射·繞射路徑的全域最大階數</summary>
 
 ```c
 void st_rt_set_max_depth(STRT_Context* context, int depth);
 ```
 
-**용도** — 반사·회절 경로 탐색이 따라갈 최대 경계면 상호작용 횟수(차수)를 엔진 전체에 대해 정합니다. 값을 올리면 고차 반사까지 정확히 추적하는 대신 전파 비용이 늘어납니다.
+**用途** — 針對整個引擎設定反射·繞射路徑搜尋所追蹤的最大邊界面交互次數（階數）。調高值可精確追蹤到高階反射，但傳播成本會增加。
 
-**언제·어떻게** — 기본값은 전역 8입니다. 소스별 깊이(기본 4)는 `st_rt_source_set_depth`로 따로 정합니다. 보통 씬을 만든 뒤 품질 설정 단계에서 한 번 부릅니다. 스레드: `[control]` — 씬 write 락을 잡으므로 워커와 잠깐 경합할 수 있습니다. 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設值為全域 8。各音源深度（預設 4）另以 `st_rt_source_set_depth` 設定。通常在建立場景後的品質設定階段呼叫一次。執行緒：`[control]` — 持有場景 write 鎖，因此可能與工作執行緒短暫競爭。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `depth` | 최대 차수, `[1, 64]`. 기본 `8`. 범위 밖 값은 무시(이전 값 유지) |
+| `context` | 情境控制代碼 |
+| `depth` | 最大階數，`[1, 64]`。預設 `8`。超出範圍的值會被忽略（保留先前的值） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_transmission_max_depth</code> — 직접음·투과 경로가 통과할 최대 면 수를 설정한다</summary>
+<summary><code>st_rt_set_transmission_max_depth</code> — 設定直達聲·透射路徑可穿過的最大面數</summary>
 
 ```c
 void st_rt_set_transmission_max_depth(STRT_Context* context, int depth);
 ```
 
-**용도** — 소스→리스너 직선이 가려졌을 때 투과 경로가 몇 개의 면까지 통과할 수 있는지 정합니다. 벽 여러 겹을 넘어오는 소리를 어디까지 계산할지 정하는 값입니다.
+**用途** — 設定音源→聆聽者直線被遮擋時，透射路徑最多可穿過幾個面。這是決定要計算到穿過幾層牆壁的聲音的值。
 
-**언제·어떻게** — 기본값은 64입니다. `0`이면 투과 면을 통과하지 않습니다. 투과 경로 자체를 끄려면 `st_rt_set_path_type_enabled`(Transmission = 1)를 씁니다. 스레드: `[control]` — 씬 write 락을 잡습니다. 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設值為 64。`0` 時不穿過透射面。若要關閉透射路徑本身，請使用 `st_rt_set_path_type_enabled`（Transmission = 1）。執行緒：`[control]` — 持有場景 write 鎖。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `depth` | 통과 가능한 최대 면 수, `[0, 64]`. 기본 `64`. 범위 밖 값은 무시(이전 값 유지) |
+| `context` | 情境控制代碼 |
+| `depth` | 可穿過的最大面數，`[0, 64]`。預設 `64`。超出範圍的值會被忽略（保留先前的值） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_ray_count</code> — 리스너 탐색(guide) 광선 수를 설정한다</summary>
+<summary><code>st_rt_listener_set_ray_count</code> — 設定聆聽者探索（guide）射線數</summary>
 
 ```c
 void st_rt_listener_set_ray_count(STRT_Context* context, int width, int height);
 ```
 
-**용도** — 리스너에서 쏘는 탐색(guide/probe) 광선의 개수를 `width × height`로 정합니다. 이 광선이 반사·회절 경로 후보를 찾으므로, 늘리면 작은 반사면을 놓칠 확률이 줄고 전파 비용이 늘어납니다.
+**用途** — 以 `width × height` 設定從聆聽者發射的探索（guide/probe）射線數量。這些射線用來尋找反射·繞射路徑候選，增加數量可降低漏掉小反射面的機率，但傳播成本會增加。
 
-**언제·어떻게** — 기본값은 16 × 16(256개)입니다. 소스 쪽 수송 광선은 `st_rt_source_set_ray_count`로 따로 정합니다. 광선 방향 분포는 `st_rt_listener_set_ray_sampling_method`가 정합니다. 스레드: `[control]` — 씬 write 락을 잡습니다. 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設值為 16 × 16（256 條）。音源端的傳輸射線另以 `st_rt_source_set_ray_count` 設定。射線方向分佈由 `st_rt_listener_set_ray_sampling_method` 決定。執行緒：`[control]` — 持有場景 write 鎖。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `width` | 격자 가로 수, `[1, 4096]`. 기본 `16` |
-| `height` | 격자 세로 수, `[1, 4096]`. 기본 `16`. 둘 중 하나라도 범위 밖이면 호출 전체를 무시 |
+| `context` | 情境控制代碼 |
+| `width` | 網格橫向數，`[1, 4096]`。預設 `16` |
+| `height` | 網格縱向數，`[1, 4096]`。預設 `16`。任一者超出範圍則忽略整個呼叫 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_set_ray_sampling_method</code> — 리스너 탐색 광선의 방향 분포를 설정한다</summary>
+<summary><code>st_rt_listener_set_ray_sampling_method</code> — 設定聆聽者探索射線的方向分佈</summary>
 
 ```c
 int st_rt_listener_set_ray_sampling_method(STRT_Context* context, int method);
 ```
 
-**용도** — 리스너 탐색 광선을 구면에 어떻게 분포시킬지 고릅니다. 현재 선택할 수 있는 분포는 `ST_RAY_SAMPLING_FIBONACCI_SPHERE` 하나이며, 이 함수는 그 값을 명시적으로 확인·설정하는 용도로 남아 있습니다.
+**用途** — 選擇聆聽者探索射線在球面上如何分佈。目前可選的分佈只有 `ST_RAY_SAMPLING_FIBONACCI_SPHERE` 一種，此函式保留作為明確確認·設定該值之用。
 
-**언제·어떻게** — 기본값이자 유일하게 받는 값이 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)입니다. 피보나치 분포는 결정적이고 시드를 쓰지 않습니다. 나머지 `STRaySamplingMethod` 값은 번호 호환을 위해 열거형에만 남아 있고 거절됩니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設值，也是唯一接受的值，為 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)。費波那契分佈具決定性且不使用種子。其餘 `STRaySamplingMethod` 值為了編號相容只保留在列舉中，會被拒絕。執行緒：`[control]` — 請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `method` | `STRaySamplingMethod`. `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)만 허용. `ST_RAY_SAMPLING_LEGACY_GRID`(0) / `ST_RAY_SAMPLING_EQUAL_AREA_GRID`(2) / `ST_RAY_SAMPLING_SOBOL_SPHERE`(3) / `ST_RAY_SAMPLING_ICOSAHEDRAL`(4)는 거절 |
+| `context` | 情境控制代碼 |
+| `method` | `STRaySamplingMethod`。只允許 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)。`ST_RAY_SAMPLING_LEGACY_GRID`(0) / `ST_RAY_SAMPLING_EQUAL_AREA_GRID`(2) / `ST_RAY_SAMPLING_SOBOL_SPHERE`(3) / `ST_RAY_SAMPLING_ICOSAHEDRAL`(4) 會被拒絕 |
 
-**반환** — `1` = 적용 / `0` = 거절(상태는 바뀌지 않고 `ST_STATUS_INVALID_ARGUMENT`를 남김).
+**回傳值** — `1` = 已套用 / `0` = 拒絕（狀態不變，留下 `ST_STATUS_INVALID_ARGUMENT`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_listener_get_ray_sampling_method</code> — 리스너 탐색 광선의 방향 분포를 읽는다</summary>
+<summary><code>st_rt_listener_get_ray_sampling_method</code> — 讀取聆聽者探索射線的方向分佈</summary>
 
 ```c
 int st_rt_listener_get_ray_sampling_method(const STRT_Context* context);
 ```
 
-**용도** — 현재 리스너 탐색 광선 분포를 돌려줍니다.
+**用途** — 回傳目前的聆聽者探索射線分佈。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 선택 가능한 분포가 피보나치 하나이므로 정상 컨텍스트에서는 항상 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`입니다. 스레드: `[control]` — 씬 read 락만 잡는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**呼叫方式** — 可隨時呼叫。可選的分佈只有費波那契一種，因此在正常情境中一律為 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`。執行緒：`[control]` — 只持有場景 read 鎖的查詢。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STRaySamplingMethod` 값(항상 `1` = `ST_RAY_SAMPLING_FIBONACCI_SPHERE`) / `-1` = 컨텍스트가 없음.
+**回傳值** — `STRaySamplingMethod` 值（一律為 `1` = `ST_RAY_SAMPLING_FIBONACCI_SPHERE`）/ `-1` = 沒有情境。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_source_ray_sampling_method</code> — 소스 수송 광선의 방향 분포를 설정한다</summary>
+<summary><code>st_rt_set_source_ray_sampling_method</code> — 設定音源傳輸射線的方向分佈</summary>
 
 ```c
 int st_rt_set_source_ray_sampling_method(STRT_Context* context, int method);
 ```
 
-**용도** — 소스에서 쏘는 수송(잔향·확산 에너지용) 광선의 구면 분포를 고릅니다. 리스너 쪽과 마찬가지로 현재 선택할 수 있는 값은 `ST_RAY_SAMPLING_FIBONACCI_SPHERE` 하나입니다.
+**用途** — 選擇從音源發射的傳輸（用於殘響·擴散能量）射線的球面分佈。與聆聽者端相同，目前可選的值只有 `ST_RAY_SAMPLING_FIBONACCI_SPHERE` 一種。
 
-**언제·어떻게** — 기본값이자 유일하게 받는 값이 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)입니다. 소스 수송 광선 수는 `st_rt_source_set_ray_count`로 정합니다. 스레드: `[control]` — 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 預設值，也是唯一接受的值，為 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)。音源傳輸射線數以 `st_rt_source_set_ray_count` 設定。執行緒：`[control]` — 請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `method` | `STRaySamplingMethod`. `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)만 허용, 나머지 값은 거절 |
+| `context` | 情境控制代碼 |
+| `method` | `STRaySamplingMethod`。只允許 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)，其餘值會被拒絕 |
 
-**반환** — `1` = 적용 / `0` = 거절(상태는 바뀌지 않고 `ST_STATUS_INVALID_ARGUMENT`를 남김).
+**回傳值** — `1` = 已套用 / `0` = 拒絕（狀態不變，留下 `ST_STATUS_INVALID_ARGUMENT`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_source_ray_sampling_method</code> — 소스 수송 광선의 방향 분포를 읽는다</summary>
+<summary><code>st_rt_get_source_ray_sampling_method</code> — 讀取音源傳輸射線的方向分佈</summary>
 
 ```c
 int st_rt_get_source_ray_sampling_method(const STRT_Context* context);
 ```
 
-**용도** — 현재 소스 수송 광선 분포를 돌려줍니다.
+**用途** — 回傳目前的音源傳輸射線分佈。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 정상 컨텍스트에서는 항상 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`입니다. 스레드: `[control]` — 씬 read 락만 잡는 질의입니다. 오디오 콜백에서는 부르지 마십시오.
+**呼叫方式** — 可隨時呼叫。在正常情境中一律為 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`。執行緒：`[control]` — 只持有場景 read 鎖的查詢。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STRaySamplingMethod` 값(항상 `1` = `ST_RAY_SAMPLING_FIBONACCI_SPHERE`) / `-1` = 컨텍스트가 없음.
+**回傳值** — `STRaySamplingMethod` 值（一律為 `1` = `ST_RAY_SAMPLING_FIBONACCI_SPHERE`）/ `-1` = 沒有情境。
 
 </details>
 
 <details>
-<summary><code>st_rt_build</code> — 정적·동적 가속구조를 전부 빌드한다</summary>
+<summary><code>st_rt_build</code> — 完整建置靜態·動態加速結構</summary>
 
 ```c
 void st_rt_build(STRT_Context* context);
 ```
 
-**용도** — 메시·오브젝트 배치로 정적 TLAS와 동적 TLAS를 모두 새로 짓습니다. 전파와 `st_rt_scene_raycast`가 이 가속구조를 사용하므로, 씬을 구성한 뒤 한 번은 반드시 불러야 합니다.
+**用途** — 依網格·物件配置重新建置靜態 TLAS 與動態 TLAS。傳播與 `st_rt_scene_raycast` 使用此加速結構，因此組成場景後必須至少呼叫一次。
 
-**언제·어떻게** — 메시·오브젝트를 만든 뒤, 첫 `st_rt_propagate` 전에 부릅니다. 이후 **정적** 오브젝트를 추가·삭제·이동하는 등 정적 구성이 바뀌면 다시 불러야 합니다 — 정적 TLAS는 `st_rt_build` 전까지 이전에 발행된 것이 그대로 쓰이고, 그 사이의 정적 변경은 보이지 않습니다. 동적 오브젝트(`isDynamic = 1`)의 이동만 반영하려면 더 가벼운 `st_rt_build_dynamic`을 씁니다. 스레드: `[control, blocking]` — 가속구조 전체 빌드라 긴 배타 구간입니다. 게임 루프의 매 프레임 경로나 오디오 스레드에서 부르지 말고, 로딩 단계에서 부르십시오.
+**呼叫方式** — 在建立網格·物件之後、第一次 `st_rt_propagate` 之前呼叫。之後若 **靜態** 組成變更（如新增·刪除·移動靜態物件），必須再次呼叫 — 靜態 TLAS 在 `st_rt_build` 之前會沿用先前發佈的版本，其間的靜態變更不可見。若只要反映動態物件（`isDynamic = 1`）的移動，請使用較輕量的 `st_rt_build_dynamic`。執行緒：`[control, blocking]` — 加速結構完整建置，是較長的獨佔區間。不要在遊戲迴圈的每影格路徑或音訊執行緒中呼叫，請在載入階段呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_build_dynamic</code> — 동적 오브젝트 가속구조만 다시 맞춘다</summary>
+<summary><code>st_rt_build_dynamic</code> — 只重新調整動態物件加速結構</summary>
 
 ```c
 void st_rt_build_dynamic(STRT_Context* context);
 ```
 
-**용도** — 동적 오브젝트(`isDynamic = 1`)로 이루어진 동적 TLAS만 갱신(refit)합니다. 문·엘리베이터처럼 움직이는 기하가 있을 때, 전체 빌드 없이 그 변화를 전파에 반영하기 위한 가벼운 경로입니다.
+**用途** — 只更新（refit）由動態物件（`isDynamic = 1`）構成的動態 TLAS。在有門·電梯等移動幾何時，不需完整建置即可將其變化反映到傳播的輕量路徑。
 
-**언제·어떻게** — 동적 오브젝트의 변환(`st_rt_object_set_transform` 등)을 바꾼 뒤 부릅니다. 정적 TLAS는 건드리지 않으므로 정적 구성 변경에는 `st_rt_build`가 필요합니다. 스레드: `[control]` — 씬 write 락을 잡으므로 워커와 잠깐 경합할 수 있습니다. 오디오 콜백에서 부르지 마십시오.
+**呼叫方式** — 在變更動態物件的變換（`st_rt_object_set_transform` 等）之後呼叫。不會動到靜態 TLAS，因此靜態組成變更需要 `st_rt_build`。執行緒：`[control]` — 持有場景 write 鎖，因此可能與工作執行緒短暫競爭。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_set_lane_update_interval</code> — 전파 레인별 갱신 주기를 설정한다</summary>
+<summary><code>st_rt_set_lane_update_interval</code> — 設定各傳播通道的更新週期</summary>
 
 ```c
 int st_rt_set_lane_update_interval(STRT_Context* context, int lane, float milliseconds);
 ```
 
-**용도** — `PIPELINED` 스케줄러에서 직접음·반사/회절·잔향 세 전파 레인이 얼마나 자주 다시 계산될지 정합니다. CPU 사용량과 반응성 사이의 균형을 호스트가 조절하는 손잡이입니다. 반사/회절 레인이 전파 비용의 대부분을 쓰므로, CPU를 아끼고 싶다면 이 레인의 주기를 먼저 올리십시오. 그 대가로 초기 반사가 리스너 움직임을 조금 늦게 따라오지만, 직접음 레인의 주기는 그대로라 무음이나 끊김은 생기지 않습니다.
+**用途** — 設定 `PIPELINED` 排程器下直達聲·反射/繞射·殘響三個傳播通道重新計算的頻率。是讓主機調整 CPU 使用量與反應性之間平衡的旋鈕。反射/繞射通道佔傳播成本的大部分，因此若想節省 CPU，請先調高此通道的週期。代價是早期反射跟隨聆聽者移動稍慢，但直達聲通道的週期不變，因此不會出現靜音或斷音。
 
-**언제·어떻게** — **런타임에 언제든** 부를 수 있습니다(스레드 속성과 달리 `st_rt_create` 전 제약이 없음). 워커가 도는 중에 바꿔도 다음 사이클부터 새 값으로 돌며, 이미 대기에 들어간 마감은 유지되고 다음 실행부터 새 값을 씁니다. 각 레인은 Guide나 호스트의 새 요청이 없어도 독립적으로 반복 실행됩니다. 주기의 의미는 레인마다 다릅니다(아래 표). `ST_RT_SCHEDULER_SYNCHRONOUS`에는 레인이 없어 실패합니다. 지원 여부는 `ST_CAP_LANE_UPDATE_INTERVAL`로 확인합니다. 스레드: `[control]` — 값을 atomic으로 저장하고 워커에 전달합니다. 오디오 콜백에서는 부르지 마십시오.
+**呼叫方式** — **執行期間隨時** 可呼叫（與執行緒屬性不同，沒有須在 `st_rt_create` 之前的限制）。即使在工作執行緒執行中變更，也會從下一個週期起以新值執行；已進入等待的截止時間維持不變，自下一次執行起使用新值。各通道即使沒有 Guide 或主機的新請求，也會獨立反覆執行。週期的意義依通道而異（見下表）。`ST_RT_SCHEDULER_SYNCHRONOUS` 沒有通道，因此會失敗。支援與否以 `ST_CAP_LANE_UPDATE_INTERVAL` 確認。執行緒：`[control]` — 以 atomic 儲存值並傳給工作執行緒。請勿在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `lane` | `STPropagationLane` — `ST_PROPAGATION_LANE_DIRECT`(0): 연속 실행 **시작** 사이 최소 간격, 기본 10 ms / `ST_PROPAGATION_LANE_REFLECTION_DIFFRACTION`(1): 연속 두 실행 사이 최소 간격, 기본 0 ms(제한 없음). 대기 중 도착한 요청은 마감까지 하나로 접혀 굶지 않음 / `ST_PROPAGATION_LANE_REVERB`(2): 실행 **완료 후** 다음 실행까지 최소 간격, 기본 4 ms |
-| `milliseconds` | 최소 간격(ms), `[0, 60000]`. `0` = 추가 대기 없음. 음수·NaN·무한대·60000 초과는 clamp하지 않고 거절 |
+| `context` | 情境控制代碼 |
+| `lane` | `STPropagationLane` — `ST_PROPAGATION_LANE_DIRECT`(0)：連續執行 **開始** 之間的最小間隔，預設 10 ms / `ST_PROPAGATION_LANE_REFLECTION_DIFFRACTION`(1)：連續兩次執行之間的最小間隔，預設 0 ms（無限制）。等待中到達的請求在截止前合併為一個，不會被餓死 / `ST_PROPAGATION_LANE_REVERB`(2)：執行 **完成後** 到下一次執行的最小間隔，預設 4 ms |
+| `milliseconds` | 最小間隔（ms），`[0, 60000]`。`0` = 無額外等待。負數·NaN·無限大·超過 60000 不箝制而是拒絕 |
 
-**반환** — `1` = 적용 / `0` = 거절. `lane`이 범위 밖이거나 `milliseconds`가 허용 범위 밖이면 `ST_STATUS_INVALID_ARGUMENT`, `SYNCHRONOUS` 스케줄러면 `ST_STATUS_UNAVAILABLE`을 `st_rt_get_last_status`에 남깁니다.
+**回傳值** — `1` = 已套用 / `0` = 拒絕。`lane` 超出範圍或 `milliseconds` 超出允許範圍時為 `ST_STATUS_INVALID_ARGUMENT`，`SYNCHRONOUS` 排程器時為 `ST_STATUS_UNAVAILABLE`，留在 `st_rt_get_last_status` 中。
 
 </details>
 
 <details>
-<summary><code>st_rt_get_lane_update_interval</code> — 전파 레인의 갱신 주기를 읽는다</summary>
+<summary><code>st_rt_get_lane_update_interval</code> — 讀取傳播通道的更新週期</summary>
 
 ```c
 float st_rt_get_lane_update_interval(const STRT_Context* context, int lane);
 ```
 
-**용도** — 레인에 저장된 갱신 주기를 ms 단위로 돌려줍니다.
+**用途** — 以 ms 為單位回傳通道中儲存的更新週期。
 
-**언제·어떻게** — 마지막 `st_rt_set_lane_update_interval`이 거절됐더라도 현재 **저장된 값**을 돌려주므로, 넣은 값이 실제로 적용됐는지 확인할 때 씁니다. 스레드: `[any]` — atomic 하나만 읽으므로 어느 스레드에서 불러도 되고 블록하지 않습니다.
+**呼叫方式** — 即使最後一次 `st_rt_set_lane_update_interval` 被拒絕，也會回傳目前 **儲存的值**，因此用於確認填入的值是否實際套用。執行緒：`[any]` — 只讀取一個 atomic，可在任意執行緒呼叫且不會阻塞。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 | `lane` | `STPropagationLane` — `DIRECT`(0) / `REFLECTION_DIFFRACTION`(1) / `REVERB`(2) |
 
-**반환** — 저장된 주기(ms). `lane`이 범위 밖이거나 컨텍스트가 없으면 `0`.
+**回傳值** — 儲存的週期（ms）。`lane` 超出範圍或沒有情境時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_propagate</code> — 전파를 실행하거나(SYNCHRONOUS) 전파 워커를 깨운다(PIPELINED)</summary>
+<summary><code>st_rt_propagate</code> — 執行傳播（SYNCHRONOUS）或喚醒傳播工作執行緒（PIPELINED）</summary>
 
 ```c
 int st_rt_propagate(STRT_Context* context);
 ```
 
-**용도** — 현재 씬·소스·리스너 상태로 음향 전파와 IR 변환을 진행시킵니다. 스케줄러에 따라 동작이 다릅니다.
+**用途** — 以目前的場景·音源·聆聽者狀態推進聲學傳播與 IR 轉換。行為依排程器而異。
 
-**언제·어떻게** — `st_rt_build` 뒤에 부릅니다.
+**呼叫方式** — 在 `st_rt_build` 之後呼叫。
 
-- `ST_RT_SCHEDULER_SYNCHRONOUS`: 전파·IR 파이프라인이 **호출 스레드에서 실제로 돕니다**. 호스트가 이 함수를 불러야만 계산이 진행되므로 게임 루프에서 주기적으로(예: 매 프레임) 부릅니다. 이 스케줄러에서는 쉬게 한 소스(`st_rt_source_idle`)도 계산됩니다.
-- `ST_RT_SCHEDULER_PIPELINED`(기본): 워커를 깨우고 **즉시 돌아옵니다**. 레인은 호스트 요청 없이도 `st_rt_set_lane_update_interval` 주기에 따라 반복 실행되므로, 이 호출은 "변경이 있으니 바로 돌아라"라는 신호입니다.
+- `ST_RT_SCHEDULER_SYNCHRONOUS`：傳播·IR 管線 **實際在呼叫執行緒上執行**。只有主機呼叫此函式計算才會推進，因此在遊戲迴圈中定期（例：每個影格）呼叫。此排程器下休眠的音源（`st_rt_source_idle`）也會被計算。
+- `ST_RT_SCHEDULER_PIPELINED`（預設）：喚醒工作執行緒並 **立即返回**。通道即使沒有主機請求也會依 `st_rt_set_lane_update_interval` 週期反覆執行，因此此呼叫是「有變更，請立即執行」的訊號。
 
-스레드: `[control, runs-here]` — `SYNCHRONOUS`에서는 호출 스레드가 전파 비용을 그대로 부담하므로 오디오 스레드에서 부르지 마십시오.
+執行緒：`[control, runs-here]` — `SYNCHRONOUS` 下呼叫執行緒會直接承擔傳播成本，因此不要在音訊執行緒中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 전파된 경로 수(`PIPELINED`에서는 워커가 가장 최근에 낸 값). `PIPELINED`에서 워커 오류가 있으면 `-1`, 컨텍스트가 없으면 `0`.
+**回傳值** — 傳播的路徑數（`PIPELINED` 下為工作執行緒最近一次產生的值）。`PIPELINED` 下有工作執行緒錯誤時為 `-1`，沒有情境時為 `0`。
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>렌더 · 출력단 · 스피커 세트</strong> — 56개</summary>
+<summary><strong>渲染 · 輸出級 · 喇叭組</strong> — 56 個</summary>
 
 <details>
-<summary><code>st_rt_render_set_spatializer</code> — 공간화 방식(패닝 / HRIR 데이터셋)을 고른다</summary>
+<summary><code>st_rt_render_set_spatializer</code> — 選擇空間化方式（平移 / HRIR 資料集）</summary>
 
 ```c
 int st_rt_render_set_spatializer(STRT_Context* context, int type);
 ```
 
-**용도** — 렌더 경로의 공간화 구현을 고릅니다. `PANNING`은 HRIR 데이터 없이 스테레오 패닝으로, `MIT_KEMAR`와 `SADIE_D2_KEMAR`는 측정 HRIR 컨볼루션으로 바이노럴 출력을 만듭니다. SADIE II D2는 데이터셋의 측정 ITD·위상까지 담은 기준 HRTF입니다.
+**用途** — 選擇渲染路徑的空間化實作。`PANNING` 不使用 HRIR 資料而以立體聲平移，`MIT_KEMAR` 與 `SADIE_D2_KEMAR` 以量測 HRIR 摺積產生雙耳輸出。SADIE II D2 是包含資料集量測 ITD·相位的基準 HRTF。
 
-**언제·어떻게** — HRIR 공간화(1·2)는 헤드폰 바이노럴 출력, 즉 `st_rt_render_start(context, 1)`로 시작한 렌더에서 쓰입니다. 보통 `st_rt_render_start` 전에 한 번 고릅니다. 스레드: `[control, blocking]` — HRIR 데이터셋을 읽어 들이는 긴 구간이라 게임 루프·오디오 스레드에서 부르지 않습니다. 지원 여부는 `ST_CAP_HRTF`, `ST_CAP_SADIE_D2_HRTF`(능력 워드 0)로 확인합니다.
+**呼叫方式** — HRIR 空間化（1·2）用於耳機雙耳輸出，即以 `st_rt_render_start(context, 1)` 開始的渲染。通常在 `st_rt_render_start` 之前選擇一次。執行緒：`[control, blocking]` — 讀入 HRIR 資料集的較長區間，不要在遊戲迴圈·音訊執行緒中呼叫。支援與否以 `ST_CAP_HRTF`、`ST_CAP_SADIE_D2_HRTF`（能力字組 0）確認。
 
-`PANNING`과 `MIT_KEMAR`는 라이브러리에 내장돼 있습니다. `SADIE_D2_KEMAR`는 외부 파일 `SADIE_D2_44K_16bit_256tap.hrtfbin`(SDK의 `Resources/HRTF/`에 라이선스 `LICENSE-SADIE-II.txt`와 함께 들어 있음)이 있어야 하며, 엔진은 다음 순서로 찾습니다.
+`PANNING` 與 `MIT_KEMAR` 內建於程式庫中。`SADIE_D2_KEMAR` 需要外部檔案 `SADIE_D2_44K_16bit_256tap.hrtfbin`（與授權 `LICENSE-SADIE-II.txt` 一同包含在 SDK 的 `Resources/HRTF/` 中），引擎依以下順序尋找。
 
-1. 환경변수 `SIMPLEST_SADIE_D2_HRTF_PATH`(파일 경로)
-2. 현재 작업 폴더, 3. 실행 파일 폴더, 4. 이 라이브러리의 폴더 — 각각 그 폴더와 상위 8단계에서 `Assets/HRTF/`, `SimpleST/Assets/HRTF/`, `Resources/HRTF/` 아래의 그 파일
+1. 環境變數 `SOUNDTRACING_SADIE_D2_HRTF_PATH`（檔案路徑）
+2. 目前工作資料夾，3. 執行檔資料夾，4. 此程式庫的資料夾 — 分別在該資料夾及其上 8 層中的 `Assets/HRTF/`、`SoundTracing/Assets/HRTF/`、`Resources/HRTF/` 下尋找該檔案
 
-배포에서는 라이브러리 옆(또는 상위)에 `Resources/HRTF/SADIE_D2_44K_16bit_256tap.hrtfbin`을 두는 것이 가장 간단합니다.
+部署時最簡單的做法是在程式庫旁（或上層）放置 `Resources/HRTF/SADIE_D2_44K_16bit_256tap.hrtfbin`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `type` | `STSpatializerType` — `ST_SPATIALIZER_PANNING`(0, 기본) / `ST_SPATIALIZER_MIT_KEMAR`(1) / `ST_SPATIALIZER_SADIE_D2_KEMAR`(2) |
+| `context` | 情境控制代碼 |
+| `type` | `STSpatializerType` — `ST_SPATIALIZER_PANNING`（0，預設）/ `ST_SPATIALIZER_MIT_KEMAR`（1）/ `ST_SPATIALIZER_SADIE_D2_KEMAR`（2） |
 
-**반환** — `1` = 적용 / `0` = 실패. 범위 밖 `type`이면 `0`입니다. SADIE D2 자산 파일을 찾지 못하면 `0`이고 `st_rt_get_last_status`에 `ST_STATUS_UNAVAILABLE`("SADIE D2 HRTF asset not found ...")이 남습니다.
+**回傳值** — `1` = 已套用 / `0` = 失敗。`type` 超出範圍時為 `0`。找不到 SADIE D2 資產檔案時為 `0`，`st_rt_get_last_status` 會留下 `ST_STATUS_UNAVAILABLE`（"SADIE D2 HRTF asset not found ..."）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_spatializer</code> — 현재 공간화 방식을 읽는다</summary>
+<summary><code>st_rt_render_get_spatializer</code> — 讀取目前的空間化方式</summary>
 
 ```c
 int st_rt_render_get_spatializer(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_render_set_spatializer`로 고른 공간화 방식을 돌려줍니다.
+**用途** — 回傳以 `st_rt_render_set_spatializer` 選擇的空間化方式。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[any]` — atomic 읽기라 어느 스레드에서 불러도 블록하지 않습니다.
+**呼叫方式** — 可隨時呼叫。執行緒：`[any]` — 為 atomic 讀取，可在任意執行緒呼叫且不會阻塞。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STSpatializerType` 값(`0` PANNING / `1` MIT_KEMAR / `2` SADIE_D2_KEMAR). 기본은 `0`. 컨텍스트가 `NULL`이면 `-1`.
+**回傳值** — `STSpatializerType` 值（`0` PANNING / `1` MIT_KEMAR / `2` SADIE_D2_KEMAR）。預設為 `0`。情境為 `NULL` 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_limiter_type</code> — 출력 리미터 종류를 고른다</summary>
+<summary><code>st_rt_render_set_limiter_type</code> — 選擇輸出限幅器類型</summary>
 
 ```c
 void st_rt_render_set_limiter_type(STRT_Context* context, int type);
 ```
 
-**용도** — 최종 믹스(마스터 버스)의 마지막 단계인 출력 리미터의 알고리즘을 고릅니다. 리미터는 스테레오(헤드폰·패닝)와 스피커 레이아웃 출력 모두에 걸리며, N채널 출력에는 모든 채널에 같은 이득을 거는 채널 링크로 동작합니다. 32채널을 넘는 커스텀 레이아웃에서는 리미터를 통과시킵니다.
+**用途** — 選擇最終混音（主匯流排）最後階段的輸出限幅器演算法。限幅器同時套用於立體聲（耳機·平移）與喇叭配置輸出，在 N 聲道輸出上以對所有聲道套用相同增益的聲道連結方式運作。超過 32 聲道的自訂配置會讓限幅器直通。
 
-**언제·어떻게** — 렌더 중에도 바꿀 수 있습니다. 리미터를 켜고 끄는 것은 이 함수가 아니라 `STRenderOptions.useLimiter`(기본 `1`, `st_rt_render_set_options`)입니다. 종류를 바꾸면 리미터 지연이 달라지므로 `st_rt_render_get_limiter_latency_samples`를 다시 읽습니다. 스레드: `[control]` — 렌더 스테이지를 바꾸는 제어 스레드 호출이라 오디오 콜백에서 부르지 않습니다. true-peak 종류 지원은 `ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER`(능력 워드 1), 룩어헤드 리미터는 `ST_CAP_LOOKAHEAD_OUTPUT_LIMITER`(능력 워드 0)로 확인합니다.
+**呼叫方式** — 渲染中也可變更。開關限幅器的不是此函式，而是 `STRenderOptions.useLimiter`（預設 `1`，`st_rt_render_set_options`）。變更類型會使限幅器延遲改變，因此請重新讀取 `st_rt_render_get_limiter_latency_samples`。執行緒：`[control]` — 是變更渲染階段的控制執行緒呼叫，不要在音訊回呼中呼叫。true-peak 類型的支援以 `ST_CAP1_TRUE_PEAK_OUTPUT_LIMITER`（能力字組 1）確認，前瞻限幅器以 `ST_CAP_LOOKAHEAD_OUTPUT_LIMITER`（能力字組 0）確認。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `type` | `STOutputLimiterType`. `0`·`1`·`2` 밖의 값은 `LEGACY_ENVELOPE`로 처리됩니다 |
+| `context` | 情境控制代碼 |
+| `type` | `STOutputLimiterType`。`0`·`1`·`2` 以外的值以 `LEGACY_ENVELOPE` 處理 |
 
-**`STOutputLimiterType` 값**
+**`STOutputLimiterType` 值**
 
-| 값 | 동작 |
+| 值 | 行為 |
 |---|---|
-| `ST_OUTPUT_LIMITER_LEGACY_ENVELOPE`(0) | 룩어헤드 없음, 2 ms attack, −0.2 dBFS 샘플 피크 + ±1 하드 클립(참조용). 지연 0 |
-| `ST_OUTPUT_LIMITER_LOOKAHEAD_PEAK`(1) | 룩어헤드 선형 램프, −0.2 dBFS 샘플 피크(참조용). 지연 = 룩어헤드 |
-| `ST_OUTPUT_LIMITER_TRUE_PEAK`(2, 기본) | ITU-R BS.1770-5 4× true-peak 사이드체인, 천장 −1 dBTP(고정), 룩어헤드(= attack) + hold 10 ms + 자동 release 60→400 ms. 출력 true-peak가 천장을 넘지 않습니다. 지연 = `max(lookahead, 1) + 5` 샘플(기본 132 → 137, 3.1 ms) |
+| `ST_OUTPUT_LIMITER_LEGACY_ENVELOPE`(0) | 無前瞻，2 ms attack，−0.2 dBFS 樣本峰值 + ±1 硬削波（參考用）。延遲 0 |
+| `ST_OUTPUT_LIMITER_LOOKAHEAD_PEAK`(1) | 前瞻線性斜坡，−0.2 dBFS 樣本峰值（參考用）。延遲 = 前瞻 |
+| `ST_OUTPUT_LIMITER_TRUE_PEAK`(2, 預設) | ITU-R BS.1770-5 4× true-peak 側鏈，上限 −1 dBTP（固定），前瞻（= attack）+ hold 10 ms + 自動 release 60→400 ms。輸出 true-peak 不會超過上限。延遲 = `max(lookahead, 1) + 5` 樣本（預設 132 → 137，3.1 ms） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_limiter_type</code> — 현재 출력 리미터 종류를 읽는다</summary>
+<summary><code>st_rt_render_get_limiter_type</code> — 讀取目前的輸出限幅器類型</summary>
 
 ```c
 int st_rt_render_get_limiter_type(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_render_set_limiter_type`로 건 리미터 종류를 돌려줍니다.
+**用途** — 回傳以 `st_rt_render_set_limiter_type` 設定的限幅器類型。
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**呼叫方式** — 執行緒：`[control]` — 供控制執行緒使用、無鎖讀取引擎狀態的查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STOutputLimiterType` 값(기본 `2` = `TRUE_PEAK`). 컨텍스트가 `NULL`이면 `-1`.
+**回傳值** — `STOutputLimiterType` 值（預設 `2` = `TRUE_PEAK`）。情境為 `NULL` 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_limiter_lookahead_samples</code> — 리미터 룩어헤드 길이를 정한다</summary>
+<summary><code>st_rt_render_set_limiter_lookahead_samples</code> — 設定限幅器預看長度</summary>
 
 ```c
 int st_rt_render_set_limiter_lookahead_samples(STRT_Context* context, int samples);
 ```
 
-**용도** — `LOOKAHEAD_PEAK`·`TRUE_PEAK` 리미터가 피크를 미리 보는 길이(= attack)를 샘플 단위로 정합니다. 길수록 이득 변화가 부드럽고, 짧을수록 출력 지연이 줄어듭니다.
+**用途** — 以樣本為單位設定 `LOOKAHEAD_PEAK`·`TRUE_PEAK` 限幅器預先查看峰值的長度（= attack）。越長增益變化越平滑，越短輸出延遲越小。
 
-**언제·어떻게** — 룩어헤드 버퍼를 다시 구성합니다. 바꾼 뒤에는 `st_rt_render_get_limiter_latency_samples`로 실제 지연을 다시 읽습니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 重新建構預看緩衝區。變更後以 `st_rt_render_get_limiter_latency_samples` 重新讀取實際延遲。執行緒：`[control]` — 不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `samples` | 룩어헤드 샘플 수(44.1 kHz 엔진 샘플), `[0, ST_OUTPUT_LIMITER_MAX_LOOKAHEAD_SAMPLES]` = `[0, 511]`. 기본 `ST_OUTPUT_LIMITER_DEFAULT_LOOKAHEAD_SAMPLES` = 132(3 ms) |
+| `context` | 情境控制代碼 |
+| `samples` | 預看樣本數（44.1 kHz 引擎樣本），`[0, ST_OUTPUT_LIMITER_MAX_LOOKAHEAD_SAMPLES]` = `[0, 511]`。預設 `ST_OUTPUT_LIMITER_DEFAULT_LOOKAHEAD_SAMPLES` = 132（3 ms） |
 
-**반환** — `1` = 적용 / `0` = 거절(범위 밖, 컨텍스트 `NULL`).
+**回傳值** — `1` = 套用 / `0` = 拒絕（超出範圍、情境為 `NULL`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_limiter_lookahead_samples</code> — 리미터 룩어헤드 길이를 읽는다</summary>
+<summary><code>st_rt_render_get_limiter_lookahead_samples</code> — 讀取限幅器預看長度</summary>
 
 ```c
 int st_rt_render_get_limiter_lookahead_samples(const STRT_Context* context);
 ```
 
-**용도** — 현재 리미터 룩어헤드 샘플 수를 돌려줍니다.
+**用途** — 回傳目前的限幅器預看樣本數。
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**呼叫方式** — 執行緒：`[control]` — 不持鎖讀取引擎狀態的控制執行緒查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 룩어헤드 샘플 수(기본 `132`). 컨텍스트가 `NULL`이면 `-1`.
+**回傳值** — 預看樣本數（預設 `132`）。情境為 `NULL` 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_limiter_latency_samples</code> — 리미터가 더하는 출력 지연을 읽는다</summary>
+<summary><code>st_rt_render_get_limiter_latency_samples</code> — 讀取限幅器增加的輸出延遲</summary>
 
 ```c
 int st_rt_render_get_limiter_latency_samples(const STRT_Context* context);
 ```
 
-**용도** — 출력 리미터가 신호에 더하는 고정 지연을 엔진 샘플 단위로 돌려줍니다. 영상·입력 이벤트와의 싱크 보정, 측정 시 정렬에 씁니다.
+**用途** — 以引擎樣本為單位回傳輸出限幅器加到訊號上的固定延遲。用於與影像·輸入事件的同步校正，以及量測時的對齊。
 
-**언제·어떻게** — 리미터 종류·룩어헤드·`useLimiter`를 바꾼 뒤 다시 읽습니다. 값은 다음 규칙을 따릅니다.
+**呼叫方式** — 變更限幅器類型·預看·`useLimiter` 後重新讀取。值遵循以下規則。
 
-- `useLimiter` = 1 · `TRUE_PEAK`: `max(lookahead, 1) + 5`(기본 137 샘플, 3.1 ms)
+- `useLimiter` = 1 · `TRUE_PEAK`: `max(lookahead, 1) + 5`（預設 137 樣本，3.1 ms）
 - `useLimiter` = 1 · `LOOKAHEAD_PEAK`: `lookahead`
 - `useLimiter` = 1 · `LEGACY_ENVELOPE`: 0
 - `useLimiter` = 0: 0
 
-스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+執行緒：`[control]` — 不持鎖讀取引擎狀態的控制執行緒查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 리미터 지연(샘플). 컨텍스트가 `NULL`이면 `-1`.
+**回傳值** — 限幅器延遲（樣本）。情境為 `NULL` 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_master_gain_db</code> — 마스터 출력 게인을 정한다</summary>
+<summary><code>st_rt_render_set_master_gain_db</code> — 設定主輸出增益</summary>
 
 ```c
 int st_rt_render_set_master_gain_db(STRT_Context* context, float gainDb);
 ```
 
-**용도** — 렌더 출력단의 볼륨입니다. 전파·IR 결과를 무효화하지 않으므로 IR 재계산 없이 전체 음량을 조절할 때 씁니다. 출력 EQ 뒤·리미터 앞에 걸려 키운 만큼은 리미터가 받습니다. 스테레오·스피커 레이아웃 등 채널 수와 무관하게 모든 출력에 걸립니다.
+**用途** — 渲染輸出級的音量。不會使傳播·IR 結果失效，因此用於在不重新計算 IR 的情況下調整整體音量。位於輸出 EQ 之後·限幅器之前，提升的部分由限幅器承接。與立體聲·喇叭佈局等聲道數無關，套用於所有輸出。
 
-**언제·어떻게** — 렌더 중 언제든 부를 수 있습니다. 값이 바뀌면 20 ms 선형 램프로 넘어가고, 0 dB이면 곱셈을 하지 않습니다. 등라우드니스 보정의 `followMasterGain`이 켜져 있으면 보정도 이 게인을 따라 다시 계산됩니다(`st_rt_render_set_loudness_compensation` 참고). 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다. 지원 여부는 `ST_CAP1_MASTER_GAIN`(능력 워드 1)으로 확인합니다.
+**呼叫方式** — 渲染中隨時可呼叫。值改變時以 20 ms 線性斜坡過渡，0 dB 時不做乘法。若等響度補償的 `followMasterGain` 開啟，補償也會依此增益重新計算（參見 `st_rt_render_set_loudness_compensation`）。執行緒：`[control]` — 只變更輸出級，不在音訊回呼中呼叫。是否支援以 `ST_CAP1_MASTER_GAIN`（能力字組 1）確認。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `gainDb` | 게인 [dB], `[ST_MASTER_GAIN_MIN_DB, ST_MASTER_GAIN_MAX_DB]` = `[−96, +24]`. 기본 0 |
+| `context` | 情境控制代碼 |
+| `gainDb` | 增益 [dB]，`[ST_MASTER_GAIN_MIN_DB, ST_MASTER_GAIN_MAX_DB]` = `[−96, +24]`。預設 0 |
 
-**반환** — `1` = 적용 / `0` = 실패. 비유한 값·범위 밖이면 `ST_STATUS_INVALID_ARGUMENT`이고 아무것도 바꾸지 않습니다. `ST_BACKEND_EXA` 백엔드 컨텍스트는 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — `1` = 套用 / `0` = 失敗。非有限值·超出範圍時為 `ST_STATUS_INVALID_ARGUMENT`，且不做任何變更。`ST_BACKEND_EXA` 後端情境為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_master_gain_db</code> — 마스터 출력 게인을 읽는다</summary>
+<summary><code>st_rt_render_get_master_gain_db</code> — 讀取主輸出增益</summary>
 
 ```c
 float st_rt_render_get_master_gain_db(const STRT_Context* context);
 ```
 
-**용도** — 저장된 마스터 게인 [dB]을 돌려줍니다.
+**用途** — 回傳已儲存的主增益 [dB]。
 
-**언제·어떻게** — 스레드: `[control]` — 오디오라이저 컨트롤 락을 짧게 잡고 저장값을 복사합니다.
+**呼叫方式** — 執行緒：`[control]` — 短暫持有 Auralizator 控制鎖並複製儲存值。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 마스터 게인 [dB](기본 `0`). 컨텍스트가 `NULL`이면 `0`.
+**回傳值** — 主增益 [dB]（預設 `0`）。情境為 `NULL` 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_loudness_compensation</code> — 등라우드니스 보정(ISO 226)을 설정한다</summary>
+<summary><code>st_rt_render_set_loudness_compensation</code> — 設定等響度補償（ISO 226）</summary>
 
 ```c
 int st_rt_render_set_loudness_compensation(STRT_Context* context, const STLoudnessCompensationDesc* desc);
 ```
 
-**용도** — 사람 귀는 콘텐츠가 균형 잡힌 기준 레벨보다 작게 재생되면 저역·초고역을 덜 듣습니다. 이 단은 ISO 226:2003 등라우드니스 곡선 두 개(기준 레벨 R, 재생 레벨 P)의 모양 차를 저역 셸프와 고역 셸프로 근사해 되돌립니다. P가 R보다 크면 반대로 깎습니다. 엔진은 절대 SPL을 모르므로 레벨은 호스트가 phon(1 kHz 순음 dB SPL)으로 줍니다.
+**用途** — 內容以低於平衡基準電平的音量播放時，人耳對低頻·極高頻的感知會減弱。此級以低頻擱架與高頻擱架近似兩條 ISO 226:2003 等響度曲線（基準電平 R、播放電平 P）的形狀差並加以補回。P 大於 R 時則反向削減。引擎不知道絕對 SPL，因此電平由主機以 phon（1 kHz 純音 dB SPL）提供。
 
-**언제·어떻게** — 출력단(스테레오·바이노럴과 스피커 레이아웃 모두)에서 출력 EQ 뒤, 마스터 게인·리미터 앞에 등라우드니스 보정 → 가상 베이스 순으로 걸립니다. 전파·IR 결과를 무효화하지 않습니다. `st_rt_create` 직후 **켜져 있고** 마스터 게인을 따라갑니다(기준 83 → 재생 70 phon, 120 Hz에서 저역 약 +7.2 dB, 고역 +1.8 dB). 미들웨어·게임 믹스처럼 출력 음색을 호스트가 소유하는 통합에서는 생성 직후 끄는 것을 검토합니다. 끈 동안은 샘플을 건드리지 않습니다.
+**呼叫方式** — 在輸出級（立體聲·雙耳與喇叭佈局皆是）中，位於輸出 EQ 之後、主增益·限幅器之前，依等響度補償 → 虛擬低音的順序套用。不會使傳播·IR 結果失效。`st_rt_create` 之後即 **為開啟**，並跟隨主增益（基準 83 → 播放 70 phon，120 Hz 低頻約 +7.2 dB，高頻 +1.8 dB）。在中介軟體·遊戲混音等由主機掌管輸出音色的整合中，請考慮在建立後立即關閉。關閉期間不觸碰樣本。
 
-켜고 끄기·값 변경은 클릭 없이 넘어갑니다(셸프 파라미터 50 ms smoothstep 램프, 끌 때는 0 dB 도착 뒤 5.8 ms 원 신호 크로스페이드). 출력 채널 수가 바뀌면(스피커 레이아웃 변경 등) 이력을 비우고 켬과 같은 램프로 다시 들어갑니다. `followMasterGain`이면 볼륨 변경 때 마스터 게인 램프(20 ms)와 함께 움직이지만 별도 명령이라 시작이 최대 한 블록 어긋날 수 있습니다(각각 램프라 불연속은 없음). 32채널을 넘는 커스텀 스피커 레이아웃에는 걸리지 않습니다.
+開關·數值變更皆無爆音過渡（擱架參數 50 ms smoothstep 斜坡，關閉時在到達 0 dB 後以 5.8 ms 與原訊號交叉淡化）。輸出聲道數改變時（喇叭佈局變更等）會清空歷史，並以與開啟相同的斜坡重新進入。`followMasterGain` 時，音量變更會與主增益斜坡（20 ms）一同移動，但因為是不同指令，起點最多可能錯開一個區塊（兩者各自為斜坡，因此不會不連續）。超過 32 聲道的自訂喇叭佈局不套用。
 
-기본값을 유지한 채 켜고 끄려면 get으로 채운 뒤 `enabled`만 바꿔 set합니다.
+要保留預設值並僅切換開關，請先以 get 填入，再只改 `enabled` 後 set。
 
 ```c
 STLoudnessCompensationDesc d = { sizeof d, ST_ABI_VERSION };
 st_rt_render_get_loudness_compensation(ctx, &d);
-d.enabled = 0;                                  /* 끄기 */
+d.enabled = 0;                                  /* 關閉 */
 st_rt_render_set_loudness_compensation(ctx, &d);
 ```
 
-스레드: `[control]` — 출력단만 바꾸며, 제어 스레드에서 ISO 226 피팅(수십 µs)을 합니다. 지원 여부는 `ST_CAP1_LOUDNESS_COMPENSATION`(능력 워드 1)으로 확인합니다. 오프라인 라이브러리에는 없습니다.
+執行緒：`[control]` — 只變更輸出級，在控制執行緒上進行 ISO 226 擬合（數十 µs）。是否支援以 `ST_CAP1_LOUDNESS_COMPENSATION`（能力字組 1）確認。離線程式庫中沒有此函式。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `desc` | 설정. 호출자가 `structSize` / `apiVersion`을 채우고 `reserved`는 0이어야 합니다 |
+| `context` | 情境控制代碼 |
+| `desc` | 設定。呼叫端須填入 `structSize` / `apiVersion`，`reserved` 必須為 0 |
 
-**구조체** `STLoudnessCompensationDesc`
+**結構體** `STLoudnessCompensationDesc`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STLoudnessCompensationDesc)` / `ST_ABI_VERSION` |
-| `enabled` | 0/1. 생성 직후 1 |
-| `followMasterGain` | 0/1. 1이면 실효 재생 레벨 = `playbackLevelPhon` + 마스터 게인 dB. `playbackLevelPhon`을 "마스터 게인 0 dB일 때의 재생 레벨"로 한 번 맞춰 두면 마스터 게인을 볼륨 노브로 쓰는 호스트에서 보정이 자동으로 따라갑니다. 생성 직후 1 |
-| `referenceLevelPhon` | 기준 청취 레벨 `[0, 120]` phon, 기본 83(영화·음악 마스터링 기준 모니터 레벨) |
-| `playbackLevelPhon` | 실제 재생 레벨 `[0, 120]` phon, 기본 70(가정·헤드폰 통상 청취 레벨). 기준과 같으면 보정 0 |
-| `bassScale` | 저역 셸프 게인 배율 `[0, 1]`, 기본 1(ISO 그대로) |
-| `trebleScale` | 고역 셸프 게인 배율 `[0, 1]`, 기본 1. 0이면 저역만 보정 |
-| `maxShelfGainDb` | 셸프 게인 절대값 상한 `[0, 40]` dB(배율 뒤에 적용), 기본 15. 저역 셸프가 상한에 닿으면 게인만 자르지 않고 "셸프가 상한에 닿는 재생 레벨"의 모양(코너·기울기)을 씁니다. 고역 셸프는 모양이 고정이라 게인만 자릅니다 |
+| `enabled` | 0/1。建立後為 1 |
+| `followMasterGain` | 0/1。1 時實效播放電平 = `playbackLevelPhon` + 主增益 dB。將 `playbackLevelPhon` 設為「主增益 0 dB 時的播放電平」後，在把主增益當作音量旋鈕的主機中，補償會自動跟隨。建立後為 1 |
+| `referenceLevelPhon` | 基準聆聽電平 `[0, 120]` phon，預設 83（電影·音樂母帶處理的基準監聽電平） |
+| `playbackLevelPhon` | 實際播放電平 `[0, 120]` phon，預設 70（家用·耳機一般聆聽電平）。與基準相同時補償為 0 |
+| `bassScale` | 低頻擱架增益倍率 `[0, 1]`，預設 1（依 ISO 原樣） |
+| `trebleScale` | 高頻擱架增益倍率 `[0, 1]`，預設 1。0 時僅補償低頻 |
+| `maxShelfGainDb` | 擱架增益絕對值上限 `[0, 40]` dB（於倍率之後套用），預設 15。低頻擱架達到上限時，不只截斷增益，而是使用「擱架達到上限時的播放電平」的形狀（轉角·斜率）。高頻擱架形狀固定，因此只截斷增益 |
 | `reserved[5]` | 0 |
 
-ISO 식의 유효 범위(20 Hz–4 kHz는 20–90 phon, 5–12.5 kHz는 20–80 phon) 밖의 레벨은 그 주파수에서 끝 레벨 등고선의 모양으로 평가합니다(R·P가 둘 다 80 phon을 넘으면 고역 보정 0). 1.25–5 kHz의 ISO 오목부(수 dB 미만)는 셸프로 만들지 않습니다. 근사 오차는 레벨 차가 크고 낮은 쪽 레벨이 낮을수록 커집니다(중역 기준 ISO 표 최대 오차: 83→70 0.5 dB, 83→60 0.9 dB, 83→40 1.9 dB, 90→20 3.7 dB).
+ISO 公式有效範圍（20 Hz–4 kHz 為 20–90 phon，5–12.5 kHz 為 20–80 phon）以外的電平，在該頻率以端點電平等響線的形狀評估（R·P 皆超過 80 phon 時高頻補償為 0）。1.25–5 kHz 的 ISO 凹陷（不到數 dB）不以擱架呈現。電平差越大、較低一方的電平越低，近似誤差越大（以中頻為準的 ISO 表最大誤差：83→70 0.5 dB，83→60 0.9 dB，83→40 1.9 dB，90→20 3.7 dB）。
 
-**반환** — `1` = 적용 / `0` = 실패. `NULL`·필드 범위 밖·`reserved` ≠ 0이면 `ST_STATUS_INVALID_ARGUMENT`, 스탬프 불일치면 `ST_STATUS_VERSION_MISMATCH`(둘 다 아무것도 바꾸지 않음). `ST_BACKEND_EXA` 백엔드 컨텍스트는 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — `1` = 套用 / `0` = 失敗。`NULL`·欄位超出範圍·`reserved` ≠ 0 時為 `ST_STATUS_INVALID_ARGUMENT`，戳記不一致時為 `ST_STATUS_VERSION_MISMATCH`（兩者皆不做任何變更）。`ST_BACKEND_EXA` 後端情境為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_loudness_compensation</code> — 등라우드니스 보정 설정을 읽는다</summary>
+<summary><code>st_rt_render_get_loudness_compensation</code> — 讀取等響度補償設定</summary>
 
 ```c
 int st_rt_render_get_loudness_compensation(const STRT_Context* context, STLoudnessCompensationDesc* outDesc);
 ```
 
-**용도** — 저장된 등라우드니스 보정 설정(요청값)을 돌려줍니다. 한 번도 set하지 않았으면 생성 직후 기본값을 채웁니다. 기본값을 유지한 채 일부 필드만 바꿀 때 먼저 부릅니다.
+**用途** — 回傳已儲存的等響度補償設定（請求值）。若從未 set，則填入建立後的預設值。在保留預設值而只變更部分欄位時先呼叫。
 
-**언제·어떻게** — 스레드: `[control]` — 오디오라이저 컨트롤 락을 짧게 잡고 저장값을 복사합니다.
+**呼叫方式** — 執行緒：`[control]` — 短暫持有 Auralizator 控制鎖並複製儲存值。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outDesc` | 출력. 호출자가 `structSize` / `apiVersion`을 채웁니다. 필드는 `st_rt_render_set_loudness_compensation` 항목 참고 |
+| `context` | 情境控制代碼 |
+| `outDesc` | 輸出。呼叫端須填入 `structSize` / `apiVersion`。欄位參見 `st_rt_render_set_loudness_compensation` 條目 |
 
-**반환** — `1` = 성공 / `0` = 실패. `ST_BACKEND_EXA` 백엔드 컨텍스트는 기본값(꺼짐)을 채웁니다.
+**回傳值** — `1` = 成功 / `0` = 失敗。`ST_BACKEND_EXA` 後端情境會填入預設值（關閉）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_virtual_bass</code> — 가상 베이스(배음 합성)를 설정한다</summary>
+<summary><code>st_rt_render_set_virtual_bass</code> — 設定虛擬低音（諧波合成）</summary>
 
 ```c
 int st_rt_render_set_virtual_bass(STRT_Context* context, const STVirtualBassDesc* desc);
 ```
 
-**용도** — 저역을 재생하지 못하는 작은 드라이버·이어폰에서 저음을 느끼게 하는 missing fundamental 효과입니다. 차단 주파수 아래 저역을 떼어 2·3·4차 배음을 만들고 대역통과로 다듬어 원 신호에 더합니다. 배음 레벨은 입력 레벨에 비례합니다.
+**用途** — 在無法重播低頻的小型單體·耳機上讓人感受到低音的 missing fundamental 效果。分離出截止頻率以下的低頻，產生 2·3·4 次諧波，經帶通修整後加到原訊號上。諧波電平與輸入電平成正比。
 
-**언제·어떻게** — 출력단에서 등라우드니스 보정 뒤, 마스터 게인·리미터 앞에 걸립니다. 기본은 꺼짐입니다. 전파·IR 결과를 무효화하지 않습니다. 켜고 끄기·값 변경은 30 ms smoothstep 램프로 넘어가고, 켬·차단/대역 변경 때는 혼합 0에서 필터를 23 ms 안정시킨 뒤 올립니다. 출력 채널 수가 바뀌면 이력을 비우고 다시 들어갑니다. 스피커 레이아웃의 LFE 채널은 건너뛰고, 32채널을 넘는 커스텀 레이아웃에는 걸리지 않습니다.
+**呼叫方式** — 在輸出級中位於等響度補償之後、主增益·限幅器之前。預設為關閉。不會使傳播·IR 結果失效。開關·數值變更以 30 ms smoothstep 斜坡過渡，開啟·截止/頻帶變更時會在混合量為 0 的狀態下讓濾波器穩定 23 ms 後再拉升。輸出聲道數改變時會清空歷史並重新進入。略過喇叭佈局的 LFE 聲道，超過 32 聲道的自訂佈局不套用。
 
-저역에 여러 톤이 함께 있으면 대역 안 혼변조(합음 f1+f2 등)가 생깁니다. 예를 들어 같은 진폭의 40 Hz + 55 Hz에서는 합음 95 Hz가 2차 배음보다 8.6–10.5 dB 큽니다. 단일 톤이면 2·3·4차 배음만 나옵니다(그 밖 성분 −77 dB 이하). 적용 여부는 청음으로 판단합니다. 기본값으로 켜려면 get으로 채운 뒤 `enabled`만 1로 바꿔 set합니다. 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다. 지원 여부는 `ST_CAP1_VIRTUAL_BASS`(능력 워드 1)로 확인합니다. 오프라인 라이브러리에는 없습니다.
+低頻中同時存在多個音調時，會產生頻帶內互調（和音 f1+f2 等）。例如等振幅的 40 Hz + 55 Hz 時，和音 95 Hz 比 2 次諧波大 8.6–10.5 dB。單一音調時只會產生 2·3·4 次諧波（其他成分 −77 dB 以下）。是否套用請以試聽判斷。要以預設值開啟，請先以 get 填入，只把 `enabled` 改為 1 後 set。執行緒：`[control]` — 只變更輸出級，不在音訊回呼中呼叫。是否支援以 `ST_CAP1_VIRTUAL_BASS`（能力字組 1）確認。離線程式庫中沒有此函式。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `desc` | 설정. 호출자가 `structSize` / `apiVersion`을 채우고 `reserved`는 0이어야 합니다 |
+| `context` | 情境控制代碼 |
+| `desc` | 設定。呼叫端須填入 `structSize` / `apiVersion`，`reserved` 必須為 0 |
 
-**구조체** `STVirtualBassDesc`
+**結構體** `STVirtualBassDesc`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STVirtualBassDesc)` / `ST_ABI_VERSION` |
-| `enabled` | 0/1. 기본 0 |
-| `mode` | `STVirtualBassMode` — `ST_VIRTUAL_BASS_HYBRID`(0, 기본): 원 저역을 그대로 두고 배음을 더함(저역이 나오는 이어폰 등) / `ST_VIRTUAL_BASS_HARMONICS_ONLY`(1): 원 신호를 `cutoffHz` LR4 HPF로 거르고 배음만 남김(작은 드라이버 보호) |
-| `cutoffHz` | 저역 분리·HPF 차단 `[40, 160]` Hz, 기본 90 |
-| `harmonicLowHz` | 배음 대역 하한 `[20, 1000]` Hz, 기본 70 |
-| `harmonicHighHz` | 배음 대역 상한 `[20, 1000]` Hz, `harmonicLowHz`보다 커야 함. 기본 220 |
-| `intensity` | 배음 혼합 강도(선형) `[0, 4]`. 1 = 대역통과 전 배음 에너지가 분리한 저역 에너지와 같음. 기본 0.5(−6 dB) — HYBRID에서 2차 배음이 기본파와 거의 같은 크기로 들리는 값입니다. 기본파가 없는 `HARMONICS_ONLY`는 1.0 안팎을 권합니다 |
+| `enabled` | 0/1。預設 0 |
+| `mode` | `STVirtualBassMode` — `ST_VIRTUAL_BASS_HYBRID`（0，預設）：保留原低頻並加上諧波（可重播低頻的耳機等）/ `ST_VIRTUAL_BASS_HARMONICS_ONLY`（1）：以 `cutoffHz` LR4 HPF 過濾原訊號，只留下諧波（保護小型單體） |
+| `cutoffHz` | 低頻分離·HPF 截止 `[40, 160]` Hz，預設 90 |
+| `harmonicLowHz` | 諧波頻帶下限 `[20, 1000]` Hz，預設 70 |
+| `harmonicHighHz` | 諧波頻帶上限 `[20, 1000]` Hz，必須大於 `harmonicLowHz`。預設 220 |
+| `intensity` | 諧波混合強度（線性）`[0, 4]`。1 = 帶通前的諧波能量等於分離出的低頻能量。預設 0.5（−6 dB） — 在 HYBRID 中 2 次諧波聽起來與基頻大小相近的值。沒有基頻的 `HARMONICS_ONLY` 建議 1.0 左右 |
 | `reserved[6]` | 0 |
 
-**반환** — `1` = 적용 / `0` = 실패. `NULL`·필드 범위 밖·`reserved` ≠ 0이면 `ST_STATUS_INVALID_ARGUMENT`, 스탬프 불일치면 `ST_STATUS_VERSION_MISMATCH`(둘 다 아무것도 바꾸지 않음). `ST_BACKEND_EXA` 백엔드 컨텍스트는 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — `1` = 套用 / `0` = 失敗。`NULL`·欄位超出範圍·`reserved` ≠ 0 時為 `ST_STATUS_INVALID_ARGUMENT`，戳記不一致時為 `ST_STATUS_VERSION_MISMATCH`（兩者皆不做任何變更）。`ST_BACKEND_EXA` 後端情境為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_virtual_bass</code> — 가상 베이스 설정을 읽는다</summary>
+<summary><code>st_rt_render_get_virtual_bass</code> — 讀取虛擬低音設定</summary>
 
 ```c
 int st_rt_render_get_virtual_bass(const STRT_Context* context, STVirtualBassDesc* outDesc);
 ```
 
-**용도** — 저장된 가상 베이스 설정(요청값)을 돌려줍니다. 한 번도 set하지 않았으면 기본값을 채웁니다.
+**用途** — 回傳已儲存的虛擬低音設定（請求值）。若從未 set，則填入預設值。
 
-**언제·어떻게** — 스레드: `[control]` — 오디오라이저 컨트롤 락을 짧게 잡고 저장값을 복사합니다.
+**呼叫方式** — 執行緒：`[control]` — 短暫持有 Auralizator 控制鎖並複製儲存值。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outDesc` | 출력. 호출자가 `structSize` / `apiVersion`을 채웁니다. 필드는 `st_rt_render_set_virtual_bass` 항목 참고 |
+| `context` | 情境控制代碼 |
+| `outDesc` | 輸出。呼叫端須填入 `structSize` / `apiVersion`。欄位參見 `st_rt_render_set_virtual_bass` 條目 |
 
-**반환** — `1` = 성공 / `0` = 실패. `ST_BACKEND_EXA` 백엔드 컨텍스트는 기본값(꺼짐)을 채웁니다.
+**回傳值** — `1` = 成功 / `0` = 失敗。`ST_BACKEND_EXA` 後端情境會填入預設值（關閉）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_eq</code> — 출력 9밴드 그래픽 EQ(믹서 EQ)를 건다</summary>
+<summary><code>st_rt_render_set_eq</code> — 套用輸出 9 頻段圖形 EQ（混音器 EQ）</summary>
 
 ```c
 int st_rt_render_set_eq(STRT_Context* context, const float gainsDb[ST_FREQUENCY_BANDS], int enabled);
 ```
 
-**용도** — 렌더 출력에만 걸리는 9밴드 톤 컨트롤입니다. 전파·IR 결과를 무효화하지 않습니다. 출력 EQ는 하나이고 이 함수는 출력 파라메트릭 EQ(`st_rt_render_set_parametric_eq`)의 **호환 뷰**입니다 — 엔진 밴드 중심(63…16k Hz)마다 Q 1.414 피킹 필터 9개 + 프리앰프 0 dB로 설정됩니다.
+**用途** — 只套用於渲染輸出的 9 頻段音色控制。不會使傳播·IR 結果失效。輸出 EQ 只有一個，此函式是輸出參數式 EQ（`st_rt_render_set_parametric_eq`）的 **相容檢視** — 在每個引擎頻段中心（63…16k Hz）設定 9 個 Q 1.414 峰值濾波器 + 前級放大 0 dB。
 
-**언제·어떻게** — 렌더 중 언제든 부를 수 있습니다. 이 함수와 `st_rt_render_set_parametric_eq`는 같은 EQ의 밴드 목록 전체를 바꾸며 **마지막에 부른 쪽이 이깁니다**. 이 경로는 계수를 즉시 교체하고(램프 없음) 9채널 이상 스피커 레이아웃에서는 통과시킵니다. 토글만 하려는 경우에도 `ST_FREQUENCY_BANDS`개 게인을 반드시 같이 넘깁니다. 9밴드 전용 getter는 없으며, `st_rt_render_get_parametric_eq`가 이 설정을 9개 `PEAKING` 밴드로 돌려줍니다. 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 渲染中隨時可呼叫。此函式與 `st_rt_render_set_parametric_eq` 會改變同一個 EQ 的整個頻段清單，**最後呼叫的一方生效**。此路徑會立即替換係數（無斜坡），在 9 聲道以上的喇叭佈局中則直通。即使只想切換開關，也務必一併傳入 `ST_FREQUENCY_BANDS` 個增益。沒有 9 頻段專用 getter，`st_rt_render_get_parametric_eq` 會將此設定以 9 個 `PEAKING` 頻段回傳。執行緒：`[control]` — 只變更輸出級，不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `gainsDb` | 밴드 게인 [dB] `ST_FREQUENCY_BANDS`(9)개, 순서 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz. 엔진이 `[−24, +24]` dB로 clamp합니다. `NULL`이면 아무것도 하지 않습니다 |
-| `enabled` | 0이면 계수는 갱신하되 우회합니다. 0 밖이면 켭니다 |
+| `context` | 情境控制代碼 |
+| `gainsDb` | `ST_FREQUENCY_BANDS`（9）個頻段增益 [dB]，順序為 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz。引擎會 clamp 到 `[−24, +24]` dB。`NULL` 時不做任何事 |
+| `enabled` | 0 時更新係數但旁通。非 0 時開啟 |
 
-**반환** — `1` = 적용 / `0` = 실패(`gainsDb`가 `NULL` 등).
+**回傳值** — `1` = 套用 / `0` = 失敗（`gainsDb` 為 `NULL` 等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_parametric_eq</code> — 출력 파라메트릭 EQ를 건다</summary>
+<summary><code>st_rt_render_set_parametric_eq</code> — 套用輸出參數式 EQ</summary>
 
 ```c
 int st_rt_render_set_parametric_eq(STRT_Context* context, const STParametricEqBand* bands, int32_t bandCount, float preampDb, int32_t enabled);
 ```
 
-**용도** — 헤드폰 보정(AutoEq 프로파일 등)이나 출력 음색 조정을 위한 최대 16밴드 파라메트릭 EQ입니다. 렌더 출력에만 걸려 전파·IR 결과를 무효화하지 않습니다.
+**用途** — 用於耳機校正（AutoEq 設定檔等）或輸出音色調整的最多 16 頻段參數式 EQ。只套用於渲染輸出，不會使傳播·IR 結果失效。
 
-**언제·어떻게** — 렌더 중 언제든 부를 수 있고, 바뀌면 20 ms 크로스페이드로 넘어갑니다(9밴드 뷰에서 넘어올 때도). 걸리는 자리는 렌더 체인 끝, 마스터 게인 앞(스테레오·바이노럴)이고, 스피커 출력에서는 디코드·거리 정렬 뒤입니다. 모든 출력 채널(스피커 LFE 포함)에 같은 필터가 걸립니다 — 음향 합에 건 것과 같아 저역을 메인·LFE가 어떻게 나눠 내든 결과 음색이 같습니다. 채널마다 다른 보정은 `st_rt_render_set_speaker_channel_eq`를 씁니다. 64채널까지 처리합니다. `st_rt_render_set_eq`와 같은 EQ이므로 마지막에 부른 setter가 이깁니다. AutoEq 텍스트는 `st_rt_render_parse_autoeq_parametric`으로 밴드 배열로 바꿔 넣습니다. 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다. 지원 여부는 `ST_CAP1_OUTPUT_PARAMETRIC_EQ`(능력 워드 1)로 확인합니다.
+**呼叫方式** — 渲染中隨時可呼叫，變更時以 20 ms 交叉淡化過渡（從 9 頻段檢視切換過來時亦同）。套用位置在渲染鏈末端、主增益之前（立體聲·雙耳），喇叭輸出時則在解碼·距離對齊之後。所有輸出聲道（含喇叭 LFE）套用相同濾波器 — 等同套用於聲學總和，因此無論低頻如何在主聲道·LFE 之間分配，結果音色都相同。各聲道不同的校正請使用 `st_rt_render_set_speaker_channel_eq`。最多處理 64 聲道。與 `st_rt_render_set_eq` 是同一個 EQ，因此最後呼叫的 setter 生效。AutoEq 文字以 `st_rt_render_parse_autoeq_parametric` 轉為頻段陣列後傳入。執行緒：`[control]` — 只變更輸出級，不在音訊回呼中呼叫。是否支援以 `ST_CAP1_OUTPUT_PARAMETRIC_EQ`（能力字組 1）確認。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `bands` | 밴드 배열 `bandCount`개. 호출 동안만 읽습니다. `bandCount` = 0이면 `NULL`이어도 됩니다 |
-| `bandCount` | 밴드 수 `[0, ST_PARAMETRIC_EQ_MAX_BANDS]` = `[0, 16]` |
-| `preampDb` | 프리앰프 [dB], `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]` = `[−48, +12]`으로 clamp. 주 용도는 클리핑 방지용 음수이며, 키우는 일은 마스터 게인이 맡습니다 |
-| `enabled` | 0이면 목록은 저장하되 통과시킵니다 |
+| `context` | 情境控制代碼 |
+| `bands` | `bandCount` 個頻段的陣列。只在呼叫期間讀取。`bandCount` = 0 時可為 `NULL` |
+| `bandCount` | 頻段數 `[0, ST_PARAMETRIC_EQ_MAX_BANDS]` = `[0, 16]` |
+| `preampDb` | 前級放大 [dB]，clamp 到 `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]` = `[−48, +12]`。主要用途是防止削波的負值，提升則交由主增益 |
+| `enabled` | 0 時儲存清單但直通 |
 
-**구조체** `STParametricEqBand` (32 bytes, 배열 원소라 버전 스탬프 없음)
+**結構體** `STParametricEqBand`（32 bytes，為陣列元素因此無版本戳記）
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `type` | `STParametricEqType` — `PEAKING`(0) / `LOW_SHELF`(1) / `HIGH_SHELF`(2) / `LOW_PASS`(3) / `HIGH_PASS`(4) / `NOTCH`(5) |
-| `enabled` | 0 = 이 밴드는 항등(건너뜀), 그 밖 = 켬 |
-| `frequencyHz` | 중심(PEAKING·NOTCH) 또는 코너(셸프 중점·LP·HP) 주파수. `[20, min(20000, 0.49·Fs)]` Hz로 clamp |
-| `gainDb` | PEAKING·LOW_SHELF·HIGH_SHELF만 사용(LP·HP·NOTCH는 저장만). `[−24, +24]` dB로 clamp |
-| `q` | `[0.1, 30]`, 셸프는 `[0.1, 3]`으로 clamp(큰 Q의 셸프는 모서리에 큰 공진 피크를 만듭니다) |
-| `reserved[3]` | 0이어야 합니다(아니면 거절) |
+| `enabled` | 0 = 此頻段為恆等（略過），其他 = 開啟 |
+| `frequencyHz` | 中心（PEAKING·NOTCH）或轉角（擱架中點·LP·HP）頻率。clamp 到 `[20, min(20000, 0.49·Fs)]` Hz |
+| `gainDb` | 僅 PEAKING·LOW_SHELF·HIGH_SHELF 使用（LP·HP·NOTCH 只儲存）。clamp 到 `[−24, +24]` dB |
+| `q` | `[0.1, 30]`，擱架 clamp 到 `[0.1, 3]`（Q 大的擱架會在轉角處產生大的共振峰） |
+| `reserved[3]` | 必須為 0（否則拒絕） |
 
-필터 정의(출력 EQ·소스 EQ·스피커 채널 EQ 공통): 밴드마다 RBJ Audio EQ Cookbook 2차 섹션 하나이고, 셸프는 Q를 쓰는 RBJ 셸프(AutoEq와 같음)입니다. Fs는 엔진 내부 표본률 44100 Hz, 계수·연산은 double Direct Form I입니다. 체인은 프리앰프 → 밴드 0..count−1 직렬입니다. `enabled` = 0인 밴드와 \|gain\| ≤ 1e-4 dB인 PEAKING·셸프는 정확히 항등이고, 전체가 꺼져 있거나 효과가 없으면(전 밴드 항등 + 프리앰프 0 dB) 샘플을 건드리지 않습니다. 값이 바뀌면 옛 설정과 새 설정을 20 ms 동안 나란히 돌려 출력을 크로스페이드하고(계수 보간이 아니라 클릭·발산 없음), 그 사이 또 바뀌면 가장 최근 값 하나만 기다렸다가 이어서 넘어갑니다. 유한 값은 위 범위로 clamp하고 getter는 clamp된 실효값을 돌려줍니다.
+濾波器定義（輸出 EQ·音源 EQ·喇叭聲道 EQ 共通）：每個頻段為一個 RBJ Audio EQ Cookbook 二階節，擱架為使用 Q 的 RBJ 擱架（與 AutoEq 相同）。Fs 為引擎內部取樣率 44100 Hz，係數·運算為 double Direct Form I。鏈為前級放大 → 頻段 0..count−1 串聯。`enabled` = 0 的頻段與 \|gain\| ≤ 1e-4 dB 的 PEAKING·擱架為精確恆等，整體關閉或無效果時（全頻段恆等 + 前級放大 0 dB）不觸碰樣本。值改變時，舊設定與新設定並行執行 20 ms 並對輸出做交叉淡化（不是係數內插，因此無爆音·發散），期間若再次變更，只等待最新的一個值再接著過渡。有限值會 clamp 到上述範圍，getter 回傳 clamp 後的實效值。
 
-**반환** — `1` = 적용 / `0` = 실패. `0`일 때 `st_rt_get_last_status`:
+**回傳值** — `1` = 套用 / `0` = 失敗。`0` 時的 `st_rt_get_last_status`：
 
-- `ST_STATUS_INVALID_ARGUMENT` — `bandCount` 범위 밖, `bands` `NULL`(`bandCount` > 0), 비유한 값, 알 수 없는 `type`, `reserved` ≠ 0. 아무것도 바꾸지 않습니다.
-- `ST_STATUS_UNAVAILABLE` — `ST_BACKEND_EXA` 백엔드 컨텍스트
+- `ST_STATUS_INVALID_ARGUMENT` — `bandCount` 超出範圍、`bands` 為 `NULL`（`bandCount` > 0）、非有限值、未知 `type`、`reserved` ≠ 0。不做任何變更。
+- `ST_STATUS_UNAVAILABLE` — `ST_BACKEND_EXA` 後端情境
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_parametric_eq</code> — 출력 EQ 밴드 목록을 읽는다</summary>
+<summary><code>st_rt_render_get_parametric_eq</code> — 讀取輸出 EQ 頻段清單</summary>
 
 ```c
 int st_rt_render_get_parametric_eq(const STRT_Context* context, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outEnabled);
 ```
 
-**용도** — 지금 출력 EQ의 밴드 목록(clamp된 실효값)·프리앰프·켜짐 상태를 돌려줍니다. `st_rt_render_set_eq`로 건 설정도 9개 `PEAKING` 밴드(Q 1.414)로 읽힙니다.
+**用途** — 回傳目前輸出 EQ 的頻段清單（clamp 後的實效值）·前級放大·開啟狀態。以 `st_rt_render_set_eq` 套用的設定也會讀成 9 個 `PEAKING` 頻段（Q 1.414）。
 
-**언제·어떻게** — 크기를 모르면 `outBands`를 `NULL`로 불러 `outBandCount`만 받은 뒤 다시 부릅니다. `ST_PARAMETRIC_EQ_MAX_BANDS`(16)개 용량을 주면 늘 들어갑니다. 스레드: `[control]` — 오디오라이저 컨트롤 락을 잡습니다.
+**呼叫方式** — 不知道大小時，以 `outBands` 為 `NULL` 呼叫只取得 `outBandCount` 後再次呼叫。給予 `ST_PARAMETRIC_EQ_MAX_BANDS`（16）個容量則一定放得下。執行緒：`[control]` — 持有 Auralizator 控制鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outBands` | 밴드 출력 배열. `NULL`이면 크기 질의(밴드는 쓰지 않음). 필드는 `st_rt_render_set_parametric_eq` 항목 참고 |
-| `bandCapacity` | `outBands` 용량(원소 수), 0 이상 |
-| `outBandCount` | 밴드 수 출력. `NULL`이면 건너뜀 |
-| `outPreampDb` | 프리앰프 [dB] 출력. `NULL`이면 건너뜀 |
-| `outEnabled` | 켜짐(0/1) 출력. `NULL`이면 건너뜀 |
+| `context` | 情境控制代碼 |
+| `outBands` | 頻段輸出陣列。`NULL` 時為大小查詢（不寫入頻段）。欄位參見 `st_rt_render_set_parametric_eq` 條目 |
+| `bandCapacity` | `outBands` 容量（元素數），0 以上 |
+| `outBandCount` | 頻段數輸出。`NULL` 時略過 |
+| `outPreampDb` | 前級放大 [dB] 輸出。`NULL` 時略過 |
+| `outEnabled` | 開啟（0/1）輸出。`NULL` 時略過 |
 
-**반환** — `1` = 성공(크기 질의 포함) / `0` = 실패. `0`일 때 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(`bandCapacity < 0`) / `ST_STATUS_BUFFER_TOO_SMALL`(용량이 밴드 수보다 작음 — 이때도 개수·프리앰프·켜짐은 씁니다) / `ST_STATUS_UNAVAILABLE`(`ST_BACKEND_EXA` 백엔드).
+**回傳值** — `1` = 成功（含大小查詢）/ `0` = 失敗。`0` 時的 `st_rt_get_last_status`：`ST_STATUS_INVALID_ARGUMENT`（`bandCapacity < 0`）/ `ST_STATUS_BUFFER_TOO_SMALL`（容量小於頻段數 — 此時仍會寫入數量·前級放大·開啟狀態）/ `ST_STATUS_UNAVAILABLE`（`ST_BACKEND_EXA` 後端）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_parse_autoeq_parametric</code> — AutoEq ParametricEQ.txt를 밴드 배열로 파싱한다</summary>
+<summary><code>st_rt_render_parse_autoeq_parametric</code> — 將 AutoEq ParametricEQ.txt 剖析為頻段陣列</summary>
 
 ```c
 int32_t st_rt_render_parse_autoeq_parametric(const char* utf8Text, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outErrorLine, char* outErrorMessage, int32_t errorMessageCapacity);
 ```
 
-**용도** — AutoEq의 `ParametricEQ.txt`(Equalizer APO 문법의 부분집합) 텍스트를 `STParametricEqBand` 배열과 프리앰프로 바꿉니다. 결과는 그대로 `st_rt_render_set_parametric_eq`(켜짐으로), `st_rt_source_set_parametric_eq`, `st_rt_render_set_speaker_channel_eq`에 넣습니다.
+**用途** — 將 AutoEq 的 `ParametricEQ.txt`（Equalizer APO 語法的子集）文字轉換為 `STParametricEqBand` 陣列與前級放大。結果可直接傳入 `st_rt_render_set_parametric_eq`（開啟）、`st_rt_source_set_parametric_eq`、`st_rt_render_set_speaker_channel_eq`。
 
-**언제·어떻게** — 컨텍스트가 필요 없고, 전역 상태·할당이 없습니다. 오프라인 라이브러리의 `st_off_render_parse_autoeq_parametric`과 같은 구현·같은 계약입니다. 스레드: `[any]` — 어느 스레드에서 불러도 블록하지 않습니다. 지원 여부는 `ST_CAP1_OUTPUT_PARAMETRIC_EQ`(능력 워드 1)에 포함됩니다.
+**呼叫方式** — 不需要情境，沒有全域狀態·配置。與離線程式庫的 `st_off_render_parse_autoeq_parametric` 為相同實作·相同約定。執行緒：`[any]` — 在任何執行緒呼叫都不會阻塞。是否支援包含在 `ST_CAP1_OUTPUT_PARAMETRIC_EQ`（能力字組 1）中。
 
-받는 문법(대소문자 무시):
+接受的語法（不分大小寫）：
 
 ```text
 Preamp: -6.2 dB
 Filter 1: ON LSC Fc 105 Hz Gain 6.8 dB Q 0.70
 ```
 
-- `Preamp: <수> [dB]` — 여러 줄이면 dB로 더합니다.
-- `Filter[ <번호>]: ON|OFF <종류> Fc <수> [Hz] [Gain <수> [dB]] [Q <수>]` — 종류는 `PK`·`PEQ`·`MODAL` / `LSC`·`LS` / `HSC`·`HS` / `LP`·`LPQ` / `HP`·`HPQ` / `NO`. Q를 생략하면 셸프·LP·HP는 0.7071이고 PK·NO는 Q가 필수입니다. Gain은 PK·셸프에 필수입니다. `OFF` 필터는 `enabled` 0 밴드로 들어가 밴드 수에 셉니다.
-- 빈 줄과 `#` 뒤(줄 끝 주석)는 무시하고, UTF-8 BOM·CRLF를 받습니다. 수는 로캘과 무관하게 읽습니다.
-- 거절: 그 밖의 명령(`Channel`·`Device`·`GraphicEQ`·`Include` 등), `BP`·`AP`·`IIR`, 셸프 기울기 형식(`LS 6dB`), `BW Oct`, 범위 밖 값(Fc `[20, 20000]` Hz · Gain ±24 dB · Q `[0.1, 30]`, 셸프 Q `[0.1, 3]` · 프리앰프 최종합 `[−48, +12]` dB), 주석 밖 비 ASCII, 지수 표기. 파서는 clamp하지 않고 거절합니다.
+- `Preamp: <數值> [dB]` — 有多行時以 dB 相加。
+- `Filter[ <編號>]: ON|OFF <類型> Fc <數值> [Hz] [Gain <數值> [dB]] [Q <數值>]` — 類型為 `PK`·`PEQ`·`MODAL` / `LSC`·`LS` / `HSC`·`HS` / `LP`·`LPQ` / `HP`·`HPQ` / `NO`。省略 Q 時擱架·LP·HP 為 0.7071，PK·NO 的 Q 為必填。Gain 對 PK·擱架為必填。`OFF` 濾波器會成為 `enabled` 0 的頻段並計入頻段數。
+- 忽略空行與 `#` 之後（行尾註解），接受 UTF-8 BOM·CRLF。數字的讀取與地區設定無關。
+- 拒絕：其他指令（`Channel`·`Device`·`GraphicEQ`·`Include` 等）、`BP`·`AP`·`IIR`、擱架斜率格式（`LS 6dB`）、`BW Oct`、超出範圍的值（Fc `[20, 20000]` Hz · Gain ±24 dB · Q `[0.1, 30]`，擱架 Q `[0.1, 3]` · 前級放大最終總和 `[−48, +12]` dB）、註解以外的非 ASCII、指數表示法。剖析器不做 clamp 而是拒絕。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `utf8Text` | NUL 종료 UTF-8 텍스트. 필수 |
-| `outBands` | 밴드 출력 배열. `bandCapacity` > 0이면 필수. `reserved`는 0으로 채워집니다 |
-| `bandCapacity` | `outBands` 용량, 0 이상 |
-| `outBandCount` | 밴드 수 출력. 필수 |
-| `outPreampDb` | 프리앰프 [dB] 출력. 필수 |
-| `outErrorLine` | 실패 시 오류 줄 번호(1부터, 줄과 무관한 오류는 0 — 프리앰프 최종합 범위 밖은 파일 끝에서 판정해 0이며, 줄 단위 오류가 있으면 그쪽이 먼저 보고됩니다). `NULL` 허용 |
-| `outErrorMessage` | 실패 사유(NUL 종료 영문, 용량에 맞춰 자름). `NULL` 허용 |
-| `errorMessageCapacity` | `outErrorMessage` 바이트 용량 |
+| `utf8Text` | NUL 結尾的 UTF-8 文字。必填 |
+| `outBands` | 頻段輸出陣列。`bandCapacity` > 0 時必填。`reserved` 會填 0 |
+| `bandCapacity` | `outBands` 容量，0 以上 |
+| `outBandCount` | 頻段數輸出。必填 |
+| `outPreampDb` | 前級放大 [dB] 輸出。必填 |
+| `outErrorLine` | 失敗時的錯誤行號（從 1 開始，與行無關的錯誤為 0 — 前級放大最終總和超出範圍在檔案結尾判定因此為 0，若有行級錯誤則優先回報該錯誤）。允許 `NULL` |
+| `outErrorMessage` | 失敗原因（NUL 結尾英文，依容量截斷）。允許 `NULL` |
+| `errorMessageCapacity` | `outErrorMessage` 位元組容量 |
 
-**반환** — `STAutoEqParseStatus`. 성공이면 `outBands[0..*outBandCount)`와 `*outPreampDb`를 쓰고, 실패면 `*outBandCount` = 0 · `*outPreampDb` = 0입니다. 컨텍스트가 없으므로 `st_rt_get_last_status`에는 남지 않습니다.
+**回傳值** — `STAutoEqParseStatus`。成功時寫入 `outBands[0..*outBandCount)` 與 `*outPreampDb`，失敗時 `*outBandCount` = 0 · `*outPreampDb` = 0。因為沒有情境，不會留在 `st_rt_get_last_status` 中。
 
-| 값 | 뜻 |
+| 值 | 意義 |
 |---|---|
-| `ST_AUTOEQ_PARSE_OK`(0) | 성공 |
-| `ST_AUTOEQ_PARSE_INVALID_ARGUMENT`(1) | `utf8Text`·`outBandCount`·`outPreampDb` `NULL`, `bandCapacity < 0`, `outBands`가 `NULL`인데 `bandCapacity > 0` |
-| `ST_AUTOEQ_PARSE_SYNTAX`(2) | 줄 형식 오류(수 아님·필수 필드 누락·중복·알 수 없는 토큰) |
-| `ST_AUTOEQ_PARSE_UNSUPPORTED`(3) | 지원하지 않는 명령·필터 종류·기울기·BW 형식 |
-| `ST_AUTOEQ_PARSE_OUT_OF_RANGE`(4) | 범위 밖 값 |
-| `ST_AUTOEQ_PARSE_TOO_MANY_BANDS`(5) | `ST_PARAMETRIC_EQ_MAX_BANDS` 또는 `bandCapacity` 초과 |
-| `ST_AUTOEQ_PARSE_EMPTY`(6) | `Preamp`·`Filter` 줄이 하나도 없음 |
+| `ST_AUTOEQ_PARSE_OK`(0) | 成功 |
+| `ST_AUTOEQ_PARSE_INVALID_ARGUMENT`(1) | `utf8Text`·`outBandCount`·`outPreampDb` 為 `NULL`、`bandCapacity < 0`、`outBands` 為 `NULL` 但 `bandCapacity > 0` |
+| `ST_AUTOEQ_PARSE_SYNTAX`(2) | 行格式錯誤（非數字·缺少必填欄位·重複·未知權杖） |
+| `ST_AUTOEQ_PARSE_UNSUPPORTED`(3) | 不支援的指令·濾波器類型·斜率·BW 格式 |
+| `ST_AUTOEQ_PARSE_OUT_OF_RANGE`(4) | 超出範圍的值 |
+| `ST_AUTOEQ_PARSE_TOO_MANY_BANDS`(5) | 超過 `ST_PARAMETRIC_EQ_MAX_BANDS` 或 `bandCapacity` |
+| `ST_AUTOEQ_PARSE_EMPTY`(6) | 沒有任何 `Preamp`·`Filter` 行 |
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_options</code> — 렌더 옵션(경로 성분·공간화·리미터 게이트)을 바꾼다</summary>
+<summary><code>st_rt_render_set_options</code> — 變更渲染選項（路徑成分·空間化·限幅器閘門）</summary>
 
 ```c
 void st_rt_render_set_options(STRT_Context* context, const STRenderOptions* options);
 ```
 
-**용도** — 오랄라이제이션 단계의 게이트를 한 번에 바꿉니다. 직접음·투과·반사·회절·잔향 성분을 개별로 끄고 켜 청취 비교(A/B)를 하거나, 초기 반사 렌더 경로(exact 객체 / hybrid HOA bed), 공간화·HRTF, 경로 페이드, 출력 리미터를 고릅니다. 전파와 IR 변환은 같은 데이터를 계속 만들고, 이 옵션은 렌더 합성 단계만 거릅니다.
+**用途** — 一次變更聽覺化階段的閘門。可個別開關直達聲·透射·反射·繞射·殘響成分進行聆聽比較（A/B），或選擇早期反射渲染路徑（exact 物件 / hybrid HOA bed）、空間化·HRTF、路徑淡化、輸出限幅器。傳播與 IR 轉換仍持續產生相同資料，此選項只過濾渲染合成階段。
 
-**언제·어떻게** — 렌더 중에도 부를 수 있습니다. 일부만 바꾸려면 `st_rt_render_get_options`로 현재 값을 받아 필드를 고친 뒤 넘깁니다. 스피커 출력이 활성인 동안에는 레이아웃이 early 경로(전체 앰비소닉)·`useSpatialization` = 1·`useHrtf` = 0을 소유하므로 그 값들은 유지되고 나머지 게이트만 적용됩니다. 스피커를 끈 뒤에는 `reserved0`이 다시 0/1 범위로 제한됩니다. 1차 산란 게이트(`st_rt_render_set_diffuse_rain_enabled`)는 이 구조체 밖의 값이라 이 호출이 바꾸지 않습니다. 스레드: `[control]` — IR 정책 훅이 포함된 제어 스레드 호출이라 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 渲染中也可呼叫。若只想變更部分，請以 `st_rt_render_get_options` 取得目前值，修改欄位後傳入。喇叭輸出啟用期間，佈局掌管 early 路徑（全 Ambisonics）·`useSpatialization` = 1·`useHrtf` = 0，因此這些值會保留，只套用其餘閘門。關閉喇叭後，`reserved0` 會再次限制在 0/1 範圍。1 次散射閘門（`st_rt_render_set_diffuse_rain_enabled`）是此結構體以外的值，此呼叫不會變更它。執行緒：`[control]` — 包含 IR 策略掛鉤的控制執行緒呼叫，不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `options` | 새 옵션. `NULL`이면 아무것도 하지 않습니다 |
+| `context` | 情境控制代碼 |
+| `options` | 新選項。`NULL` 時不做任何事 |
 
-**구조체** `STRenderOptions` (버전 스탬프 없는 `int` 필드 12개, 0 = 끔 / 0 밖 = 켬)
+**結構體** `STRenderOptions`（無版本戳記的 `int` 欄位 12 個，0 = 關閉 / 非 0 = 開啟）
 
-| 필드 | 기본 | 설명 |
+| 欄位 | 預設 | 說明 |
 |---|---|---|
-| `renderDirect` | 1 | 직접음 렌더 |
-| `renderTransmission` | 1 | 투과음 렌더 |
-| `renderReflection` | 1 | 반사음 렌더 |
-| `renderDiffraction` | 1 | 회절음 렌더 |
-| `renderLateReverb` | 1 | 후기 잔향(FDN 탱크). 0은 탱크만 끄고 1차 산란은 남깁니다 |
-| `useDoppler` | 1 | 가변 지연 도플러(피치). 실시간에서는 무시되고 늘 1입니다 — 0을 넘겨도 켜지고 get은 1을 돌려줍니다. 움직이는 소스의 방사 이득은 별개 스위치(`st_rt_set_doppler_gain_mode`)입니다 |
-| `usePathFade` | 1 | 경로 페이드. 길이는 `st_rt_render_set_path_fade_time` |
-| `reserved0` | 1 | 초기 반사 렌더 경로(`STEarlySpatialMode`와 같은 번호). `0` = Objects: 모든 초기 경로를 exact 객체로 개별 렌더(경로 수에 비례해 렌더 비용이 늚). `1` = Hybrid: 리스너 전역 예산 안의 exact 객체 + 나머지 초기 반사·1차 산란은 HOA3 bed. 실시간 게임 통합은 1을 권합니다. 범위 밖 값은 `[0, 1]`로 clamp됩니다. 스피커 출력 중에는 레이아웃 전용 경로를 나타내는 다른 값이 읽힐 수 있습니다 |
-| `useSpatialization` | 1 | 공간화(패닝·HRIR) 사용 |
-| `useHrtf` | 0 | HRTF 바이노럴 공간화. `st_rt_render_start`의 `useHrtf` 인자가 렌더 시작 때 이 값을 정합니다 |
-| `useLimiter` | 1 | 출력 리미터 켬. 종류는 `st_rt_render_set_limiter_type` |
-| `outputBandPressure` | 0 | 예약 슬롯. 실시간에서는 항상 0입니다 |
+| `renderDirect` | 1 | 直達聲渲染 |
+| `renderTransmission` | 1 | 透射聲渲染 |
+| `renderReflection` | 1 | 反射聲渲染 |
+| `renderDiffraction` | 1 | 繞射聲渲染 |
+| `renderLateReverb` | 1 | 後期殘響（FDN 槽）。0 只關閉槽並保留 1 次散射 |
+| `useDoppler` | 1 | 可變延遲都卜勒（音高）。在即時中會被忽略並恆為 1 — 傳入 0 也會開啟，get 回傳 1。移動音源的輻射增益是另一個開關（`st_rt_set_doppler_gain_mode`） |
+| `usePathFade` | 1 | 路徑淡化。長度為 `st_rt_render_set_path_fade_time` |
+| `reserved0` | 1 | 早期反射渲染路徑（與 `STEarlySpatialMode` 相同編號）。`0` = Objects：所有早期路徑以 exact 物件個別渲染（渲染成本隨路徑數增加）。`1` = Hybrid：聆聽者全域預算內的 exact 物件 + 其餘早期反射·1 次散射為 HOA3 bed。即時遊戲整合建議 1。超出範圍的值會 clamp 到 `[0, 1]`。喇叭輸出期間可能讀到代表佈局專用路徑的其他值 |
+| `useSpatialization` | 1 | 使用空間化（聲像·HRIR） |
+| `useHrtf` | 0 | HRTF 雙耳空間化。`st_rt_render_start` 的 `useHrtf` 引數在渲染開始時決定此值 |
+| `useLimiter` | 1 | 開啟輸出限幅器。類型為 `st_rt_render_set_limiter_type` |
+| `outputBandPressure` | 0 | 保留欄位。在即時中恆為 0 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_options</code> — 현재 렌더 옵션을 읽는다</summary>
+<summary><code>st_rt_render_get_options</code> — 讀取目前的渲染選項</summary>
 
 ```c
 void st_rt_render_get_options(const STRT_Context* context, STRenderOptions* outOptions);
 ```
 
-**용도** — 지금 적용된 `STRenderOptions`를 채웁니다. 일부 필드만 바꿀 때 먼저 읽는 용도입니다.
+**用途** — 填入目前套用的 `STRenderOptions`。用於只變更部分欄位前先讀取。
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**呼叫方式** — 執行緒：`[control]` — 不持鎖讀取引擎狀態的控制執行緒查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outOptions` | 출력. `NULL`이면 아무것도 하지 않습니다. 필드는 `st_rt_render_set_options` 항목 참고 |
+| `context` | 情境控制代碼 |
+| `outOptions` | 輸出。`NULL` 時不做任何事。欄位參見 `st_rt_render_set_options` 條目 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_diffuse_rain_enabled</code> — 1차 산란(diffuse rain) 렌더를 끄고 켠다</summary>
+<summary><code>st_rt_render_set_diffuse_rain_enabled</code> — 開關 1 次散射（diffuse rain）渲染</summary>
 
 ```c
 void st_rt_render_set_diffuse_rain_enabled(STRT_Context* context, int enabled);
 ```
 
-**용도** — 1차 산란은 직접음·반사음·회절음·잔향(`STRenderOptions`의 `render*`)과 나란한 독립 렌더 성분입니다. 이 게이트로 1차 산란만 끄고 켜 청취 비교를 합니다. 끄면 hybrid 경로의 rain bed 셀과 Objects 경로의 rain RIR 셀만 빠지고 FDN 꼬리는 그대로입니다. 반대로 `renderLateReverb` = 0은 탱크만 끄고 1차 산란은 남깁니다.
+**用途** — 1 次散射是與直達聲·反射聲·繞射聲·殘響（`STRenderOptions` 的 `render*`）並列的獨立渲染成分。以此閘門只開關 1 次散射進行聆聽比較。關閉時只移除 hybrid 路徑的 rain bed 單元與 Objects 路徑的 rain RIR 單元，FDN 尾音不變。反之，`renderLateReverb` = 0 只關閉槽並保留 1 次散射。
 
-**언제·어떻게** — 렌더 중에도 부를 수 있으며 IR 재변환 없이 렌더 준비만 다시 합니다. `STRenderOptions` 밖의 값이라 `st_rt_render_set_options`와 스피커 레이아웃 전환이 이 값을 바꾸지 않습니다. 사운드 트레이싱을 끄면(`st_rt_render_set_sound_tracing_enabled(…, 0)`) 1차 산란도 함께 꺼집니다. 기본 1. 스레드: `[control]` — 렌더 준비를 다시 발행하는 제어 스레드 호출입니다. 지원 여부는 `ST_CAP1_RENDER_DIFFUSE_RAIN_GATE`(능력 워드 1)로 확인합니다.
+**呼叫方式** — 渲染中也可呼叫，不重新轉換 IR，只重新進行渲染準備。這是 `STRenderOptions` 以外的值，因此 `st_rt_render_set_options` 與喇叭佈局切換不會變更此值。關閉聲音追蹤（`st_rt_render_set_sound_tracing_enabled(…, 0)`）時 1 次散射也一併關閉。預設 1。執行緒：`[control]` — 重新發佈渲染準備的控制執行緒呼叫。是否支援以 `ST_CAP1_RENDER_DIFFUSE_RAIN_GATE`（能力字組 1）確認。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | 0 = 1차 산란 끔, 0 밖 = 켬(기본) |
+| `context` | 情境控制代碼 |
+| `enabled` | 0 = 關閉 1 次散射，非 0 = 開啟（預設） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_is_diffuse_rain_enabled</code> — 1차 산란 렌더 게이트 상태를 읽는다</summary>
+<summary><code>st_rt_render_is_diffuse_rain_enabled</code> — 讀取 1 次散射渲染閘門狀態</summary>
 
 ```c
 int st_rt_render_is_diffuse_rain_enabled(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_render_set_diffuse_rain_enabled`로 건 값을 돌려줍니다.
+**用途** — 回傳以 `st_rt_render_set_diffuse_rain_enabled` 設定的值。
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**呼叫方式** — 執行緒：`[control]` — 不持鎖讀取引擎狀態的控制執行緒查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `1` = 켜짐(기본) / `0` = 꺼짐. 컨텍스트가 없으면 `-1`.
+**回傳值** — `1` = 開啟（預設）/ `0` = 關閉。沒有情境時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_sound_tracing_enabled</code> — 사운드 트레이싱 효과를 끄고 켠다(기준선 비교)</summary>
+<summary><code>st_rt_render_set_sound_tracing_enabled</code> — 開關聲音追蹤效果（基準線比較）</summary>
 
 ```c
 void st_rt_render_set_sound_tracing_enabled(STRT_Context* context, int enabled);
 ```
 
-**용도** — 사운드 트레이싱 효과를 끈 "거리 감쇠 + 패닝" 기준선과 비교하기 위한 토글입니다. `enabled` = 0은 별도의 바이패스 렌더러가 아닙니다 — 같은 추적 파이프라인을 그대로 돌리되 반사·회절·잔향·1차 산란 경로와 공기흡수·전파지연·직접음 차폐를 꺼서 거리 감쇠와 공간화만 남깁니다. 공간화 방식(`st_rt_render_set_spatializer`)은 그대로입니다.
+**用途** — 用於與關閉聲音追蹤效果的「距離衰減 + 聲像」基準線進行比較的切換。`enabled` = 0 並非獨立的旁通渲染器 — 仍執行相同的追蹤管線，但關閉反射·繞射·殘響·1 次散射路徑與空氣吸收·傳播延遲·直達聲遮蔽，只保留距離衰減與空間化。空間化方式（`st_rt_render_set_spatializer`）不變。
 
-**언제·어떻게** — 렌더 중에도 부를 수 있습니다. 끈 상태에서도 씬 setter·전파 워커·IR 변환·발행은 계속 돕니다 — 스케줄러나 데이터 펌프를 멈추는 기능이 아니며, CPU를 아끼려면 `st_rt_idle`을 씁니다. 그래서 끈 상태에서도 첫 IR이 설치된 뒤부터 소리가 납니다. 기본은 켜짐입니다. 스레드: `[control]` — 씬 락을 여러 번 잡으므로 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 渲染中也可呼叫。關閉狀態下場景 setter·傳播工作執行緒·IR 轉換·發佈仍持續運作 — 這不是停止排程器或資料幫浦的功能，要節省 CPU 請使用 `st_rt_idle`。因此即使在關閉狀態下，也要在第一個 IR 安裝後才會發聲。預設為開啟。執行緒：`[control]` — 會多次持有場景鎖，因此不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | 0 = 기준선(거리 감쇠 + 공간화만), 0 밖 = 사운드 트레이싱 켬(기본) |
+| `context` | 情境控制代碼 |
+| `enabled` | 0 = 基準線（僅距離衰減 + 空間化），非 0 = 開啟聲音追蹤（預設） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_is_sound_tracing_enabled</code> — 사운드 트레이싱 효과가 켜져 있는지 읽는다</summary>
+<summary><code>st_rt_render_is_sound_tracing_enabled</code> — 讀取聲音追蹤效果是否開啟</summary>
 
 ```c
 int st_rt_render_is_sound_tracing_enabled(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_render_set_sound_tracing_enabled`로 건 값을 돌려줍니다.
+**用途** — 回傳以 `st_rt_render_set_sound_tracing_enabled` 設定的值。
 
-**언제·어떻게** — 스레드: `[any]` — atomic 읽기라 어느 스레드에서 불러도 블록하지 않습니다.
+**呼叫方式** — 執行緒：`[any]` — atomic 讀取，在任何執行緒呼叫都不會阻塞。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `1` = 켜짐(기본) / `0` = 꺼짐 또는 컨텍스트 `NULL`.
+**回傳值** — `1` = 開啟（預設）/ `0` = 關閉或情境為 `NULL`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_path_fade_time</code> — 경로 페이드 시간을 정한다</summary>
+<summary><code>st_rt_render_set_path_fade_time</code> — 設定路徑淡化時間</summary>
 
 ```c
 void st_rt_render_set_path_fade_time(STRT_Context* context, float seconds);
 ```
 
-**용도** — IR이 갱신되면서 경로가 바뀔 때 클릭 없이 넘어가도록 거는 페이드의 길이(초)를 정합니다. 소스·리스너가 움직이는 장면에서 전환의 부드러움과 반응성 사이를 조정합니다. `STRenderOptions.usePathFade`가 켜져 있을 때(기본) 쓰입니다.
+**用途** — 設定 IR 更新導致路徑改變時，為了無爆音過渡而套用的淡化長度（秒）。在音源·聆聽者移動的場景中，調整過渡平滑度與反應性之間的平衡。在 `STRenderOptions.usePathFade` 開啟時（預設）使用。
 
-**언제·어떻게** — 렌더 중에도 부를 수 있습니다. 시간 인자는 씬 단위와 무관한 초입니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 渲染中也可呼叫。時間引數是與場景單位無關的秒。執行緒：`[control]` — 不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `seconds` | 페이드 길이 [s], 양의 유한 값. 기본 0.05 s. 0 이하·비유한 값은 무시됩니다 |
+| `context` | 情境控制代碼 |
+| `seconds` | 淡化長度 [s]，正的有限值。預設 0.05 s。0 以下·非有限值會被忽略 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_path_fade_time</code> — 경로 페이드 시간을 읽는다</summary>
+<summary><code>st_rt_render_get_path_fade_time</code> — 讀取路徑淡化時間</summary>
 
 ```c
 float st_rt_render_get_path_fade_time(const STRT_Context* context);
 ```
 
-**용도** — 현재 경로 페이드 시간(초)을 돌려줍니다.
+**用途** — 回傳目前的路徑淡化時間（秒）。
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**呼叫方式** — 執行緒：`[control]` — 不持鎖讀取引擎狀態的控制執行緒查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 페이드 시간 [s](기본 `0.05`). 컨텍스트가 `NULL`이면 `0`.
+**回傳值** — 淡化時間 [s]（預設 `0.05`）。情境為 `NULL` 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_max_delay_seconds</code> — 렌더 지연 링의 최대 지연을 정한다</summary>
+<summary><code>st_rt_render_set_max_delay_seconds</code> — 設定渲染延遲環的最大延遲</summary>
 
 ```c
 int st_rt_render_set_max_delay_seconds(STRT_Context* context, float seconds);
 ```
 
-**용도** — 렌더러가 표현할 수 있는 최대 전파 지연(초)을 정합니다. 지연이 이 한계를 넘는 exact 경로는 렌더에서 빠지고 후기 잔향은 FDN이 덮습니다. 큰 실내·야외처럼 늦게 도착하는 경로가 필요하면 늘리고, 메모리를 줄이려면 줄입니다. 지연 링 메모리는 렌더하는 소스마다 9밴드 × 링 길이로 늘어납니다. 음원 메모리 예산(`STMemoryBudget`)에서는 이 값이 소스별 지연 링의 천장입니다.
+**用途** — 設定渲染器可表示的最大傳播延遲（秒）。延遲超過此上限的 exact 路徑會從渲染中移除，後期殘響由 FDN 覆蓋。需要大型室內·戶外等較晚到達的路徑時調大，要減少記憶體時調小。延遲環記憶體會依每個渲染中的音源以 9 頻段 × 環長度增加。在音源記憶體預算（`STMemoryBudget`）中，此值是各音源延遲環的上限。
 
-**언제·어떻게** — 지연 링을 재할당하므로 소스를 많이 만들기 전, 렌더를 시작하기 전에 정하는 것이 좋습니다. 생성 시점 값은 `STRT_CreateOptions.maxDelaySeconds`(0 = 기본 2.0 s)로도 줄 수 있습니다. 스레드: `[control, blocking]` — 지연 링 재할당이 있는 긴 구간이라 게임 루프·오디오 스레드에서 부르지 않습니다. 지원 여부는 `ST_CAP_RUNTIME_DELAY_RESIZE`(능력 워드 0)로 확인합니다.
+**呼叫方式** — 會重新配置延遲環，因此最好在建立大量音源之前、開始渲染之前設定。建立時的值也可以透過 `STRT_CreateOptions.maxDelaySeconds`（0 = 預設 2.0 s）指定。執行緒：`[control, blocking]` — 包含延遲環重新配置的長區間，不在遊戲迴圈·音訊執行緒中呼叫。是否支援以 `ST_CAP_RUNTIME_DELAY_RESIZE`（能力字組 0）確認。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `seconds` | 최대 지연 [s], 약 `0.012`(엔진 블록 512 + 보간 여유 8 샘플) ~ `60`. 기본 2.0. 씬 단위와 무관한 초 |
+| `context` | 情境控制代碼 |
+| `seconds` | 最大延遲 [s]，約 `0.012`（引擎區塊 512 + 內插餘裕 8 樣本）~ `60`。預設 2.0。與場景單位無關的秒 |
 
-**반환** — `1` = 적용(같은 값이면 그대로 1) / `0` = 거절(범위 밖·비유한 값, 컨텍스트 `NULL`).
+**回傳值** — `1` = 套用（相同值時照樣為 1）/ `0` = 拒絕（超出範圍·非有限值、情境為 `NULL`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_max_delay_seconds</code> — 렌더 지연 링의 최대 지연을 읽는다</summary>
+<summary><code>st_rt_render_get_max_delay_seconds</code> — 讀取渲染延遲環的最大延遲</summary>
 
 ```c
 float st_rt_render_get_max_delay_seconds(const STRT_Context* context);
 ```
 
-**용도** — 현재 최대 지연(초)을 돌려줍니다.
+**用途** — 回傳目前的最大延遲（秒）。
 
-**언제·어떻게** — 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**呼叫方式** — 執行緒：`[control]` — 不持鎖讀取引擎狀態的控制執行緒查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 최대 지연 [s](기본 `2.0`). 컨텍스트가 `NULL`이면 `0`.
+**回傳值** — 最大延遲 [s]（預設 `2.0`）。情境為 `NULL` 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_ring_buffer_samples</code> — 지연 링 길이(샘플)를 읽는다</summary>
+<summary><code>st_rt_render_get_ring_buffer_samples</code> — 讀取延遲環長度（樣本）</summary>
 
 ```c
 int st_rt_render_get_ring_buffer_samples(const STRT_Context* context);
 ```
 
-**용도** — 현재 최대 지연에 대응하는 렌더 지연 링의 길이를 엔진 샘플(44.1 kHz) 단위로 돌려줍니다. 최대 지연 × 44100에 렌더 블록(512)과 보간 여유를 더한 값이라 메모리 추정에 씁니다.
+**用途** — 以引擎樣本（44.1 kHz）為單位回傳對應目前最大延遲的渲染延遲環長度。為最大延遲 × 44100 加上渲染區塊（512）與內插餘裕的值，用於記憶體估算。
 
-**언제·어떻게** — `st_rt_render_set_max_delay_seconds` 뒤에 다시 읽습니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽는 제어 스레드용 질의입니다.
+**呼叫方式** — 在 `st_rt_render_set_max_delay_seconds` 之後重新讀取。執行緒：`[control]` — 不持鎖讀取引擎狀態的控制執行緒查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 링 길이(샘플). 컨텍스트가 `NULL`이면 `0`.
+**回傳值** — 環長度（樣本）。情境為 `NULL` 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_start</code> — 오디오 렌더를 시작한다(출력 모드별)</summary>
+<summary><code>st_rt_render_start</code> — 開始音訊渲染（依輸出模式）</summary>
 
 ```c
 int st_rt_render_start(STRT_Context* context, int useHrtf);
 ```
 
-**용도** — 렌더 출력을 시작하고 출력 형태(헤드폰 바이노럴 / 스테레오 패닝 / 스피커 레이아웃)를 정합니다. 무엇을 띄우는지는 생성 옵션 `STRT_CreateOptions.renderOutputMode`에 따라 다릅니다.
+**用途** — 開始渲染輸出並決定輸出形式（耳機雙耳 / 立體聲聲像 / 喇叭佈局）。啟動什麼取決於建立選項 `STRT_CreateOptions.renderOutputMode`。
 
-| `renderOutputMode` | `st_rt_render_start`가 하는 일 | 출력을 가져가는 쪽 |
+| `renderOutputMode` | `st_rt_render_start` 所做的事 | 取用輸出的一方 |
 |---|---|---|
-| `ST_RT_RENDER_OUTPUT_DEVICE`(0, 기본) | OS 오디오 장치를 열고 엔진 렌더 스레드를 띄웁니다 | 엔진이 장치까지 직접 냅니다 |
-| `ST_RT_RENDER_OUTPUT_HOST_PULL`(1) | **스레드도 장치도 만들지 않고** 바이노럴/스피커 선택과 "렌더 허용" 플래그만 세웁니다. pull 버퍼와 리샘플러를 여기서 잡습니다 | 호스트가 자기 오디오 스레드에서 `st_rt_render_process`를 부릅니다 |
-| `ST_RT_RENDER_OUTPUT_HOST_PULL_BUFFERED`(2) | 엔진 렌더 스레드를 띄워 출력 링(8블록 용량·3블록 목표)을 채웁니다. 장치는 없습니다 | 호스트가 `st_rt_render_process`로 링에서 복사만 합니다 |
+| `ST_RT_RENDER_OUTPUT_DEVICE`(0, 預設) | 開啟 OS 音訊裝置並啟動引擎渲染執行緒 | 引擎直接輸出到裝置 |
+| `ST_RT_RENDER_OUTPUT_HOST_PULL`(1) | **不建立執行緒也不建立裝置**，只設定雙耳/喇叭選擇與「允許渲染」旗標。pull 緩衝區與重新取樣器在此配置 | 主機在自己的音訊執行緒上呼叫 `st_rt_render_process` |
+| `ST_RT_RENDER_OUTPUT_HOST_PULL_BUFFERED`(2) | 啟動引擎渲染執行緒填充輸出環（容量 8 區塊·目標 3 區塊）。沒有裝置 | 主機以 `st_rt_render_process` 只從環中複製 |
 
-**언제·어떻게** — 씬·소스·리스너를 준비한 뒤 부릅니다. HOST_PULL 계열에서도 **반드시 불러야 합니다** — 부르기 전 `st_rt_render_process`는 0 프레임을 돌려줍니다. HRIR 공간화를 쓸 거면 먼저 `st_rt_render_set_spatializer`로 데이터셋을 고르고 `useHrtf` = 1로 시작합니다. 스피커 레이아웃(`st_rt_render_set_speaker_layout[_custom]`)을 걸어 두고 `useHrtf` = 0으로 시작하면 그 레이아웃의 N채널로 출력하며, 스피커 출력의 활성 판정(`st_rt_render_get_speaker_channels`)은 이 호출 이후에 섭니다. 엔진이 쉬는 중(`st_rt_idle`)에 시작하면 IDLE 상태로 시작합니다. 스레드: `[control, blocking]` — DEVICE 모드는 장치·스레드 기동이 있는 긴 구간이라 게임 루프·오디오 스레드에서 부르지 않습니다. HOST_PULL 지원은 `ST_CAP_HOST_PULL_RENDER`, BUFFERED는 `ST_CAP_HOST_PULL_BUFFERED`(능력 워드 0)로 확인합니다.
+**呼叫方式** — 在準備好場景·音源·聆聽者後呼叫。HOST_PULL 系列也 **必須呼叫** — 呼叫前 `st_rt_render_process` 回傳 0 幀。若要使用 HRIR 空間化，先以 `st_rt_render_set_spatializer` 選擇資料集，再以 `useHrtf` = 1 開始。若已設定喇叭佈局（`st_rt_render_set_speaker_layout[_custom]`）並以 `useHrtf` = 0 開始，則以該佈局的 N 聲道輸出，喇叭輸出的啟用判定（`st_rt_render_get_speaker_channels`）在此呼叫之後成立。在引擎閒置中（`st_rt_idle`）開始時，會以 IDLE 狀態開始。執行緒：`[control, blocking]` — DEVICE 模式包含裝置·執行緒啟動的長區間，不在遊戲迴圈·音訊執行緒中呼叫。HOST_PULL 支援以 `ST_CAP_HOST_PULL_RENDER`、BUFFERED 以 `ST_CAP_HOST_PULL_BUFFERED`（能力字組 0）確認。
 
-스레드 수(PIPELINED 스케줄러, N = `max(3, 계산 스레드 예산)`): DEVICE = 계산 워커 N−1 + 렌더 1 + 장치 1, HOST_PULL = 계산 워커 N−1(렌더·장치 0), HOST_PULL_BUFFERED = 계산 워커 N−1 + 렌더 1(장치 0). 파일 입력이 있으면 디코더 스레드 1개가 더해집니다. 실측은 `st_rt_get_thread_inventory`로 봅니다.
+執行緒數（PIPELINED 排程器，N = `max(3, 計算執行緒預算)`）：DEVICE = 計算工作執行緒 N−1 + 渲染 1 + 裝置 1，HOST_PULL = 計算工作執行緒 N−1（渲染·裝置 0），HOST_PULL_BUFFERED = 計算工作執行緒 N−1 + 渲染 1（裝置 0）。有檔案輸入時會再加 1 個解碼器執行緒。實測以 `st_rt_get_thread_inventory` 查看。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `useHrtf` | 1 = HRTF 바이노럴 2채널(`st_rt_render_set_spatializer`로 고른 HRIR). 0 = 스테레오 패닝 2채널, 또는 스피커 레이아웃을 걸었으면 그 N채널. `STRenderOptions.useHrtf`도 이 값으로 정해집니다 |
+| `context` | 情境控制代碼 |
+| `useHrtf` | 1 = HRTF 雙耳 2 聲道（以 `st_rt_render_set_spatializer` 選擇的 HRIR）。0 = 立體聲聲像 2 聲道，或已設定喇叭佈局時為該 N 聲道。`STRenderOptions.useHrtf` 也由此值決定 |
 
-**반환** — `1` = 시작됨(DEVICE 모드에서 이미 돌고 있으면 그대로 1) / `0` = 실패(컨텍스트 `NULL`, 장치 기동 실패 등).
+**回傳值** — `1` = 已開始（DEVICE 模式下已在執行時照樣為 1）/ `0` = 失敗（情境為 `NULL`、裝置啟動失敗等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_stop</code> — 오디오 렌더를 멈춘다</summary>
+<summary><code>st_rt_render_stop</code> — 停止音訊渲染</summary>
 
 ```c
 void st_rt_render_stop(STRT_Context* context);
 ```
 
-**용도** — `st_rt_render_start`로 시작한 렌더를 멈춥니다.
+**用途** — 停止以 `st_rt_render_start` 開始的渲染。
 
-**언제·어떻게** — 모드별 동작:
+**呼叫方式** — 各模式的行為：
 
-- DEVICE: 장치를 멈추고 렌더 스레드를 join합니다.
-- HOST_PULL: "렌더 허용" 플래그를 내리고 이월 FIFO를 비웁니다(다음 start가 남은 꼬리를 내보내지 않게). 이후 `st_rt_render_process`는 0을 돌려줍니다.
-- HOST_PULL_BUFFERED: 렌더 스레드를 멈추고 출력 링을 버립니다. 링에 있던 몫은 스피커 세트의 `contentFrame`에 이미 세었지만 들리지 않으므로, 세트 위치를 맞추려면 버리기 전에 `contentFrame − latencyFrames`(들린 위치)를 읽고 `st_rt_speaker_set_relocate`로 다시 잡습니다.
+- DEVICE：停止裝置並 join 渲染執行緒。
+- HOST_PULL：降下「允許渲染」旗標並清空結轉 FIFO（使下一次 start 不會送出殘留的尾巴）。之後 `st_rt_render_process` 回傳 0。
+- HOST_PULL_BUFFERED：停止渲染執行緒並丟棄輸出環。環中的部分已計入喇叭組的 `contentFrame` 但不會被聽到，因此要對齊組的位置時，請在丟棄前讀取 `contentFrame − latencyFrames`（已聽到的位置），並以 `st_rt_speaker_set_relocate` 重新設定。
 
-`st_rt_render_process`와 동시에 불러도 안전합니다 — 엔진이 렌더 허용을 내리고 진행 중인 `st_rt_render_process`가 빠져나갈 때까지 기다린 뒤 멈춥니다. 오래 쉬게 할 때 장치까지 놓으려면 `st_rt_get_idle_state`가 IDLE이 된 뒤 이 함수를 부릅니다. 스레드: `[control, blocking]` — 장치 정지·스레드 join이 있어 게임 루프·오디오 스레드에서 부르지 않습니다.
+與 `st_rt_render_process` 同時呼叫也安全 — 引擎會降下允許渲染，等待進行中的 `st_rt_render_process` 退出後再停止。長時間閒置時若要連裝置一起釋放，請在 `st_rt_get_idle_state` 成為 IDLE 後呼叫此函式。執行緒：`[control, blocking]` — 包含裝置停止·執行緒 join，不在遊戲迴圈·音訊執行緒中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_is_running</code> — 렌더가 돌고 있는지 읽는다</summary>
+<summary><code>st_rt_render_is_running</code> — 讀取渲染是否正在執行</summary>
 
 ```c
 int st_rt_render_is_running(const STRT_Context* context);
 ```
 
-**용도** — 렌더 상태를 돌려줍니다. 출력 모드와 무관하게 일관된 뜻입니다 — DEVICE는 장치가 도는지, HOST_PULL은 장치가 아니라 "렌더 허용" 플래그(`st_rt_render_start` 뒤·`st_rt_render_stop` 전)를 봅니다.
+**用途** — 回傳渲染狀態。與輸出模式無關，意義一致 — DEVICE 看裝置是否在執行，HOST_PULL 看的不是裝置而是「允許渲染」旗標（`st_rt_render_start` 之後·`st_rt_render_stop` 之前）。
 
-**언제·어떻게** — 스레드: `[control]` — 제어 스레드용 질의입니다.
+**呼叫方式** — 執行緒：`[control]` — 控制執行緒用查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `1` = 렌더 중 / `0` = 멈춤 또는 컨텍스트 `NULL`.
+**回傳值** — `1` = 渲染中 / `0` = 停止或情境為 `NULL`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_process</code> — 호스트 오디오 스레드에서 출력 블록을 가져간다(pull 렌더)</summary>
+<summary><code>st_rt_render_process</code> — 在主機音訊執行緒上取得輸出區塊（pull 渲染）</summary>
 
 ```c
 int st_rt_render_process(STRT_Context* context, float* interleavedOut, int frames);
 ```
 
-**용도** — HOST_PULL 계열 출력 모드의 진입점입니다. 엔진 출력이 호스트 오디오 그래프를 지나야 하는 통합 — 게임 엔진 서브믹스 이펙트, 오디오 캡처·녹화 파이프라인 등 — 에서 호스트가 자기 오디오 스레드에서 블록을 가져갑니다. HOST_PULL은 이 호출 스레드에서 렌더하고, HOST_PULL_BUFFERED는 엔진 렌더 스레드가 채운 링에서 복사만 합니다(호스트 콜백 비용 ≈ memcpy, 지터는 링이 흡수). 세 출력 모드 모두 같은 블록 함수를 쓰므로 소리는 같습니다.
+**用途** — HOST_PULL 系列輸出模式的進入點。在引擎輸出須經過主機音訊圖的整合中 — 遊戲引擎子混音效果、音訊擷取·錄製管線等 — 由主機在自己的音訊執行緒上取得區塊。HOST_PULL 在此呼叫執行緒上渲染，HOST_PULL_BUFFERED 只從引擎渲染執行緒填充的環中複製（主機回呼成本 ≈ memcpy，抖動由環吸收）。三種輸出模式都使用相同的區塊函式，因此聲音相同。
 
-**언제·어떻게** — `st_rt_render_start` 뒤, 호스트 오디오 콜백마다 부릅니다. 스레드: `[audio]` — 호스트 오디오 스레드(MMCSS/HIGHEST)에서 불러도 안전합니다. 락·할당·시스템콜을 새로 만들지 않고(버퍼와 리샘플러는 `st_rt_render_start`에서 잡고, IR 채택은 포인터 교체), 호출 스레드의 우선순위·affinity는 건드리지 않습니다. FTZ/DAZ만 이 호출 구간 동안 켰다가 원래대로 되돌립니다.
+**呼叫方式** — 在 `st_rt_render_start` 之後，於每次主機音訊回呼時呼叫。執行緒：`[audio]` — 在主機音訊執行緒（MMCSS/HIGHEST）上呼叫也安全。不會新增鎖·配置·系統呼叫（緩衝區與重新取樣器在 `st_rt_render_start` 中配置，IR 採用為指標替換），也不觸碰呼叫執行緒的優先順序·affinity。只有 FTZ/DAZ 在此呼叫區間內開啟後再還原。
 
-- **채널 수** — 바이노럴·스테레오면 2, 스피커 레이아웃이 활성이면 `st_rt_render_get_speaker_channels()` 값입니다. 그 함수가 0을 돌려주면 출력은 **2채널**입니다 — 0을 채널 수로 쓰지 않습니다.
-- **레이아웃 전환** — 렌더 중에 `st_rt_render_set_speaker_layout[_custom]` / `st_rt_render_disable_speaker_output`을 부르면 pull 출력이 재구성됩니다(채널 수·엔진 블록·이월 FIFO·출력 리샘플러). 전환은 이 함수와 동시에 불러도 안전합니다 — 엔진이 렌더 허용을 내리고 진행 중인 호출이 빠져나갈 때까지 기다린 뒤 바꿉니다(`st_rt_render_start` / `stop`도 같음). 전환 창에 걸린 호출은 **0 프레임**을 돌려주므로 그 블록은 호스트가 무음으로 처리합니다. 전환 뒤에는 `st_rt_render_get_speaker_channels()`를 다시 읽어 그 폭으로 버퍼를 잡습니다.
-- **언더런** — 소스 스트림이 요청보다 적게 채워졌으면 그 소스는 무음으로 채우고 `STStreamStatus.underrunFrames`에 누적합니다. **절대 stall하지 않습니다.** BUFFERED에서 블록당 렌더 비용이 지속적으로 블록 시간(11.61 ms)을 넘으면 링도 막지 못해, 그 언더런은 엔진 링 카운터에 잡히고 무음으로 채워집니다.
-- **임의 `frames`** — 내부는 512프레임 엔진 블록으로 렌더하고 남는 몫은 이월 FIFO에 둡니다. 호스트 블록이 512의 배수가 아니어도(예: 48 kHz에서 1024 = 941.6 엔진 프레임) stall하지 않지만, FIFO에 남은 몫은 그만큼 지연입니다. 지연 상한은 1 엔진 블록 + 리샘플러 지연이고, 호스트 블록이 512의 배수면 이월 잔량은 0으로 고정됩니다(`st_rt_render_get_latency_frames` 참고).
-- **샘플레이트** — `frames`는 `STRT_CreateOptions.hostSampleRate`(0이면 엔진 레이트 44100) 단위입니다. 0이 아니면 엔진이 출력 쪽 변환을 합니다(BUFFERED는 렌더 스레드에서 변환).
+- **聲道數** — 雙耳·立體聲為 2，喇叭佈局啟用時為 `st_rt_render_get_speaker_channels()` 的值。該函式回傳 0 時輸出為 **2 聲道** — 不要把 0 當作聲道數。
+- **佈局切換** — 渲染中呼叫 `st_rt_render_set_speaker_layout[_custom]` / `st_rt_render_disable_speaker_output` 時，pull 輸出會重新建構（聲道數·引擎區塊·結轉 FIFO·輸出重新取樣器）。切換與此函式同時呼叫也安全 — 引擎會降下允許渲染，等待進行中的呼叫退出後再變更（`st_rt_render_start` / `stop` 亦同）。落在切換視窗內的呼叫會回傳 **0 幀**，該區塊由主機作為靜音處理。切換後重新讀取 `st_rt_render_get_speaker_channels()`，並以該寬度配置緩衝區。
+- **欠載** — 音源串流填入的量少於請求時，該音源以靜音填充並累加到 `STStreamStatus.underrunFrames`。**絕不會 stall。** 在 BUFFERED 中，若每區塊渲染成本持續超過區塊時間（11.61 ms），環也無法擋住，該欠載會記錄在引擎環計數器中並以靜音填充。
+- **任意 `frames`** — 內部以 512 幀引擎區塊渲染，剩餘部分放入結轉 FIFO。主機區塊不是 512 的倍數時（例：48 kHz 下 1024 = 941.6 引擎幀）也不會 stall，但 FIFO 中的剩餘部分就是相應的延遲。延遲上限為 1 個引擎區塊 + 重新取樣器延遲，主機區塊為 512 的倍數時結轉殘量固定為 0（參見 `st_rt_render_get_latency_frames`）。
+- **取樣率** — `frames` 以 `STRT_CreateOptions.hostSampleRate`（0 時為引擎取樣率 44100）為單位。非 0 時由引擎進行輸出端轉換（BUFFERED 在渲染執行緒上轉換）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `interleavedOut` | 출력 버퍼. interleaved float, `frames × 채널 수`개를 담아야 합니다 |
-| `frames` | 요청 프레임 수(호스트 레이트), 1 이상 |
+| `context` | 情境控制代碼 |
+| `interleavedOut` | 輸出緩衝區。interleaved float，須能容納 `frames × 聲道數` 個 |
+| `frames` | 請求幀數（主機取樣率），1 以上 |
 
-**반환** — 실제로 쓴 프레임 수(정상은 `frames`). 부분 반환(`0 < 반환 < frames`)이면 나머지는 무음으로 채워져 있습니다. `0`인 경우와 `st_rt_get_last_status`:
+**回傳值** — 實際寫入的幀數（正常為 `frames`）。部分回傳（`0 < 回傳值 < frames`）時其餘部分已填入靜音。`0` 的情況與 `st_rt_get_last_status`：
 
-| 상황 | 상태 |
+| 情況 | 狀態 |
 |---|---|
-| 컨텍스트·버퍼 `NULL`, `frames` ≤ 0 | `ST_STATUS_INVALID_ARGUMENT` |
-| DEVICE 모드 컨텍스트 | `ST_STATUS_UNAVAILABLE` |
-| `st_rt_render_start` 전 | `ST_STATUS_UNAVAILABLE` |
-| 레이아웃 전환 창 | 0 프레임(무음 처리) |
+| 情境·緩衝區為 `NULL`、`frames` ≤ 0 | `ST_STATUS_INVALID_ARGUMENT` |
+| DEVICE 模式情境 | `ST_STATUS_UNAVAILABLE` |
+| `st_rt_render_start` 之前 | `ST_STATUS_UNAVAILABLE` |
+| 佈局切換視窗 | 0 幀（作為靜音處理） |
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_latency_frames</code> — pull 출력단이 들고 있는 지연을 읽는다</summary>
+<summary><code>st_rt_render_get_latency_frames</code> — 讀取 pull 輸出級持有的延遲</summary>
 
 ```c
 int st_rt_render_get_latency_frames(const STRT_Context* context);
 ```
 
-**용도** — pull 경로의 **출력단**이 지금 들고 있는 지연을 호스트 프레임으로 돌려줍니다. A/V 싱크 보정에 씁니다.
+**用途** — 以主機幀回傳 pull 路徑 **輸出級** 目前持有的延遲。用於 A/V 同步校正。
 
-지연 = 이월 FIFO 잔량 + 출력 리샘플러 지연 + 입력 리샘플러 고정 지연
+延遲 = 結轉 FIFO 殘量 + 輸出重新取樣器延遲 + 輸入重新取樣器固定延遲
 
-**언제·어떻게** — 고정값이 아니라 **호출 시점의 스냅샷**입니다. 요청 `frames`가 512의 배수가 아니면 호출마다 이월 잔량만큼(0..511 엔진 프레임 상당) 흔들리고, 상한은 1 엔진 블록 + 리샘플러 지연입니다. A/V 싱크에 쓸 때는 블록 처리 **직전**에 한 번 읽습니다. `hostSampleRate` = 0(무변환)에서도 이월 FIFO가 있으므로 0이 아닐 수 있습니다. BUFFERED 모드에서는 링에 쌓인 프레임(호스트 레이트) + 변환기 지연이며 상한은 약 3 엔진 블록입니다. 스레드: `[any]` — 어느 스레드에서 불러도 블록하지 않습니다.
+**呼叫方式** — 這不是固定值，而是 **呼叫當下的快照**。請求 `frames` 不是 512 的倍數時，每次呼叫會隨結轉殘量（相當於 0..511 引擎幀）浮動，上限為 1 個引擎區塊 + 重新取樣器延遲。用於 A/V 同步時，在區塊處理 **之前** 讀取一次。`hostSampleRate` = 0（無轉換）時也有結轉 FIFO，因此可能不為 0。BUFFERED 模式下為環中累積的幀（主機取樣率）+ 轉換器延遲，上限約為 3 個引擎區塊。執行緒：`[any]` — 在任何執行緒呼叫都不會阻塞。
 
-이 값은 출력단의 몫만 셉니다. "지금 민 입력 프레임이 몇 프레임 뒤에 나오나"의 전체 답은 이 값 + `STStreamStatus.queuedFrames` + 엔진 DSP의 고정 지연(리미터 지연 등, 설정이 같으면 상수)입니다.
+此值只計算輸出級的部分。「現在推入的輸入幀會在幾幀後輸出」的完整答案是此值 + `STStreamStatus.queuedFrames` + 引擎 DSP 的固定延遲（限幅器延遲等，設定相同時為常數）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 지연(호스트 프레임). DEVICE 모드에서는 언제나 `0`.
+**回傳值** — 延遲（主機幀）。DEVICE 模式下恆為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_process_stats</code> — 마지막 렌더 블록의 단계별 시간을 읽는다</summary>
+<summary><code>st_rt_render_get_process_stats</code> — 讀取最後一個渲染區塊的各階段時間</summary>
 
 ```c
 int st_rt_render_get_process_stats(const STRT_Context* context, STProcessStats* outStats);
 ```
 
-**용도** — 마지막으로 끝난 512프레임 렌더 블록 하나의 단계별 순수 연산 시간(µs)과 탭 수를 돌려줍니다. "렌더가 왜 무거운가"를 호스트가 엔진 내부를 보지 않고 가를 때 씁니다. 세 출력 모드 모두 같은 블록 함수라 값의 뜻이 같습니다(HOST_PULL은 호스트 콜백 안에서 잰 값).
+**用途** — 回傳最後完成的一個 512 幀渲染區塊的各階段純運算時間（µs）與 tap 數。供主機在不查看引擎內部的情況下判斷「渲染為何繁重」。三種輸出模式都是相同的區塊函式，因此值的意義相同（HOST_PULL 為在主機回呼內量測的值）。
 
-**언제·어떻게** — 렌더 중 언제든, 어느 스레드에서든 부를 수 있습니다. 스레드: `[any]` — seqlock 스냅샷(필드별 atomic, 최대 8회 재시도)이라 블록하지 않습니다. 지원 여부는 `ST_CAP_PROCESS_STATS`(능력 워드 0)로 확인합니다.
+**呼叫方式** — 渲染中隨時、在任何執行緒都可呼叫。執行緒：`[any]` — seqlock 快照（逐欄位 atomic，最多重試 8 次），不會阻塞。是否支援以 `ST_CAP_PROCESS_STATS`（能力字組 0）確認。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outStats` | 출력. 호출자가 `structSize` / `apiVersion`을 채웁니다 |
+| `context` | 情境控制代碼 |
+| `outStats` | 輸出。呼叫端須填入 `structSize` / `apiVersion` |
 
-**구조체** `STProcessStats`
+**結構體** `STProcessStats`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STProcessStats)` / `ST_ABI_VERSION` |
-| `blockSequence` | 블록마다 +1. 0 = 아직 블록이 돈 적 없음(무음 프리롤 동안도 0) |
-| `sourceInputUs` | 소스 입력 읽기 + 9밴드 크로스오버 + 밴드 지연 링 쓰기(소스 합) |
-| `exactTapsUs` | exact 경로 탭 렌더(HRIR 버스 누적 또는 스테레오 패닝, 소스 합) |
-| `bedUs` | early bed — 소스별 send 버스 합 + 병합 bed 컨볼루션 |
-| `sendUs` | 잔향 send — 소스별 밴드 버스 합 + 리스너 전역 send 탭 렌더 |
-| `lateUs` | FDN16 후기 잔향 |
-| `outputUs` | 나머지 — HRTF 스펙트럼 합성·HOA 디코드·EQ·리미터·모드 페이드 |
-| `totalUs` | 블록 전체(`STTiming.auralProcessMs`와 같은 구간). 여섯 단계의 합은 이 값과 같거나 약간 작습니다 |
-| `activeSources` | 입력이 붙은 소스 수 |
-| `exactTaps` | 그 블록이 실제로 렌더한 exact 탭 수(소스 합) |
-| `sendTaps` | 리스너 전역 send 탭 수 — 소스 수와 무관하고 시간 bin 수가 상한입니다 |
-| `reserved[8]` | 예약 |
+| `blockSequence` | 每個區塊 +1。0 = 尚未執行過區塊（靜音預捲期間也為 0） |
+| `sourceInputUs` | 音源輸入讀取 + 9 頻段分頻 + 頻段延遲環寫入（音源合計） |
+| `exactTapsUs` | exact 路徑 tap 渲染（HRIR 匯流排累加或立體聲聲像，音源合計） |
+| `bedUs` | early bed — 各音源 send 匯流排合計 + 合併 bed 摺積 |
+| `sendUs` | 殘響 send — 各音源頻段匯流排合計 + 聆聽者全域 send tap 渲染 |
+| `lateUs` | FDN16 後期殘響 |
+| `outputUs` | 其餘 — HRTF 頻譜合成·HOA 解碼·EQ·限幅器·模式淡化 |
+| `totalUs` | 整個區塊（與 `STTiming.auralProcessMs` 相同的區間）。六個階段的合計等於或略小於此值 |
+| `activeSources` | 有輸入的音源數 |
+| `exactTaps` | 該區塊實際渲染的 exact tap 數（音源合計） |
+| `sendTaps` | 聆聽者全域 send tap 數 — 與音源數無關，上限為時間 bin 數 |
+| `reserved[8]` | 保留 |
 
-**반환** — `1` = 성공 / `0` = 실패. `NULL`·스탬프 불일치는 `ST_STATUS_VERSION_MISMATCH`, 엔진 미초기화는 `ST_STATUS_INVALID_CONTEXT`, 스냅샷 실패는 `ST_STATUS_UNAVAILABLE`(`outStats` 무변경).
+**回傳值** — `1` = 成功 / `0` = 失敗。`NULL`·戳記不一致為 `ST_STATUS_VERSION_MISMATCH`，引擎未初始化為 `ST_STATUS_INVALID_CONTEXT`，快照失敗為 `ST_STATUS_UNAVAILABLE`（`outStats` 不變）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_speaker_layout</code> — 프리셋 스피커 레이아웃으로 출력한다</summary>
+<summary><code>st_rt_render_set_speaker_layout</code> — 以預設喇叭佈局輸出</summary>
 
 ```c
 int st_rt_render_set_speaker_layout(STRT_Context* context, int preset);
 ```
 
-**용도** — 헤드폰 바이노럴 대신 실제 스피커 배치(2.0~7.1)로 N채널 출력을 냅니다. 스피커 출력에서는 레이아웃이 전체 앰비소닉 early 경로·공간화 켬·HRTF 끔을 소유합니다(`st_rt_render_set_options` 참고).
+**用途** — 以實際喇叭配置（2.0~7.1）取代耳機雙耳，輸出 N 聲道。喇叭輸出時，佈局掌管全 Ambisonics early 路徑·空間化開啟·HRTF 關閉（參見 `st_rt_render_set_options`）。
 
-**언제·어떻게** — 보통 `st_rt_render_start(context, 0)` 전에 겁니다. 렌더 중에 부르면 오디오 장치를 stop → 적용 → start로 재기동하고, 장치가 N채널 포맷을 거부하면 스테레오로 한 번 강등해 재시도합니다. HOST_PULL 계열에서는 pull 출력이 재구성되며, 그동안 `st_rt_render_process`는 0 프레임을 돌려줍니다. 부른 뒤 `st_rt_render_get_speaker_channels()`로 실제 출력 폭을 다시 읽습니다. 레이아웃을 걸 때마다(같은 레이아웃이라도) 스피커 채널 EQ가 전부 비워지므로 채널 EQ는 레이아웃을 건 뒤에 설정합니다. 스레드: `[control, blocking]` — 장치 재기동이 있어 게임 루프·오디오 스레드에서 부르지 않습니다.
+**呼叫方式** — 通常在 `st_rt_render_start(context, 0)` 之前設定。渲染中呼叫時，會以 stop → 套用 → start 重新啟動音訊裝置，裝置拒絕 N 聲道格式時會降級為立體聲重試一次。HOST_PULL 系列中 pull 輸出會重新建構，期間 `st_rt_render_process` 回傳 0 幀。呼叫後以 `st_rt_render_get_speaker_channels()` 重新讀取實際輸出寬度。每次設定佈局時（即使是相同佈局）喇叭聲道 EQ 都會全部清空，因此聲道 EQ 請在設定佈局之後設定。執行緒：`[control, blocking]` — 包含裝置重新啟動，不在遊戲迴圈·音訊執行緒中呼叫。
 
-채널 순서는 WAVEFORMATEXTENSIBLE 표준 순서(FL FR FC LFE BL BR SL SR 중 레이아웃에 없는 채널은 건너뜀)를 따르고, 방향 규약은 엔진 전역과 같습니다(azimuth 정면 0° · 오른쪽 +90°, elevation 위쪽 +).
+聲道順序遵循 WAVEFORMATEXTENSIBLE 標準順序（FL FR FC LFE BL BR SL SR 中略過佈局沒有的聲道），方向慣例與引擎全域相同（azimuth 正前方 0° · 右方 +90°，elevation 向上為 +）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `preset` | `0` = 2.0 / `1` = 2.1 / `2` = 4.1 / `3` = 5.1 / `4` = 7.1 / `5` = 랩톱 근접 2.0 |
+| `context` | 情境控制代碼 |
+| `preset` | `0` = 2.0 / `1` = 2.1 / `2` = 4.1 / `3` = 5.1 / `4` = 7.1 / `5` = 筆電近場 2.0 |
 
-`5`(LaptopNearfield20, "MacBook Pro 16-inch reference")는 정확히 2 PCM 채널이고 `0`과 다른 것은 청취 기하(반각 30° → 15.642°)뿐입니다. 기기·OS가 소유한 내장 스피커 처리(우퍼·와이드 스테레오·공간 음향 DSP 등)는 건드리지 않습니다.
+`5`（LaptopNearfield20，"MacBook Pro 16-inch reference"）恰為 2 個 PCM 聲道，與 `0` 的差別只有聆聽幾何（半角 30° → 15.642°）。不觸碰裝置·OS 掌管的內建喇叭處理（低音單體·寬立體聲·空間音訊 DSP 等）。
 
-**반환** — `1` = 적용 / `0` = 실패. 범위 밖 `preset`이면 아무것도 하지 않고 `0`.
+**回傳值** — `1` = 套用 / `0` = 失敗。`preset` 超出範圍時不做任何事並回傳 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_speaker_layout_custom</code> — 임의 스피커 배치로 출력한다</summary>
+<summary><code>st_rt_render_set_speaker_layout_custom</code> — 以任意喇叭配置輸出</summary>
 
 ```c
 int st_rt_render_set_speaker_layout_custom(STRT_Context* context, const float* azimuthDegrees, const float* elevationDegrees, const unsigned char* isLfe, const float* gainTrim, const float* distanceMeters, int channelCount);
 ```
 
-**용도** — 프리셋에 없는 스피커 배치(돔·불규칙 배열 등)를 채널별 방향·LFE 여부·트림·거리로 직접 정의합니다. 거리를 주면 가장 먼 스피커를 기준으로 지연·1/r 레벨을 정렬해 스피커까지 거리가 다른 설치를 보정합니다.
+**用途** — 以各聲道的方向·是否 LFE·微調·距離直接定義預設中沒有的喇叭配置（穹頂·不規則陣列等）。提供距離時，以最遠的喇叭為基準對齊延遲·1/r 電平，校正喇叭距離不同的安裝。
 
-**언제·어떻게** — 호출 시점·재기동·채널 EQ 초기화·`st_rt_render_get_speaker_channels` 재확인은 `st_rt_render_set_speaker_layout`과 같습니다. 채널 순서는 배열 순서이고, 방향 규약은 엔진 전역과 같습니다(azimuth 정면 0° · 오른쪽 +90°, elevation 위쪽 +). 리미터·등라우드니스 보정·가상 베이스는 32채널까지, 출력 파라메트릭 EQ·스피커 채널 EQ는 64채널까지 걸립니다. 스레드: `[control, blocking]` — 장치 재기동이 있어 게임 루프·오디오 스레드에서 부르지 않습니다.
+**呼叫方式** — 呼叫時機·重新啟動·聲道 EQ 初始化·`st_rt_render_get_speaker_channels` 重新確認與 `st_rt_render_set_speaker_layout` 相同。聲道順序為陣列順序，方向慣例與引擎全域相同（azimuth 正前方 0° · 右方 +90°，elevation 向上為 +）。限幅器·等響度補償·虛擬低音最多套用到 32 聲道，輸出參數式 EQ·喇叭聲道 EQ 最多套用到 64 聲道。執行緒：`[control, blocking]` — 包含裝置重新啟動，不在遊戲迴圈·音訊執行緒中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `azimuthDegrees` | 채널별 방위각 [°] `channelCount`개. 필수 |
-| `elevationDegrees` | 채널별 고도각 [°] `channelCount`개. 필수 |
-| `isLfe` | 채널별 LFE 여부(0/1) `channelCount`개. 필수 |
-| `gainTrim` | 채널별 선형 트림 `channelCount`개. `NULL`이면 모두 1.0 |
-| `distanceMeters` | 채널별 스피커 거리 [m] `channelCount`개(씬 단위가 아니라 미터). `NULL`이 아니고 모든 비-LFE 채널이 양수면 렌더 출력단에서 가장 먼 스피커 기준 지연·1/r 레벨 정렬을 겁니다. `NULL`이면 정렬하지 않습니다 |
-| `channelCount` | 채널 수, 1 이상 |
+| `context` | 情境控制代碼 |
+| `azimuthDegrees` | 各聲道方位角 [°]，`channelCount` 個。必填 |
+| `elevationDegrees` | 各聲道仰角 [°]，`channelCount` 個。必填 |
+| `isLfe` | 各聲道是否 LFE（0/1），`channelCount` 個。必填 |
+| `gainTrim` | 各聲道線性微調，`channelCount` 個。`NULL` 時全為 1.0 |
+| `distanceMeters` | 各聲道喇叭距離 [m]，`channelCount` 個（不是場景單位而是公尺）。非 `NULL` 且所有非 LFE 聲道皆為正數時，在渲染輸出級以最遠喇叭為基準對齊延遲·1/r 電平。`NULL` 時不對齊 |
+| `channelCount` | 聲道數，1 以上 |
 
-**반환** — `1` = 적용 / `0` = 실패(`azimuthDegrees`·`elevationDegrees`·`isLfe`가 `NULL`이거나 `channelCount` ≤ 0 등).
+**回傳值** — `1` = 套用 / `0` = 失敗（`azimuthDegrees`·`elevationDegrees`·`isLfe` 為 `NULL` 或 `channelCount` ≤ 0 等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_disable_speaker_output</code> — 스피커 출력을 끄고 스테레오로 돌아간다</summary>
+<summary><code>st_rt_render_disable_speaker_output</code> — 關閉喇叭輸出並回到立體聲</summary>
 
 ```c
 void st_rt_render_disable_speaker_output(STRT_Context* context);
 ```
 
-**용도** — 스피커 레이아웃 출력을 끄고 기본 스테레오(2채널) 경로로 되돌립니다.
+**用途** — 關閉喇叭佈局輸出，回到預設立體聲（2 聲道）路徑。
 
-**언제·어떻게** — 렌더 중이면 장치 재기동(DEVICE) 또는 pull 출력 재구성(HOST_PULL 계열)이 일어나며, 그동안 `st_rt_render_process`는 0 프레임을 돌려줍니다. 스피커 채널 EQ가 전부 비워지고, `STRenderOptions.reserved0`은 다시 0/1 범위로 제한됩니다. 스레드: `[control, blocking]` — 장치 재기동이 있어 게임 루프·오디오 스레드에서 부르지 않습니다.
+**呼叫方式** — 渲染中會發生裝置重新啟動（DEVICE）或 pull 輸出重新建構（HOST_PULL 系列），期間 `st_rt_render_process` 回傳 0 幀。喇叭聲道 EQ 全部清空，`STRenderOptions.reserved0` 再次限制在 0/1 範圍。執行緒：`[control, blocking]` — 包含裝置重新啟動，不在遊戲迴圈·音訊執行緒中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_speaker_channels</code> — 스피커 출력 채널 수를 읽는다</summary>
+<summary><code>st_rt_render_get_speaker_channels</code> — 讀取喇叭輸出聲道數</summary>
 
 ```c
 int st_rt_render_get_speaker_channels(STRT_Context* context);
 ```
 
-**용도** — 스피커 출력이 활성이면 현재 출력 채널 수를 돌려줍니다. HOST_PULL 계열에서는 실제 `st_rt_render_process` 출력 폭과 일치합니다(0이면 2채널).
+**用途** — 喇叭輸出啟用時回傳目前的輸出聲道數。HOST_PULL 系列中與實際 `st_rt_render_process` 輸出寬度一致（0 時為 2 聲道）。
 
-**언제·어떻게** — 활성 판정은 `st_rt_render_start` 이후에 섭니다 — 레이아웃만 걸고 렌더를 시작하지 않았으면 아직 0입니다. 레이아웃을 바꾼 뒤에는 다시 읽어 버퍼 폭을 맞춥니다. 스레드: `[control]` — 비원자 멤버 읽기라 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 啟用判定在 `st_rt_render_start` 之後成立 — 只設定佈局而未開始渲染時仍為 0。變更佈局後重新讀取以對齊緩衝區寬度。執行緒：`[control]` — 讀取非原子成員，不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 출력 채널 수. 스피커 출력이 비활성이면 `0`(이때 출력은 2채널).
+**回傳值** — 輸出聲道數。喇叭輸出未啟用時為 `0`（此時輸出為 2 聲道）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_set_speaker_channel_eq</code> — 스피커 출력 채널 하나에 EQ를 건다(룸 보정)</summary>
+<summary><code>st_rt_render_set_speaker_channel_eq</code> — 對單一喇叭輸出聲道套用 EQ（房間校正）</summary>
 
 ```c
 int st_rt_render_set_speaker_channel_eq(STRT_Context* context, int32_t channelIndex, const STParametricEqBand* bands, int32_t bandCount, float preampDb, int32_t enabled);
 ```
 
-**용도** — 물리 스피커마다 잰 룸 보정처럼 출력 채널 하나에만 거는 파라메트릭 EQ입니다. 전 채널 공통 톤은 출력 EQ(`st_rt_render_set_parametric_eq`)가 맡습니다.
+**用途** — 像針對每個實體喇叭量測的房間校正那樣，只套用於單一輸出聲道的參數式 EQ。所有聲道共通的音色由輸出 EQ（`st_rt_render_set_parametric_eq`）負責。
 
-**언제·어떻게** — 스피커 경로에서 전역 출력 EQ 바로 뒤, 마스터 게인 앞에 걸립니다. 스피커 레이아웃 출력에서만 걸리고, 스테레오·바이노럴 출력에는 효과가 없습니다. 설정하지 않은(또는 꺼진·효과 없는) 채널은 샘플을 건드리지 않습니다. **레이아웃을 걸 때마다(`st_rt_render_set_speaker_layout[_custom]`, 같은 레이아웃이라도) 그리고 `st_rt_render_disable_speaker_output` 때 전 채널이 비워집니다** — 채널 번호의 뜻이 레이아웃마다 달라(같은 3번이 5.1에서는 LFE) 옛 번호에 남기면 엉뚱한 스피커에 걸리기 때문입니다. 레이아웃을 건 뒤에 설정합니다. 채널 수는 `st_rt_render_get_speaker_channels`와 달리 `st_rt_render_start` 전이어도 레이아웃을 건 직후부터 셉니다. 값이 바뀌면 20 ms 크로스페이드로 넘어갑니다. 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다. 지원 여부는 `ST_CAP1_SPEAKER_CHANNEL_EQ`(능력 워드 1)로 확인합니다.
+**呼叫方式** — 在喇叭路徑中位於全域輸出 EQ 之後、主增益之前。只在喇叭佈局輸出中套用，對立體聲·雙耳輸出無效果。未設定（或關閉·無效果）的聲道不觸碰樣本。**每次設定佈局時（`st_rt_render_set_speaker_layout[_custom]`，即使是相同佈局）以及 `st_rt_render_disable_speaker_output` 時，所有聲道都會清空** — 因為聲道編號的意義因佈局而異（同樣的 3 號在 5.1 中是 LFE），若保留舊編號會套用到錯誤的喇叭。請在設定佈局之後設定。聲道數與 `st_rt_render_get_speaker_channels` 不同，即使在 `st_rt_render_start` 之前，也從設定佈局後立即計算。值改變時以 20 ms 交叉淡化過渡。執行緒：`[control]` — 只變更輸出級，不在音訊回呼中呼叫。是否支援以 `ST_CAP1_SPEAKER_CHANNEL_EQ`（能力字組 1）確認。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `channelIndex` | 출력 채널 번호(레이아웃 채널 순서, LFE 포함), `[0, 레이아웃 채널 수)`. 64채널까지 |
-| `bands` | 밴드 배열 `bandCount`개. `bandCount` = 0이면 `NULL` 허용. `STParametricEqBand` 필드·필터 정의는 `st_rt_render_set_parametric_eq` 항목 참고 |
-| `bandCount` | 밴드 수 `[0, ST_PARAMETRIC_EQ_MAX_BANDS]` |
-| `preampDb` | 프리앰프 [dB], `[−48, +12]`으로 clamp |
-| `enabled` | 0이면 목록은 저장하되 통과 |
+| `context` | 情境控制代碼 |
+| `channelIndex` | 輸出聲道編號（佈局聲道順序，含 LFE），`[0, 佈局聲道數)`。最多 64 聲道 |
+| `bands` | `bandCount` 個頻段的陣列。`bandCount` = 0 時允許 `NULL`。`STParametricEqBand` 欄位·濾波器定義參見 `st_rt_render_set_parametric_eq` 條目 |
+| `bandCount` | 頻段數 `[0, ST_PARAMETRIC_EQ_MAX_BANDS]` |
+| `preampDb` | 前級放大 [dB]，clamp 到 `[−48, +12]` |
+| `enabled` | 0 時儲存清單但直通 |
 
-**반환** — `1` = 적용 / `0` = 실패. `0`일 때 `st_rt_get_last_status`: `ST_STATUS_INVALID_ARGUMENT`(채널 범위 밖·레이아웃 없음, 그 밖 검증은 `st_rt_render_set_parametric_eq`와 같음) / `ST_STATUS_UNAVAILABLE`(`ST_BACKEND_EXA` 백엔드).
+**回傳值** — `1` = 套用 / `0` = 失敗。`0` 時的 `st_rt_get_last_status`：`ST_STATUS_INVALID_ARGUMENT`（聲道超出範圍·沒有佈局，其他驗證與 `st_rt_render_set_parametric_eq` 相同）/ `ST_STATUS_UNAVAILABLE`（`ST_BACKEND_EXA` 後端）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_get_speaker_channel_eq</code> — 스피커 채널 EQ를 읽는다</summary>
+<summary><code>st_rt_render_get_speaker_channel_eq</code> — 讀取喇叭聲道 EQ</summary>
 
 ```c
 int st_rt_render_get_speaker_channel_eq(const STRT_Context* context, int32_t channelIndex, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outEnabled);
 ```
 
-**용도** — 출력 채널 하나의 EQ 밴드 목록(clamp된 실효값)·프리앰프·켜짐을 돌려줍니다. 설정하지 않은 채널은 0밴드·꺼짐입니다.
+**用途** — 回傳單一輸出聲道的 EQ 頻段清單（clamp 後的實效值）·前級放大·開啟狀態。未設定的聲道為 0 頻段·關閉。
 
-**언제·어떻게** — 출력 규약(크기 질의, `NULL` 출력 건너뛰기, 용량 부족 처리)은 `st_rt_render_get_parametric_eq`와 같습니다. 스레드: `[control]` — 오디오라이저 컨트롤 락을 잡습니다.
+**呼叫方式** — 輸出慣例（大小查詢、略過 `NULL` 輸出、容量不足處理）與 `st_rt_render_get_parametric_eq` 相同。執行緒：`[control]` — 持有 Auralizator 控制鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `channelIndex` | 출력 채널 번호, `[0, 레이아웃 채널 수)` |
-| `outBands` | 밴드 출력 배열. `NULL`이면 크기 질의 |
-| `bandCapacity` | `outBands` 용량, 0 이상 |
-| `outBandCount` | 밴드 수 출력. `NULL`이면 건너뜀 |
-| `outPreampDb` | 프리앰프 [dB] 출력. `NULL`이면 건너뜀 |
-| `outEnabled` | 켜짐(0/1) 출력. `NULL`이면 건너뜀 |
+| `context` | 情境控制代碼 |
+| `channelIndex` | 輸出聲道編號，`[0, 佈局聲道數)` |
+| `outBands` | 頻段輸出陣列。`NULL` 時為大小查詢 |
+| `bandCapacity` | `outBands` 容量，0 以上 |
+| `outBandCount` | 頻段數輸出。`NULL` 時略過 |
+| `outPreampDb` | 前級放大 [dB] 輸出。`NULL` 時略過 |
+| `outEnabled` | 開啟（0/1）輸出。`NULL` 時略過 |
 
-**반환** — `1` = 성공 / `0` = 실패(`ST_STATUS_INVALID_ARGUMENT` / `ST_STATUS_BUFFER_TOO_SMALL` / `ST_STATUS_UNAVAILABLE`, 뜻은 `st_rt_render_get_parametric_eq`와 같음).
+**回傳值** — `1` = 成功 / `0` = 失敗（`ST_STATUS_INVALID_ARGUMENT` / `ST_STATUS_BUFFER_TOO_SMALL` / `ST_STATUS_UNAVAILABLE`，意義與 `st_rt_render_get_parametric_eq` 相同）。
 
 </details>
 
 <details>
-<summary><code>st_rt_render_clear_speaker_channel_eqs</code> — 모든 스피커 채널 EQ를 끈다</summary>
+<summary><code>st_rt_render_clear_speaker_channel_eqs</code> — 關閉所有喇叭聲道 EQ</summary>
 
 ```c
 int st_rt_render_clear_speaker_channel_eqs(STRT_Context* context);
 ```
 
-**용도** — 전 채널의 스피커 채널 EQ를 한 번에 끕니다.
+**用途** — 一次關閉所有聲道的喇叭聲道 EQ。
 
-**언제·어떻게** — 재생 중이면 20 ms 램프로 넘어갑니다. 레이아웃이 없어도 성공합니다. 스레드: `[control]` — 출력단만 바꾸며 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 播放中時以 20 ms 斜坡過渡。沒有佈局也會成功。執行緒：`[control]` — 只變更輸出級，不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `1` = 성공 / `0` = 실패(`ST_BACKEND_EXA` 백엔드는 `ST_STATUS_UNAVAILABLE`).
+**回傳值** — `1` = 成功 / `0` = 失敗（`ST_BACKEND_EXA` 後端為 `ST_STATUS_UNAVAILABLE`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_create</code> — 다채널 입력을 재생할 가상 스피커 세트를 만든다</summary>
+<summary><code>st_rt_speaker_set_create</code> — 建立播放多聲道輸入的虛擬喇叭組</summary>
 
 ```c
 STSpeakerSetId st_rt_speaker_set_create(STRT_Context* context, const STSpeakerSetDesc* desc);
 ```
 
-**용도** — 스피커 세트는 다채널 PCM 입력 하나(콘텐츠 채널 C개)를 방 안의 가상 스피커 N개로 재생합니다. 스피커 하나는 엔진이 만든 소스(멤버 소스) 하나이고, 한 채널을 여러 스피커가 나눠 낼 수 있습니다(영화관 배열). 입력 링은 세트에 **하나**(interleaved)라, 렌더 블록마다 한 번 꺼내 모든 스피커가 같은 블록·같은 표본을 읽습니다 — 언더런도 전 채널 동시라 채널끼리 어긋나지 않습니다. 스테레오 입력을 3.0/5.1/7.1로 올리는 업믹스 입력도 지원합니다.
+**用途** — 喇叭組以房間內的 N 個虛擬喇叭播放一個多聲道 PCM 輸入（C 個內容聲道）。一個喇叭就是一個由引擎建立的音源（成員音源），一個聲道可由多個喇叭分擔（電影院陣列）。輸入環每組只有 **一個**（interleaved），每個渲染區塊取出一次，所有喇叭讀取相同區塊·相同樣本 — 欠載也是全聲道同時發生，因此聲道之間不會錯位。也支援將立體聲輸入升混為 3.0/5.1/7.1 的升混輸入。
 
-**언제·어떻게** — 씬·리스너를 준비한 뒤 만들고, `st_rt_speaker_set_write`로 링을 채운 다음 `st_rt_speaker_set_play`로 재생합니다. 멤버는 만들자마자 재생 상태로 들어가지만 세트가 play되기 전에는 무음을 냅니다. 멤버 품질 설정(광선 수·깊이·수송 갱신 단계)은 `st_rt_speaker_set_get_source`로 받은 id에 생성 뒤 아무 때나 겁니다(첫 전파 전이면 첫 IR부터 그 값). 스레드: `[control, blocking]` — 멤버 소스 N개 생성(+지향성·게인)이 있어 게임 루프·오디오 스레드에서 부르지 않습니다. 지원 여부는 `ST_CAP1_SPEAKER_SET`(능력 워드 1)으로 확인합니다.
+**呼叫方式** — 在準備好場景·聆聽者後建立，以 `st_rt_speaker_set_write` 填充環，再以 `st_rt_speaker_set_play` 播放。成員一建立即進入播放狀態，但在組 play 之前輸出靜音。成員品質設定（光線數·深度·傳輸更新階段）可在建立後隨時套用到以 `st_rt_speaker_set_get_source` 取得的 id（若在第一次傳播之前，則從第一個 IR 起即為該值）。執行緒：`[control, blocking]` — 包含建立 N 個成員音源（+指向性·增益），不在遊戲迴圈·音訊執行緒中呼叫。是否支援以 `ST_CAP1_SPEAKER_SET`（能力字組 1）確認。
 
-- **한도** — 세트 `ST_SPEAKER_SET_MAX_SETS`(12)개, 세트당 채널 `ST_SPEAKER_SET_MAX_CHANNELS`(16)·스피커 `ST_SPEAKER_SET_MAX_SPEAKERS`(64). 세트는 호스트 스트림 슬롯(64)을 쓰지 않습니다. 쓰지 않는 슬롯·쉬는 세트는 렌더 블록마다 원자 읽기 몇 번뿐입니다.
-- **좌표** — 스피커 포즈는 **세트 좌표**이고, 월드 = 앵커 ∘ 세트 변환 ∘ 스피커 포즈입니다. `WORLD` 앵커는 항등(방 고정), `LISTENER` 앵커는 리스너 위치 + yaw(+Y축 회전)입니다. `LISTENER` 앵커는 `st_rt_speaker_set_update`의 리스너 필드로만 다시 계산되며 일반 리스너 setter(머리 회전 포함)는 세트를 움직이지 않습니다. 생성 시점 앵커는 그때의 리스너 위치·yaw입니다. 쿼터니언은 XYZW이고 엔진이 정규화합니다(노름 `< 1e-12`는 거절). 스피커 로컬 프레임·지향성 테이블 프레임은 소스와 같습니다(forward = +Z).
-- **레벨** — 멤버 볼륨(소스 볼륨과 같은 자리, 3 ms 램프) = `muted`·`silenced`면 0, 아니면 `gain × trim`. `ST_SPEAKER_SET_FLAG_ARRAY_TRIM`이면 `trim = 1/√N`이고, N은 같은 채널에서 `muted`가 아니고 `gain` > 0인 스피커 수입니다(`silenced`는 셈). LFE는 특별 처리가 없습니다. `st_rt_source_get_volume`은 램프의 목표값을 돌려줍니다.
-- **멤버 소유권** — 멤버 소스는 세트가 소유합니다. 멤버 id에 대한 입력(`set_audio_*`·`attach_stream`·`clear_audio`), 재생(play/pause/stop/seek/loop/trigger/retrigger), 포즈(position/direction/velocity/orientation_q), 방사(directivity/axis_attenuation), 볼륨·피치·destroy, `st_rt_source_idle`/`_run`은 0을 돌려주거나 무시되고 `ST_STATUS_INVALID_ARGUMENT`가 남습니다. 품질 설정(광선 수·깊이·갱신 단계·EQ·경로 켜기·경로 볼륨)과 getter는 그대로 씁니다. 지향성은 생성 때 정하고, 무지향 스피커의 회전은 엔진에 보내지 않습니다.
+- **上限** — 組 `ST_SPEAKER_SET_MAX_SETS`（12）個，每組聲道 `ST_SPEAKER_SET_MAX_CHANNELS`（16）·喇叭 `ST_SPEAKER_SET_MAX_SPEAKERS`（64）。組不使用主機串流槽（64）。未使用的槽·閒置的組在每個渲染區塊只有幾次原子讀取。
+- **座標** — 喇叭姿態為 **組座標**，世界 = 錨點 ∘ 組變換 ∘ 喇叭姿態。`WORLD` 錨點為恆等（固定於房間），`LISTENER` 錨點為聆聽者位置 + yaw（繞 +Y 軸旋轉）。`LISTENER` 錨點只會由 `st_rt_speaker_set_update` 的聆聽者欄位重新計算，一般聆聽者 setter（含頭部旋轉）不會移動組。建立時的錨點為當時的聆聽者位置·yaw。四元數為 XYZW，由引擎正規化（範數 `< 1e-12` 會被拒絕）。喇叭本地座標系·指向性表座標系與音源相同（forward = +Z）。
+- **電平** — 成員音量（與音源音量相同位置，3 ms 斜坡）= `muted`·`silenced` 時為 0，否則為 `gain × trim`。`ST_SPEAKER_SET_FLAG_ARRAY_TRIM` 時 `trim = 1/√N`，N 為同一聲道中非 `muted` 且 `gain` > 0 的喇叭數（`silenced` 計入）。LFE 沒有特別處理。`st_rt_source_get_volume` 回傳斜坡的目標值。
+- **成員擁有權** — 成員音源由組擁有。對成員 id 的輸入（`set_audio_*`·`attach_stream`·`clear_audio`）、播放（play/pause/stop/seek/loop/trigger/retrigger）、姿態（position/direction/velocity/orientation_q）、輻射（directivity/axis_attenuation）、音量·音高·destroy、`st_rt_source_idle`/`_run` 會回傳 0 或被忽略，並留下 `ST_STATUS_INVALID_ARGUMENT`。品質設定（光線數·深度·更新階段·EQ·路徑開啟·路徑音量）與 getter 照常可用。指向性在建立時決定，無指向喇叭的旋轉不會傳給引擎。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `desc` | 세트 기술자. 호출자가 `structSize` / `apiVersion`을 채웁니다. 포인터 배열은 호출 동안만 읽습니다(복사) |
+| `context` | 情境控制代碼 |
+| `desc` | 組描述子。呼叫端須填入 `structSize` / `apiVersion`。指標陣列只在呼叫期間讀取（複製） |
 
-**구조체** `STSpeakerSetDesc`
+**結構體** `STSpeakerSetDesc`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STSpeakerSetDesc)` / `ST_ABI_VERSION` |
-| `channelCount` | 콘텐츠 채널 수 `[1, ST_SPEAKER_SET_MAX_CHANNELS]` |
-| `speakerCount` | 스피커 수 `[1, ST_SPEAKER_SET_MAX_SPEAKERS]` |
-| `speakers` | `STSpeakerDesc` 배열 `speakerCount`개 |
-| `directivities` | 공유 지향성 테이블 포인터 배열(`STSourceDirectivity`). 같은 테이블을 가리키는 스피커는 엔진 사본 하나를 같이 씁니다. 각 테이블 검증은 `st_rt_source_set_directivity`와 같습니다. `NULL` 허용(`directivityCount` 0) |
-| `directivityCount` | `directivities` 원소 수 |
+| `channelCount` | 內容聲道數 `[1, ST_SPEAKER_SET_MAX_CHANNELS]` |
+| `speakerCount` | 喇叭數 `[1, ST_SPEAKER_SET_MAX_SPEAKERS]` |
+| `speakers` | `speakerCount` 個 `STSpeakerDesc` 的陣列 |
+| `directivities` | 共用指向性表指標陣列（`STSourceDirectivity`）。指向同一個表的喇叭共用一份引擎副本。各表的驗證與 `st_rt_source_set_directivity` 相同。允許 `NULL`（`directivityCount` 0） |
+| `directivityCount` | `directivities` 元素數 |
 | `anchor` | `STSpeakerSetAnchor` — `ST_SPEAKER_SET_ANCHOR_WORLD`(0) / `ST_SPEAKER_SET_ANCHOR_LISTENER`(1) |
-| `position[3]` / `rotationXYZW[4]` | 세트 변환(앵커 좌표) |
-| `sampleRate` | 입력 레이트. 엔진 레이트(44100), 또는 `hostSampleRate`를 지정한 컨텍스트면 그 값이어야 합니다 |
-| `capacityFrames` | 링 용량(호스트 프레임), `[512, 1048576]`. 0 = 16384 |
-| `flags` | `ST_SPEAKER_SET_FLAG_ARRAY_TRIM`(채널을 공유하는 스피커 N개에 1/√N) / `ST_SPEAKER_SET_FLAG_STATIC`(멤버 소스를 정적 `isDynamic` 0으로) |
-| `inputChannels` | 업믹스 입력. 0 = `channelCount` 그대로. 2 = 스테레오를 `channelCount`(3 = L R C, 6 = 5.1, 8 = 7.1)로 올림 — 이때 write는 스테레오를 받습니다 |
-| `upmixWindowFrames` | 업믹스 창 길이 `[1024, 65536]` 짝수, 0 = 4096. 창 지연 = 창의 절반(기본 2048) |
+| `position[3]` / `rotationXYZW[4]` | 組變換（錨點座標） |
+| `sampleRate` | 輸入取樣率。必須為引擎取樣率（44100），或在指定了 `hostSampleRate` 的情境中為該值 |
+| `capacityFrames` | 環容量（主機幀），`[512, 1048576]`。0 = 16384 |
+| `flags` | `ST_SPEAKER_SET_FLAG_ARRAY_TRIM`（共用聲道的 N 個喇叭為 1/√N）/ `ST_SPEAKER_SET_FLAG_STATIC`（成員音源為靜態 `isDynamic` 0） |
+| `inputChannels` | 升混輸入。0 = 與 `channelCount` 相同。2 = 將立體聲升為 `channelCount`（3 = L R C，6 = 5.1，8 = 7.1） — 此時 write 接受立體聲 |
+| `upmixWindowFrames` | 升混視窗長度 `[1024, 65536]` 偶數，0 = 4096。視窗延遲 = 視窗的一半（預設 2048） |
 | `reserved[5]` | 0 |
 
-**구조체** `STSpeakerDesc`
+**結構體** `STSpeakerDesc`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `channel` | 이 스피커가 내는 콘텐츠 채널 `[0, channelCount)` |
-| `directivityIndex` | -1 = 무지향, 그 밖 = `STSpeakerSetDesc.directivities` 인덱스 |
-| `pose` | `STSpeakerPose` — 세트 좌표 포즈와 레벨 |
+| `channel` | 此喇叭輸出的內容聲道 `[0, channelCount)` |
+| `directivityIndex` | -1 = 無指向，其他 = `STSpeakerSetDesc.directivities` 索引 |
+| `pose` | `STSpeakerPose` — 組座標姿態與電平 |
 | `reserved[2]` | 0 |
 
-**구조체** `STSpeakerPose`
+**結構體** `STSpeakerPose`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `position[3]` / `rotationXYZW[4]` | 세트 좌표 위치·회전 |
-| `gain` | 선형 압력 `[0, 16]` |
-| `muted` | 0/1 — 1이면 볼륨 0이고 `ARRAY_TRIM`의 N에서 빠집니다 |
-| `silenced` | 0/1 — 1이면 볼륨 0이지만 N은 그대로(측정용 단독 재생: 나머지를 `silenced`로) |
+| `position[3]` / `rotationXYZW[4]` | 組座標位置·旋轉 |
+| `gain` | 線性聲壓 `[0, 16]` |
+| `muted` | 0/1 — 1 時音量為 0，並從 `ARRAY_TRIM` 的 N 中排除 |
+| `silenced` | 0/1 — 1 時音量為 0，但 N 不變（量測用的單獨播放：其餘設為 `silenced`） |
 | `reserved[2]` | 0 |
 
-**업믹스 입력**(`inputChannels` = 2) — 엔진 내장 업믹서가 좌우 성분의 레벨 차로 앞쪽 방위(±30°)를, 상관도로 앞·옆·뒤(상관 → 앞, 무상관 → 옆, 역상 → 뒤)를 잡아 스피커 고리에 에너지를 보존하며 나누고, LFE에는 (L + R)/2의 저역(80 Hz까지, 160 Hz에서 0)을 더합니다. 3.0은 가운데 뽑기라 앞에 상관으로 모인 몫만 FC로 옮기고 나머지는 L·R에 남겨 스테레오 이미지를 유지합니다(LFE 없음). 출력 채널 순서는 3.0 = FL FR FC, 5.1 = FL FR FC LFE SL SR, 7.1 = FL FR FC LFE SL SR BL BR이고(스피커 `channel` 번호와 같음), 가정하는 각은 FL −30° · FR 30° · FC 0°, 5.1 SL −110° · SR 110°, 7.1 SL −90° · SR 90° · BL −150° · BR 150°입니다. 업믹스는 write를 부른 생산자 스레드에서 호스트 레이트로 돕니다(할당 없음). 창 지연을 잘라 내 입력 프레임 n = 콘텐츠 프레임 n이지만, 입력이 `inputDelayFrames`만큼 더 들어가야 링에 나오므로 프리필을 그만큼 더 합니다. stop/relocate 뒤 첫 write가 업믹스 이력도 버립니다.
+**升混輸入**（`inputChannels` = 2） — 引擎內建升混器以左右成分的電平差決定前方方位（±30°），以相關度決定前·側·後（相關 → 前，不相關 → 側，反相 → 後），在喇叭環上保持能量進行分配，並在 LFE 加上 (L + R)/2 的低頻（至 80 Hz，160 Hz 時為 0）。3.0 為中央提取，只把前方相關集中的部分移到 FC，其餘留在 L·R 以維持立體聲聲像（無 LFE）。輸出聲道順序為 3.0 = FL FR FC，5.1 = FL FR FC LFE SL SR，7.1 = FL FR FC LFE SL SR BL BR（與喇叭 `channel` 編號相同），假設的角度為 FL −30° · FR 30° · FC 0°，5.1 SL −110° · SR 110°，7.1 SL −90° · SR 90° · BL −150° · BR 150°。升混在呼叫 write 的生產者執行緒上以主機取樣率執行（無配置）。視窗延遲已被裁除，因此輸入幀 n = 內容幀 n，但輸入要再多送入 `inputDelayFrames` 才會出現在環中，因此預填充也要相應增加。stop/relocate 之後的第一次 write 也會丟棄升混歷史。
 
-**반환** — 세트 핸들. 실패면 `v < 0`이고 만들던 멤버는 모두 지웁니다. `st_rt_get_last_status`: `ST_STATUS_VERSION_MISMATCH` / `ST_STATUS_INVALID_ARGUMENT`(범위·비유한·채널·레이트·`reserved`) / `ST_STATUS_UNAVAILABLE`(세트 `ST_SPEAKER_SET_MAX_SETS`개 소진).
+**回傳值** — 組控制代碼。失敗時 `v < 0`，建立中的成員全部刪除。`st_rt_get_last_status`：`ST_STATUS_VERSION_MISMATCH` / `ST_STATUS_INVALID_ARGUMENT`（範圍·非有限·聲道·取樣率·`reserved`）/ `ST_STATUS_UNAVAILABLE`（組 `ST_SPEAKER_SET_MAX_SETS` 個已用盡）。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_destroy</code> — 스피커 세트를 지운다</summary>
+<summary><code>st_rt_speaker_set_destroy</code> — 刪除喇叭組</summary>
 
 ```c
 int st_rt_speaker_set_destroy(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 멤버 소스를 지우고(3 ms 페이드) 세트 슬롯을 반납합니다.
+**用途** — 刪除成員音源（3 ms 淡化）並歸還組槽。
 
-**언제·어떻게** — 세트가 더 필요 없을 때 부릅니다. 멤버 id에 `st_rt_source_destroy`를 부르는 것은 거절되므로 반드시 이 함수로 지웁니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 不再需要組時呼叫。對成員 id 呼叫 `st_rt_source_destroy` 會被拒絕，因此務必以此函式刪除。執行緒：`[control]` — 不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
 
-**반환** — `1` = 지움 / `0` = 없는 세트.
+**回傳值** — `1` = 已刪除 / `0` = 組不存在。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_get_source</code> — 스피커 하나의 멤버 소스 id를 얻는다</summary>
+<summary><code>st_rt_speaker_set_get_source</code> — 取得單一喇叭的成員音源 id</summary>
 
 ```c
 STSourceId st_rt_speaker_set_get_source(STRT_Context* context, STSpeakerSetId set, int speakerIndex);
 ```
 
-**용도** — `speakerIndex`번 스피커를 맡은 멤버 소스 id를 돌려줍니다. 멤버별 품질 설정(광선 수·깊이·수송 갱신 단계·EQ·경로 켜기·경로 볼륨)과 소스 getter에 씁니다.
+**用途** — 回傳負責第 `speakerIndex` 號喇叭的成員音源 id。用於各成員的品質設定（光線數·深度·傳輸更新階段·EQ·路徑開啟·路徑音量）與音源 getter。
 
-**언제·어떻게** — 세트를 만든 뒤 아무 때나 부릅니다. 첫 전파 전에 품질을 걸면 첫 IR부터 그 값입니다. 입력·재생·포즈·방사·볼륨·피치·destroy는 세트가 소유하므로 이 id로는 거절됩니다(`st_rt_speaker_set_create` 참고). 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 建立組後隨時呼叫。在第一次傳播之前設定品質時，從第一個 IR 起即為該值。輸入·播放·姿態·輻射·音量·音高·destroy 由組擁有，因此以此 id 呼叫會被拒絕（參見 `st_rt_speaker_set_create`）。執行緒：`[control]` — 不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `speakerIndex` | 스피커 번호 `[0, speakerCount)` (`STSpeakerSetDesc.speakers` 순서) |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
+| `speakerIndex` | 喇叭編號 `[0, speakerCount)`（`STSpeakerSetDesc.speakers` 順序） |
 
-**반환** — 멤버 소스 id. 실패(없는 세트·범위 밖)면 `v < 0`.
+**回傳值** — 成員音源 id。失敗（組不存在·超出範圍）時 `v < 0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_update</code> — 세트 변환·스피커 포즈·리스너를 일괄 갱신한다</summary>
+<summary><code>st_rt_speaker_set_update</code> — 批次更新組變換·喇叭姿態·聆聽者</summary>
 
 ```c
 int st_rt_speaker_set_update(STRT_Context* context, STSpeakerSetId set, const STSpeakerSetUpdate* update, uint32_t* outChanged);
 ```
 
-**용도** — 세트 변환, 스피커 포즈·레벨 전부, 리스너 포즈, `ARRAY_TRIM` 플래그를 한 번에 바꿉니다. 값이 직전 적용값과 비트 동일하면 엔진에 보내지 않아, 매 프레임 불러도 바뀐 것만 반영됩니다.
+**用途** — 一次變更組變換、全部喇叭姿態·電平、聆聽者姿態、`ARRAY_TRIM` 旗標。值與上次套用值位元相同時不會傳給引擎，因此即使每幀呼叫也只反映有變更的部分。
 
-**언제·어떻게** — 게임 루프에서 프레임마다 부를 수 있습니다. `LISTENER` 앵커 세트는 이 호출의 리스너 필드로만 다시 계산되고, 같은 호출이 엔진 리스너도 같은 배치로 옮깁니다(`st_rt_listener_set_position`/`rotation`과 같은 뜻). 원자성: SYNCHRONOUS 스케줄러는 다음 `st_rt_propagate`가 갱신 전체를 한 번에 봅니다. PIPELINED는 스피커 위치 전부와 리스너 위치를 한 리비전에 넣으며, 회전 변경은 씬 커밋이라 위치보다 작업 하나만큼 먼저 보일 수 있습니다. `outChanged`가 0이면 엔진에 아무것도 보내지 않은 것이므로 SYNCHRONOUS 호스트는 propagate를 건너뛰어도 됩니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 可在遊戲迴圈中每幀呼叫。`LISTENER` 錨點組只會由此呼叫的聆聽者欄位重新計算，同一呼叫也會以同一批次移動引擎聆聽者（與 `st_rt_listener_set_position`/`rotation` 意義相同）。原子性：SYNCHRONOUS 排程器中，下一次 `st_rt_propagate` 會一次看到整個更新。PIPELINED 會將全部喇叭位置與聆聽者位置放入同一個修訂版本，旋轉變更屬於場景提交，可能比位置早一個工作被看到。`outChanged` 為 0 表示沒有向引擎傳送任何內容，因此 SYNCHRONOUS 主機可略過 propagate。執行緒：`[control]` — 不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `update` | 갱신 내용. 호출자가 `structSize` / `apiVersion`을 채웁니다. `fields`에 든 것만 읽습니다 |
-| `outChanged` | 엔진에 보낸 항목 비트 출력. `NULL` 허용. `ST_SPEAKER_SET_CHANGED_LISTENER`(엔진 리스너 포즈) / `ST_SPEAKER_SET_CHANGED_POSES`(멤버 소스 월드 위치·회전) / `ST_SPEAKER_SET_CHANGED_GAINS`(멤버 소스 볼륨) |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
+| `update` | 更新內容。呼叫端須填入 `structSize` / `apiVersion`。只讀取 `fields` 中包含的項目 |
+| `outChanged` | 已傳給引擎的項目位元輸出。允許 `NULL`。`ST_SPEAKER_SET_CHANGED_LISTENER`（引擎聆聽者姿態）/ `ST_SPEAKER_SET_CHANGED_POSES`（成員音源世界位置·旋轉）/ `ST_SPEAKER_SET_CHANGED_GAINS`（成員音源音量） |
 
-**구조체** `STSpeakerSetUpdate`
+**結構體** `STSpeakerSetUpdate`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STSpeakerSetUpdate)` / `ST_ABI_VERSION` |
-| `fields` | 읽을 항목 비트: `ST_SPEAKER_SET_UPDATE_TRANSFORM` / `_SPEAKERS` / `_LISTENER` / `_FLAGS` |
-| `position[3]` / `rotationXYZW[4]` | TRANSFORM — 세트 변환(앵커 좌표) |
-| `listenerPosition[3]` | LISTENER — 리스너 위치(씬 단위) |
-| `listenerYaw` | LISTENER — yaw [rad], +Y축 |
-| `listenerPitch` | LISTENER — pitch [rad]. 리스너에만 걸리고 앵커는 yaw만 따릅니다 |
-| `speakerCount` | SPEAKERS — 세트의 스피커 수와 같아야 합니다 |
-| `speakers` | SPEAKERS — `STSpeakerPose` 배열 `speakerCount`개(전부). 필드는 `st_rt_speaker_set_create` 항목 참고 |
-| `flags` | FLAGS — `ST_SPEAKER_SET_FLAG_ARRAY_TRIM` 켬/끔(그 밖 비트는 0) |
+| `fields` | 要讀取的項目位元：`ST_SPEAKER_SET_UPDATE_TRANSFORM` / `_SPEAKERS` / `_LISTENER` / `_FLAGS` |
+| `position[3]` / `rotationXYZW[4]` | TRANSFORM — 組變換（錨點座標） |
+| `listenerPosition[3]` | LISTENER — 聆聽者位置（場景單位） |
+| `listenerYaw` | LISTENER — yaw [rad]，+Y 軸 |
+| `listenerPitch` | LISTENER — pitch [rad]。只套用於聆聽者，錨點只跟隨 yaw |
+| `speakerCount` | SPEAKERS — 必須等於組的喇叭數 |
+| `speakers` | SPEAKERS — `speakerCount` 個（全部）`STSpeakerPose` 的陣列。欄位參見 `st_rt_speaker_set_create` 條目 |
+| `flags` | FLAGS — `ST_SPEAKER_SET_FLAG_ARRAY_TRIM` 開/關（其他位元為 0） |
 | `reserved[5]` | 0 |
 
-**반환** — `1` = 성공 / `0` = 실패.
+**回傳值** — `1` = 成功 / `0` = 失敗。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_write</code> — 세트 링에 interleaved PCM을 쓴다</summary>
+<summary><code>st_rt_speaker_set_write</code> — 將 interleaved PCM 寫入組環</summary>
 
 ```c
 int st_rt_speaker_set_write(STRT_Context* context, STSpeakerSetId set, const float* interleaved, int frames);
 ```
 
-**용도** — 세트의 다채널 콘텐츠를 링에 공급합니다. 파일 디코드·웹 PCM·마이크 등 어디서 온 것이든 같은 방식으로 씁니다.
+**用途** — 將組的多聲道內容供給到環中。無論來自檔案解碼·Web PCM·麥克風等何處，都以相同方式寫入。
 
-**언제·어떻게** — 재생 전에 프리필하고, 재생 중에는 `st_rt_speaker_set_get_status`의 `queuedFrames`를 보며 공급량을 맞춥니다. 렌더가 돌지 않는 동안에도 쓸 수 있고, 엔진·세트가 쉬는 동안 쓴 프레임은 링에 남았다가 깨운 뒤 나갑니다. 스레드: `[any]` — 단일 생산자 전용이며 락·할당이 없습니다(업믹스도 이 호출 스레드에서 돕니다).
+**呼叫方式** — 播放前預填充，播放中則參照 `st_rt_speaker_set_get_status` 的 `queuedFrames` 調整供給量。渲染未執行時也可寫入，引擎·組閒置期間寫入的幀會留在環中，喚醒後輸出。執行緒：`[any]` — 僅限單一生產者，無鎖·無配置（升混也在此呼叫執行緒上執行）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `interleaved` | interleaved float, `frames × 입력 채널 수`개. 입력 채널 수 = `channelCount`, 업믹스 입력이면 2 |
-| `frames` | 프레임 수(호스트 프레임 = `STSpeakerSetDesc.sampleRate`) |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
+| `interleaved` | interleaved float，`frames × 輸入聲道數` 個。輸入聲道數 = `channelCount`，升混輸入時為 2 |
+| `frames` | 幀數（主機幀 = `STSpeakerSetDesc.sampleRate`） |
 
-**반환** — `hostSampleRate` = 0이고 업믹스가 없으면 링에 실제로 들어간 프레임 수(백프레셔 — 나머지는 다시 씁니다). 그 밖(`hostSampleRate` 지정 또는 업믹스 입력)이면 항상 `frames`이고 백프레셔가 없으므로 `queuedFrames`로 공급량을 맞춥니다. 넘친 몫은 `droppedFrames`로만 남습니다.
+**回傳值** — `hostSampleRate` = 0 且無升混時，為實際放入環中的幀數（背壓 — 其餘部分需重新寫入）。其他情況（指定 `hostSampleRate` 或升混輸入）恆為 `frames` 且無背壓，因此以 `queuedFrames` 調整供給量。溢出的部分只會記錄在 `droppedFrames`。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_write_planar</code> — 세트 링에 채널별 배열로 PCM을 쓴다</summary>
+<summary><code>st_rt_speaker_set_write_planar</code> — 以各聲道陣列將 PCM 寫入組環</summary>
 
 ```c
 int st_rt_speaker_set_write_planar(STRT_Context* context, STSpeakerSetId set, const float* const* channels, int frames);
 ```
 
-**용도** — `st_rt_speaker_set_write`와 같고 입력만 채널별(planar) 배열입니다. 디코더가 planar로 내는 경우 interleave 복사를 피합니다.
+**用途** — 與 `st_rt_speaker_set_write` 相同，只是輸入為各聲道（planar）陣列。解碼器以 planar 輸出時可避免 interleave 複製。
 
-**언제·어떻게** — `st_rt_speaker_set_write`와 같습니다. 스레드: `[any]` — 단일 생산자 전용, 락·할당 없음.
+**呼叫方式** — 與 `st_rt_speaker_set_write` 相同。執行緒：`[any]` — 僅限單一生產者，無鎖·無配置。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `channels` | 채널 포인터 배열 `channels[입력 채널 수]`, 각 `frames`개 float. 입력 채널 수 = `channelCount`, 업믹스 입력이면 2 |
-| `frames` | 프레임 수(호스트 프레임) |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
+| `channels` | 聲道指標陣列 `channels[輸入聲道數]`，各 `frames` 個 float。輸入聲道數 = `channelCount`，升混輸入時為 2 |
+| `frames` | 幀數（主機幀） |
 
-**반환** — `st_rt_speaker_set_write`와 같습니다.
+**回傳值** — 與 `st_rt_speaker_set_write` 相同。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_play</code> — 세트 재생을 시작한다</summary>
+<summary><code>st_rt_speaker_set_play</code> — 開始組播放</summary>
 
 ```c
 int st_rt_speaker_set_play(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 세트 전체의 재생을 요청합니다. 모든 멤버가 같은 렌더 블록에서 함께 시작합니다.
+**用途** — 請求整個組播放。所有成員在同一渲染區塊一起開始。
 
-**언제·어떻게** — 요청 상태는 **호출 즉시** 바뀌고, 소리는 다음 렌더 블록 경계에서 세트 전체에 한 번에 걸립니다. 그래서 렌더가 멈춘 동안에도 stop → relocate → write(프리필) → play가 쌓였다가 다음 첫 블록에서 한꺼번에 걸립니다. play는 멤버 소스를 담은 IR이 렌더러에 채택될 때까지 `ST_SPEAKER_SET_STARTING`으로 기다리고(콘텐츠를 꺼내지 않음), 그 뒤에는 링이 비어 있어도 시작합니다(언더런으로 셈) — 호스트가 먼저 채웁니다. **첫 재생은 페이드인 없이** 시작하고, 일시정지·정지 뒤 다시 시작할 때는 132표본 페이드인을 겁니다. pause 뒤 재개는 멈춘 바로 그 프레임부터입니다. 엔진이 쉬는 중이면 깨운 뒤 블록 경계에서 풀립니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 請求狀態在 **呼叫當下** 即改變，聲音則在下一個渲染區塊邊界一次套用到整個組。因此即使渲染停止期間，stop → relocate → write（預填充）→ play 也會累積起來，在下一個第一區塊一次套用。play 會以 `ST_SPEAKER_SET_STARTING` 等待，直到包含成員音源的 IR 被渲染器採用（不取出內容），之後即使環為空也會開始（計為欠載） — 主機應先填充。**首次播放不做淡入**，暫停·停止後重新開始時套用 132 樣本淡入。pause 之後的恢復從停止的那一幀開始。引擎閒置中時，喚醒後在區塊邊界解除。執行緒：`[control]` — 不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
 
-**반환** — `1` = 요청됨 / `0` = 실패(없는 세트 등).
+**回傳值** — `1` = 已請求 / `0` = 失敗（組不存在等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_pause</code> — 세트를 일시정지한다(큐 유지)</summary>
+<summary><code>st_rt_speaker_set_pause</code> — 暫停組（保留佇列）</summary>
 
 ```c
 int st_rt_speaker_set_pause(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 세트 전체를 일시정지합니다. 링에 쌓인 큐를 남기므로 다시 play하면 멈춘 바로 그 프레임부터 이어집니다.
+**用途** — 暫停整個組。保留環中累積的佇列，因此再次 play 時會從停止的那一幀接續。
 
-**언제·어떻게** — 요청은 즉시, 소리는 다음 렌더 블록 경계에서 걸립니다. 멈출 때는 채널마다 마지막 출력 표본에서 0까지 132표본 램프를 걸고 링에서 더 꺼내지 않으므로 `contentFrame`은 실제로 낸 위치입니다. 이미 방에 나간 잔향은 계속 울립니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 請求即時生效，聲音在下一個渲染區塊邊界套用。停止時各聲道從最後輸出樣本到 0 套用 132 樣本斜坡，且不再從環中取出，因此 `contentFrame` 為實際輸出的位置。已傳到房間中的殘響會繼續迴響。執行緒：`[control]` — 不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
 
-**반환** — `1` = 요청됨 / `0` = 실패(없는 세트 등).
+**回傳值** — `1` = 已請求 / `0` = 失敗（組不存在等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_stop</code> — 세트를 정지한다(큐 비움)</summary>
+<summary><code>st_rt_speaker_set_stop</code> — 停止組（清空佇列）</summary>
 
 ```c
 int st_rt_speaker_set_stop(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 세트 전체를 정지하고 링의 큐를 비웁니다.
+**用途** — 停止整個組並清空環中的佇列。
 
-**언제·어떻게** — 요청은 즉시, 소리는 다음 렌더 블록 경계에서 걸립니다(132표본 램프 아웃). 이미 방에 나간 잔향은 계속 울립니다. 탐색하려면 stop(또는 pause) 직후 `st_rt_speaker_set_relocate` → write(프리필) → play 순으로 부릅니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 請求即時生效，聲音在下一個渲染區塊邊界套用（132 樣本斜坡淡出）。已傳到房間中的殘響會繼續迴響。要定位時，在 stop（或 pause）之後立即依 `st_rt_speaker_set_relocate` → write（預填充）→ play 的順序呼叫。執行緒：`[control]` — 不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
 
-**반환** — `1` = 요청됨 / `0` = 실패(없는 세트 등).
+**回傳值** — `1` = 已請求 / `0` = 失敗（組不存在等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_relocate</code> — 세트의 콘텐츠 위치를 다시 잡는다(탐색)</summary>
+<summary><code>st_rt_speaker_set_relocate</code> — 重新設定組的內容位置（定位）</summary>
 
 ```c
 int st_rt_speaker_set_relocate(STRT_Context* context, STSpeakerSetId set, int64_t contentFrame);
 ```
 
-**용도** — 탐색(seek)용입니다. 호출 시점까지 쓴 프레임을 버리고, 다음 꺼냄부터 `contentFrame`을 이 값에서 셉니다. 그 뒤에 쓴 프레임은 남습니다.
+**用途** — 用於定位（seek）。丟棄截至呼叫時寫入的幀，從下一次取出起以此值開始計算 `contentFrame`。之後寫入的幀會保留。
 
-**언제·어떻게** — 요청 상태가 정지·일시정지일 때만 받습니다(stop 직후 바로 불러도 됩니다). 입력 리샘플러(`hostSampleRate`)·업믹스 이력도 다음 write에서 버리므로, relocate 뒤 첫 출력 표본은 그 뒤 처음 쓴 호스트 프레임(= `contentFrame` 기준값)에 표본 단위로 맞습니다. HOST_PULL_BUFFERED에서 `st_rt_render_stop`/`start`로 출력 링을 버리기 전에는 `contentFrame − latencyFrames`(들린 위치)를 읽어 두었다가 이 함수로 다시 잡습니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 只在請求狀態為停止·暫停時接受（在 stop 之後立即呼叫也可以）。輸入重新取樣器（`hostSampleRate`）·升混歷史也會在下一次 write 時丟棄，因此 relocate 後的第一個輸出樣本會以樣本為單位對齊之後第一次寫入的主機幀（= `contentFrame` 基準值）。在 HOST_PULL_BUFFERED 中以 `st_rt_render_stop`/`start` 丟棄輸出環之前，先讀取 `contentFrame − latencyFrames`（已聽到的位置），再以此函式重新設定。執行緒：`[control]` — 不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `contentFrame` | 새 콘텐츠 위치 기준(호스트 프레임) |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
+| `contentFrame` | 新內容位置基準（主機幀） |
 
-**반환** — `1` = 적용 / `0` = 실패(재생 중, 없는 세트 등).
+**回傳值** — `1` = 套用 / `0` = 失敗（播放中、組不存在等）。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_idle</code> — 세트(멤버 전원)를 쉬게 한다</summary>
+<summary><code>st_rt_speaker_set_idle</code> — 讓組（全部成員）閒置</summary>
 
 ```c
 int st_rt_speaker_set_idle(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 들려줄 것이 없는 세트의 계산·렌더 비용을 없앱니다. 멤버 전원을 한 번에(씬 커밋 1번) 쉬게 하고(동작은 `st_rt_source_idle`과 같음), 세트 창이 멤버와 같은 길이(지연선 길이 + 1 s) 동안 무음이고 원음 모드 지연 링도 비면 렌더 블록마다 하던 링 꺼내기·원음 믹스도 멈춥니다(블록 시각 `renderFrame`도 멈춤).
+**用途** — 消除沒有內容要播放的組的計算·渲染成本。一次（1 次場景提交）讓全部成員閒置（行為與 `st_rt_source_idle` 相同），當組視窗在與成員相同的長度（延遲線長度 + 1 s）內為靜音且原音模式延遲環也為空時，每個渲染區塊進行的環取出·原音混合也會停止（區塊時刻 `renderFrame` 也停止）。
 
-**언제·어떻게** — 재생을 멈춘 뒤(stop·pause·무음 쓰기) 부릅니다. 쉬는 동안 쓴 프레임은 링에 남았다가 깨운 뒤 나갑니다. 멤버 id에 대한 `st_rt_source_idle`/`_run`은 거절되므로 세트는 이 함수와 `st_rt_speaker_set_run`으로 다룹니다. 스레드: `[control]` — 씬 락을 잡습니다. 지원 여부는 `ST_CAP1_ENGINE_IDLE`(능력 워드 1)로 확인합니다.
+**呼叫方式** — 在停止播放後（stop·pause·寫入靜音）呼叫。閒置期間寫入的幀會留在環中，喚醒後輸出。對成員 id 的 `st_rt_source_idle`/`_run` 會被拒絕，因此組以此函式與 `st_rt_speaker_set_run` 操作。執行緒：`[control]` — 持有場景鎖。是否支援以 `ST_CAP1_ENGINE_IDLE`（能力字組 1）確認。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
 
-**반환** — `1` = 성공 / `0` = 실패(`ST_STATUS_NOT_FOUND` 없는 세트, `ST_STATUS_UNAVAILABLE`).
+**回傳值** — `1` = 成功 / `0` = 失敗（`ST_STATUS_NOT_FOUND` 組不存在、`ST_STATUS_UNAVAILABLE`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_run</code> — 쉬는 세트를 깨운다</summary>
+<summary><code>st_rt_speaker_set_run</code> — 喚醒閒置的組</summary>
 
 ```c
 int st_rt_speaker_set_run(STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — `st_rt_speaker_set_idle`로 쉬게 한 세트를 다시 돌립니다. 멤버를 먼저 깨운 뒤 세트 창을 열어, 그 사이 렌더 블록이 끼어도 콘텐츠를 잃지 않습니다.
+**用途** — 讓以 `st_rt_speaker_set_idle` 閒置的組重新執行。先喚醒成員再開啟組視窗，因此即使期間插入渲染區塊也不會遺失內容。
 
-**언제·어떻게** — 다시 재생하기 전에 부릅니다. 쉬는 동안 링에 쓴 프레임은 깨운 뒤 나갑니다. 스레드: `[control]` — 씬 락을 잡습니다. 지원 여부는 `ST_CAP1_ENGINE_IDLE`(능력 워드 1)로 확인합니다.
+**呼叫方式** — 在重新播放之前呼叫。閒置期間寫入環中的幀會在喚醒後輸出。執行緒：`[control]` — 持有場景鎖。是否支援以 `ST_CAP1_ENGINE_IDLE`（能力字組 1）確認。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
 
-**반환** — `1` = 성공 / `0` = 실패(`ST_STATUS_NOT_FOUND` 없는 세트, `ST_STATUS_UNAVAILABLE`).
+**回傳值** — `1` = 成功 / `0` = 失敗（`ST_STATUS_NOT_FOUND` 組不存在、`ST_STATUS_UNAVAILABLE`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_get_idle_state</code> — 세트의 쉼 상태를 읽는다</summary>
+<summary><code>st_rt_speaker_set_get_idle_state</code> — 讀取組的閒置狀態</summary>
 
 ```c
 int st_rt_speaker_set_get_idle_state(const STRT_Context* context, STSpeakerSetId set);
 ```
 
-**용도** — 세트의 쉼·실행 상태를 `STRT_IdleState`로 돌려줍니다. 세트와 멤버가 모두 쉬어야 IDLE입니다.
+**用途** — 以 `STRT_IdleState` 回傳組的閒置·執行狀態。組與成員皆閒置時才為 IDLE。
 
-**언제·어떻게** — `st_rt_speaker_set_idle` 뒤 꼬리가 다 나갔는지 확인할 때 씁니다. 스레드: `[control]` — 제어 스레드용 질의입니다.
+**呼叫方式** — 用於確認 `st_rt_speaker_set_idle` 之後尾音是否已全部輸出。執行緒：`[control]` — 控制執行緒用查詢。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
 
-**반환** — `ST_RT_IDLE_RUNNING`(0) / `ST_RT_IDLE_DRAINING`(1, 남은 소리를 내는 중) / `ST_RT_IDLE_IDLE`(2). 없는 세트·컨텍스트 `NULL`이면 `-1`.
+**回傳值** — `ST_RT_IDLE_RUNNING`(0) / `ST_RT_IDLE_DRAINING`(1，正在輸出剩餘聲音) / `ST_RT_IDLE_IDLE`(2)。組不存在·情境為 `NULL` 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_set_direct</code> — 원음 모드(전파를 건너뛴 직접 출력)를 설정한다</summary>
+<summary><code>st_rt_speaker_set_set_direct</code> — 設定原音模式（略過傳播的直接輸出）</summary>
 
 ```c
 int st_rt_speaker_set_set_direct(STRT_Context* context, STSpeakerSetId set, const STSpeakerSetDirect* direct);
 ```
 
-**용도** — 원음 모드는 전파·오랄라이제이션을 건너뛰고 세트 채널을 출력 채널로 바로 냅니다. 켜고 끌 때 방 안의 스피커 소리와 콘텐츠 원음 사이를 같은 콘텐츠 위치에서 크로스페이드합니다. 같은 링·`contentFrame`·transport·페이드를 쓰며, 렌더 블록마다 꺼낸 같은 콘텐츠 표본을 원음 g, 젖은 경로(멤버 소스) 1 − g로 나누고 g를 크로스페이드 동안 선형으로 옮깁니다. 젖은 경로가 0이 돼도 방에 이미 나간 잔향은 자연 감쇠합니다.
+**用途** — 原音模式會略過傳播·聽覺化，將組聲道直接輸出到輸出聲道。開關時在相同內容位置於房間內喇叭聲與內容原音之間交叉淡化。使用相同的環·`contentFrame`·transport·淡化，將每個渲染區塊取出的相同內容樣本分為原音 g、濕路徑（成員音源）1 − g，並在交叉淡化期間線性移動 g。濕路徑變為 0 時，已傳到房間中的殘響也會自然衰減。
 
-**언제·어떻게** — 매번 설정 전체를 보내며 다음 렌더 블록부터 적용됩니다. 세트가 소리를 내지 않던 동안(정지·일시정지·시작 대기) 바꾼 설정은 크로스페이드 없이 바로 걸립니다 — 원음 모드로 처음 재생하면 첫 표본부터 원음만 나갑니다. 원음은 `delayFrames` 뒤에 행렬을 거쳐 출력단(출력 EQ → 마스터 게인 → 리미터) **앞**에 더해지므로 리미터·출력단 지연은 젖은 경로와 같고, 남는 차이인 젖은 경로의 전파 지연(거리/음속)을 `delayFrames`로 맞춥니다. 원음이 켜진 동안 `delayFrames`를 바꾸면 이어 붙이지 않고 건너뜁니다. 헤드폰 출력에서도 원음은 HRTF를 타지 않습니다. 원음을 한 번도 켜지 않은 세트의 출력은 이 기능이 없을 때와 비트 동일합니다. 스레드: `[control]` — 오디오 콜백에서 부르지 않습니다.
+**呼叫方式** — 每次都傳送完整設定，從下一個渲染區塊起套用。組未發聲期間（停止·暫停·等待開始）變更的設定會不經交叉淡化直接套用 — 以原音模式首次播放時，從第一個樣本起只輸出原音。原音在 `delayFrames` 之後經過矩陣，加到輸出級（輸出 EQ → 主增益 → 限幅器）**之前**，因此限幅器·輸出級延遲與濕路徑相同，剩餘的差異即濕路徑的傳播延遲（距離/音速）以 `delayFrames` 對齊。原音開啟期間變更 `delayFrames` 時不做接合而是跳躍。耳機輸出時原音也不經過 HRTF。從未開啟原音的組，其輸出與沒有此功能時位元相同。執行緒：`[control]` — 不在音訊回呼中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `direct` | 원음 설정. 호출자가 `structSize` / `apiVersion`을 채웁니다 |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
+| `direct` | 原音設定。呼叫端須填入 `structSize` / `apiVersion` |
 
-**구조체** `STSpeakerSetDirect`
+**結構體** `STSpeakerSetDirect`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STSpeakerSetDirect)` / `ST_ABI_VERSION` |
-| `enabled` | 0 = 젖은 경로(기본), 1 = 원음 |
-| `crossfadeMs` | 전환 길이 `[0, 1000]` ms. 3 ms보다 짧으면 3 ms |
-| `delayFrames` | 원음 지연(호스트 프레임), `[0, 1 s]` |
-| `outputChannels` | `matrix` 행 수. 0이면 행렬 없음(엔진 기본 매핑) |
-| `matrix` | `outputChannels × channelCount`, 출력 행 우선 — `matrix[o * channelCount + c]`. `NULL` 허용 |
+| `enabled` | 0 = 濕路徑（預設），1 = 原音 |
+| `crossfadeMs` | 切換長度 `[0, 1000]` ms。短於 3 ms 時為 3 ms |
+| `delayFrames` | 原音延遲（主機幀），`[0, 1 s]` |
+| `outputChannels` | `matrix` 列數。0 時無矩陣（引擎預設對應） |
+| `matrix` | `outputChannels × channelCount`，輸出列優先 — `matrix[o * channelCount + c]`。允許 `NULL` |
 | `reserved[6]` | 0 |
 
-`outputChannels`가 지금 출력 채널 수(스테레오 2 · 스피커 레이아웃 N)와 다르거나 `matrix`가 `NULL`이면 엔진 기본 매핑을 씁니다.
+`outputChannels` 與目前輸出聲道數（立體聲 2 · 喇叭佈局 N）不同，或 `matrix` 為 `NULL` 時，使用引擎預設對應。
 
-| 조건 | 기본 매핑 |
+| 條件 | 預設對應 |
 |---|---|
-| 채널 수 = 출력 수 | 그대로 |
-| 출력 2 | ITU-R BS.775 다운믹스 — 3.0은 FL FR FC(FC 0.7071), 그 밖은 FL FR FC LFE SL SR [BL BR \| BC]로 읽고 FC·서라운드·백 0.7071, LFE 0(제외), 6.1의 BC는 양쪽 0.5, 모노는 양쪽 0.7071, 그 밖 채널 수는 짝수 → L · 홀수 → R |
-| 그 밖 | 앞에서부터 1:1 |
+| 聲道數 = 輸出數 | 原樣 |
+| 輸出 2 | ITU-R BS.775 降混 — 3.0 為 FL FR FC（FC 0.7071），其他讀作 FL FR FC LFE SL SR [BL BR \| BC]，FC·環繞·後方 0.7071，LFE 0（排除），6.1 的 BC 兩側 0.5，單聲道兩側 0.7071，其他聲道數為偶數 → L · 奇數 → R |
+| 其他 | 從前面起 1:1 |
 
-다운믹스는 정규화하지 않습니다(리미터가 받습니다).
+降混不做正規化（由限幅器承接）。
 
-**반환** — `1` = 적용 / `0` = 실패(`ST_STATUS_VERSION_MISMATCH` · `ST_STATUS_INVALID_ARGUMENT` · `ST_STATUS_NOT_FOUND`).
+**回傳值** — `1` = 套用 / `0` = 失敗（`ST_STATUS_VERSION_MISMATCH` · `ST_STATUS_INVALID_ARGUMENT` · `ST_STATUS_NOT_FOUND`）。
 
 </details>
 
 <details>
-<summary><code>st_rt_speaker_set_get_status</code> — 세트의 재생 상태·카운터·시각을 읽는다</summary>
+<summary><code>st_rt_speaker_set_get_status</code> — 讀取組的播放狀態·計數器·時刻</summary>
 
 ```c
 int st_rt_speaker_set_get_status(const STRT_Context* context, STSpeakerSetId set, STSpeakerSetStatus* outStatus);
 ```
 
-**용도** — 세트의 transport 상태, 링 상태, 누적 카운터, 표본 단위 정렬용 렌더 시각을 한 번에 돌려줍니다. 공급량 조절(`queuedFrames`), 재생 위치 표시, 영상과의 표본 단위 싱크에 씁니다.
+**用途** — 一次回傳組的 transport 狀態、環狀態、累計計數器、樣本級對齊用的渲染時刻。用於供給量調整（`queuedFrames`）、播放位置顯示、與影像的樣本級同步。
 
-**언제·어떻게** — 어느 스레드에서든 부를 수 있습니다. 프레임 필드는 전부 호스트 프레임(엔진 프레임 누계를 조회 때 round-half-up 한 번 환산)이고, 카운터는 생성 시점부터의 누계입니다. `state`·`contentFrame`·`renderFrame`·`playRenderFrame`·`playContentFrame`은 렌더 블록 하나가 함께 쓰는 값이라 한 번의 호출 안에서 서로 맞습니다. `latencyFrames`는 출력단 상태를 따로 읽으므로 렌더와 다른 스레드에서 읽으면 ±1블록 어긋날 수 있습니다 — 표본 단위 정렬은 렌더 시각 필드로 합니다. 스레드: `[any]` — 블록하지 않습니다.
+**呼叫方式** — 在任何執行緒都可呼叫。幀欄位全部為主機幀（引擎幀累計在查詢時以 round-half-up 換算一次），計數器為自建立起的累計。`state`·`contentFrame`·`renderFrame`·`playRenderFrame`·`playContentFrame` 是同一個渲染區塊一起寫入的值，因此在單次呼叫中彼此一致。`latencyFrames` 另外讀取輸出級狀態，因此在與渲染不同的執行緒讀取時可能相差 ±1 區塊 — 樣本級對齊請使用渲染時刻欄位。執行緒：`[any]` — 不會阻塞。
 
-표본 단위 정렬: 재생이 `playRenderFrame`에서 시작한 뒤 언더런 없이 이어졌다면, 렌더 위치 r(`renderFrame` 축)의 콘텐츠는 `playContentFrame + (r − playRenderFrame)`입니다(3 ms 페이드인 포함). 출력 표본은 그 뒤 `latencyFrames`(출력단 + 리미터)만큼 늦게 나옵니다. 소리의 전파 지연(거리/음속)과 필터 군지연은 여기 들어가지 않으며, `hostSampleRate`를 지정했으면 두 축의 환산 반올림으로 ±1 프레임 차이가 날 수 있습니다.
+樣本級對齊：若播放從 `playRenderFrame` 開始後無欠載地持續，渲染位置 r（`renderFrame` 軸）的內容為 `playContentFrame + (r − playRenderFrame)`（含 3 ms 淡入）。輸出樣本會再晚 `latencyFrames`（輸出級 + 限幅器）輸出。聲音的傳播延遲（距離/音速）與濾波器群延遲不包含在此，若指定了 `hostSampleRate`，兩軸的換算捨入可能產生 ±1 幀差異。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `set` | 세트 핸들 |
-| `outStatus` | 출력. 호출자가 `structSize` / `apiVersion`을 채웁니다 |
+| `context` | 情境控制代碼 |
+| `set` | 組控制代碼 |
+| `outStatus` | 輸出。呼叫端須填入 `structSize` / `apiVersion` |
 
-**구조체** `STSpeakerSetStatus`
+**結構體** `STSpeakerSetStatus`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `structSize` / `apiVersion` | `sizeof(STSpeakerSetStatus)` / `ST_ABI_VERSION` |
-| `state` | `STSpeakerSetState` — `STOPPED`(0) / `PLAYING`(1) / `PAUSED`(2) / `STARTING`(3, play 요청 후 멤버 소스를 담은 IR 채택 대기 — 콘텐츠를 꺼내지 않음) |
-| `queuedFrames` | 링에 쌓인 몫 |
-| `capacityFrames` | 엔진이 실제로 잡은 링 용량 |
-| `latencyFrames` | 렌더 → 출력 지연: 출력단(pull FIFO·버퍼드 링·출력 리샘플러) + 리미터 |
-| `contentFrame` | relocate 기준 + 렌더가 링에서 꺼낸 몫 |
-| `underrunFrames` | 재생 중 링이 비어 무음으로 채운 몫 |
-| `droppedFrames` | 링이 가득 차 버린 몫 |
-| `totalWrittenFrames` | 링에 실제로 들어간 몫 |
-| `renderFrame` | 컨텍스트가 지금까지 렌더한 프레임(무음 프리롤 블록 포함) |
-| `playRenderFrame` | 마지막 재생 시작 블록의 첫 표본 렌더 위치. 시작 전 −1 |
-| `playContentFrame` | 그 표본의 콘텐츠 프레임 |
-| `appliedSetters` | `st_rt_speaker_set_update`가 엔진에 보낸 값 수(위치·회전·게인·리스너 위치·회전) |
-| `skippedSetters` | 비트 동일·무지향 회전이라 보내지 않은 값 수 |
-| `directMix` | 원음 몫 0..1(직전 블록 끝). 0 = 젖은 경로만 |
-| `inputDelayFrames` | 업믹스 창 지연(호스트 프레임, 업믹스 없으면 0) |
-| `reserved[4]` | 예약 |
+| `state` | `STSpeakerSetState` — `STOPPED`(0) / `PLAYING`(1) / `PAUSED`(2) / `STARTING`(3，play 請求後等待包含成員音源的 IR 被採用 — 不取出內容) |
+| `queuedFrames` | 環中累積的量 |
+| `capacityFrames` | 引擎實際配置的環容量 |
+| `latencyFrames` | 渲染 → 輸出延遲：輸出級（pull FIFO·緩衝環·輸出重新取樣器）+ 限幅器 |
+| `contentFrame` | relocate 基準 + 渲染從環中取出的量 |
+| `underrunFrames` | 播放中環為空而以靜音填充的量 |
+| `droppedFrames` | 環已滿而丟棄的量 |
+| `totalWrittenFrames` | 實際放入環中的量 |
+| `renderFrame` | 情境至今渲染的幀（含靜音預捲區塊） |
+| `playRenderFrame` | 最後一次播放開始區塊的第一個樣本渲染位置。開始前為 −1 |
+| `playContentFrame` | 該樣本的內容幀 |
+| `appliedSetters` | `st_rt_speaker_set_update` 傳給引擎的值數（位置·旋轉·增益·聆聽者位置·旋轉） |
+| `skippedSetters` | 因位元相同·無指向旋轉而未傳送的值數 |
+| `directMix` | 原音比例 0..1（上一區塊結束時）。0 = 只有濕路徑 |
+| `inputDelayFrames` | 升混視窗延遲（主機幀，無升混時為 0） |
+| `reserved[4]` | 保留 |
 
-**반환** — `1` = 성공 / `0` = 실패(`NULL`, 스탬프 불일치, 없는 세트).
+**回傳值** — `1` = 成功 / `0` = 失敗（`NULL`、戳記不一致、組不存在）。
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>디버그 · 시각화</strong> — 9개</summary>
+<summary><strong>除錯 · 視覺化</strong> — 9 個</summary>
 
 <details>
-<summary><code>st_rt_debug_get_frame_generation</code> — 전파 프레임 세대 번호를 읽는다</summary>
+<summary><code>st_rt_debug_get_frame_generation</code> — 讀取傳播幀世代編號</summary>
 
 ```c
 uint64_t st_rt_debug_get_frame_generation(const STRT_Context* context);
 ```
 
-**용도** — 새 전파 결과가 나왔는지 값의 변화만으로 가볍게 감지하는 카운터입니다. 디버그 시각화가 매 프레임 스냅샷을 다시 가져올 필요가 있는지 판단할 때 씁니다.
+**用途** — 僅憑值的變化即可輕量偵測是否產生新傳播結果的計數器。用於判斷除錯視覺化是否需要每幀重新取得快照。
 
-**언제·어떻게** — 언제든 폴링할 수 있습니다. 값이 바뀌었으면 `st_rt_debug_acquire_snapshot`을 불러 새 스냅샷을 잡습니다. `st_rt_debug_copy_visual_paths`에 넘길 세대는 이 값이 아니라 `st_rt_debug_acquire_snapshot`이 돌려준 `frameGeneration`을 씁니다. 스레드: `[any]` — atomic 하나를 읽습니다.
+**呼叫方式** — 隨時可輪詢。值改變時呼叫 `st_rt_debug_acquire_snapshot` 取得新快照。要傳給 `st_rt_debug_copy_visual_paths` 的世代不是此值，而是使用 `st_rt_debug_acquire_snapshot` 回傳的 `frameGeneration`。執行緒：`[any]` — 讀取一個 atomic。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 현재 세대 번호. 아직 전파 결과가 없거나 `context`가 `NULL`이면 `0`.
+**回傳值** — 目前世代編號。尚無傳播結果或 `context` 為 `NULL` 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_set_collect_failed_walks</code> — 중도에 실패한 경로 walk도 시각화용으로 수집할지 정한다</summary>
+<summary><code>st_rt_debug_set_collect_failed_walks</code> — 設定是否也收集中途失敗的路徑 walk 供視覺化</summary>
 
 ```c
 void st_rt_debug_set_collect_failed_walks(STRT_Context* context, int enabled);
 ```
 
-**용도** — 기본 시각화는 소스에서 리스너까지 완주한 경로만 담습니다. 이 옵션을 켜면 중간에 끊긴 walk도 수집돼 "왜 이 경로가 연결되지 않았는가"를 디버깅할 수 있습니다.
+**用途** — 預設視覺化只包含從音源到聆聽者走完的路徑。開啟此選項後，中途中斷的 walk 也會被收集，可用於除錯「為什麼這條路徑沒有連通」。
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있고 이후 전파 결과부터 반영됩니다. 수집 대상 경로 종류는 `st_rt_debug_set_collect_visual_paths`의 마스크로 따로 정하며, 이 플래그는 그 마스크와 독립적으로 유지됩니다(`st_rt_debug_get_collect_mask`에는 나타나지 않습니다). 실패 walk는 `STVisualPathRecord.valid = 0`으로 들어오고, 복사할 때 `ST_VISUAL_PATH_COPY_ALL`로 가져옵니다. 기본은 꺼짐입니다. 스레드: `[control]` — 씬 쓰기 락을 잡으므로 오디오 스레드에서 부르지 않습니다.
+**呼叫方式** — 建立後隨時可呼叫，從之後的傳播結果起反映。收集對象的路徑類型另由 `st_rt_debug_set_collect_visual_paths` 的遮罩決定，此旗標獨立於該遮罩維持（不會出現在 `st_rt_debug_get_collect_mask` 中）。失敗 walk 以 `STVisualPathRecord.valid = 0` 進入，複製時以 `ST_VISUAL_PATH_COPY_ALL` 取得。預設為關閉。執行緒：`[control]` — 持有場景寫入鎖，因此不在音訊執行緒中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | `0` = 끔(기본) / `0`이 아닌 값 = 켬 |
+| `context` | 情境控制代碼 |
+| `enabled` | `0` = 關閉（預設）/ 非 `0` 的值 = 開啟 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_set_collect_visual_paths</code> — 시각화용으로 수집할 경로 종류 마스크를 지정한다</summary>
+<summary><code>st_rt_debug_set_collect_visual_paths</code> — 指定要收集供視覺化的路徑類型遮罩</summary>
 
 ```c
 int st_rt_debug_set_collect_visual_paths(STRT_Context* context, uint32_t mask);
 ```
 
-**용도** — 에디터·디버그 뷰에서 guide 레이, 소스 수송 레이, 직접음·투과 경로, 반사·회절 경로를 선분으로 그리기 위해 전파가 경로 기하를 기록하게 합니다.
+**用途** — 讓傳播記錄路徑幾何，以便在編輯器·除錯檢視中以線段繪製 guide 光線、音源傳輸光線、直達聲·透射路徑、反射·繞射路徑。
 
-**언제·어떻게** — 생성 후 언제든 부를 수 있고 이후 전파 결과부터 반영됩니다. 수집된 결과는 `st_rt_debug_acquire_snapshot` → `st_rt_debug_copy_visual_paths` 순으로 가져옵니다. 기본 마스크는 `0`(수집 안 함)입니다. 지원 여부는 `ST_CAP_PATH_COLLECTION_MASK`. 스레드: `[control]` — 씬 쓰기 락을 잡으므로 오디오 스레드에서 부르지 않습니다.
+**呼叫方式** — 建立後隨時可呼叫，從之後的傳播結果起反映。收集的結果依 `st_rt_debug_acquire_snapshot` → `st_rt_debug_copy_visual_paths` 的順序取得。預設遮罩為 `0`（不收集）。是否支援為 `ST_CAP_PATH_COLLECTION_MASK`。執行緒：`[control]` — 持有場景寫入鎖，因此不在音訊執行緒中呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mask` | `STPathCollectionFlag` 조합(아래 표). `0` = 수집 끔. 정의되지 않은 비트가 있으면 거절 |
+| `context` | 情境控制代碼 |
+| `mask` | `STPathCollectionFlag` 組合（見下表）。`0` = 關閉收集。含有未定義位元時拒絕 |
 
-**열거형** `STPathCollectionFlag`
+**列舉** `STPathCollectionFlag`
 
-| 값 | 이름 | 수집 대상 |
+| 值 | 名稱 | 收集對象 |
 |---|---|---|
-| `1u << 0` | `ST_PATH_COLLECTION_GUIDE_RAY` | 리스너에서 쏜 guide 레이 |
-| `1u << 1` | `ST_PATH_COLLECTION_SOURCE_TRANSPORT_RAY` | 소스 수송 레이 |
-| `1u << 2` | `ST_PATH_COLLECTION_DIRECT_TRANSMISSION` | 직접음·투과 경로 |
-| `1u << 3` | `ST_PATH_COLLECTION_REFLECTION_DIFFRACTION` | 반사·회절 경로(반사 구간을 포함한 혼합 회절 경로가 있어 한 비트로 묶임) |
-| 위 넷의 OR | `ST_PATH_COLLECTION_ALL` | 전부 |
+| `1u << 0` | `ST_PATH_COLLECTION_GUIDE_RAY` | 從聆聽者發射的 guide 光線 |
+| `1u << 1` | `ST_PATH_COLLECTION_SOURCE_TRANSPORT_RAY` | 音源傳輸光線 |
+| `1u << 2` | `ST_PATH_COLLECTION_DIRECT_TRANSMISSION` | 直達聲·透射路徑 |
+| `1u << 3` | `ST_PATH_COLLECTION_REFLECTION_DIFFRACTION` | 反射·繞射路徑（存在包含反射區段的混合繞射路徑，因此合為一個位元） |
+| 上述四者的 OR | `ST_PATH_COLLECTION_ALL` | 全部 |
 
-**반환** — `1` = 적용 / `0` = 거절(`context`가 `NULL`, `mask`에 정의되지 않은 비트).
+**回傳值** — `1` = 套用 / `0` = 拒絕（`context` 為 `NULL`、`mask` 含未定義位元）。
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_get_collect_mask</code> — 현재 경로 수집 마스크를 읽는다</summary>
+<summary><code>st_rt_debug_get_collect_mask</code> — 讀取目前的路徑收集遮罩</summary>
 
 ```c
 uint32_t st_rt_debug_get_collect_mask(const STRT_Context* context);
 ```
 
-**용도** — `st_rt_debug_set_collect_visual_paths`로 지정한 수집 마스크를 확인합니다.
+**用途** — 確認以 `st_rt_debug_set_collect_visual_paths` 指定的收集遮罩。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 실패 walk 수집 여부(`st_rt_debug_set_collect_failed_walks`)는 이 값에 포함되지 않습니다. 스레드: `[any]` — atomic 사본을 읽습니다.
+**呼叫方式** — 隨時可呼叫。是否收集失敗 walk（`st_rt_debug_set_collect_failed_walks`）不包含在此值中。執行緒：`[any]` — 讀取 atomic 副本。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STPathCollectionFlag` 비트 조합. 기본 `0`, `context`가 `NULL`이면 `0`.
+**回傳值** — `STPathCollectionFlag` 位元組合。預設 `0`，`context` 為 `NULL` 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_acquire_snapshot</code> — 최신 전파 진단 스냅샷을 잡고 요약을 읽는다</summary>
+<summary><code>st_rt_debug_acquire_snapshot</code> — 取得最新傳播診斷快照並讀取摘要</summary>
 
 ```c
 int st_rt_debug_acquire_snapshot(STRT_Context* context, STPropagationSnapshotInfo* outInfo);
 ```
 
-**용도** — 최신 전파 세대 하나를 진단용으로 고정하고, 그 세대의 경로 수·시각화 버퍼 크기를 한 번에 돌려줍니다. 모든 값이 **같은 세대**에서 온 것이므로 경로 수 통계와 시각화 경로가 서로 어긋나지 않습니다.
+**用途** — 將最新的一個傳播世代固定為診斷用，並一次回傳該世代的路徑數·視覺化緩衝區大小。所有值都來自 **同一世代**，因此路徑數統計與視覺化路徑不會互相錯位。
 
-**언제·어떻게** — 시각화 경로를 가져오려면 먼저 이 함수로 스냅샷을 잡고, 돌려받은 `frameGeneration`과 개수로 버퍼를 준비해 `st_rt_debug_copy_visual_paths`를 부릅니다. 다시 부르면 그사이 새 세대가 나왔을 경우 그 세대로 바뀌므로, 복사는 마지막으로 잡은 세대에 대해 합니다. 시각화 경로·점 개수는 `st_rt_debug_set_collect_visual_paths`로 수집을 켰을 때만 0이 아닙니다. 스레드: `[control]` — 진단 뮤텍스를 잡습니다.
+**呼叫方式** — 要取得視覺化路徑時，先以此函式取得快照，再以回傳的 `frameGeneration` 與數量準備緩衝區，呼叫 `st_rt_debug_copy_visual_paths`。再次呼叫時若期間產生了新世代會切換到該世代，因此複製要針對最後取得的世代進行。視覺化路徑·點數只有在以 `st_rt_debug_set_collect_visual_paths` 開啟收集時才不為 0。執行緒：`[control]` — 持有診斷互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outInfo` | 출력. 호출자가 `structSize = sizeof(STPropagationSnapshotInfo)`, `apiVersion = ST_ABI_VERSION`을 채운다 |
+| `context` | 情境控制代碼 |
+| `outInfo` | 輸出。呼叫端須填入 `structSize = sizeof(STPropagationSnapshotInfo)`、`apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STPropagationSnapshotInfo`
+**結構體** `STPropagationSnapshotInfo`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채우는 스탬프 |
-| `frameGeneration` | 이 스냅샷의 세대. `st_rt_debug_copy_visual_paths`에 그대로 넘긴다 |
-| `collectionMask` | 이 세대를 만들 때 쓰인 수집 마스크(`STPathCollectionFlag`) |
-| `reserved0` | 예약 |
-| `visualPathCount` | 시각화 경로 전체 수(실패 walk 포함) |
-| `validVisualPathCount` | 완주한 시각화 경로 수. 유효 경로는 배열 앞쪽을 차지한다 |
-| `visualPointCount` | 시각화 점 전체 수 |
-| `validVisualPointCount` | 유효 경로에 속한 점 수. 배열 앞쪽을 차지한다 |
-| `totalPathCount` | 이 세대의 전체 음향 경로 수 |
-| `reflectionPathCount` | 반사 경로 수 |
-| `diffractionPathCount` | 회절 경로 수 |
-| `sourceSideOnlyPaths` | 소스 쪽 회절 모서리만 있는 회절 경로 수 |
-| `unclassifiedPaths` | 분류되지 않은 회절 경로 수(정상 동작에서는 0) |
-| `sourceSideEvents` | 소스 쪽 회절 이벤트 수 |
-| `terminalOnlyPaths` | 리스너 쪽 끝 모서리 회절만 있는 경로 수 |
-| `sourceAndTerminalPaths` | 소스 쪽과 리스너 쪽 회절이 모두 있는 경로 수 |
-| `terminalEvents` | 리스너 쪽 끝 모서리 회절 이벤트 수 |
-| `reserved[4]` | 예약 |
+| `structSize` / `apiVersion` | 由呼叫端填入的戳記 |
+| `frameGeneration` | 此快照的世代。直接傳給 `st_rt_debug_copy_visual_paths` |
+| `collectionMask` | 產生此世代時使用的收集遮罩（`STPathCollectionFlag`） |
+| `reserved0` | 保留 |
+| `visualPathCount` | 視覺化路徑總數（含失敗 walk） |
+| `validVisualPathCount` | 走完的視覺化路徑數。有效路徑位於陣列前段 |
+| `visualPointCount` | 視覺化點總數 |
+| `validVisualPointCount` | 屬於有效路徑的點數。位於陣列前段 |
+| `totalPathCount` | 此世代的聲學路徑總數 |
+| `reflectionPathCount` | 反射路徑數 |
+| `diffractionPathCount` | 繞射路徑數 |
+| `sourceSideOnlyPaths` | 只有音源側繞射邊的繞射路徑數 |
+| `unclassifiedPaths` | 未分類的繞射路徑數（正常運作時為 0） |
+| `sourceSideEvents` | 音源側繞射事件數 |
+| `terminalOnlyPaths` | 只有聆聽者側末端邊繞射的路徑數 |
+| `sourceAndTerminalPaths` | 同時有音源側與聆聽者側繞射的路徑數 |
+| `terminalEvents` | 聆聽者側末端邊繞射事件數 |
+| `reserved[4]` | 保留 |
 
-**반환** — `1` = 성공 / `0` = `context`·`outInfo`가 `NULL`, 스탬프 불일치, 또는 아직 전파 결과가 한 번도 없음. 실패 시 `outInfo`는 바뀌지 않습니다.
+**回傳值** — `1` = 成功 / `0` = `context`·`outInfo` 為 `NULL`、戳記不一致，或尚未有任何傳播結果。失敗時 `outInfo` 不變。
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_copy_visual_paths</code> — 잡아 둔 스냅샷의 시각화 경로와 점을 복사한다</summary>
+<summary><code>st_rt_debug_copy_visual_paths</code> — 複製已取得快照的視覺化路徑與點</summary>
 
 ```c
 int st_rt_debug_copy_visual_paths(STRT_Context* context, uint64_t frameGeneration, int copyMode, STVisualPathRecord* outPaths, uint32_t pathCapacity, STVisualPoint* outPoints, uint32_t pointCapacity);
 ```
 
-**용도** — 디버그 뷰에서 경로를 선분으로 그리기 위해 경로 레코드와 꼭짓점 배열을 호스트 버퍼로 복사합니다. 오디오 데이터는 이 표면을 통과하지 않습니다(검사·시각화 전용).
+**用途** — 為了在除錯檢視中以線段繪製路徑，將路徑記錄與頂點陣列複製到主機緩衝區。音訊資料不經過此介面（僅供檢查·視覺化）。
 
-**언제·어떻게** — `st_rt_debug_acquire_snapshot`을 먼저 부르고, 그 `frameGeneration`과 개수로 버퍼를 준비합니다: `VALID_ONLY`면 경로 `validVisualPathCount`개·점 `validVisualPointCount`개, `ALL`이면 `visualPathCount`개·`visualPointCount`개. 버퍼는 해당 세트 전체를 담아야 하며 부분 복사는 하지 않습니다. 각 레코드의 `points[pointOffset .. pointOffset + pointCount)`가 순서대로 이어진 경로 하나입니다. 스레드: `[control]` — 진단 뮤텍스를 잡습니다.
+**呼叫方式** — 先呼叫 `st_rt_debug_acquire_snapshot`，再以其 `frameGeneration` 與數量準備緩衝區：`VALID_ONLY` 時路徑 `validVisualPathCount` 個·點 `validVisualPointCount` 個，`ALL` 時為 `visualPathCount` 個·`visualPointCount` 個。緩衝區必須容納整組資料，不做部分複製。每筆記錄的 `points[pointOffset .. pointOffset + pointCount)` 依序相連構成一條路徑。執行緒：`[control]` — 持有診斷互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `frameGeneration` | `st_rt_debug_acquire_snapshot`이 돌려준 세대. 잡아 둔 스냅샷의 세대와 다르면 실패 |
-| `copyMode` | `STVisualPathCopyMode`: `ST_VISUAL_PATH_COPY_VALID_ONLY`(0) = 완주한 경로만 / `ST_VISUAL_PATH_COPY_ALL`(1) = 실패 walk 포함 전부. 그 밖 값은 실패 |
-| `outPaths` | 경로 레코드 출력 배열. 복사할 경로가 0개면 `NULL` 가능 |
-| `pathCapacity` | `outPaths` 원소 수 |
-| `outPoints` | 점 출력 배열. 복사할 점이 0개면 `NULL` 가능 |
-| `pointCapacity` | `outPoints` 원소 수 |
+| `context` | 情境控制代碼 |
+| `frameGeneration` | `st_rt_debug_acquire_snapshot` 回傳的世代。與已取得快照的世代不同時失敗 |
+| `copyMode` | `STVisualPathCopyMode`：`ST_VISUAL_PATH_COPY_VALID_ONLY`(0) = 只有走完的路徑 / `ST_VISUAL_PATH_COPY_ALL`(1) = 含失敗 walk 的全部。其他值失敗 |
+| `outPaths` | 路徑記錄輸出陣列。要複製的路徑為 0 個時可為 `NULL` |
+| `pathCapacity` | `outPaths` 元素數 |
+| `outPoints` | 點輸出陣列。要複製的點為 0 個時可為 `NULL` |
+| `pointCapacity` | `outPoints` 元素數 |
 
-**구조체** `STVisualPathRecord`
+**結構體** `STVisualPathRecord`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `pointOffset` | 이 경로의 첫 점이 `outPoints`에서 차지하는 인덱스 |
-| `pointCount` | 이 경로의 점 수 |
-| `depth` | 경로 깊이(상호작용 차수) |
-| `pathKind` | `STPathKind`(아래 표) |
-| `soundSourceIndex` | 소스 인덱스. guide 레이는 `-1` |
-| `valid` | `1` = 완주 / `0` = 중도 실패 walk |
-| `totalLengthMeters` | 경로 전체 길이(m) |
-| `reserved0` | 예약 |
+| `pointOffset` | 此路徑第一個點在 `outPoints` 中的索引 |
+| `pointCount` | 此路徑的點數 |
+| `depth` | 路徑深度（互動次數） |
+| `pathKind` | `STPathKind`（見下表） |
+| `soundSourceIndex` | 音源索引。guide 光線為 `-1` |
+| `valid` | `1` = 走完 / `0` = 中途失敗的 walk |
+| `totalLengthMeters` | 路徑總長度（m） |
+| `reserved0` | 保留 |
 
-음향 경로의 점 순서는 소스 → 상호작용 지점들 → 리스너이고, guide 레이는 리스너 → 히트 지점들입니다.
+聲學路徑的點順序為音源 → 各互動點 → 聆聽者，guide 光線為聆聽者 → 各命中點。
 
-**열거형** `STPathKind`
+**列舉** `STPathKind`
 
-| 값 | 이름 | 의미 |
+| 值 | 名稱 | 意義 |
 |---|---|---|
-| `0` | `ST_PATH_GUIDE_RAY` | guide 레이 |
-| `1` | `ST_PATH_DIRECT` | 직접음(투과 포함) |
-| `2` | `ST_PATH_REFLECTION` | 반사 |
-| `3` | `ST_PATH_DIFFRACTION_UNKNOWN` | 분류되지 않은 회절(정상 동작에서는 나오지 않음) |
-| `1 << 2` | `ST_PATH_DIFFRACTION_S` | 소스 쪽 모서리 회절 |
-| `1 << 3` | `ST_PATH_DIFFRACTION_L` | 리스너 쪽 끝 모서리 회절 |
-| `S \| L` | `ST_PATH_DIFFRACTION_SL` | 소스 쪽과 리스너 쪽 회절 모두 |
-| `1 << 4` | `ST_PATH_SOURCE_TRANSPORT_RAY` | 소스 수송 레이 |
+| `0` | `ST_PATH_GUIDE_RAY` | guide 光線 |
+| `1` | `ST_PATH_DIRECT` | 直達聲（含透射） |
+| `2` | `ST_PATH_REFLECTION` | 反射 |
+| `3` | `ST_PATH_DIFFRACTION_UNKNOWN` | 未分類的繞射（正常運作時不會出現） |
+| `1 << 2` | `ST_PATH_DIFFRACTION_S` | 音源側邊繞射 |
+| `1 << 3` | `ST_PATH_DIFFRACTION_L` | 聆聽者側末端邊繞射 |
+| `S \| L` | `ST_PATH_DIFFRACTION_SL` | 音源側與聆聽者側繞射皆有 |
+| `1 << 4` | `ST_PATH_SOURCE_TRANSPORT_RAY` | 音源傳輸光線 |
 
-**구조체** `STVisualPoint`
+**結構體** `STVisualPoint`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `x`, `y`, `z` | 점 좌표(씬 프레임) |
-| `flags` | `STVisualPointFlag`: `ST_VISUAL_POINT_NONE`(0) / `ST_VISUAL_POINT_DIFFRACTION`(`1u << 0`, 회절 지점) |
+| `x`, `y`, `z` | 點座標（場景座標系） |
+| `flags` | `STVisualPointFlag`：`ST_VISUAL_POINT_NONE`(0) / `ST_VISUAL_POINT_DIFFRACTION`(`1u << 0`，繞射點) |
 
-**반환** — `1` = 성공 / `0` = 실패: `context`가 `NULL`, `copyMode`가 범위 밖, 아직 스냅샷이 없음, `frameGeneration`이 잡아 둔 세대와 다름, 버퍼 용량 부족(또는 필요한데 `NULL`). 세대 불일치로 실패하면 `st_rt_debug_acquire_snapshot`을 다시 부른 뒤 복사합니다.
+**回傳值** — `1` = 成功 / `0` = 失敗：`context` 為 `NULL`、`copyMode` 超出範圍、尚無快照、`frameGeneration` 與已取得的世代不同、緩衝區容量不足（或需要時為 `NULL`）。因世代不一致而失敗時，重新呼叫 `st_rt_debug_acquire_snapshot` 後再複製。
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_copy_mesh_accel_nodes</code> — 메시 하나의 가속구조(BLAS) 노드 박스를 복사한다</summary>
+<summary><code>st_rt_debug_copy_mesh_accel_nodes</code> — 複製單一網格的加速結構（BLAS）節點方塊</summary>
 
 ```c
 int st_rt_debug_copy_mesh_accel_nodes(STRT_Context* context, STMeshId mesh, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 전파가 쓰는 메시 가속구조의 노드 경계 상자를 시각화용으로 꺼냅니다. 메시가 어떻게 분할됐는지 확인하거나 에디터에 BVH 박스를 겹쳐 그릴 때 씁니다. 전파가 쓰는 구조를 읽기만 합니다.
+**用途** — 取出傳播所使用的網格加速結構的節點邊界方塊供視覺化。用於確認網格如何被分割，或在編輯器中疊加繪製 BVH 方塊。只讀取傳播所使用的結構。
 
-**언제·어떻게** — `st_rt_mesh_create` 뒤 언제든 부를 수 있습니다. BLAS는 메시 생성 시점의 `st_rt_scene_set_accel` 값으로 지어집니다. 보통 `outNodes = NULL`로 먼저 불러 노드 수를 받고 버퍼를 할당한 뒤 다시 부릅니다. 큰 메시는 수천 노드이므로 시각화에는 `maxDepth`로 윗단만 보는 것이 일반적입니다. 버퍼가 모자라면 전위 순서의 앞부분(맨 왼쪽 가지부터)만 쓰이므로, 윗단만 원하면 `maxDepth`로 자릅니다. 지원 여부는 `ST_CAP_ACCEL_DEBUG_NODES`. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**呼叫方式** — `st_rt_mesh_create` 之後隨時可呼叫。BLAS 依網格建立時的 `st_rt_scene_set_accel` 值建置。通常先以 `outNodes = NULL` 呼叫取得節點數，配置緩衝區後再次呼叫。大型網格有數千個節點，因此視覺化時一般以 `maxDepth` 只看上層。緩衝區不足時只會寫入前序順序的前段（從最左分支起），因此只需要上層時請以 `maxDepth` 截斷。是否支援為 `ST_CAP_ACCEL_DEBUG_NODES`。執行緒：`[control]` — 只持有場景讀取鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 대상 메시 핸들(`st_rt_mesh_create`가 돌려준 값) |
-| `maxDepth` | `< 0` = 전 깊이. `0` 이상이면 `depth ≤ maxDepth`인 노드만 세고 쓴다 |
-| `outNodes` | 출력 배열. `NULL`이면 크기 질의(`nodeCapacity` 무시) |
-| `nodeCapacity` | `outNodes` 원소 수. 앞에서부터 `min(전체, nodeCapacity)`개를 쓴다 |
+| `context` | 情境控制代碼 |
+| `mesh` | 目標網格控制代碼（`st_rt_mesh_create` 回傳的值） |
+| `maxDepth` | `< 0` = 全部深度。`0` 以上時只計算並寫入 `depth ≤ maxDepth` 的節點 |
+| `outNodes` | 輸出陣列。`NULL` 時為大小查詢（忽略 `nodeCapacity`） |
+| `nodeCapacity` | `outNodes` 元素數。從前面起寫入 `min(全部, nodeCapacity)` 個 |
 
-**구조체** `STAccelNode` (32바이트, 버전 스탬프 없는 배열 원소)
+**結構體** `STAccelNode`（32 位元組，無版本戳記的陣列元素）
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `boundsMin[3]` | 노드 상자 최소 좌표 |
-| `boundsMax[3]` | 노드 상자 최대 좌표 |
-| `depth` | 깊이, 루트 = `0` |
-| `primitiveCount` | 리프: 담긴 프리미티브 수(≥ 0) / 내부 노드: `-1` |
+| `boundsMin[3]` | 節點方塊最小座標 |
+| `boundsMax[3]` | 節點方塊最大座標 |
+| `depth` | 深度，根 = `0` |
+| `primitiveCount` | 葉節點：包含的基本體數（≥ 0）/ 內部節點：`-1` |
 
-- **순서**: 깊이 우선 전위(pre-order). 루트가 `[0]`이고, 각 노드의 부모는 배열 앞쪽에서 가장 가까운 `depth − 1` 노드입니다 — 부모 인덱스 없이 트리를 복원할 수 있습니다.
-- **좌표**: 메시 BLAS는 `st_rt_mesh_create`에 넘긴 정점 프레임(메시 로컬)입니다. 인스턴스 위치에 그리려면 호스트가 오브젝트 변환을 곱합니다. `sceneRatio` 변환은 없습니다.
-- **가속구조 종류별 의미**(`st_rt_scene_set_accel`의 kind): BVH 계열(`0` BinnedSAH, `2` TinyBVH, `3` LBVH, `4` LBVH_Simd)은 빌드된 이진 트리이며, 4/8-wide 순회 표현의 상자는 이 목록의 부분집합입니다. TinyBVH BVH8의 리프는 삼각형 4개 이하입니다. KD(`1` HybridKD)는 루트 상자를 분할 평면으로 잘라 상자를 유도하므로 형제 상자가 겹치지 않고 부모를 정확히 나눕니다. 빈 리프(`primitiveCount = 0`)가 있을 수 있고, 여러 리프에 걸친 삼각형은 리프마다 셉니다.
+- **順序**：深度優先前序（pre-order）。根為 `[0]`，各節點的父節點是陣列前方最近的 `depth − 1` 節點 — 不需父索引即可還原樹。
+- **座標**：網格 BLAS 為傳給 `st_rt_mesh_create` 的頂點座標系（網格本地）。要繪製在實例位置時，由主機乘上物件變換。沒有 `sceneRatio` 轉換。
+- **各加速結構類型的意義**（`st_rt_scene_set_accel` 的 kind）：BVH 系列（`0` BinnedSAH、`2` TinyBVH、`3` LBVH、`4` LBVH_Simd）為建置完成的二元樹，4/8-wide 走訪表示的方塊是此清單的子集。TinyBVH BVH8 的葉節點為 4 個三角形以下。KD（`1` HybridKD）以分割平面切割根方塊來推導方塊，因此兄弟方塊不重疊且精確分割父節點。可能存在空葉節點（`primitiveCount = 0`），跨多個葉節點的三角形會在每個葉節點各計一次。
 
-**반환** — `maxDepth` 안의 **전체** 노드 수(≥ 0), 실패 시 `-1`(`context`가 `NULL`, 없는 메시 → `ST_STATUS_NOT_FOUND`). 버퍼가 모자라 잘린 복사도 전체 수를 돌려주며 `st_rt_get_last_status`에 `ST_STATUS_BUFFER_TOO_SMALL`을 남깁니다.
+**回傳值** — `maxDepth` 內的 **全部** 節點數（≥ 0），失敗時為 `-1`（`context` 為 `NULL`、網格不存在 → `ST_STATUS_NOT_FOUND`）。因緩衝區不足而截斷的複製也會回傳全部數量，並在 `st_rt_get_last_status` 留下 `ST_STATUS_BUFFER_TOO_SMALL`。
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_copy_scene_accel_nodes</code> — 씬 최상위 가속구조(TLAS) 노드 박스를 복사한다</summary>
+<summary><code>st_rt_debug_copy_scene_accel_nodes</code> — 複製場景頂層加速結構（TLAS）節點方塊</summary>
 
 ```c
 int st_rt_debug_copy_scene_accel_nodes(STRT_Context* context, int layer, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 오브젝트 인스턴스 위에 지은 씬 가속구조의 노드 상자를 시각화용으로 꺼냅니다. 정적·동적 오브젝트가 씬에서 어떻게 묶였는지 확인할 때 씁니다.
+**用途** — 取出建在物件實例之上的場景加速結構的節點方塊供視覺化。用於確認靜態·動態物件在場景中如何分組。
 
-**언제·어떻게** — `st_rt_build` 뒤에 부릅니다. 정적 TLAS는 `st_rt_build`가 발행한 것이라, 다음 `st_rt_build` 전까지는 스테이징된 정적 변경이 보이지 않습니다. 동적 TLAS는 동적 재구축이 다시 발행합니다. 크기 질의(`outNodes = NULL`)·`maxDepth`·잘린 복사 규약은 `st_rt_debug_copy_mesh_accel_nodes`와 같습니다. 지원 여부는 `ST_CAP_ACCEL_DEBUG_NODES`. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**呼叫方式** — 在 `st_rt_build` 之後呼叫。靜態 TLAS 是由 `st_rt_build` 發佈的，因此在下一次 `st_rt_build` 之前看不到暫存的靜態變更。動態 TLAS 由動態重建重新發佈。大小查詢（`outNodes = NULL`）·`maxDepth`·截斷複製的慣例與 `st_rt_debug_copy_mesh_accel_nodes` 相同。是否支援為 `ST_CAP_ACCEL_DEBUG_NODES`。執行緒：`[control]` — 只持有場景讀取鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `layer` | `STAccelLayer`: `ST_ACCEL_LAYER_STATIC`(0) = `st_rt_build`가 발행한 정적 TLAS / `ST_ACCEL_LAYER_DYNAMIC`(1) = 동적 오브젝트 TLAS |
-| `maxDepth` | `< 0` = 전 깊이. `0` 이상이면 `depth ≤ maxDepth`인 노드만 |
-| `outNodes` | 출력 배열. `NULL`이면 크기 질의 |
-| `nodeCapacity` | `outNodes` 원소 수 |
+| `context` | 情境控制代碼 |
+| `layer` | `STAccelLayer`：`ST_ACCEL_LAYER_STATIC`(0) = `st_rt_build` 發佈的靜態 TLAS / `ST_ACCEL_LAYER_DYNAMIC`(1) = 動態物件 TLAS |
+| `maxDepth` | `< 0` = 全部深度。`0` 以上時只有 `depth ≤ maxDepth` 的節點 |
+| `outNodes` | 輸出陣列。`NULL` 時為大小查詢 |
+| `nodeCapacity` | `outNodes` 元素數 |
 
-`STAccelNode` 필드는 `st_rt_debug_copy_mesh_accel_nodes` 항목 참고. TLAS의 좌표는 씬(월드) 프레임이며, 리프의 프리미티브는 삼각형이 아니라 오브젝트 인스턴스입니다.
+`STAccelNode` 欄位參見 `st_rt_debug_copy_mesh_accel_nodes` 條目。TLAS 的座標為場景（世界）座標系，葉節點的基本體不是三角形而是物件實例。
 
-**반환** — `maxDepth` 안의 전체 노드 수(≥ 0). 그 TLAS가 아직 없으면(빌드 전, 해당 종류의 오브젝트 없음) `0`이며 오류가 아닙니다. `-1` = 실패(`context`가 `NULL`, `layer` 범위 밖 → `ST_STATUS_INVALID_ARGUMENT`). 잘린 복사는 `st_rt_debug_copy_mesh_accel_nodes`와 같이 `ST_STATUS_BUFFER_TOO_SMALL`을 남깁니다.
+**回傳值** — `maxDepth` 內的全部節點數（≥ 0）。該 TLAS 尚不存在時（建置前、沒有該類型的物件）為 `0`，不是錯誤。`-1` = 失敗（`context` 為 `NULL`、`layer` 超出範圍 → `ST_STATUS_INVALID_ARGUMENT`）。截斷複製與 `st_rt_debug_copy_mesh_accel_nodes` 相同，會留下 `ST_STATUS_BUFFER_TOO_SMALL`。
 
 </details>
 
 <details>
-<summary><code>st_rt_debug_build_mesh_accel_nodes</code> — 컨텍스트 없이 메시 하나의 BLAS를 지어 노드 박스를 돌려준다</summary>
+<summary><code>st_rt_debug_build_mesh_accel_nodes</code> — 不需情境即建置單一網格的 BLAS 並回傳節點方塊</summary>
 
 ```c
 int st_rt_debug_build_mesh_accel_nodes(const STMesh* mesh, int accelKind, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 호스트 에디터가 씬을 만들기 전에 메시의 가속구조를 미리 볼 때 씁니다. `st_rt_mesh_create`와 같은 입력 검증·같은 빌드 경로를 거치므로, 같은 `accelKind`면 실시간 컨텍스트가 짓는 BLAS와 같은 트리가 나옵니다.
+**用途** — 供主機編輯器在建立場景之前預覽網格的加速結構。經過與 `st_rt_mesh_create` 相同的輸入驗證·相同的建置路徑，因此相同 `accelKind` 時會得到與即時情境所建 BLAS 相同的樹。
 
-**언제·어떻게** — 컨텍스트 없이 언제든 부를 수 있습니다. 매 호출이 BLAS를 새로 짓기 때문에(메시 크기에 비례하는 비용) 결과는 호스트가 캐시합니다. 크기 질의(`outNodes = NULL`)·`maxDepth`·전위 순서 규약은 `st_rt_debug_copy_mesh_accel_nodes`와 같습니다. 지원 여부는 `ST_CAP_ACCEL_DEBUG_NODES`. 스레드: `[any]` — 전역 상태를 쓰지 않습니다(빌드 비용은 호출 스레드가 부담합니다).
+**呼叫方式** — 不需情境，隨時可呼叫。每次呼叫都會重新建置 BLAS（成本與網格大小成正比），因此結果由主機快取。大小查詢（`outNodes = NULL`）·`maxDepth`·前序順序慣例與 `st_rt_debug_copy_mesh_accel_nodes` 相同。是否支援為 `ST_CAP_ACCEL_DEBUG_NODES`。執行緒：`[any]` — 不使用全域狀態（建置成本由呼叫執行緒負擔）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `mesh` | 입력 메시. `vertices`는 xyz 인터리브(`numVertices × 3` float), `triangles`는 정점 인덱스(`numTriangles × 3` int) |
-| `accelKind` | `st_rt_scene_set_accel`의 kind: `0` BinnedSAH / `1` HybridKD / `2` TinyBVH / `3` LBVH / `4` LBVH_Simd. `-1` = 엔진 기본(TinyBVH, 환경변수 `SIMPLEST_ACCEL`이 있으면 그 값) |
-| `maxDepth` | `< 0` = 전 깊이. `0` 이상이면 `depth ≤ maxDepth`인 노드만 |
-| `outNodes` | 출력 배열. `NULL`이면 크기 질의 |
-| `nodeCapacity` | `outNodes` 원소 수 |
+| `mesh` | 輸入網格。`vertices` 為 xyz 交錯（`numVertices × 3` float），`triangles` 為頂點索引（`numTriangles × 3` int） |
+| `accelKind` | `st_rt_scene_set_accel` 的 kind：`0` BinnedSAH / `1` HybridKD / `2` TinyBVH / `3` LBVH / `4` LBVH_Simd。`-1` = 引擎預設（TinyBVH，若有環境變數 `SOUNDTRACING_ACCEL` 則為其值） |
+| `maxDepth` | `< 0` = 全部深度。`0` 以上時只有 `depth ≤ maxDepth` 的節點 |
+| `outNodes` | 輸出陣列。`NULL` 時為大小查詢 |
+| `nodeCapacity` | `outNodes` 元素數 |
 
-**구조체** `STMesh`
+**結構體** `STMesh`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `numVertices` | 정점 수 |
-| `vertices` | 정점 좌표 배열(xyz 인터리브) |
-| `numTriangles` | 삼각형 수 |
-| `triangles` | 삼각형 정점 인덱스 배열(삼각형당 3개) |
+| `numVertices` | 頂點數 |
+| `vertices` | 頂點座標陣列（xyz 交錯） |
+| `numTriangles` | 三角形數 |
+| `triangles` | 三角形頂點索引陣列（每個三角形 3 個） |
 
-`STAccelNode` 필드와 노드 순서·좌표 규약은 `st_rt_debug_copy_mesh_accel_nodes` 항목 참고. 좌표는 입력 정점 프레임 그대로입니다.
+`STAccelNode` 欄位與節點順序·座標慣例參見 `st_rt_debug_copy_mesh_accel_nodes` 條目。座標維持輸入頂點座標系。
 
-**반환** — `maxDepth` 안의 전체 노드 수(≥ 0). `-1` = 실패(`mesh`나 배열이 `NULL`, 개수 0 이하, 비유한 정점, 범위 밖 인덱스, 잘못된 `accelKind`, 할당 실패). 컨텍스트가 없으므로 `st_rt_get_last_status`에는 아무것도 남지 않습니다.
+**回傳值** — `maxDepth` 內的全部節點數（≥ 0）。`-1` = 失敗（`mesh` 或陣列為 `NULL`、數量為 0 以下、非有限頂點、超出範圍的索引、錯誤的 `accelKind`、配置失敗）。因為沒有情境，`st_rt_get_last_status` 中不會留下任何內容。
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>오프라인(`st_off_*`) — 컨텍스트 · 씬 · 음원 · 리스너</strong> — 72개</summary>
+<summary><strong>離線(`st_off_*`) — 情境 · 場景 · 音源 · 聆聽者</strong> — 72 個</summary>
 
 <details>
-<summary><code>st_off_get_api_version</code> — 오프라인 DLL의 ABI 버전을 돌려준다</summary>
+<summary><code>st_off_get_api_version</code> — 回傳離線 DLL 的 ABI 版本</summary>
 
 ```c
 uint32_t st_off_get_api_version(void);
 ```
 
-**용도** — 로드한 `SimpleSTOffline` 라이브러리가 어떤 ABI 버전으로 빌드됐는지 알려 줍니다. 호스트가 컴파일한 헤더(`STTypes.h`의 `ST_ABI_VERSION`)와 DLL이 같은 구조체 배치를 쓰는지 확인하는 유일한 판정 수단입니다.
+**用途** — 告知載入的 `SoundTracingOffline` 程式庫以哪個 ABI 版本建置。這是確認主機編譯時的標頭檔（`STTypes.h` 的 `ST_ABI_VERSION`）與 DLL 是否使用相同結構體配置的唯一判定手段。
 
-**언제·어떻게** — 라이브러리를 로드한 직후, 컨텍스트를 만들기 전에 한 번 불러 `ST_ABI_VERSION`과 비교합니다. 다르면 구조체 레이아웃이 어긋나므로 사용을 중단합니다. 모든 버전 스탬프 구조체의 `apiVersion` 필드에도 이 값(`ST_ABI_VERSION`)을 넣습니다. 스레드: `[any]` — 컴파일 상수라 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**呼叫方式** — 在載入程式庫之後、建立情境之前呼叫一次，與 `ST_ABI_VERSION` 比較。不同時結構體佈局不一致，因此停止使用。所有帶版本戳記結構體的 `apiVersion` 欄位也填入此值（`ST_ABI_VERSION`）。執行緒：`[any]` — 編譯期常數，可在任何執行緒無阻塞呼叫。
 
-**파라미터** — 없음.
+**參數** — 無。
 
-**반환** — 라이브러리의 ABI 버전(`ST_ABI_VERSION`과 같은 값이어야 호환).
+**回傳值** — 程式庫的 ABI 版本（須與 `ST_ABI_VERSION` 相同才相容）。
 
 </details>
 
 <details>
-<summary><code>st_off_get_version_string</code> — 제품 릴리스 버전 문자열을 돌려준다</summary>
+<summary><code>st_off_get_version_string</code> — 回傳產品發行版本字串</summary>
 
 ```c
 const char* st_off_get_version_string(void);
 ```
 
-**용도** — 로그·진단 화면에 표시할 제품 릴리스 버전을 사람이 읽을 수 있는 문자열로 줍니다.
+**用途** — 以人類可讀的字串提供要顯示在日誌·診斷畫面上的產品發行版本。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. ABI 호환성 판정에는 쓰지 않습니다 — 그 판정은 `st_off_get_api_version`으로 합니다. 스레드: `[any]` — 블록하지 않습니다.
+**呼叫方式** — 隨時可呼叫。不用於 ABI 相容性判定 — 該判定以 `st_off_get_api_version` 進行。執行緒：`[any]` — 不會阻塞。
 
-**파라미터** — 없음.
+**參數** — 無。
 
-**반환** — DLL이 소유한 정적 NUL 종료 문자열. 호출자가 해제하지 않습니다.
+**回傳值** — DLL 擁有的靜態 NUL 結尾字串。呼叫端不需釋放。
 
 </details>
 
 <details>
-<summary><code>st_off_get_capabilities</code> — 능력 워드 0(<code>ST_CAP_*</code>)을 돌려준다</summary>
+<summary><code>st_off_get_capabilities</code> — 回傳能力字組 0（<code>ST_CAP_*</code>）</summary>
 
 ```c
 uint64_t st_off_get_capabilities(void);
 ```
 
-**용도** — 이 오프라인 라이브러리가 지원하는 기능을 비트마스크로 알려 줍니다. 기능이 선택적으로 추가되는 ABI라서, 호스트는 함수 존재가 아니라 이 비트로 지원 여부를 판단합니다.
+**用途** — 以位元遮罩告知此離線程式庫支援的功能。由於這是功能會選擇性追加的 ABI，主機不是依函式是否存在，而是依此位元判斷是否支援。
 
-**언제·어떻게** — 초기화 시 한 번 읽어 두고 `ST_CAP_*` 비트로 AND해 확인합니다. 예: `ST_CAP_OFFLINE`, `ST_CAP_SCENE_RAYCAST`, `ST_CAP_SOURCE_DIRECTIVITY`, `ST_CAP_SCENE_RATIO`, `ST_CAP_THREAD_ATTRIBUTES`, `ST_CAP_SOURCE_EQ` 등. 실시간 DLL과 집합이 다릅니다 — 실시간 전용 비트(`ST_CAP_REALTIME_SINGLE` / `ST_CAP_REALTIME_MULTI`, `ST_CAP_RUNTIME_DELAY_RESIZE`, `ST_CAP_LOOKAHEAD_OUTPUT_LIMITER`, `ST_CAP_ENGINE_TIMING` 등)는 없고 `ST_CAP_OFFLINE_*` 비트가 있습니다. Exa 백엔드가 포함된 빌드는 `ST_CAP_BACKEND_EXA`가 더해집니다. 워드 1 이상의 능력(`ST_CAP1_*`)은 `st_off_get_capability_word`로 읽습니다 — 서로 다른 워드의 비트를 섞어 AND하지 않습니다. 스레드: `[any]` — 컴파일 상수입니다.
+**呼叫方式** — 在初始化時讀取一次，與 `ST_CAP_*` 位元 AND 來確認。例：`ST_CAP_OFFLINE`、`ST_CAP_SCENE_RAYCAST`、`ST_CAP_SOURCE_DIRECTIVITY`、`ST_CAP_SCENE_RATIO`、`ST_CAP_THREAD_ATTRIBUTES`、`ST_CAP_SOURCE_EQ` 等。與即時 DLL 的集合不同 — 沒有即時專用位元（`ST_CAP_REALTIME_SINGLE` / `ST_CAP_REALTIME_MULTI`、`ST_CAP_RUNTIME_DELAY_RESIZE`、`ST_CAP_LOOKAHEAD_OUTPUT_LIMITER`、`ST_CAP_ENGINE_TIMING` 等），而有 `ST_CAP_OFFLINE_*` 位元。包含 Exa 後端的建置會加上 `ST_CAP_BACKEND_EXA`。字組 1 以上的能力（`ST_CAP1_*`）以 `st_off_get_capability_word` 讀取 — 不要混合不同字組的位元做 AND。執行緒：`[any]` — 編譯期常數。
 
-**파라미터** — 없음.
+**參數** — 無。
 
-**반환** — 능력 워드 0의 비트 OR(`st_off_get_capability_word(0)`과 같은 값).
+**回傳值** — 能力字組 0 的位元 OR（與 `st_off_get_capability_word(0)` 相同的值）。
 
 </details>
 
 <details>
-<summary><code>st_off_get_capability_word</code> — 능력 워드 n을 돌려준다</summary>
+<summary><code>st_off_get_capability_word</code> — 回傳能力字組 n</summary>
 
 ```c
 uint64_t st_off_get_capability_word(uint32_t word);
 ```
 
-**용도** — 워드 0의 64비트가 다 찬 뒤 추가된 능력을 워드 단위로 조회합니다. 이 함수가 있다는 것 자체는 워드 0의 `ST_CAP_CAPABILITY_WORDS` 비트로 알 수 있습니다.
+**用途** — 以字組為單位查詢在字組 0 的 64 位元用完後追加的能力。此函式本身是否存在，可由字組 0 的 `ST_CAP_CAPABILITY_WORDS` 位元得知。
 
-**언제·어떻게** — 초기화 시 필요한 워드를 읽고, 같은 워드의 상수(`ST_CAP1_*`는 워드 1)로만 AND합니다. 오프라인 DLL의 워드 1에는 `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN`, `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE`, `ST_CAP1_OFFLINE_MAX_DELAY`, `ST_CAP1_SOURCE_PARAMETRIC_EQ`, `ST_CAP1_LISTENER_ORIENTATION_Q`가 들어 있습니다. 스레드: `[any]` — 컴파일 상수입니다.
+**呼叫方式** — 在初始化時讀取需要的字組，只與同一字組的常數（`ST_CAP1_*` 為字組 1）做 AND。離線 DLL 的字組 1 包含 `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN`、`ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE`、`ST_CAP1_OFFLINE_MAX_DELAY`、`ST_CAP1_SOURCE_PARAMETRIC_EQ`、`ST_CAP1_LISTENER_ORIENTATION_Q`。執行緒：`[any]` — 編譯期常數。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `word` | 워드 번호. `0` = `st_off_get_capabilities()`와 같은 값, `1` = `ST_CAP1_*` 워드. 헤더가 아는 워드 수는 `ST_CAPABILITY_WORD_COUNT`이며 그 밖의 번호는 `0`을 돌려줍니다 |
+| `word` | 字組編號。`0` = 與 `st_off_get_capabilities()` 相同的值，`1` = `ST_CAP1_*` 字組。標頭檔所知的字組數為 `ST_CAPABILITY_WORD_COUNT`，其他編號回傳 `0` |
 
-**반환** — 해당 워드의 비트 OR. 모르는 워드는 `0`(= 해당 능력 없음).
+**回傳值** — 該字組的位元 OR。未知字組為 `0`（= 無該能力）。
 
 </details>
 
 <details>
-<summary><code>st_off_get_sample_rate</code> — 엔진 샘플레이트(44100 Hz)를 돌려준다</summary>
+<summary><code>st_off_get_sample_rate</code> — 回傳引擎取樣率（44100 Hz）</summary>
 
 ```c
 int st_off_get_sample_rate(void);
 ```
 
-**용도** — 엔진이 IR과 오디오를 만드는 고정 샘플레이트를 알려 줍니다. 오프라인 렌더 결과의 샘플 수를 시간으로 바꾸거나, 다른 레이트로 리샘플할지 판단할 때 씁니다.
+**用途** — 告知引擎產生 IR 與音訊的固定取樣率。用於將離線渲染結果的樣本數換算為時間，或判斷是否要重新取樣為其他取樣率。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 값은 44100 Hz로 고정이며, 호스트가 다른 레이트를 쓰면 리샘플은 호스트 몫입니다. 스레드: `[any]` — 컴파일 상수입니다.
+**呼叫方式** — 隨時可呼叫。值固定為 44100 Hz，主機使用其他取樣率時，重新取樣由主機負責。執行緒：`[any]` — 編譯期常數。
 
-**파라미터** — 없음.
+**參數** — 無。
 
-**반환** — `44100`.
+**回傳值** — `44100`。
 
 </details>
 
 <details>
-<summary><code>st_off_set_thread_attributes</code> — 엔진 스레드 종류별 우선순위·코어 선호·affinity를 지정한다</summary>
+<summary><code>st_off_set_thread_attributes</code> — 依引擎執行緒類型指定優先順序·核心偏好·affinity</summary>
 
 ```c
 int st_off_set_thread_attributes(int threadType, const STThreadAttributes* attributes);
 ```
 
-**용도** — 엔진이 만드는 스레드의 속성을 호스트가 스레드 **생성 전에** 정합니다. 호스트가 자기 스레드 예산·우선순위 정책 안에 엔진 계산 스레드를 맞춰 넣기 위한 표면입니다.
+**用途** — 由主機在執行緒 **建立之前** 決定引擎所建立執行緒的屬性。這是讓主機將引擎計算執行緒納入自己的執行緒預算·優先順序策略的介面。
 
-**언제·어떻게** — `st_off_create` **전에** 부르는 것이 계약입니다. 이미 시작된 스레드에는 적용되지 않고 이후 만들어지는 스레드(다음 `st_off_create`의 계산 풀 등)부터 적용됩니다. 표는 컨텍스트와 무관한 **프로세스 전역**이고, 실시간 DLL과 오프라인 DLL은 각자 자기 표를 가집니다 — 두 DLL을 함께 쓰면 `st_rt_set_thread_attributes`와 이 함수 양쪽에 같은 값을 넣어야 합니다. 오프라인 셸에서 실제로 의미가 있는 종류는 `ST_THREAD_COMPUTE_POOL`뿐이고, 나머지 종류는 값이 저장만 되고 적용될 스레드가 없습니다(배치 워커는 `STThreadType`에 속하지 않습니다). `affinityMask`와 코어 선호 플래그는 Windows에서만 반영되고 macOS에서는 무시됩니다(QoS 클래스가 배치를 정합니다). 지원 여부는 `ST_CAP_THREAD_ATTRIBUTES`. 스레드: `[any]` — 프로세스 전역 표를 뮤텍스로 한 번 갱신합니다.
+**呼叫方式** — 約定在 `st_off_create` **之前** 呼叫。不套用到已啟動的執行緒，從之後建立的執行緒（下一次 `st_off_create` 的計算集區等）起套用。此表與情境無關，為 **處理程序全域**，即時 DLL 與離線 DLL 各自擁有自己的表 — 兩個 DLL 一起使用時，必須在 `st_rt_set_thread_attributes` 與此函式兩邊填入相同的值。在離線外殼中實際有意義的類型只有 `ST_THREAD_COMPUTE_POOL`，其他類型的值只會儲存而沒有可套用的執行緒（批次工作執行緒不屬於 `STThreadType`）。`affinityMask` 與核心偏好旗標只在 Windows 上反映，macOS 上會被忽略（由 QoS 類別決定配置）。是否支援為 `ST_CAP_THREAD_ATTRIBUTES`。執行緒：`[any]` — 以互斥鎖更新處理程序全域表一次。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `threadType` | `STThreadType` 값, `[0, ST_THREAD_TYPE_COUNT)`. 오프라인에서 적용되는 것은 `ST_THREAD_COMPUTE_POOL`(4) — 계산 풀 워커(`maxComputeThreads` N > 1일 때 N개) |
-| `attributes` | 지정할 속성. 호출자가 `structSize = sizeof(STThreadAttributes)`, `apiVersion = ST_ABI_VERSION`을 채웁니다. `NULL`이면 그 종류를 기본값으로 되돌립니다 |
+| `threadType` | `STThreadType` 值，`[0, ST_THREAD_TYPE_COUNT)`。離線中套用的是 `ST_THREAD_COMPUTE_POOL`(4) — 計算集區工作執行緒（`maxComputeThreads` N > 1 時為 N 個） |
+| `attributes` | 要指定的屬性。呼叫端須填入 `structSize = sizeof(STThreadAttributes)`、`apiVersion = ST_ABI_VERSION`。`NULL` 時將該類型還原為預設值 |
 
-**구조체** `STThreadAttributes`
+**結構體** `STThreadAttributes`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` | `sizeof(STThreadAttributes)`. 호출자가 채움 |
-| `apiVersion` | `ST_ABI_VERSION`. 호출자가 채움 |
-| `priority` | `STThreadPriority` — `ST_THREAD_PRIORITY_DEFAULT`(0, 플랫폼 기본 그대로) / `LOW`(1) / `BELOW_NORMAL`(2) / `NORMAL`(3) / `ABOVE_NORMAL`(4) / `HIGH`(5) / `TIME_CRITICAL`(6). Windows는 같은 이름의 스레드 우선순위(LOW→LOWEST, HIGH→HIGHEST)로, macOS는 QoS 클래스(LOW→BACKGROUND, BELOW_NORMAL→UTILITY, NORMAL→USER_INITIATED, 그 이상→USER_INTERACTIVE)로 매핑됩니다 |
-| `flags` | `ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES` / `ST_THREAD_FLAG_PREFER_EFFICIENCY_CORES`. 둘을 동시에 켜면 거절됩니다. Windows만 반영 |
-| `affinityMask` | 논리 프로세서 비트마스크, `0` = 지정 없음. Windows만 반영하며, 64개를 넘는 머신에서는 현재 프로세서 그룹 안에서만 해석됩니다 |
-| `reserved[4]` | 전부 `0`이어야 합니다 |
+| `structSize` | `sizeof(STThreadAttributes)`。由呼叫端填入 |
+| `apiVersion` | `ST_ABI_VERSION`。由呼叫端填入 |
+| `priority` | `STThreadPriority` — `ST_THREAD_PRIORITY_DEFAULT`（0，維持平台預設）/ `LOW`(1) / `BELOW_NORMAL`(2) / `NORMAL`(3) / `ABOVE_NORMAL`(4) / `HIGH`(5) / `TIME_CRITICAL`(6)。Windows 對應同名的執行緒優先順序（LOW→LOWEST，HIGH→HIGHEST），macOS 對應 QoS 類別（LOW→BACKGROUND，BELOW_NORMAL→UTILITY，NORMAL→USER_INITIATED，更高→USER_INTERACTIVE） |
+| `flags` | `ST_THREAD_FLAG_PREFER_PERFORMANCE_CORES` / `ST_THREAD_FLAG_PREFER_EFFICIENCY_CORES`。兩者同時開啟會被拒絕。僅 Windows 反映 |
+| `affinityMask` | 邏輯處理器位元遮罩，`0` = 不指定。僅 Windows 反映，在超過 64 個處理器的機器上只在目前處理器群組內解譯 |
+| `reserved[4]` | 必須全部為 `0` |
 
-**반환** — `1` = 성공 / `0` = 실패: `threadType` 범위 밖, `structSize`/`apiVersion` 불일치, `priority` 범위 밖, 코어 선호 플래그 상충, `reserved[]`가 0이 아님. 컨텍스트를 받지 않으므로 `st_off_get_last_status`에는 아무것도 남지 않습니다.
+**回傳值** — `1` = 成功 / `0` = 失敗：`threadType` 超出範圍、`structSize`/`apiVersion` 不一致、`priority` 超出範圍、核心偏好旗標衝突、`reserved[]` 非 0。因為不接受情境，`st_off_get_last_status` 中不會留下任何內容。
 
 </details>
 
 <details>
-<summary><code>st_off_get_thread_attributes</code> — 저장된 스레드 속성 요청값을 읽는다</summary>
+<summary><code>st_off_get_thread_attributes</code> — 讀取已儲存的執行緒屬性請求值</summary>
 
 ```c
 int st_off_get_thread_attributes(int threadType, STThreadAttributes* outAttributes);
 ```
 
-**용도** — `st_off_set_thread_attributes`로 지정해 둔 값을 확인합니다.
+**用途** — 確認以 `st_off_set_thread_attributes` 指定的值。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 돌려주는 값은 실제로 스레드에 심긴 값이 아니라 저장된 **요청값** 그대로입니다. 지정하지 않은 종류의 기본값은 `priority` = `ST_THREAD_PRIORITY_DEFAULT` · `flags` = 0 · `affinityMask` = 0입니다. 스레드: `[any]` — 프로세스 전역 표를 뮤텍스로 한 번 읽습니다.
+**呼叫方式** — 隨時可呼叫。回傳的值不是實際設定到執行緒上的值，而是原樣儲存的 **請求值**。未指定類型的預設值為 `priority` = `ST_THREAD_PRIORITY_DEFAULT` · `flags` = 0 · `affinityMask` = 0。執行緒：`[any]` — 以互斥鎖讀取處理程序全域表一次。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `threadType` | `STThreadType` 값, `[0, ST_THREAD_TYPE_COUNT)` |
-| `outAttributes` | 결과를 받을 구조체. 호출자가 `structSize`/`apiVersion`을 채웁니다. 필드는 `st_off_set_thread_attributes` 항목 참고 |
+| `threadType` | `STThreadType` 值，`[0, ST_THREAD_TYPE_COUNT)` |
+| `outAttributes` | 接收結果的結構體。呼叫端須填入 `structSize`/`apiVersion`。欄位參見 `st_off_set_thread_attributes` 條目 |
 
-**반환** — `1` = 성공 / `0` = 거절(`outAttributes`가 `NULL`, 스탬프 불일치, `threadType` 범위 밖).
+**回傳值** — `1` = 成功 / `0` = 拒絕（`outAttributes` 為 `NULL`、戳記不一致、`threadType` 超出範圍）。
 
 </details>
 
 <details>
-<summary><code>st_off_get_thread_inventory</code> — 이 컨텍스트가 띄운 스레드 수를 종류별로 읽는다</summary>
+<summary><code>st_off_get_thread_inventory</code> — 依類型讀取此情境啟動的執行緒數</summary>
 
 ```c
 int st_off_get_thread_inventory(const STOFF_Context* context, STThreadInventory* outInventory);
 ```
 
-**용도** — 컨텍스트가 지금 실제로 몇 개의 스레드를 점유하는지 종류별 수치로 줍니다. 호스트가 스레드 예산을 추측이 아니라 측정값으로 세우게 하려는 것입니다.
+**用途** — 以各類型的數值提供情境目前實際佔用多少執行緒。目的是讓主機以量測值而非推測來規劃執行緒預算。
 
-**언제·어떻게** — 컨텍스트를 만든 뒤 언제든 부릅니다. 오프라인 셸에는 전파 레인·오디오 렌더·장치·파일 디코더 스레드가 없으므로 값이 서는 자리는 `ST_THREAD_COMPUTE_POOL`뿐입니다 — `maxComputeThreads`가 N > 1이면 N, 1이면 0(호출자 스레드에서 인라인 실행). `ST_THREAD_ACCEL_BUILD`는 예약 역할이라 0입니다. 종류별 값은 각각 독립 atomic이라 같은 순간의 스냅샷은 아닙니다. 지원 여부는 `ST_CAP_THREAD_INVENTORY`. 스레드: `[any]` — atomic 카운터만 읽어 블록하지 않습니다.
+**呼叫方式** — 建立情境後隨時呼叫。離線外殼沒有傳播通道·音訊渲染·裝置·檔案解碼器執行緒，因此有值的位置只有 `ST_THREAD_COMPUTE_POOL` — `maxComputeThreads` 為 N > 1 時為 N，為 1 時為 0（在呼叫端執行緒內嵌執行）。`ST_THREAD_ACCEL_BUILD` 為保留角色，因此為 0。各類型的值是各自獨立的 atomic，因此不是同一時刻的快照。是否支援為 `ST_CAP_THREAD_INVENTORY`。執行緒：`[any]` — 只讀取 atomic 計數器，不會阻塞。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outInventory` | 결과를 받을 구조체. 호출자가 `structSize = sizeof(STThreadInventory)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | 情境控制代碼 |
+| `outInventory` | 接收結果的結構體。呼叫端須填入 `structSize = sizeof(STThreadInventory)`、`apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STThreadInventory`
+**結構體** `STThreadInventory`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` | `sizeof(STThreadInventory)`. 호출자가 채움 |
-| `apiVersion` | `ST_ABI_VERSION`. 호출자가 채움 |
-| `countByRole[ST_THREAD_TYPE_COUNT]` | `STThreadType` 순서의 종류별 스레드 수(인덱스 = 종류). 오프라인은 `[ST_THREAD_COMPUTE_POOL]`만 0이 아닐 수 있습니다 |
-| `reserved[5]` | 예약 |
+| `structSize` | `sizeof(STThreadInventory)`。由呼叫端填入 |
+| `apiVersion` | `ST_ABI_VERSION`。由呼叫端填入 |
+| `countByRole[ST_THREAD_TYPE_COUNT]` | 依 `STThreadType` 順序的各類型執行緒數（索引 = 類型）。離線中只有 `[ST_THREAD_COMPUTE_POOL]` 可能不為 0 |
+| `reserved[5]` | 保留 |
 
-**반환** — `1` = 성공 / `0` = `context`·`outInventory`가 `NULL`이거나 스탬프 불일치(`st_off_get_last_status`에 `ST_STATUS_VERSION_MISMATCH`).
+**回傳值** — `1` = 成功 / `0` = `context`·`outInventory` 為 `NULL` 或戳記不一致（`st_off_get_last_status` 中為 `ST_STATUS_VERSION_MISMATCH`）。
 
 </details>
 
 <details>
-<summary><code>st_off_init_create_options</code> — <code>STOFF_CreateOptions</code>를 기본값으로 채운다</summary>
+<summary><code>st_off_init_create_options</code> — 以預設值填入 <code>STOFF_CreateOptions</code></summary>
 
 ```c
 void st_off_init_create_options(STOFF_CreateOptions* outOptions);
 ```
 
-**용도** — 컨텍스트 생성 옵션을 버전 스탬프와 기본값으로 초기화합니다. 호스트가 바꾸고 싶은 필드만 덮어쓰고 나머지는 엔진 기본값을 받게 하려는 것입니다.
+**用途** — 以版本戳記與預設值初始化情境建立選項。目的是讓主機只覆寫想變更的欄位，其餘取得引擎預設值。
 
-**언제·어떻게** — `st_off_create` 직전에 부릅니다. 구조체 전체를 0으로 지운 뒤 `structSize`와 `apiVersion`을 채우므로, 0이 곧 "기본"인 필드들이 모두 기본값이 됩니다. 이어서 필요한 필드(`maxComputeThreads`, `sceneRatio` 등)만 바꾸고 `st_off_create`에 넘깁니다. 스레드: `[any]` — 호출자 소유 POD만 채웁니다.
+**呼叫方式** — 在 `st_off_create` 之前呼叫。先將整個結構體清為 0，再填入 `structSize` 與 `apiVersion`，因此以 0 代表「預設」的欄位全部成為預設值。接著只變更需要的欄位（`maxComputeThreads`、`sceneRatio` 等）並傳給 `st_off_create`。執行緒：`[any]` — 只填入呼叫端擁有的 POD。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `outOptions` | 채울 구조체. `NULL`이면 아무것도 하지 않습니다 |
+| `outOptions` | 要填入的結構體。`NULL` 時不做任何事 |
 
-**구조체** `STOFF_CreateOptions`
+**結構體** `STOFF_CreateOptions`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` | `sizeof(STOFF_CreateOptions)`. 이 함수가 채웁니다 |
-| `apiVersion` | `ST_ABI_VERSION`. 이 함수가 채웁니다 |
-| `seedValue` | 기본 `0`. 기본(ST) 백엔드의 출력에는 영향이 없습니다 — ABI 호환과 Exa 백엔드를 위해 남아 있는 필드입니다 |
-| `maxComputeThreads` | 컨텍스트가 쓰는 계산 스레드 상한. `0` = 자동 = min(퍼포먼스 코어 수, 6), 최소 1. 이 값이 엔진 소유 공유 계산 풀의 폭이 되며, 오프라인 셸에서는 이것이 컨텍스트가 만드는 스레드의 전부입니다 — `1`이면 풀 스레드 0개(모든 계산을 호출 스레드에서 인라인 실행), N > 1이면 계산 풀 워커 N개. 환경 변수는 영향을 주지 않습니다. 배치 워커는 컨텍스트가 아니라 `st_off_batch_create`가 만든 배치 객체가 소유합니다. 지원 여부는 `ST_CAP_MAX_COMPUTE_THREADS` |
-| `sceneRatio` | 씬 단위 → 미터 변환 인자. `0` = 기본 = `1.0`(씬 단위가 곧 미터). 센티미터 호스트는 `0.01f`, 피트 호스트는 `0.3048f`. **초기화 전용**이라 런타임 setter가 없습니다. 좌표는 씬 단위 그대로 넣고, 엔진은 전파 지연·거리 감쇠·공기 흡수·잔향 기술자·`...Meters` 출력 필드처럼 미터가 필요한 곳에서만 이 인자를 곱합니다. 비유한 값이나 0 이하(0 제외)는 `st_off_create`가 거절합니다. 지원 여부는 `ST_CAP_SCENE_RATIO` |
-| `backend` | `STBackend` — `ST_BACKEND_ST`(0, 기본) / `ST_BACKEND_EXA`(1). 생성 시 전체 파이프라인을 고르며 런타임 전환은 없습니다. Exa는 라이브러리가 `ST_CAP_BACKEND_EXA`를 광고할 때만 쓸 수 있습니다 |
-| `reserved[5]` | 예약. 0으로 둡니다 |
+| `structSize` | `sizeof(STOFF_CreateOptions)`。由此函式填入 |
+| `apiVersion` | `ST_ABI_VERSION`。由此函式填入 |
+| `seedValue` | 預設 `0`。對預設（ST）後端的輸出沒有影響 — 為 ABI 相容與 Exa 後端而保留的欄位 |
+| `maxComputeThreads` | 情境使用的計算執行緒上限。`0` = auto = min(效能核心數, 6)，最少 1。此值即為引擎擁有的共用計算集區寬度，在離線外殼中這就是情境建立的全部執行緒 — `1` 時集區執行緒為 0 個（所有計算在呼叫執行緒內嵌執行），N > 1 時計算集區工作執行緒為 N 個。不受環境變數影響。批次工作執行緒不是由情境擁有，而是由 `st_off_batch_create` 建立的批次物件擁有。是否支援為 `ST_CAP_MAX_COMPUTE_THREADS` |
+| `sceneRatio` | 場景單位 → 公尺換算係數。`0` = 預設 = `1.0`（場景單位即公尺）。公分主機為 `0.01f`，英尺主機為 `0.3048f`。**僅限初始化**，沒有執行期 setter。座標以場景單位原樣傳入，引擎只在傳播延遲·距離衰減·空氣吸收·殘響描述子·`...Meters` 輸出欄位等需要公尺的地方乘上此係數。非有限值或 0 以下（0 除外）會被 `st_off_create` 拒絕。是否支援為 `ST_CAP_SCENE_RATIO` |
+| `backend` | `STBackend` — `ST_BACKEND_ST`（0，預設）/ `ST_BACKEND_EXA`(1)。建立時選擇整個管線，沒有執行期切換。Exa 只有在程式庫宣告 `ST_CAP_BACKEND_EXA` 時才可使用 |
+| `reserved[5]` | 保留。保持為 0 |
 
-오프라인 옵션에는 실시간의 `scheduler`·`maxDelaySeconds`·`renderOutputMode`·`hostSampleRate`·`startIdle`·`maxSources`에 해당하는 필드가 없습니다 — 스케줄러 없이 호출 스레드가 파이프라인을 구동하고, 장치·스트리밍·음원 예산이 없기 때문입니다. 렌더 지연 링 길이는 생성 뒤 `st_off_render_set_max_delay_seconds`로 정합니다(기본 4.0 s).
+離線選項沒有對應即時的 `scheduler`·`maxDelaySeconds`·`renderOutputMode`·`hostSampleRate`·`startIdle`·`maxSources` 的欄位 — 因為沒有排程器而由呼叫執行緒驅動管線，且沒有裝置·串流·音源預算。渲染延遲環長度在建立後以 `st_off_render_set_max_delay_seconds` 設定（預設 4.0 s）。
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_create</code> — 오프라인 컨텍스트를 만든다</summary>
+<summary><code>st_off_create</code> — 建立離線情境</summary>
 
 ```c
 STStatus st_off_create(const STOFF_CreateOptions* options, STOFF_Context** outContext);
 ```
 
-**용도** — 오프라인 엔진 인스턴스(씬·재질·소스·리스너·IR 캐시를 소유)와 그 계산 풀을 만듭니다. 오프라인 컨텍스트는 장치·오디오 렌더·전파 워커 스레드 없이, 호출 스레드가 `st_off_ir_compute`로 전파를 한 번 돌려 결정적인 IR을 만드는 용도입니다.
+**用途** — 建立離線引擎實例（擁有場景·材質·音源·聆聽者·IR 快取）及其計算集區。離線情境沒有裝置·音訊渲染·傳播工作執行緒，用途是由呼叫執行緒以 `st_off_ir_compute` 執行一次傳播，產生確定性的 IR。
 
-**언제·어떻게** — 필요하면 `st_off_set_thread_attributes`를 먼저 부르고, `st_off_init_create_options`로 옵션을 초기화한 뒤 호출합니다. 성공 직후의 상태: 리스너 하나가 자동으로 만들어져 활성이고(id `1`, 위치 (0,0,0), 방향 항등), IR 캐시는 비어 있어 `st_off_ir_compute` 전에는 렌더 계열이 `ST_STATUS_UNAVAILABLE`로 실패합니다. 삼각형 교차 커널은 `0`(MollerTrumbore), early 공간 모드는 `ST_EARLY_SPATIAL_OBJECTS`, 렌더 지연 링은 4.0 s이며, 그 밖의 기본값(대기·거리 감쇠·에너지 타깃·경로 종류·음향 기능·소스 기본값)은 실시간과 같습니다. 서로 **다른** 컨텍스트라면 `st_off_create`/`st_off_destroy`를 여러 스레드에서 동시에 불러도 되고, 다른 컨텍스트의 compute·렌더·배치 작업과 겹쳐도 됩니다(Exa 백엔드는 서로 다른 컨텍스트라도 compute를 동시에 돌리면 안 됩니다). 실패 이유 문자열은 `st_off_get_last_error(NULL, ...)`로 같은 스레드에서 읽습니다. 스레드: `[control, blocking]` — 엔진과 계산 풀을 만드는 긴 구간입니다.
+**呼叫方式** — 需要時先呼叫 `st_off_set_thread_attributes`，以 `st_off_init_create_options` 初始化選項後呼叫。成功後的狀態：自動建立一個聆聽者並為啟用（id `1`，位置 (0,0,0)，方向恆等），IR 快取為空，因此在 `st_off_ir_compute` 之前渲染系列會以 `ST_STATUS_UNAVAILABLE` 失敗。三角形相交核心為 `0`（MollerTrumbore），early 空間模式為 `ST_EARLY_SPATIAL_OBJECTS`，渲染延遲環為 4.0 s，其他預設值（大氣·距離衰減·能量目標·路徑類型·聲學功能·音源預設值）與即時相同。若是 **不同的** 情境，可在多個執行緒同時呼叫 `st_off_create`/`st_off_destroy`，也可與其他情境的 compute·渲染·批次工作重疊（Exa 後端即使是不同情境也不可同時執行 compute）。失敗原因字串在同一執行緒以 `st_off_get_last_error(NULL, ...)` 讀取。執行緒：`[control, blocking]` — 建立引擎與計算集區的長區間。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `options` | 생성 옵션. `NULL`이면 `st_off_init_create_options`의 기본값을 씁니다. 필드는 `st_off_init_create_options` 항목 참고 |
-| `outContext` | 만든 컨텍스트를 받을 포인터. 실패하면 `NULL`이 들어갑니다 |
+| `options` | 建立選項。`NULL` 時使用 `st_off_init_create_options` 的預設值。欄位參見 `st_off_init_create_options` 條目 |
+| `outContext` | 接收所建立情境的指標。失敗時填入 `NULL` |
 
-**반환** — `STStatus`: `ST_STATUS_OK` = 성공 / `ST_STATUS_INVALID_ARGUMENT` = `outContext`가 `NULL`, 알 수 없거나 이 빌드에 없는 `backend`, 잘못된 `sceneRatio` / `ST_STATUS_VERSION_MISMATCH` = `structSize`·`apiVersion` 불일치 / `ST_STATUS_INITIALIZATION_FAILED` = 엔진 초기화 실패 / `ST_STATUS_ALLOCATION_FAILED` = 메모리 할당 실패.
+**回傳值** — `STStatus`：`ST_STATUS_OK` = 成功 / `ST_STATUS_INVALID_ARGUMENT` = `outContext` 為 `NULL`、未知或此建置中沒有的 `backend`、錯誤的 `sceneRatio` / `ST_STATUS_VERSION_MISMATCH` = `structSize`·`apiVersion` 不一致 / `ST_STATUS_INITIALIZATION_FAILED` = 引擎初始化失敗 / `ST_STATUS_ALLOCATION_FAILED` = 記憶體配置失敗。
 
 </details>
 
 <details>
-<summary><code>st_off_get_backend</code> — 컨텍스트가 쓰는 백엔드를 돌려준다</summary>
+<summary><code>st_off_get_backend</code> — 回傳情境使用的後端</summary>
 
 ```c
 int st_off_get_backend(const STOFF_Context* context);
 ```
 
-**용도** — 생성 시 `STOFF_CreateOptions.backend`로 고른 파이프라인을 확인합니다.
+**用途** — 確認建立時以 `STOFF_CreateOptions.backend` 選擇的管線。
 
-**언제·어떻게** — 생성 뒤 언제든 부릅니다. 백엔드는 생성 시 확정되며 런타임에 바꿀 수 없습니다. 스레드: `[control]`.
+**呼叫方式** — 建立後隨時呼叫。後端在建立時確定，執行期間無法變更。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STBackend` 값(`ST_BACKEND_ST` = 0 / `ST_BACKEND_EXA` = 1). `context`가 `NULL`이면 `-1`.
+**回傳值** — `STBackend` 值（`ST_BACKEND_ST` = 0 / `ST_BACKEND_EXA` = 1）。`context` 為 `NULL` 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_off_destroy</code> — 오프라인 컨텍스트를 파괴한다</summary>
+<summary><code>st_off_destroy</code> — 銷毀離線情境</summary>
 
 ```c
 void st_off_destroy(STOFF_Context* context);
 ```
 
-**용도** — 컨텍스트와 그 엔진·계산 풀·IR 캐시를 해제합니다.
+**用途** — 釋放情境及其引擎·計算集區·IR 快取。
 
-**언제·어떻게** — 그 컨텍스트에 대한 다른 호출이 모두 끝난 뒤 부릅니다. 파괴 중이거나 파괴된 컨텍스트를 다른 스레드가 쓰면 안 됩니다. 배치(`st_off_batch_*`)에 등록한 컨텍스트는 그 작업의 완료 레코드를 `st_off_batch_poll`로 받은 뒤에만 파괴합니다. 이 함수는 그 컨텍스트의 계산 풀 워커만 join합니다(`maxComputeThreads`가 1이면 join할 스레드가 없습니다). 서로 다른 컨텍스트라면 여러 스레드에서 동시에 불러도 됩니다. 스레드: `[control, blocking]`.
+**呼叫方式** — 在對該情境的其他呼叫全部結束後呼叫。正在銷毀或已銷毀的情境不得被其他執行緒使用。註冊到批次（`st_off_batch_*`）的情境，只能在以 `st_off_batch_poll` 收到該工作的完成記錄之後銷毀。此函式只 join 該情境的計算集區工作執行緒（`maxComputeThreads` 為 1 時沒有要 join 的執行緒）。若是不同的情境，可在多個執行緒同時呼叫。執行緒：`[control, blocking]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 파괴할 컨텍스트 핸들 |
+| `context` | 要銷毀的情境控制代碼 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_get_last_status</code> — 마지막 호출의 상태 코드를 읽는다</summary>
+<summary><code>st_off_get_last_status</code> — 讀取最後一次呼叫的狀態碼</summary>
 
 ```c
 STStatus st_off_get_last_status(const STOFF_Context* context);
 ```
 
-**용도** — `0`/`-1`/실패 핸들만 돌려주는 함수가 왜 실패했는지 상태 코드로 확인합니다.
+**用途** — 以狀態碼確認只回傳 `0`/`-1`/失敗控制代碼的函式為何失敗。
 
-**언제·어떻게** — 실패를 반환한 호출 직후, 같은 스레드에서 부릅니다. 컨텍스트마다 진단 필드가 하나라서 같은 컨텍스트를 여러 스레드에서 동시에 쓰면 값이 섞일 수 있습니다. 사람이 읽을 메시지는 `st_off_get_last_error`. 스레드: `[control]`.
+**呼叫方式** — 在回傳失敗的呼叫之後立即於同一執行緒呼叫。每個情境只有一個診斷欄位，因此在多個執行緒同時使用同一情境時值可能混雜。人類可讀的訊息為 `st_off_get_last_error`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STStatus`: `ST_STATUS_OK`(0) / `INVALID_CONTEXT`(1) / `INVALID_ARGUMENT`(2) / `VERSION_MISMATCH`(3) / `INITIALIZATION_FAILED`(4) / `ALLOCATION_FAILED`(5) / `NOT_FOUND`(6) / `BUFFER_TOO_SMALL`(7) / `INVALID_MATERIAL`(8) / `STALE_SNAPSHOT`(9) / `UNAVAILABLE`(10). `context`가 `NULL`이면 `ST_STATUS_INVALID_CONTEXT`.
+**回傳值** — `STStatus`：`ST_STATUS_OK`(0) / `INVALID_CONTEXT`(1) / `INVALID_ARGUMENT`(2) / `VERSION_MISMATCH`(3) / `INITIALIZATION_FAILED`(4) / `ALLOCATION_FAILED`(5) / `NOT_FOUND`(6) / `BUFFER_TOO_SMALL`(7) / `INVALID_MATERIAL`(8) / `STALE_SNAPSHOT`(9) / `UNAVAILABLE`(10)。`context` 為 `NULL` 時為 `ST_STATUS_INVALID_CONTEXT`。
 
 </details>
 
 <details>
-<summary><code>st_off_get_last_error</code> — 마지막 오류 메시지를 복사한다</summary>
+<summary><code>st_off_get_last_error</code> — 複製最後的錯誤訊息</summary>
 
 ```c
 int st_off_get_last_error(const STOFF_Context* context, char* outMessage, int capacity);
 ```
 
-**용도** — 마지막 실패의 사람이 읽을 수 있는 설명(예: 검증기의 거절 사유)을 얻습니다. `context`를 `NULL`로 주면 `st_off_create` 실패 이유를 얻을 수 있습니다 — 그때는 컨텍스트가 없기 때문입니다.
+**用途** — 取得最後一次失敗的人類可讀說明（例：驗證器的拒絕原因）。將 `context` 設為 `NULL` 可取得 `st_off_create` 的失敗原因 — 因為此時沒有情境。
 
-**언제·어떻게** — 실패 직후 같은 스레드에서 부릅니다. `NULL` 컨텍스트로 부르면 이 호출 스레드에서 마지막으로 실패한 `st_off_create`의 메시지를 돌려주며, 다음 create가 이를 지웁니다. 필요한 크기를 모르면 `outMessage = NULL`로 먼저 불러 길이를 받습니다. 스레드: `[control]`.
+**呼叫方式** — 在失敗之後立即於同一執行緒呼叫。以 `NULL` 情境呼叫時，回傳此呼叫執行緒最後一次失敗的 `st_off_create` 訊息，下一次 create 會清除它。不知道所需大小時，先以 `outMessage = NULL` 呼叫取得長度。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들. `NULL`이면 이 스레드의 마지막 create 실패 메시지 |
-| `outMessage` | 메시지를 받을 버퍼. `NULL`이면 복사하지 않고 길이만 돌려줍니다 |
-| `capacity` | `outMessage`의 바이트 수. 부족하면 잘라서 NUL로 끝냅니다 |
+| `context` | 情境控制代碼。`NULL` 時為此執行緒最後一次 create 失敗的訊息 |
+| `outMessage` | 接收訊息的緩衝區。`NULL` 時不複製，只回傳長度 |
+| `capacity` | `outMessage` 的位元組數。不足時截斷並以 NUL 結尾 |
 
-**반환** — 메시지 전체를 담는 데 필요한 바이트 수(NUL 포함). 반환값이 `capacity`보다 크면 잘린 것입니다.
+**回傳值** — 容納完整訊息所需的位元組數（含 NUL）。回傳值大於 `capacity` 時表示已截斷。
 
 </details>
 
 <details>
-<summary><code>st_off_material_create</code> — 음향 재질 하나를 등록한다</summary>
+<summary><code>st_off_material_create</code> — 註冊一個聲學材質</summary>
 
 ```c
 STMaterialId st_off_material_create(STOFF_Context* context, const STMaterial* material);
 ```
 
-**용도** — 메시 표면에 쓸 9밴드 음향 재질(반사·흡수·투과·산란)을 등록하고 핸들을 받습니다. 재질 계수는 엔진이 보정하지 않는 엄격한 입력이라, 등록 시점에 검증해 잘못된 값을 바로 거절합니다.
+**用途** — 註冊用於網格表面的 9 頻段聲學材質（反射·吸收·透射·散射）並取得控制代碼。材質係數是引擎不做校正的嚴格輸入，因此在註冊時驗證並立即拒絕錯誤的值。
 
-**언제·어떻게** — 메시를 만들기 전에 필요한 재질을 모두 등록하고, 받은 핸들을 `st_off_mesh_create`의 `material`(또는 삼각형별 재질 인덱스)에 씁니다. 여러 재질은 이 함수를 반복 호출해 등록하며, 반환 id는 등록 순서대로 연속입니다. 실시간 `st_rt_material_create`와 같은 계약입니다. 스레드: `[control]` — 씬 쓰기 락을 잡아 잠깐 블록될 수 있습니다.
+**呼叫方式** — 在建立網格之前註冊所有需要的材質，將取得的控制代碼用於 `st_off_mesh_create` 的 `material`（或各三角形的材質索引）。多個材質以重複呼叫此函式註冊，回傳的 id 依註冊順序連續。與即時 `st_rt_material_create` 為相同約定。執行緒：`[control]` — 持有場景寫入鎖，可能短暫阻塞。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `material` | 등록할 재질. 호출자가 `structSize`/`apiVersion`을 채웁니다 |
+| `context` | 情境控制代碼 |
+| `material` | 要註冊的材質。呼叫端須填入 `structSize`/`apiVersion` |
 
-**구조체** `STMaterial`
+**結構體** `STMaterial`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` | `sizeof(STMaterial)`. 계수를 읽기 전에 검증합니다 |
+| `structSize` | `sizeof(STMaterial)`。在讀取係數之前驗證 |
 | `apiVersion` | `ST_ABI_VERSION` |
-| `reflection[ST_FREQUENCY_BANDS]` | 밴드별 반사 에너지 비율, `[0, 1]` |
-| `absorption[ST_FREQUENCY_BANDS]` | 밴드별 흡수 에너지 비율, `[0, 1]` |
-| `transmission[ST_FREQUENCY_BANDS]` | 밴드별 투과 에너지 비율, `[0, 1]` |
-| `scattering[ST_FREQUENCY_BANDS]` | 반사 에너지 중 확산 비율, `[0, 1]`. R+A+T 합 검사에서는 빠집니다 |
-| `reserved[8]` | 예약 |
+| `reflection[ST_FREQUENCY_BANDS]` | 各頻段反射能量比，`[0, 1]` |
+| `absorption[ST_FREQUENCY_BANDS]` | 各頻段吸收能量比，`[0, 1]` |
+| `transmission[ST_FREQUENCY_BANDS]` | 各頻段透射能量比，`[0, 1]` |
+| `scattering[ST_FREQUENCY_BANDS]` | 反射能量中的擴散比例，`[0, 1]`。不計入 R+A+T 總和檢查 |
+| `reserved[8]` | 保留 |
 
-밴드 순서는 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz(`ST_FREQUENCY_BANDS` = 9)입니다. 모든 계수는 **에너지 도메인**의 무차원 비율이고, 밴드마다 `|R + A + T − 1| ≤ ST_MATERIAL_ENERGY_BALANCE_TOLERANCE`(0.001)를 만족해야 합니다. 엔진은 값을 유도·정규화·클램프·보간하지 않습니다.
+頻段順序為 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz（`ST_FREQUENCY_BANDS` = 9）。所有係數都是 **能量域** 的無因次比例，每個頻段必須滿足 `|R + A + T − 1| ≤ ST_MATERIAL_ENERGY_BALANCE_TOLERANCE`（0.001）。引擎不對值進行推導·正規化·clamp·內插。
 
-**반환** — 재질 핸들 `STMaterialId`. 실패는 `v < 0`: `context`·`material`이 `NULL`이면 `ST_STATUS_INVALID_ARGUMENT`, 계수 검증에 걸리면 `ST_STATUS_INVALID_MATERIAL`(스탬프 불일치는 `ST_STATUS_VERSION_MISMATCH`)이 `st_off_get_last_status`에 남고, 사유는 `st_off_get_last_error`로 읽습니다.
+**回傳值** — 材質控制代碼 `STMaterialId`。失敗時 `v < 0`：`context`·`material` 為 `NULL` 時為 `ST_STATUS_INVALID_ARGUMENT`，未通過係數驗證時為 `ST_STATUS_INVALID_MATERIAL`（戳記不一致為 `ST_STATUS_VERSION_MISMATCH`），會留在 `st_off_get_last_status` 中，原因以 `st_off_get_last_error` 讀取。
 
 </details>
 
 <details>
-<summary><code>st_off_material_load_defaults</code> — 기본 재질 라이브러리를 통째로 등록한다</summary>
+<summary><code>st_off_material_load_defaults</code> — 一次註冊整個預設材質庫</summary>
 
 ```c
 STMaterialId st_off_material_load_defaults(STOFF_Context* context);
 ```
 
-**용도** — 재질 계수를 직접 준비하지 않고도 씬을 구성할 수 있도록 엔진 내장 기본 재질 묶음을 한 번에 등록합니다.
+**用途** — 一次註冊引擎內建的預設材質組，無需自行準備材質係數即可構成場景。
 
-**언제·어떻게** — 메시를 만들기 전에 부릅니다. 반환된 핸들이 묶음의 첫 재질이고, 이후 재질은 `v+1`, `v+2` … 순서로 연속입니다. 실시간 `st_rt_material_load_defaults`와 같은 계약입니다. 스레드: `[control]`.
+**呼叫方式** — 在建立網格之前呼叫。回傳的控制代碼是材質組的第一個材質，之後的材質依 `v+1`、`v+2` … 的順序連續。與即時 `st_rt_material_load_defaults` 為相同約定。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 첫 재질의 핸들 `STMaterialId`. 실패는 `v < 0`.
+**回傳值** — 第一個材質的控制代碼 `STMaterialId`。失敗時 `v < 0`。
 
 </details>
 
 <details>
-<summary><code>st_off_scene_set_edge_split_collinear_overlaps</code> — 메시 엣지 토폴로지 컴파일 옵션을 켜고 끈다</summary>
+<summary><code>st_off_scene_set_edge_split_collinear_overlaps</code> — 開關網格邊拓撲編譯選項</summary>
 
 ```c
 void st_off_scene_set_edge_split_collinear_overlaps(STOFF_Context* context, int enabled);
 ```
 
-**용도** — `st_off_mesh_create`가 메시의 음향 엣지(회절 후보) 토폴로지를 컴파일할 때, 한 직선 위에서 겹치는 엣지들을 분할해 다룰지 정하는 씬 빌드 옵션입니다.
+**用途** — 場景建置選項，決定 `st_off_mesh_create` 編譯網格的聲學邊（繞射候選）拓撲時，是否分割處理在同一直線上重疊的邊。
 
-**언제·어떻게** — 메시를 만들기 전에 부릅니다. 이 호출 뒤에 추가되는 메시에만 적용되고, 이미 만든 메시는 생성 시점에 컴파일한 토폴로지를 유지합니다. 지원 여부는 `ST_CAP_ACOUSTIC_EDGE_BUILD_OPTIONS`. 실시간 `st_rt_scene_set_edge_split_collinear_overlaps`와 같은 계약입니다. 스레드: `[control]`.
+**呼叫方式** — 在建立網格之前呼叫。只套用到此呼叫之後加入的網格，已建立的網格維持建立時編譯的拓撲。是否支援為 `ST_CAP_ACOUSTIC_EDGE_BUILD_OPTIONS`。與即時 `st_rt_scene_set_edge_split_collinear_overlaps` 為相同約定。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | `0` = 끔 / 그 밖 = 켬 |
+| `context` | 情境控制代碼 |
+| `enabled` | `0` = 關閉 / 其他 = 開啟 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_scene_set_solid_wedge_gate</code> — 두 면 회절 쐐기의 각도 구간 기각을 켜고 끈다</summary>
+<summary><code>st_off_scene_set_solid_wedge_gate</code> — 開關雙面繞射楔的角度區間剔除</summary>
 
 ```c
 void st_off_scene_set_solid_wedge_gate(STOFF_Context* context, int enabled);
 ```
 
-**용도** — 회절 경로를 검증할 때 두 면으로 이루어진 쐐기(wedge)의 솔리드 쪽 각도 구간을 지나는 경로를 기각하는 게이트입니다. 기본은 꺼져 있습니다.
+**用途** — 驗證繞射路徑時，剔除通過由兩個面構成的楔（wedge）實體側角度區間之路徑的閘門。預設為關閉。
 
-**언제·어떻게** — 전파 시점에 적용되는 옵션이라 `st_off_ir_compute` 전에 정합니다. 켜면 쐐기의 볼록/오목 판정에 메시 와인딩(삼각형 정점 순서가 주는 법선 부호)이 쓰이므로, 와인딩을 뒤집으면 기각되는 회절 경로 집합이 반대가 됩니다 — 메시 하나 안에서 와인딩을 일관되게 유지하고 가능하면 법선이 공기 쪽을 향하게 합니다. 지원 여부는 `ST_CAP_EXPERIMENTAL_SOLID_WEDGE_GATE`. 실시간 `st_rt_scene_set_solid_wedge_gate`와 같은 계약입니다. 스레드: `[control]`.
+**呼叫方式** — 這是在傳播時套用的選項，因此在 `st_off_ir_compute` 之前設定。開啟時，楔的凸/凹判定會使用網格繞向（由三角形頂點順序給出的法線正負號），因此繞向反轉時被剔除的繞射路徑集合也會相反 — 請在單一網格內保持繞向一致，並盡可能讓法線朝向空氣側。是否支援為 `ST_CAP_EXPERIMENTAL_SOLID_WEDGE_GATE`。與即時 `st_rt_scene_set_solid_wedge_gate` 為相同約定。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `enabled` | `0` = 끔(기본) / 그 밖 = 켬 |
+| `context` | 情境控制代碼 |
+| `enabled` | `0` = 關閉（預設）/ 其他 = 開啟 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_scene_set_accel</code> — 메시·정적 가속구조 종류를 고른다</summary>
+<summary><code>st_off_scene_set_accel</code> — 選擇網格·靜態加速結構類型</summary>
 
 ```c
 int st_off_scene_set_accel(STOFF_Context* context, int kind);
 ```
 
-**용도** — 레이 교차에 쓰는 BLAS·정적 가속구조의 구현을 호스트가 고릅니다. 씬 규모나 빌드 시간·질의 속도 우선순위에 따라 구조를 바꿔 비교할 수 있게 합니다.
+**用途** — 由主機選擇用於光線相交的 BLAS·靜態加速結構實作。可依場景規模或建置時間·查詢速度的優先順序更換結構進行比較。
 
-**언제·어떻게** — 오브젝트를 넣기 전에 부릅니다. 이후의 빌드에만 적용됩니다. 기본은 `2`(TinyBVH)입니다. 실시간 `st_rt_scene_set_accel`과 완전히 같은 계약입니다. 스레드: `[control]`.
+**呼叫方式** — 在加入物件之前呼叫。只套用到之後的建置。預設為 `2`（TinyBVH）。與即時 `st_rt_scene_set_accel` 為完全相同的約定。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `kind` | `0` = BinnedSAH / `1` = HybridKD / `2` = TinyBVH(기본) / `3` = LBVH / `4` = LBVH_Simd |
+| `context` | 情境控制代碼 |
+| `kind` | `0` = BinnedSAH / `1` = HybridKD / `2` = TinyBVH（預設）/ `3` = LBVH / `4` = LBVH_Simd |
 
-**반환** — `1` = 적용 / `0` = `kind` 범위 밖이거나 컨텍스트 없음.
+**回傳值** — `1` = 套用 / `0` = `kind` 超出範圍或沒有情境。
 
 </details>
 
 <details>
-<summary><code>st_off_scene_set_triangle_intersection</code> — 삼각형 교차 커널을 고른다</summary>
+<summary><code>st_off_scene_set_triangle_intersection</code> — 選擇三角形相交核心</summary>
 
 ```c
 int st_off_scene_set_triangle_intersection(STOFF_Context* context, int kind);
 ```
 
-**용도** — 레이–삼각형 교차 계산 방식을 고릅니다. 기본값은 실시간과 같은 MollerTrumbore라서, 오프라인이 실시간과 같은 기하 통계를 냅니다.
+**用途** — 選擇光線–三角形相交的計算方式。預設值與即時相同為 MollerTrumbore，因此離線會產生與即時相同的幾何統計。
 
-**언제·어떻게** — 커널은 `st_off_mesh_create` 시점에 메시에 고정되므로 이 호출 **이후 추가하는 메시에만** 적용됩니다(기존 메시에는 소급하지 않으며, 메시마다 커널이 달라도 유효한 구성입니다). 보통 메시를 만들기 전에 한 번 부릅니다. 세 커널 모두 양면 교차이며 백페이스 컬링이 없습니다. 스레드: `[control]`.
+**呼叫方式** — 核心在 `st_off_mesh_create` 時固定於網格，因此只套用到此呼叫 **之後加入的網格**（不追溯既有網格，各網格核心不同也是有效的配置）。通常在建立網格之前呼叫一次。三種核心皆為雙面相交，沒有背面剔除。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `kind` | `0` = MollerTrumbore(기본) / `1` = PluckerAdaptive / `2` = Watertight |
+| `context` | 情境控制代碼 |
+| `kind` | `0` = MollerTrumbore（預設）/ `1` = PluckerAdaptive / `2` = Watertight |
 
-**반환** — `1` = 적용 / `0` = 잘못된 `kind`이거나 컨텍스트 없음.
+**回傳值** — `1` = 套用 / `0` = 錯誤的 `kind` 或沒有情境。
 
 </details>
 
 <details>
-<summary><code>st_off_scene_get_triangle_intersection</code> — 다음 메시에 적용될 교차 커널을 읽는다</summary>
+<summary><code>st_off_scene_get_triangle_intersection</code> — 讀取將套用到下一個網格的相交核心</summary>
 
 ```c
 int st_off_scene_get_triangle_intersection(const STOFF_Context* context);
 ```
 
-**용도** — `st_off_scene_set_triangle_intersection`으로 지정한 값을 확인합니다.
+**用途** — 確認以 `st_off_scene_set_triangle_intersection` 指定的值。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 값은 **다음 `st_off_mesh_create`에 적용될** 커널이며, 이미 만든 메시의 커널과 다를 수 있습니다. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**呼叫方式** — 隨時可呼叫。值為 **將套用到下一次 `st_off_mesh_create`** 的核心，可能與已建立網格的核心不同。執行緒：`[control]` — 只持有場景讀取鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `0` = MollerTrumbore / `1` = PluckerAdaptive / `2` = Watertight.
+**回傳值** — `0` = MollerTrumbore / `1` = PluckerAdaptive / `2` = Watertight.
 
 </details>
 
 <details>
-<summary><code>st_off_scene_raycast</code> — 엔진 가속구조로 최근접 히트를 질의한다</summary>
+<summary><code>st_off_scene_raycast</code> — 以引擎加速結構查詢最近命中</summary>
 
 ```c
 int st_off_scene_raycast(STOFF_Context* context, const float origin[3], const float direction[3], float maxDistanceMeters, STRayHit* outHit);
 ```
 
-**용도** — 전파가 쓰는 바로 그 가속구조(정적+동적 TLAS)에 레이 한 개를 쏴서 가장 가까운 히트를 돌려줍니다. 호스트가 자기 물리 엔진과 별도로, 엔진이 실제로 보는 음향 기하를 확인·디버그할 수 있게 합니다.
+**用途** — 對傳播所使用的同一個加速結構（靜態+動態 TLAS）發射一條光線，回傳最近的命中。讓主機能獨立於自己的物理引擎，確認·除錯引擎實際看到的聲學幾何。
 
-**언제·어떻게** — `st_off_build` 뒤에 부릅니다. 빌드 전이면 오류 없이 미스가 됩니다. 읽기 전용 질의라 파이프라인 상태를 바꾸지 않습니다. 지원 여부는 `ST_CAP_SCENE_RAYCAST`. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**呼叫方式** — 在 `st_off_build` 之後呼叫。建置前呼叫不會出錯而是未命中。這是唯讀查詢，不會改變管線狀態。是否支援為 `ST_CAP_SCENE_RAYCAST`。執行緒：`[control]` — 只持有場景讀取鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `origin` | 레이 원점, 월드 좌표 3성분(씬 단위). 유한해야 합니다 |
-| `direction` | 레이 방향 3성분. 엔진이 정규화하며 유한하고 0벡터가 아니어야 합니다 |
-| `maxDistanceMeters` | 최대 거리(미터). `sceneRatio`로 씬 단위로 되돌려 적용합니다. `≤ 0` 또는 비유한 값 = 무한 |
-| `outHit` | 결과. 호출자가 `structSize = sizeof(STRayHit)`, `apiVersion = ST_ABI_VERSION`을 채웁니다 |
+| `context` | 情境控制代碼 |
+| `origin` | 光線原點，世界座標 3 分量（場景單位）。必須為有限值 |
+| `direction` | 光線方向 3 分量。由引擎正規化，必須為有限值且不可為零向量 |
+| `maxDistanceMeters` | 最大距離（公尺）。以 `sceneRatio` 換回場景單位後套用。`≤ 0` 或非有限值 = 無限 |
+| `outHit` | 結果。呼叫端須填入 `structSize = sizeof(STRayHit)`、`apiVersion = ST_ABI_VERSION` |
 
-**구조체** `STRayHit`
+**結構體** `STRayHit`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채움 |
-| `hit` | `1` = 히트 / `0` = 미스 |
-| `distanceMeters` | 원점에서 히트점까지 거리(씬 거리 × `sceneRatio`). 미스면 0 |
-| `point[3]` | 히트점, 씬 좌표 그대로. 미스면 0 |
-| `normal[3]` | 히트 삼각형의 단위 기하 법선. 항상 레이 원점 쪽을 향하도록 정렬되며(와인딩 부호는 유지되지 않음) 미스면 0 |
-| `objectId` | 히트한 오브젝트 id. 미스면 `-1` |
-| `meshId` | 그 오브젝트의 메시 id. 미스면 `-1` |
-| `triangleIndex` | 메시 로컬 삼각형 인덱스. 미스면 `-1` |
-| `materialIndex` | 그 삼각형의 재질 인덱스. 미스면 `-1` |
-| `reserved[6]` | 예약 |
+| `structSize` / `apiVersion` | 由呼叫端填入 |
+| `hit` | `1` = 命中 / `0` = 未命中 |
+| `distanceMeters` | 從原點到命中點的距離（場景距離 × `sceneRatio`）。未命中時為 0 |
+| `point[3]` | 命中點，維持場景座標。未命中時為 0 |
+| `normal[3]` | 命中三角形的單位幾何法線。恆對齊為朝向光線原點（不保留繞向正負號），未命中時為 0 |
+| `objectId` | 命中的物件 id。未命中時為 `-1` |
+| `meshId` | 該物件的網格 id。未命中時為 `-1` |
+| `triangleIndex` | 網格本地三角形索引。未命中時為 `-1` |
+| `materialIndex` | 該三角形的材質索引。未命中時為 `-1` |
+| `reserved[6]` | 保留 |
 
-`0`은 유효한 id이므로 미스 판정은 반드시 `hit`(또는 id가 `-1`인지)로 합니다.
+`0` 是有效的 id，因此未命中判定務必以 `hit`（或 id 是否為 `-1`）進行。
 
-**반환** — `1` = 호출 성공(히트 여부는 `outHit->hit`, 미스는 실패가 아님) / `0` = `context`·포인터가 `NULL`, 스탬프 불일치(`ST_STATUS_VERSION_MISMATCH`), `origin`·`direction` 비유한 또는 `direction`이 0벡터(`ST_STATUS_INVALID_ARGUMENT`).
+**回傳值** — `1` = 呼叫成功（是否命中看 `outHit->hit`，未命中不算失敗）/ `0` = `context`·指標為 `NULL`、戳記不一致（`ST_STATUS_VERSION_MISMATCH`）、`origin`·`direction` 非有限或 `direction` 為零向量（`ST_STATUS_INVALID_ARGUMENT`）。
 
 </details>
 
 <details>
-<summary><code>st_off_mesh_create</code> — 삼각형 메시를 등록한다</summary>
+<summary><code>st_off_mesh_create</code> — 註冊三角形網格</summary>
 
 ```c
 STMeshId st_off_mesh_create(STOFF_Context* context, const STMesh* mesh, STMaterialId material, const int32_t* triangleMaterialIndices);
 ```
 
-**용도** — 음향 기하로 쓸 삼각형 메시를 등록합니다. 등록 시점에 회절용 음향 엣지 토폴로지를 컴파일하고 교차 커널을 고정합니다. 메시는 그 자체로는 씬에 놓이지 않고, `st_off_object_create`로 인스턴스를 만들어야 전파에 참여합니다.
+**用途** — 註冊用作聲學幾何的三角形網格。在註冊時編譯繞射用的聲學邊拓撲並固定相交核心。網格本身不會放進場景，必須以 `st_off_object_create` 建立實例才會參與傳播。
 
-**언제·어떻게** — 재질을 등록하고, 필요하면 `st_off_scene_set_triangle_intersection`·`st_off_scene_set_edge_split_collinear_overlaps`를 정한 뒤 부릅니다. 재질은 둘 중 하나로 지정합니다 — `triangleMaterialIndices`가 `NULL`이면 메시 전체가 `material` 하나를 쓰고, `NULL`이 아니면 삼각형마다 재질 인덱스를 주며 그때 `material` 인자는 무시됩니다(지원 여부 `ST_CAP_PER_TRIANGLE_MATERIALS`). 메시 하나 안에서는 와인딩을 일관되게 유지합니다 — 부분적으로 뒤집힌 와인딩은 두께 0 판의 회절 엣지를 잃게 할 수 있습니다. 실시간 `st_rt_mesh_create`와 완전히 같은 계약입니다. 스레드: `[control, blocking]` — 음향 엣지 토폴로지 컴파일이 메시 크기에 비례해 오래 걸릴 수 있습니다.
+**呼叫方式** — 註冊材質，必要時設定 `st_off_scene_set_triangle_intersection`·`st_off_scene_set_edge_split_collinear_overlaps` 之後呼叫。材質以兩種方式之一指定 — `triangleMaterialIndices` 為 `NULL` 時整個網格使用單一 `material`，非 `NULL` 時為每個三角形提供材質索引，此時忽略 `material` 引數（是否支援 `ST_CAP_PER_TRIANGLE_MATERIALS`）。在單一網格內保持繞向一致 — 部分反轉的繞向可能使厚度為 0 的板失去繞射邊。與即時 `st_rt_mesh_create` 為完全相同的約定。執行緒：`[control, blocking]` — 聲學邊拓撲編譯可能依網格大小耗時較久。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 메시 데이터. 엔진이 호출 중에 읽어 들입니다 |
-| `material` | 메시 전체 재질 핸들(`triangleMaterialIndices == NULL`일 때만 사용) |
-| `triangleMaterialIndices` | 삼각형별 재질 인덱스 배열(`mesh->numTriangles`개, 재질 핸들의 `v` 값). `NULL`이면 `material` 하나를 씁니다 |
+| `context` | 情境控制代碼 |
+| `mesh` | 網格資料。引擎在呼叫期間讀入 |
+| `material` | 整個網格的材質控制代碼（僅在 `triangleMaterialIndices == NULL` 時使用） |
+| `triangleMaterialIndices` | 各三角形材質索引陣列（`mesh->numTriangles` 個，材質控制代碼的 `v` 值）。`NULL` 時使用單一 `material` |
 
-**구조체** `STMesh`
+**結構體** `STMesh`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `numVertices` | 정점 수(> 0) |
-| `vertices` | xyz가 이어진 정점 배열(`numVertices × 3` float), 메시 로컬 좌표(씬 단위) |
-| `numTriangles` | 삼각형 수(> 0) |
-| `triangles` | 정점 인덱스 배열(`numTriangles × 3` int) |
+| `numVertices` | 頂點數（> 0） |
+| `vertices` | xyz 相連的頂點陣列（`numVertices × 3` float），網格本地座標（場景單位） |
+| `numTriangles` | 三角形數（> 0） |
+| `triangles` | 頂點索引陣列（`numTriangles × 3` int） |
 
-**반환** — 메시 핸들 `STMeshId`. 실패는 `v < 0`(컨텍스트·`mesh`·배열이 `NULL`이거나 정점·삼각형 수가 0 이하 등).
+**回傳值** — 網格控制代碼 `STMeshId`。失敗時 `v < 0`（情境·`mesh`·陣列為 `NULL`，或頂點·三角形數為 0 以下等）。
 
 </details>
 
 <details>
-<summary><code>st_off_object_create</code> — 메시 인스턴스를 행렬 변환으로 씬에 놓는다</summary>
+<summary><code>st_off_object_create</code> — 以矩陣變換將網格實例放入場景</summary>
 
 ```c
 STObjectId st_off_object_create(STOFF_Context* context, STMeshId mesh, const STTransform* transform, int isDynamic);
 ```
 
-**용도** — 등록한 메시를 월드 변환과 함께 씬에 배치해 전파에 참여시킵니다. 같은 메시를 여러 오브젝트가 공유할 수 있습니다.
+**用途** — 將已註冊的網格連同世界變換放入場景，使其參與傳播。多個物件可共用同一網格。
 
-**언제·어떻게** — `st_off_mesh_create` 뒤, `st_off_build` 전에 부릅니다. 정적 오브젝트(`isDynamic = 0`)는 정적 가속구조에, 동적 오브젝트는 동적 TLAS에 들어가며 `st_off_object_set_transform*`로 옮긴 뒤 `st_off_build_dynamic`으로 갱신합니다. 쿼터니언으로 배치하려면 `st_off_object_create_q`. 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_mesh_create` 之後、`st_off_build` 之前呼叫。靜態物件（`isDynamic = 0`）進入靜態加速結構，動態物件進入動態 TLAS，以 `st_off_object_set_transform*` 移動後以 `st_off_build_dynamic` 更新。要以四元數放置請使用 `st_off_object_create_q`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | `st_off_mesh_create`가 돌려준 메시 핸들 |
-| `transform` | 메시 로컬 → 월드 변환 |
-| `isDynamic` | `0` = 정적 / 그 밖 = 동적 |
+| `context` | 情境控制代碼 |
+| `mesh` | `st_off_mesh_create` 回傳的網格控制代碼 |
+| `transform` | 網格本地 → 世界變換 |
+| `isDynamic` | `0` = 靜態 / 其他 = 動態 |
 
-**구조체** `STTransform`
+**結構體** `STTransform`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `m00, m01, m02` / `m10, m11, m12` / `m20, m21, m22` | 3×3 회전·스케일, 행 우선(row-major) |
-| `tx, ty, tz` | 이동(씬 단위) |
+| `m00, m01, m02` / `m10, m11, m12` / `m20, m21, m22` | 3×3 旋轉·縮放，列優先（row-major） |
+| `tx, ty, tz` | 平移（場景單位） |
 
-점은 열벡터로 곱합니다: `x' = m00·x + m01·y + m02·z + tx`, `y' = m10·x + m11·y + m12·z + ty`, `z' = m20·x + m21·y + m22·z + tz`. 비균등 스케일과 행렬식이 음수인 변환(거울·음수 스케일)도 받습니다.
+點以行向量相乘：`x' = m00·x + m01·y + m02·z + tx`、`y' = m10·x + m11·y + m12·z + ty`、`z' = m20·x + m21·y + m22·z + tz`。也接受非均勻縮放與行列式為負的變換（鏡像·負縮放）。
 
-**반환** — 오브젝트 핸들 `STObjectId`. 실패는 `v < 0`.
+**回傳值** — 物件控制代碼 `STObjectId`。失敗時 `v < 0`。
 
 </details>
 
 <details>
-<summary><code>st_off_object_create_q</code> — 메시 인스턴스를 위치·쿼터니언·스케일로 씬에 놓는다</summary>
+<summary><code>st_off_object_create_q</code> — 以位置·四元數·縮放將網格實例放入場景</summary>
 
 ```c
 STObjectId st_off_object_create_q(STOFF_Context* context, STMeshId mesh, const float position[3], const float quatXYZW[4], const float scale[3], int isDynamic);
 ```
 
-**용도** — `st_off_object_create`의 쿼터니언판입니다. 게임 엔진의 TRS(위치·회전·스케일) 표현을 행렬로 바꾸지 않고 그대로 넣을 수 있습니다.
+**用途** — `st_off_object_create` 的四元數版。可將遊戲引擎的 TRS（位置·旋轉·縮放）表示直接傳入，無需轉換為矩陣。
 
-**언제·어떻게** — `st_off_object_create`와 같습니다(`st_off_build` 전, 동적이면 이후 `st_off_build_dynamic`). 스레드: `[control]`.
+**呼叫方式** — 與 `st_off_object_create` 相同（`st_off_build` 之前，動態時之後再 `st_off_build_dynamic`）。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 메시 핸들 |
-| `position` | 위치 xyz(씬 단위) |
-| `quatXYZW` | 로컬 → 월드 회전 쿼터니언, **XYZW 순서**. 엔진이 정규화하며 `norm < 1e-12`이면 항등으로 대체합니다 |
-| `scale` | 축별 스케일 xyz. R·S로 합성되며 비균등을 허용합니다 |
-| `isDynamic` | `0` = 정적 / 그 밖 = 동적 |
+| `context` | 情境控制代碼 |
+| `mesh` | 網格控制代碼 |
+| `position` | 位置 xyz（場景單位） |
+| `quatXYZW` | 本地 → 世界旋轉四元數，**XYZW 順序**。由引擎正規化，`norm < 1e-12` 時以恆等取代 |
+| `scale` | 各軸縮放 xyz。以 R·S 合成，允許非均勻 |
+| `isDynamic` | `0` = 靜態 / 其他 = 動態 |
 
-**반환** — 오브젝트 핸들 `STObjectId`. 실패는 `v < 0`.
+**回傳值** — 物件控制代碼 `STObjectId`。失敗時 `v < 0`。
 
 </details>
 
 <details>
-<summary><code>st_off_source_create</code> — 음원을 만든다</summary>
+<summary><code>st_off_source_create</code> — 建立音源</summary>
 
 ```c
 STSourceId st_off_source_create(STOFF_Context* context, const STSourceDesc* source);
 ```
 
-**용도** — IR을 계산할 음원을 씬에 추가합니다. 오프라인 컨텍스트의 음원은 오디오 입력(파일·스트림)을 받지 않고, 리스너와 짝을 이뤄 IR 계산·렌더의 대상이 됩니다. 실시간과 달리 음원 수 예산이 없습니다.
+**用途** — 在場景中加入要計算 IR 的音源。離線情境的音源不接受音訊輸入（檔案·串流），與聆聽者配對成為 IR 計算·渲染的對象。與即時不同，沒有音源數預算。
 
-**언제·어떻게** — 씬을 구성한 뒤 `st_off_ir_compute` 전에 만듭니다. 생성 직후 상태는 실시간과 같습니다 — source energy 1.0, 경로 볼륨 4종 1.0, 지향성 테이블 없음, 방향은 `direction`에 맞춘 roll 없는 회전, 수송 갱신 단계 수 0. 이후 위치·방향·레이 수·깊이·EQ·지향성 등은 `st_off_source_set_*`로 바꿉니다. 스레드: `[control]`.
+**呼叫方式** — 構成場景後、`st_off_ir_compute` 之前建立。建立後的狀態與即時相同 — source energy 1.0、4 種路徑音量 1.0、無指向性表、方向為對齊 `direction` 的無 roll 旋轉、傳輸更新階段數 0。之後的位置·方向·光線數·深度·EQ·指向性等以 `st_off_source_set_*` 變更。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 기술자. 모든 값이 유한해야 하고 `intensity ≥ 0`이어야 합니다 |
+| `context` | 情境控制代碼 |
+| `source` | 音源描述子。所有值必須為有限值，且 `intensity ≥ 0` |
 
-**구조체** `STSourceDesc`
+**結構體** `STSourceDesc`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `positionX, positionY, positionZ` | 위치(씬 단위) |
-| `directionX, directionY, directionZ` | 정면 방향. 이 방향에 맞는 roll 없는 소스 프레임이 만들어집니다 |
-| `velocityX, velocityY, velocityZ` | 속도(씬 단위/초). `sceneRatio`로 m/s로 바뀌어 도플러 방사 이득(`st_off_set_doppler_gain_mode`)에 쓰입니다 |
-| `intensity` | 무차원 선형 **압력** 게인(≥ 0). 음향 인텐시티(W/m²)·SPL·Pa가 아닙니다. 별도의 에너지 배율은 `st_off_source_set_energy` |
-| `directional` | `0` = 무지향(onAxis = offAxis = 1) / 그 밖 = 지향 프로파일(onAxis = 1, offAxis = 0) |
-| `isDynamic` | `1` = 동적 / `0` = 정적. 오프라인에서 정적 소스의 수송은 계산마다 한 번 굽고 고정되며, 동적 소스는 매 계산 전량 재추적합니다 |
+| `positionX, positionY, positionZ` | 位置（場景單位） |
+| `directionX, directionY, directionZ` | 正面方向。建立對齊此方向的無 roll 音源座標系 |
+| `velocityX, velocityY, velocityZ` | 速度（場景單位/秒）。以 `sceneRatio` 換算為 m/s，用於都卜勒輻射增益（`st_off_set_doppler_gain_mode`） |
+| `intensity` | 無因次線性 **聲壓** 增益（≥ 0）。不是聲強（W/m²）·SPL·Pa。另外的能量倍率為 `st_off_source_set_energy` |
+| `directional` | `0` = 無指向（onAxis = offAxis = 1）/ 其他 = 指向設定檔（onAxis = 1，offAxis = 0） |
+| `isDynamic` | `1` = 動態 / `0` = 靜態。離線中靜態音源的傳輸在每次計算時烘焙一次並固定，動態音源每次計算都完整重新追蹤 |
 
-**반환** — 음원 핸들 `STSourceId`. 실패는 `v < 0`(`NULL`, 비유한 값, 음수 `intensity`는 `ST_STATUS_INVALID_ARGUMENT`).
+**回傳值** — 音源控制代碼 `STSourceId`。失敗時 `v < 0`（`NULL`、非有限值、負的 `intensity` 為 `ST_STATUS_INVALID_ARGUMENT`）。
 
 </details>
 
 <details>
-<summary><code>st_off_listener_create</code> — 리스너를 하나 더 만든다</summary>
+<summary><code>st_off_listener_create</code> — 再建立一個聆聽者</summary>
 
 ```c
 STListenerId st_off_listener_create(STOFF_Context* context);
 ```
 
-**용도** — 오프라인 컨텍스트는 리스너를 여러 개 둘 수 있습니다. 한 씬에서 여러 청취 위치의 IR을 한 번의 `st_off_ir_compute`로 얻기 위한 것입니다. 실시간 DLL에는 없는 오프라인 전용 함수입니다.
+**用途** — 離線情境可以有多個聆聽者。用於以一次 `st_off_ir_compute` 取得同一場景中多個聆聽位置的 IR。這是即時 DLL 中沒有的離線專用函式。
 
-**언제·어떻게** — 컨텍스트를 만들면 리스너 하나(id `1`)가 자동으로 만들어져 활성 상태입니다. 그 외 청취 위치마다 이 함수를 부릅니다. 새 리스너는 자동으로 활성이 되지 않습니다 — 리스너 위치·방향 setter(`st_off_listener_set_position` 등)는 **활성 리스너**에 적용되므로, `st_off_listener_set_active`로 전환한 뒤 포즈를 지정합니다. IR 계산은 등록된 리스너마다 이루어지고, 렌더·원시 IR 조회 함수가 리스너 핸들을 인자로 받습니다. 스레드: `[control]`.
+**呼叫方式** — 建立情境時會自動建立一個聆聽者（id `1`）並為啟用狀態。其他每個聆聽位置呼叫此函式。新聆聽者不會自動成為啟用 — 聆聽者位置·方向 setter（`st_off_listener_set_position` 等）套用於 **啟用聆聽者**，因此以 `st_off_listener_set_active` 切換後再指定姿態。IR 計算針對每個已註冊的聆聽者進行，渲染·原始 IR 查詢函式以聆聽者控制代碼為引數。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 새 리스너 핸들 `STListenerId`. 실패는 `v < 0`.
+**回傳值** — 新聆聽者控制代碼 `STListenerId`。失敗時 `v < 0`。
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_active</code> — 활성 리스너를 바꾼다</summary>
+<summary><code>st_off_listener_set_active</code> — 變更啟用聆聽者</summary>
 
 ```c
 void st_off_listener_set_active(STOFF_Context* context, STListenerId listener);
 ```
 
-**용도** — 리스너 포즈 setter(`st_off_listener_set_position` · `_set_rotation` · `_set_orientation_q` · `_set_rotation_ypr`)가 어느 리스너에 적용될지 고릅니다.
+**用途** — 選擇聆聽者姿態 setter（`st_off_listener_set_position` · `_set_rotation` · `_set_orientation_q` · `_set_rotation_ypr`）要套用到哪個聆聽者。
 
-**언제·어떻게** — 여러 리스너를 쓸 때, 각 리스너의 포즈를 지정하기 직전에 부릅니다. 존재하지 않는 리스너 핸들이면 아무것도 바꾸지 않습니다. 스레드: `[control]`.
+**呼叫方式** — 使用多個聆聽者時，在指定各聆聽者姿態之前呼叫。聆聽者控制代碼不存在時不做任何變更。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `listener` | 활성으로 만들 리스너 핸들 |
+| `context` | 情境控制代碼 |
+| `listener` | 要設為啟用的聆聽者控制代碼 |
 
-**반환** — 없음. 전환 여부는 `st_off_listener_get_active`로 확인합니다.
+**回傳值** — 無。是否已切換以 `st_off_listener_get_active` 確認。
 
 </details>
 
 <details>
-<summary><code>st_off_listener_get_active</code> — 현재 활성 리스너를 읽는다</summary>
+<summary><code>st_off_listener_get_active</code> — 讀取目前的啟用聆聽者</summary>
 
 ```c
 STListenerId st_off_listener_get_active(const STOFF_Context* context);
 ```
 
-**용도** — 포즈 setter가 지금 어느 리스너를 대상으로 하는지 확인합니다.
+**用途** — 確認姿態 setter 目前以哪個聆聽者為對象。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 생성 직후 값은 자동 생성된 리스너 `1`입니다. 스레드: `[any]` — atomic 읽기입니다.
+**呼叫方式** — 隨時可呼叫。建立後的值為自動建立的聆聽者 `1`。執行緒：`[any]` — atomic 讀取。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 활성 리스너 핸들. `context`가 `NULL`이면 `v = -1`.
+**回傳值** — 啟用聆聽者控制代碼。`context` 為 `NULL` 時 `v = -1`。
 
 </details>
 
 <details>
-<summary><code>st_off_listener_destroy</code> — 리스너를 지운다</summary>
+<summary><code>st_off_listener_destroy</code> — 刪除聆聽者</summary>
 
 ```c
 int st_off_listener_destroy(STOFF_Context* context, STListenerId listener);
 ```
 
-**용도** — 더 이상 계산할 필요가 없는 청취 위치를 제거해 다음 계산의 비용을 줄입니다.
+**用途** — 移除不再需要計算的聆聽位置，減少下一次計算的成本。
 
-**언제·어떻게** — 활성 리스너는 지울 수 없습니다 — 먼저 `st_off_listener_set_active`로 다른 리스너로 전환합니다. 스레드: `[control]`.
+**呼叫方式** — 啟用聆聽者無法刪除 — 先以 `st_off_listener_set_active` 切換到其他聆聽者。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `listener` | 지울 리스너 핸들 |
+| `context` | 情境控制代碼 |
+| `listener` | 要刪除的聆聽者控制代碼 |
 
-**반환** — `1` = 제거 / `0` = 컨텍스트 없음, 없는 리스너, 또는 활성 리스너.
+**回傳值** — `1` = 已移除 / `0` = 沒有情境、聆聽者不存在，或為啟用聆聽者。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_position</code> — 음원 위치를 바꾼다</summary>
+<summary><code>st_off_source_set_position</code> — 變更音源位置</summary>
 
 ```c
 void st_off_source_set_position(STOFF_Context* context, STSourceId source, float x, float y, float z);
 ```
 
-**용도** — 음원을 옮깁니다.
+**用途** — 移動音源。
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 변경은 다음 계산에 반영됩니다. 실시간과 달리 모션 큐가 없고 즉시 씬에 적용됩니다. 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_ir_compute` 之前呼叫。變更會反映在下一次計算中。與即時不同，沒有運動佇列，會立即套用到場景。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `x`, `y`, `z` | 월드 위치(씬 단위) |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `x`, `y`, `z` | 世界位置（場景單位） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_direction</code> — 음원 정면 방향을 바꾼다</summary>
+<summary><code>st_off_source_set_direction</code> — 變更音源正面方向</summary>
 
 ```c
 void st_off_source_set_direction(STOFF_Context* context, STSourceId source, float x, float y, float z);
 ```
 
-**용도** — 지향성 음원(콘 또는 지향성 테이블)의 정면을 돌립니다.
+**用途** — 轉動指向性音源（錐形或指向性表）的正面。
 
-**언제·어떻게** — 소스 프레임(`st_off_source_set_orientation_q`)과 양방향 동기화됩니다 — 이 함수를 부르면 프레임은 "+Z에서 이 방향으로 가는 roll 없는 최소 회전"이 됩니다. roll이 필요하면 이 함수 대신 `st_off_source_set_orientation_q`를 씁니다. 변경은 다음 `st_off_ir_compute`에 반영됩니다. 스레드: `[control]`.
+**呼叫方式** — 與音源座標系（`st_off_source_set_orientation_q`）雙向同步 — 呼叫此函式時，座標系會成為「從 +Z 轉向此方向的無 roll 最小旋轉」。需要 roll 時請改用 `st_off_source_set_orientation_q`。變更會反映在下一次 `st_off_ir_compute` 中。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `x`, `y`, `z` | 월드 방향 벡터 |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `x`, `y`, `z` | 世界方向向量 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_position</code> — 활성 리스너의 위치를 바꾼다</summary>
+<summary><code>st_off_listener_set_position</code> — 變更啟用聆聽者的位置</summary>
 
 ```c
 void st_off_listener_set_position(STOFF_Context* context, float x, float y, float z);
 ```
 
-**용도** — 청취 위치를 지정합니다.
+**用途** — 指定聆聽位置。
 
-**언제·어떻게** — **활성 리스너**에 적용됩니다(여러 리스너는 `st_off_listener_set_active`로 전환하며 지정). 방향은 유지됩니다. 변경은 다음 `st_off_ir_compute`에 반영됩니다. 스레드: `[control]`.
+**呼叫方式** — 套用於 **啟用聆聽者**（多個聆聽者以 `st_off_listener_set_active` 切換後指定）。方向維持不變。變更會反映在下一次 `st_off_ir_compute` 中。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `x`, `y`, `z` | 월드 위치(씬 단위) |
+| `context` | 情境控制代碼 |
+| `x`, `y`, `z` | 世界位置（場景單位） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_rotation</code> — 활성 리스너의 방향을 yaw·pitch로 정한다</summary>
+<summary><code>st_off_listener_set_rotation</code> — 以 yaw·pitch 設定啟用聆聽者的方向</summary>
 
 ```c
 void st_off_listener_set_rotation(STOFF_Context* context, float yaw, float pitch);
 ```
 
-**용도** — 바이노럴·공간화 렌더가 기준으로 삼는 리스너 머리 방향을 지정합니다.
+**用途** — 指定雙耳·空間化渲染作為基準的聆聽者頭部方向。
 
-**언제·어떻게** — 활성 리스너에 적용됩니다. 회전은 R = Ry(yaw)·Rx(pitch)이며, yaw = pitch = 0이면 forward = +Z, up = +Y, right = +X입니다. forward = (sin(yaw)·cos(pitch), −sin(pitch), cos(yaw)·cos(pitch)). 방향 벡터 d에서 역으로 구하려면 `yaw = atan2f(d.x, d.z); pitch = -asinf(d.y);`. roll은 표현할 수 없습니다 — 필요하면 `st_off_listener_set_rotation_ypr` 또는 `st_off_listener_set_orientation_q`를 씁니다. 리스너 방향 setter 셋은 마지막에 부른 쪽이 이깁니다. 스레드: `[control]`.
+**呼叫方式** — 套用於啟用聆聽者。旋轉為 R = Ry(yaw)·Rx(pitch)，yaw = pitch = 0 時 forward = +Z、up = +Y、right = +X。forward = (sin(yaw)·cos(pitch), −sin(pitch), cos(yaw)·cos(pitch))。要從方向向量 d 反求時為 `yaw = atan2f(d.x, d.z); pitch = -asinf(d.y);`。無法表示 roll — 需要時請使用 `st_off_listener_set_rotation_ypr` 或 `st_off_listener_set_orientation_q`。三個聆聽者方向 setter 以最後呼叫的一方生效。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `yaw` | 라디안. 양수 = 위에서 내려다볼 때 시계 방향(오른쪽으로 돈다) |
-| `pitch` | 라디안. 양수 = 아래를 본다 |
+| `context` | 情境控制代碼 |
+| `yaw` | 弧度。正值 = 從上方俯視時順時針（向右轉） |
+| `pitch` | 弧度。正值 = 向下看 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_orientation_q</code> — 활성 리스너의 방향을 쿼터니언으로 정한다</summary>
+<summary><code>st_off_listener_set_orientation_q</code> — 以四元數設定啟用聆聽者的方向</summary>
 
 ```c
 int st_off_listener_set_orientation_q(STOFF_Context* context, const float quatXYZW[4]);
 ```
 
-**용도** — roll(머리 기울임)까지 포함한 리스너 방향을 게임 엔진의 쿼터니언 그대로 넣습니다.
+**用途** — 將包含 roll（頭部傾斜）的聆聽者方向以遊戲引擎的四元數原樣傳入。
 
-**언제·어떻게** — 활성 리스너에 적용됩니다. 로컬 축은 forward = +Z · up = +Y · right = +X이고, 소스 `orientation_q`와 같은 순서·같은 검증입니다. yaw/pitch 표현은 q = q_y(yaw)·q_x(pitch)인 roll 0 경우에 해당합니다. 리스너 방향 setter 셋은 마지막에 부른 쪽이 이깁니다. 지원 여부는 워드 1의 `ST_CAP1_LISTENER_ORIENTATION_Q`. 스레드: `[control]`.
+**呼叫方式** — 套用於啟用聆聽者。本地軸為 forward = +Z · up = +Y · right = +X，與音源 `orientation_q` 為相同順序·相同驗證。yaw/pitch 表示相當於 q = q_y(yaw)·q_x(pitch) 的 roll 0 情況。三個聆聽者方向 setter 以最後呼叫的一方生效。是否支援為字組 1 的 `ST_CAP1_LISTENER_ORIENTATION_Q`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `quatXYZW` | 로컬 → 월드 단위 쿼터니언, **XYZW 순서**. 엔진이 정규화합니다 |
+| `context` | 情境控制代碼 |
+| `quatXYZW` | 本地 → 世界單位四元數，**XYZW 順序**。由引擎正規化 |
 
-**반환** — `1` = 성공 / `0` = 실패. 비유한 성분이나 퇴화(`norm < 1e-12`)는 `ST_STATUS_INVALID_ARGUMENT`이며 아무것도 바꾸지 않습니다.
+**回傳值** — `1` = 成功 / `0` = 失敗。非有限分量或退化（`norm < 1e-12`）為 `ST_STATUS_INVALID_ARGUMENT`，且不做任何變更。
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_rotation_ypr</code> — 활성 리스너의 방향을 yaw·pitch·roll로 정한다</summary>
+<summary><code>st_off_listener_set_rotation_ypr</code> — 以 yaw·pitch·roll 設定啟用聆聽者的方向</summary>
 
 ```c
 int st_off_listener_set_rotation_ypr(STOFF_Context* context, float yaw, float pitch, float roll);
 ```
 
-**용도** — `st_off_listener_set_rotation`에 roll을 더한 오일러판입니다.
+**用途** — 在 `st_off_listener_set_rotation` 上加入 roll 的歐拉角版。
 
-**언제·어떻게** — 활성 리스너에 적용됩니다. 회전은 R = Ry(yaw)·Rx(pitch)·Rz(roll)이며 Unity `Quaternion.Euler(pitch, yaw, roll)`(도 → 라디안)과 같은 순서입니다. `roll = 0`이면 `st_off_listener_set_rotation(yaw, pitch)`와 같은 행렬입니다. 리스너 방향 setter 셋은 마지막에 부른 쪽이 이깁니다. 지원 여부는 `ST_CAP1_LISTENER_ORIENTATION_Q`. 스레드: `[control]`.
+**呼叫方式** — 套用於啟用聆聽者。旋轉為 R = Ry(yaw)·Rx(pitch)·Rz(roll)，與 Unity `Quaternion.Euler(pitch, yaw, roll)`（度 → 弧度）順序相同。`roll = 0` 時與 `st_off_listener_set_rotation(yaw, pitch)` 為相同矩陣。三個聆聽者方向 setter 以最後呼叫的一方生效。是否支援為 `ST_CAP1_LISTENER_ORIENTATION_Q`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `yaw` | 라디안. 양수 = 오른쪽으로 돈다 |
-| `pitch` | 라디안. 양수 = 아래를 본다 |
-| `roll` | 라디안. 양수 = right 축이 위로 기운다(머리가 왼쪽으로 기울고 오른쪽 귀가 올라감) |
+| `context` | 情境控制代碼 |
+| `yaw` | 弧度。正值 = 向右轉 |
+| `pitch` | 弧度。正值 = 向下看 |
+| `roll` | 弧度。正值 = right 軸向上傾斜（頭向左傾、右耳抬高） |
 
-**반환** — `1` = 성공 / `0` = 실패. 비유한 값은 `ST_STATUS_INVALID_ARGUMENT`이며 아무것도 바꾸지 않습니다.
+**回傳值** — `1` = 成功 / `0` = 失敗。非有限值為 `ST_STATUS_INVALID_ARGUMENT`，且不做任何變更。
 
 </details>
 
 <details>
-<summary><code>st_off_object_set_transform</code> — 오브젝트 변환을 행렬로 바꾼다</summary>
+<summary><code>st_off_object_set_transform</code> — 以矩陣變更物件變換</summary>
 
 ```c
 void st_off_object_set_transform(STOFF_Context* context, STObjectId object, const STTransform* transform);
 ```
 
-**용도** — 배치한 오브젝트를 옮기거나 회전·스케일합니다.
+**用途** — 移動已放置的物件，或對其旋轉、縮放。
 
-**언제·어떻게** — 바꾼 뒤 가속구조에 반영해야 다음 계산에 쓰입니다 — 동적 오브젝트는 `st_off_build_dynamic`(동적 TLAS refit), 정적 오브젝트는 `st_off_build`(전체 빌드). 쿼터니언판은 `st_off_object_set_transform_q`. 스레드: `[control]`.
+**呼叫方式** — 變更後須反映到加速結構才會用於下一次計算 — 動態物件用 `st_off_build_dynamic`（動態 TLAS refit），靜態物件用 `st_off_build`（完整建置）。四元數版本為 `st_off_object_set_transform_q`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 오브젝트 핸들 |
-| `transform` | 새 로컬 → 월드 변환. `STTransform` 필드는 `st_off_object_create` 항목 참고 |
+| `context` | 情境控制代碼 |
+| `object` | 物件控制代碼 |
+| `transform` | 新的區域 → 世界變換。`STTransform` 欄位請參考 `st_off_object_create` 條目 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_object_set_transform_q</code> — 오브젝트 변환을 위치·쿼터니언·스케일로 바꾼다</summary>
+<summary><code>st_off_object_set_transform_q</code> — 以位置、四元數、縮放變更物件變換</summary>
 
 ```c
 void st_off_object_set_transform_q(STOFF_Context* context, STObjectId object, const float position[3], const float quatXYZW[4], const float scale[3]);
 ```
 
-**용도** — `st_off_object_set_transform`의 쿼터니언판입니다. 실시간 `st_rt_object_set_transform_q`와 같은 계약입니다.
+**用途** — `st_off_object_set_transform` 的四元數版本。與即時 `st_rt_object_set_transform_q` 契約相同。
 
-**언제·어떻게** — `st_off_object_set_transform`과 같습니다(이후 `st_off_build_dynamic` 또는 `st_off_build`). 스레드: `[control]`.
+**呼叫方式** — 與 `st_off_object_set_transform` 相同（之後呼叫 `st_off_build_dynamic` 或 `st_off_build`）。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 오브젝트 핸들 |
-| `position` | 위치 xyz(씬 단위) |
-| `quatXYZW` | 회전 쿼터니언, **XYZW 순서**. 엔진이 정규화합니다 |
-| `scale` | 축별 스케일 xyz(비균등 허용) |
+| `context` | 情境控制代碼 |
+| `object` | 物件控制代碼 |
+| `position` | 位置 xyz（場景單位） |
+| `quatXYZW` | 旋轉四元數，**XYZW 順序**。由引擎正規化 |
+| `scale` | 各軸縮放 xyz（允許非均勻） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_source_destroy</code> — 음원을 지운다</summary>
+<summary><code>st_off_source_destroy</code> — 刪除音源</summary>
 
 ```c
 int st_off_source_destroy(STOFF_Context* context, STSourceId source);
 ```
 
-**용도** — 음원을 씬에서 제거합니다. 소스 EQ 등 소스별 설정도 함께 사라집니다.
+**用途** — 從場景移除音源。音源 EQ 等各音源設定也一併消失。
 
-**언제·어떻게** — 다음 `st_off_ir_compute`부터 그 음원은 계산되지 않습니다. 스레드: `[control]`.
+**呼叫方式** — 從下一次 `st_off_ir_compute` 起不再計算該音源。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
 
-**반환** — `1` = 제거 / `0` = 컨텍스트 없음 또는 없는 음원.
+**回傳值** — `1` = 已移除 / `0` = 無情境或音源不存在。
 
 </details>
 
 <details>
-<summary><code>st_off_mesh_destroy</code> — 메시를 지운다</summary>
+<summary><code>st_off_mesh_destroy</code> — 刪除網格</summary>
 
 ```c
 int st_off_mesh_destroy(STOFF_Context* context, STMeshId mesh);
 ```
 
-**용도** — 등록한 메시를 제거합니다.
+**用途** — 移除已註冊的網格。
 
-**언제·어떻게** — 씬 구성을 바꾼 뒤에는 `st_off_build`로 가속구조를 다시 짓습니다. 스레드: `[control]`.
+**呼叫方式** — 變更場景組成後，以 `st_off_build` 重新建置加速結構。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 메시 핸들 |
+| `context` | 情境控制代碼 |
+| `mesh` | 網格控制代碼 |
 
-**반환** — `1` = 제거 / `0` = 컨텍스트 없음 또는 제거 실패.
+**回傳值** — `1` = 已移除 / `0` = 無情境或移除失敗。
 
 </details>
 
 <details>
-<summary><code>st_off_object_destroy</code> — 오브젝트를 지운다</summary>
+<summary><code>st_off_object_destroy</code> — 刪除物件</summary>
 
 ```c
 int st_off_object_destroy(STOFF_Context* context, STObjectId object);
 ```
 
-**용도** — 배치한 메시 인스턴스를 씬에서 뺍니다.
+**用途** — 將已放置的網格實例從場景中移除。
 
-**언제·어떻게** — 씬 구성을 바꾼 뒤에는 `st_off_build`로 가속구조를 다시 짓습니다. 스레드: `[control]`.
+**呼叫方式** — 變更場景組成後，以 `st_off_build` 重新建置加速結構。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `object` | 오브젝트 핸들 |
+| `context` | 情境控制代碼 |
+| `object` | 物件控制代碼 |
 
-**반환** — `1` = 제거 / `0` = 컨텍스트 없음 또는 없는 오브젝트.
+**回傳值** — `1` = 已移除 / `0` = 無情境或物件不存在。
 
 </details>
 
 <details>
-<summary><code>st_off_mesh_set_material</code> — 메시 재질을 바꾼다</summary>
+<summary><code>st_off_mesh_set_material</code> — 變更網格材質</summary>
 
 ```c
 int st_off_mesh_set_material(STOFF_Context* context, STMeshId mesh, STMaterialId material);
 ```
 
-**용도** — 기하를 다시 등록하지 않고 메시의 재질만 교체합니다. 재질 A/B 비교에 씁니다.
+**用途** — 不重新註冊幾何，只替換網格的材質。用於材質 A/B 比較。
 
-**언제·어떻게** — 변경은 다음 `st_off_ir_compute`에 반영됩니다. 스레드: `[control]`.
+**呼叫方式** — 變更會反映到下一次 `st_off_ir_compute`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mesh` | 메시 핸들 |
-| `material` | 새 재질 핸들 |
+| `context` | 情境控制代碼 |
+| `mesh` | 網格控制代碼 |
+| `material` | 新材質控制代碼 |
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음, 없는 메시·재질.
+**回傳值** — `1` = 成功 / `0` = 無情境、網格或材質不存在。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_ray_count</code> — 음원의 수송 레이 격자 크기를 정한다</summary>
+<summary><code>st_off_source_set_ray_count</code> — 設定音源的傳輸射線格點大小</summary>
 
 ```c
 void st_off_source_set_ray_count(STOFF_Context* context, STSourceId source, int width, int height);
 ```
 
-**용도** — 음원에서 쏘는 확산 수송(diffuse transport) 레이의 수를 정합니다. 레이 수 N = `width × height`이며, 늘리면 잔향·확산 성분의 통계가 안정되는 대신 계산 비용이 늘어납니다.
+**用途** — 設定從音源發射的擴散傳輸（diffuse transport）射線數量。射線數 N = `width × height`，增加後殘響與擴散成分的統計更穩定，但計算成本也隨之增加。
 
-**언제·어떻게** — `st_off_ir_compute` 전에 음원마다 부릅니다. 기본은 16 × 8입니다. 받아들일 수 없는 값이면 설정을 바꾸지 않고 `st_off_get_last_status`에 `ST_STATUS_INVALID_ARGUMENT`를 남깁니다. 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_ir_compute` 之前針對每個音源呼叫。預設為 16 × 8。若為無法接受的值，則不變更設定，並在 `st_off_get_last_status` 留下 `ST_STATUS_INVALID_ARGUMENT`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `width` | 격자 가로 레이 수(기본 16) |
-| `height` | 격자 세로 레이 수(기본 8) |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `width` | 格點水平射線數（預設 16） |
+| `height` | 格點垂直射線數（預設 8） |
 
-**반환** — 없음. 실패는 `st_off_get_last_status`로 확인합니다.
+**回傳值** — 無。失敗以 `st_off_get_last_status` 確認。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_depth</code> — 음원별 최대 반사 깊이를 정한다</summary>
+<summary><code>st_off_source_set_depth</code> — 設定各音源的最大反射深度</summary>
 
 ```c
 void st_off_source_set_depth(STOFF_Context* context, STSourceId source, int depth);
 ```
 
-**용도** — 이 음원에서 추적하는 반사 차수 상한을 음원마다 따로 정합니다. 중요한 음원만 깊게 추적해 비용을 배분할 때 씁니다.
+**用途** — 為每個音源個別設定從該音源追蹤的反射階數上限。用於只深入追蹤重要音源以分配成本。
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 음원별 4입니다(전역 상한은 `st_off_set_max_depth`, 기본 8). 받아들일 수 없는 값이면 `st_off_get_last_status`에 `ST_STATUS_INVALID_ARGUMENT`를 남깁니다. 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_ir_compute` 之前呼叫。預設為每個音源 4（全域上限為 `st_off_set_max_depth`，預設 8）。若為無法接受的值，則在 `st_off_get_last_status` 留下 `ST_STATUS_INVALID_ARGUMENT`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `depth` | 최대 반사 깊이(기본 4) |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `depth` | 最大反射深度（預設 4） |
 
-**반환** — 없음. 실패는 `st_off_get_last_status`로 확인합니다.
+**回傳值** — 無。失敗以 `st_off_get_last_status` 確認。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_energy</code> — 음원의 에너지 배율을 정한다</summary>
+<summary><code>st_off_source_set_energy</code> — 設定音源的能量倍率</summary>
 
 ```c
 int st_off_source_set_energy(STOFF_Context* context, STSourceId source, float energy);
 ```
 
-**용도** — `STSourceDesc.intensity`(압력 도메인 게인)와 별개인 **에너지 도메인** 상대 배율로 음원 세기를 조정합니다. 지원 여부는 `ST_CAP_SOURCE_ENERGY`.
+**用途** — 以獨立於 `STSourceDesc.intensity`（壓力域增益）的 **能量域** 相對倍率調整音源強度。是否支援見 `ST_CAP_SOURCE_ENERGY`。
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 1.0입니다. 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_ir_compute` 之前呼叫。預設為 1.0。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `energy` | 에너지 배율. 유한하고 `≥ 0`이어야 합니다(기본 1.0) |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `energy` | 能量倍率。必須為有限值且 `≥ 0`（預設 1.0） |
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음, 비유한·음수 값, 없는 음원.
+**回傳值** — `1` = 成功 / `0` = 無情境、非有限或負值、音源不存在。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_transport_refresh_steps</code> — 음원별 수송 갱신 단계 수를 저장한다</summary>
+<summary><code>st_off_source_set_transport_refresh_steps</code> — 儲存各音源的傳輸更新步數</summary>
 
 ```c
 int st_off_source_set_transport_refresh_steps(STOFF_Context* context, STSourceId source, int steps);
 ```
 
-**용도** — 실시간 컨텍스트에서 음원의 수송 레이 격자 N을 n번의 전파에 나눠 갱신하게 하는 값입니다. 오프라인에도 같은 setter가 있는 것은, 호스트가 같은 씬 설정을 실시간 컨텍스트에 그대로 재생할 수 있도록 값을 왕복시키기 위해서입니다.
+**用途** — 在即時情境中，讓音源的傳輸射線格點 N 分攤到 n 次傳播中更新的值。離線也有相同的 setter，是為了讓主機能將同一場景設定原樣重播到即時情境，使值得以來回傳遞。
 
-**언제·어떻게** — 오프라인 컨텍스트는 롤링 수송을 쓰지 않으므로 **동적 음원의 n을 무시하고 매 계산 전량 재추적합니다**(실효 n = 1). 그래서 같은 씬·같은 입력이면 몇 번을 계산해도 같은 RIR이 나옵니다. 정적 음원은 n과 무관하게 계산마다 한 번 구운 결과로 고정됩니다. 값 자체는 저장되고 `st_off_source_get_transport_refresh_steps`가 그대로 돌려줍니다. 실시간 `st_rt_source_set_transport_refresh_steps`와 시그니처·반환 계약이 같습니다. 지원 여부는 `ST_CAP_SOURCE_TRANSPORT_REFRESH_STEPS`. 스레드: `[control]`.
+**呼叫方式** — 離線情境不使用滾動傳輸，因此 **忽略動態音源的 n，每次計算皆全量重新追蹤**（有效 n = 1）。因此同一場景、同一輸入無論計算幾次都得到相同的 RIR。靜態音源與 n 無關，每次計算都固定為一次烘焙的結果。值本身會被儲存，`st_off_source_get_transport_refresh_steps` 原樣回傳。與即時 `st_rt_source_set_transport_refresh_steps` 的簽章與回傳契約相同。是否支援見 `ST_CAP_SOURCE_TRANSPORT_REFRESH_STEPS`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `steps` | `0` = 기본(셸·음원 플래그가 정함) / `1` = 매 전파 전량 재추적 / `≥ 2` = n번에 나눠 갱신(실시간에서 `[1, N]`으로 clamp). 음수는 거절 |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `steps` | `0` = 預設（由外殼、音源旗標決定） / `1` = 每次傳播全量重新追蹤 / `≥ 2` = 分 n 次更新（即時中 clamp 到 `[1, N]`）。負值拒絕 |
 
-**반환** — `1` = 성공 / `0` = 실패: 음수 `steps`는 `ST_STATUS_INVALID_ARGUMENT`, 없는 음원은 `ST_STATUS_NOT_FOUND`.
+**回傳值** — `1` = 成功 / `0` = 失敗：負的 `steps` 為 `ST_STATUS_INVALID_ARGUMENT`，音源不存在為 `ST_STATUS_NOT_FOUND`。
 
 </details>
 
 <details>
-<summary><code>st_off_source_get_transport_refresh_steps</code> — 저장된 수송 갱신 단계 수를 읽는다</summary>
+<summary><code>st_off_source_get_transport_refresh_steps</code> — 讀取已儲存的傳輸更新步數</summary>
 
 ```c
 int st_off_source_get_transport_refresh_steps(const STOFF_Context* context, STSourceId source);
 ```
 
-**용도** — `st_off_source_set_transport_refresh_steps`로 저장한 값을 확인합니다.
+**用途** — 確認以 `st_off_source_set_transport_refresh_steps` 儲存的值。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 돌려주는 값은 실효 n이 아니라 **저장값 그대로**(0 포함)입니다 — 오프라인의 동적 음원 실효값은 항상 1입니다. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**呼叫方式** — 隨時可呼叫。回傳的不是有效 n，而是 **原樣的儲存值**（包含 0） — 離線動態音源的有效值永遠是 1。執行緒：`[control]` — 只取得場景讀取鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
 
-**반환** — 저장된 단계 수(`≥ 0`). 실패는 `-1`.
+**回傳值** — 已儲存的步數（`≥ 0`）。失敗為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_orientation_q</code> — 음원 로컬 프레임을 쿼터니언으로 정한다</summary>
+<summary><code>st_off_source_set_orientation_q</code> — 以四元數設定音源區域座標框架</summary>
 
 ```c
 int st_off_source_set_orientation_q(STOFF_Context* context, STSourceId source, const float quatXYZW[4]);
 ```
 
-**용도** — 음원의 로컬 프레임을 roll까지 포함해 월드에 얹습니다. 지향성 테이블은 이 프레임 기준으로 조회되므로, 테이블을 쓰는 음원은 이 함수로 방향을 지정합니다.
+**用途** — 將音源的區域座標框架連同 roll 一起放到世界中。指向性表以此框架為基準查詢，因此使用表的音源以此函式指定方向。
 
-**언제·어떻게** — 로컬 축은 forward = +Z / up = +Y / right = +X입니다. `st_off_source_set_direction`과 양방향 동기화됩니다 — 여기서 프레임을 주면 direction = forward(q)로 함께 바뀌고, direction setter를 부르면 프레임은 roll 없는 최소 회전이 됩니다. roll이 필요하면 반드시 이 함수를 씁니다. 실시간 `st_rt_source_set_orientation_q`와 같은 계약입니다. 지원 여부는 `ST_CAP_SOURCE_DIRECTIVITY`. 스레드: `[control]`.
+**呼叫方式** — 區域軸為 forward = +Z / up = +Y / right = +X。與 `st_off_source_set_direction` 雙向同步 — 在此給定框架時 direction = forward(q) 會一併變更，呼叫 direction setter 時框架成為不含 roll 的最小旋轉。需要 roll 時務必使用此函式。與即時 `st_rt_source_set_orientation_q` 契約相同。是否支援見 `ST_CAP_SOURCE_DIRECTIVITY`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `quatXYZW` | 로컬 → 월드 단위 쿼터니언, **XYZW 순서**. 엔진이 정규화합니다 |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `quatXYZW` | 區域 → 世界的單位四元數，**XYZW 順序**。由引擎正規化 |
 
-**반환** — `1` = 성공 / `0` = 실패: 비유한 성분 또는 퇴화(`norm < 1e-12`)는 `ST_STATUS_INVALID_ARGUMENT`, 없는 음원은 `ST_STATUS_NOT_FOUND`.
+**回傳值** — `1` = 成功 / `0` = 失敗：非有限分量或退化（`norm < 1e-12`）為 `ST_STATUS_INVALID_ARGUMENT`，音源不存在為 `ST_STATUS_NOT_FOUND`。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_directivity</code> — 음원 지향성 테이블을 붙이거나 뗀다</summary>
+<summary><code>st_off_source_set_directivity</code> — 附加或移除音源指向性表</summary>
 
 ```c
 int st_off_source_set_directivity(STOFF_Context* context, STSourceId source, const STSourceDirectivity* table);
 ```
 
-**용도** — 측정·저작한 방위각 × 고도각 × 9밴드 에너지 테이블로 음원의 방사 패턴을 지정합니다. 단순한 정면/측면 콘보다 실제 음원(악기·스피커·사람 목소리 등)의 방사를 정확히 담을 수 있습니다.
+**用途** — 以量測或製作的方位角 × 仰角 × 9 頻帶能量表指定音源的輻射模式。比單純的正面/側面錐體更能準確呈現實際音源（樂器、喇叭、人聲等）的輻射。
 
-**언제·어떻게** — 테이블이 붙어 있는 동안에는 콘 감쇠(`STSourceDesc.directional`이 만든 on/off-axis) 대신 테이블이 쓰이고, `table = NULL`로 떼면 콘 공식으로 돌아갑니다. 엔진이 테이블을 **복사**하므로 호출이 돌아온 뒤 호스트 버퍼를 해제해도 됩니다. 조회 방향은 소스 프레임 기준이라 `st_off_source_set_orientation_q`와 짝으로 씁니다. 실시간 `st_rt_source_set_directivity`와 같은 계약입니다. 지원 여부는 `ST_CAP_SOURCE_DIRECTIVITY`. 스레드: `[control]` — 테이블 복사와 정규화 스칼라 계산을 이 호출에서 한 번 합니다.
+**呼叫方式** — 附加表期間，使用表取代錐體衰減（由 `STSourceDesc.directional` 產生的 on/off-axis），以 `table = NULL` 移除後則回到錐體公式。引擎會 **複製** 表，因此呼叫返回後可釋放主機緩衝區。查詢方向以音源框架為基準，因此與 `st_off_source_set_orientation_q` 搭配使用。與即時 `st_rt_source_set_directivity` 契約相同。是否支援見 `ST_CAP_SOURCE_DIRECTIVITY`。執行緒：`[control]` — 表的複製與正規化純量計算在此呼叫中進行一次。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `table` | 지향성 테이블. 호출자가 `structSize`/`apiVersion`을 채웁니다. `NULL`이면 테이블 제거 |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `table` | 指向性表。呼叫端填入 `structSize`/`apiVersion`。`NULL` 則移除表 |
 
-**구조체** `STSourceDirectivity`
+**結構體** `STSourceDirectivity`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize` / `apiVersion` | 호출자가 채움 |
-| `azCount` | 방위각 노드 수, `[3, 361]`. 노드 az_i = i·360/azCount(360°에서 wrap) |
-| `elCount` | 고도각 노드 수, `[2, 181]`. 노드 el_j = −90 + j·180/(elCount−1). 홀수면 수평면(0°)이 노드에 놓입니다. 권장 격자는 5° 간격(72 × 37) |
-| `levelMode` | `STDirectivityLevelMode` — `ST_DIRECTIVITY_ABSOLUTE`(0, 값을 그대로 씀: 절대 레벨까지 담긴 측정 자료용) / `ST_DIRECTIVITY_POWER_MEAN`(1, 밴드별 구면 파워 평균이 1이 되도록 정규화: 패턴만 쓰고 총 파워는 intensity/energy로 잡을 때, 권장) / `ST_DIRECTIVITY_ON_AXIS`(2, 정면 값이 1이 되도록 정규화) |
-| `reserved0` | 예약 |
-| `energy` | `elCount × azCount × ST_FREQUENCY_BANDS`개 float, 레이아웃 `[el][az][band]`(band가 가장 빠름). **에너지 도메인**, 유한하고 `≥ 0` |
-| `reserved[6]` | 예약 |
+| `structSize` / `apiVersion` | 由呼叫端填入 |
+| `azCount` | 方位角節點數，`[3, 361]`。節點 az_i = i·360/azCount（在 360° 處 wrap） |
+| `elCount` | 仰角節點數，`[2, 181]`。節點 el_j = −90 + j·180/(elCount−1)。奇數時水平面（0°）會落在節點上。建議格點為 5° 間隔（72 × 37） |
+| `levelMode` | `STDirectivityLevelMode` — `ST_DIRECTIVITY_ABSOLUTE`（0，直接使用值：用於含絕對電平的量測資料） / `ST_DIRECTIVITY_POWER_MEAN`（1，正規化使各頻帶球面功率平均為 1：只用模式、總功率由 intensity/energy 決定時，建議） / `ST_DIRECTIVITY_ON_AXIS`（2，正規化使正面值為 1） |
+| `reserved0` | 保留 |
+| `energy` | `elCount × azCount × ST_FREQUENCY_BANDS` 個 float，佈局 `[el][az][band]`（band 變化最快）。**能量域**，有限且 `≥ 0` |
+| `reserved[6]` | 保留 |
 
-방향 규약은 소스 로컬 프레임에서 az = atan2(x, z)(정면 0, 오른쪽 +90°), el = asin(y)(위 +)이며, 조회는 az wrap · el clamp 쌍선형 보간입니다.
+方向約定為在音源區域框架中 az = atan2(x, z)（正面 0，右側 +90°）、el = asin(y)（向上為 +），查詢為 az wrap · el clamp 雙線性內插。
 
-**반환** — `1` = 성공(테이블 제거 포함) / `0` = 실패: 스탬프 불일치 `ST_STATUS_VERSION_MISMATCH`, `levelMode`·`azCount`·`elCount` 범위 밖·`energy`가 `NULL`·비유한 또는 음수 원소 `ST_STATUS_INVALID_ARGUMENT`(사유는 `st_off_get_last_error`), 없는 음원 `ST_STATUS_NOT_FOUND`.
+**回傳值** — `1` = 成功（包含移除表） / `0` = 失敗：戳記不符為 `ST_STATUS_VERSION_MISMATCH`，`levelMode`、`azCount`、`elCount` 超出範圍、`energy` 為 `NULL`、非有限或負元素為 `ST_STATUS_INVALID_ARGUMENT`（原因見 `st_off_get_last_error`），音源不存在為 `ST_STATUS_NOT_FOUND`。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_eq</code> — 음원 원음에 9밴드 그래픽 EQ를 건다</summary>
+<summary><code>st_off_source_set_eq</code> — 對音源原音套用 9 頻帶圖形 EQ</summary>
 
 ```c
 int st_off_source_set_eq(STOFF_Context* context, STSourceId source, const float gainsDb[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 음원 신호 자체의 음색을 9밴드로 보정합니다. 크로스오버 앞에서 걸리므로 그 음원의 모든 경로(직접·투과·반사·회절)와 잔향 송출에 같은 필터가 적용됩니다. 실시간 `st_rt_source_set_eq`와 같은 구현이라 같은 결과를 냅니다.
+**用途** — 以 9 頻帶修正音源訊號本身的音色。套用在分頻器之前，因此該音源的所有路徑（直接、透射、反射、繞射）與殘響送出都套用同一濾波器。與即時 `st_rt_source_set_eq` 實作相同，產生相同結果。
 
-**언제·어떻게** — 렌더 전용 설정이라 IR 캐시를 무효화하지 않습니다 — `st_off_ir_compute`를 다시 하지 않고 렌더만 다시 하면 바로 반영됩니다(압력 IR의 솔로·혼합·배치 렌더 모두). `gainsDb = NULL` 또는 전 밴드 0 dB면 EQ를 끄며, 그 결과는 EQ가 없는 결과와 비트 동일합니다. 설정은 음원을 지울 때까지 유지되고 `st_off_trim_memory`에도 남습니다. 파라메트릭 EQ(`st_off_source_set_parametric_eq`)와 같은 EQ를 공유하며 마지막에 부른 setter가 이깁니다. 지원 여부는 `ST_CAP_SOURCE_EQ`. 스레드: `[control]` — 씬 읽기 락과 오디오라이저 컨트롤 락을 잡습니다.
+**呼叫方式** — 為渲染專用設定，不會使 IR 快取失效 — 不必重新執行 `st_off_ir_compute`，只要重新渲染即可立即反映（壓力 IR 的獨奏、混合、批次渲染皆然）。`gainsDb = NULL` 或所有頻帶 0 dB 時關閉 EQ，其結果與無 EQ 時位元相同。設定保留至音源刪除為止，`st_off_trim_memory` 之後也會保留。與參數 EQ（`st_off_source_set_parametric_eq`）共用同一 EQ，最後呼叫的 setter 生效。是否支援見 `ST_CAP_SOURCE_EQ`。執行緒：`[control]` — 取得場景讀取鎖與聲化器控制鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `gainsDb` | 밴드별 게인(dB), 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz 순서. 유한하고 `[−ST_SOURCE_EQ_MAX_GAIN_DB, +ST_SOURCE_EQ_MAX_GAIN_DB]`(±24 dB) 범위여야 하며 클램프하지 않고 거절합니다. `NULL` = 끔 |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `gainsDb` | 各頻帶增益（dB），依 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz 順序。必須為有限值且在 `[−ST_SOURCE_EQ_MAX_GAIN_DB, +ST_SOURCE_EQ_MAX_GAIN_DB]`（±24 dB）範圍內，不 clamp 而是拒絕。`NULL` = 關閉 |
 
-필터는 밴드마다 RBJ 피킹 biquad 하나(중심 = 밴드 중심, Q = 1.414)를 44100 Hz에서 오름차순 직렬로 겁니다. 이웃 밴드끼리 응답이 겹치므로 밴드 중심에서 정확히 지정값을 원하면 호스트가 게인을 보정해 넣습니다.
+濾波器在每個頻帶各一個 RBJ 峰值 biquad（中心 = 頻帶中心，Q = 1.414），在 44100 Hz 下依升序串聯。相鄰頻帶的響應會重疊，因此若希望在頻帶中心精確得到指定值，須由主機修正增益後再傳入。
 
-**반환** — `1` = 성공 / `0` = 실패: 비유한 값 또는 범위 밖 `ST_STATUS_INVALID_ARGUMENT`(아무것도 바꾸지 않음), 없는 음원 `ST_STATUS_NOT_FOUND`, 소스 EQ를 지원하지 않는 백엔드(Exa) `ST_STATUS_UNAVAILABLE`.
+**回傳值** — `1` = 成功 / `0` = 失敗：非有限值或超出範圍為 `ST_STATUS_INVALID_ARGUMENT`（不做任何變更），音源不存在為 `ST_STATUS_NOT_FOUND`，不支援音源 EQ 的後端（Exa）為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_source_get_eq</code> — 음원 EQ를 9밴드 게인으로 읽는다</summary>
+<summary><code>st_off_source_get_eq</code> — 以 9 頻帶增益讀取音源 EQ</summary>
 
 ```c
 int st_off_source_get_eq(STOFF_Context* context, STSourceId source, float outGainsDb[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 현재 음원 EQ를 9밴드 그래픽 EQ 뷰로 돌려줍니다.
+**用途** — 以 9 頻帶圖形 EQ 檢視回傳目前的音源 EQ。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. EQ가 꺼져 있으면 전부 0입니다. 파라메트릭 EQ로 9밴드 모양이 아닌 설정을 걸었다면 그래픽 뷰로 표현할 수 없어 실패합니다 — `0` + `ST_STATUS_UNAVAILABLE`일 때 `st_off_source_get_parametric_eq`를 불러 성공하면 그쪽으로 설정을 읽고, 같은 `UNAVAILABLE`로 실패하면 백엔드가 소스 EQ를 지원하지 않는 것입니다. 스레드: `[control]`.
+**呼叫方式** — 隨時可呼叫。EQ 關閉時全部為 0。若以參數 EQ 設定了非 9 頻帶形狀的設定，則無法以圖形檢視表示而失敗 — 得到 `0` + `ST_STATUS_UNAVAILABLE` 時呼叫 `st_off_source_get_parametric_eq`，成功則從那邊讀取設定，若以相同的 `UNAVAILABLE` 失敗，表示後端不支援音源 EQ。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `outGainsDb` | 9밴드 게인(dB)을 받을 배열 |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `outGainsDb` | 接收 9 頻帶增益（dB）的陣列 |
 
-**반환** — `1` = 성공 / `0` = 실패: `outGainsDb`가 `NULL`이면 `ST_STATUS_INVALID_ARGUMENT`, 없는 음원 `ST_STATUS_NOT_FOUND`, `ST_STATUS_UNAVAILABLE`(백엔드 미지원 또는 9밴드로 표현할 수 없는 파라메트릭 설정 — 이때 `outGainsDb`는 건드리지 않음).
+**回傳值** — `1` = 成功 / `0` = 失敗：`outGainsDb` 為 `NULL` 時為 `ST_STATUS_INVALID_ARGUMENT`，音源不存在為 `ST_STATUS_NOT_FOUND`，`ST_STATUS_UNAVAILABLE`（後端不支援或無法以 9 頻帶表示的參數設定 — 此時不動 `outGainsDb`）。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_parametric_eq</code> — 음원 원음에 파라메트릭 EQ를 건다</summary>
+<summary><code>st_off_source_set_parametric_eq</code> — 對音源原音套用參數 EQ</summary>
 
 ```c
 int st_off_source_set_parametric_eq(STOFF_Context* context, STSourceId source, const STParametricEqBand* bands, int32_t bandCount, float preampDb, int32_t enabled);
 ```
 
-**용도** — 9밴드 고정 EQ보다 자유로운 밴드 목록(피킹·셸프·LP·HP·노치)으로 음원 음색을 보정합니다. `st_off_source_set_eq`와 **같은 EQ**이며, 걸리는 위치(크로스오버 앞, 그 음원의 모든 경로)도 같습니다. AutoEq 프로파일은 `st_off_render_parse_autoeq_parametric`으로 읽어 그대로 넣을 수 있습니다.
+**用途** — 以比 9 頻帶固定 EQ 更自由的頻帶清單（峰值、擱架、LP、HP、陷波）修正音源音色。與 `st_off_source_set_eq` 是 **同一 EQ**，套用位置（分頻器之前，該音源的所有路徑）也相同。AutoEq 設定檔可用 `st_off_render_parse_autoeq_parametric` 讀取後直接傳入。
 
-**언제·어떻게** — 오프라인은 램프 없이 즉시 바뀌고, 압력 렌더의 솔로·혼합·배치 모두에 같은 필터가 걸립니다. IR 캐시를 무효화하지 않으므로 렌더만 다시 하면 반영됩니다. 두 소스 EQ setter는 목록 전체를 바꾸며 마지막에 부른 쪽이 이깁니다. 꺼진 목록이나 효과 없는 목록도 저장되며, 끄고 지우려면 `st_off_source_set_eq(context, source, NULL)`을 부릅니다. 설정은 음원을 지울 때까지 유지됩니다. 실시간 `st_rt_source_set_parametric_eq`와 같은 계약·같은 구현입니다. 지원 여부는 워드 1의 `ST_CAP1_SOURCE_PARAMETRIC_EQ`. 스레드: `[control]` — 씬 읽기 락과 오디오라이저 컨트롤 락을 잡습니다.
+**呼叫方式** — 離線下無斜坡、立即變更，壓力渲染的獨奏、混合、批次皆套用同一濾波器。不會使 IR 快取失效，因此只要重新渲染即可反映。兩個音源 EQ setter 都會替換整個清單，最後呼叫者生效。關閉的清單或無效果的清單也會被儲存，若要關閉並清除，請呼叫 `st_off_source_set_eq(context, source, NULL)`。設定保留至音源刪除為止。與即時 `st_rt_source_set_parametric_eq` 契約相同、實作相同。是否支援見字組 1 的 `ST_CAP1_SOURCE_PARAMETRIC_EQ`。執行緒：`[control]` — 取得場景讀取鎖與聲化器控制鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `bands` | 밴드 배열(`bandCount`개). `bandCount = 0`이면 `NULL`이어도 됩니다 |
-| `bandCount` | 밴드 수, `[0, ST_PARAMETRIC_EQ_MAX_BANDS]`(16) |
-| `preampDb` | 프리앰프(dB), `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]`(−48 ~ +12)로 clamp. 주 용도는 클리핑 방지용 음수 값 |
-| `enabled` | `0` = 목록은 저장하되 통과 / 그 밖 = 켬 |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `bands` | 頻帶陣列（`bandCount` 個）。`bandCount = 0` 時可為 `NULL` |
+| `bandCount` | 頻帶數，`[0, ST_PARAMETRIC_EQ_MAX_BANDS]`（16） |
+| `preampDb` | 前級（dB），clamp 到 `[ST_PARAMETRIC_EQ_MIN_PREAMP_DB, ST_PARAMETRIC_EQ_MAX_PREAMP_DB]`（−48 ~ +12）。主要用途是防止削波的負值 |
+| `enabled` | `0` = 儲存清單但直通 / 其他 = 開啟 |
 
-**구조체** `STParametricEqBand`
+**結構體** `STParametricEqBand`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `type` | `STParametricEqType` — `ST_PARAMETRIC_EQ_PEAKING`(0) / `LOW_SHELF`(1) / `HIGH_SHELF`(2) / `LOW_PASS`(3) / `HIGH_PASS`(4) / `NOTCH`(5) |
-| `enabled` | `0` = 이 밴드는 항등(건너뜀) / 그 밖 = 켬 |
-| `frequencyHz` | 중심(PEAKING·NOTCH) 또는 코너(셸프 중점·LP·HP) 주파수. `[20, min(20000, 0.49·44100)]`로 clamp |
-| `gainDb` | PEAKING·셸프만 사용. `[−24, +24]`로 clamp |
-| `q` | `[0.1, 30]`, 셸프는 `[0.1, 3]`로 clamp |
-| `reserved[3]` | 반드시 `0` |
+| `enabled` | `0` = 此頻帶為恆等（略過） / 其他 = 開啟 |
+| `frequencyHz` | 中心（PEAKING、NOTCH）或轉角（擱架中點、LP、HP）頻率。clamp 到 `[20, min(20000, 0.49·44100)]` |
+| `gainDb` | 僅 PEAKING、擱架使用。clamp 到 `[−24, +24]` |
+| `q` | `[0.1, 30]`，擱架 clamp 到 `[0.1, 3]` |
+| `reserved[3]` | 必須為 `0` |
 
-비유한 값·알 수 없는 `type`·`reserved ≠ 0`·밴드 수 범위 밖은 거절하고(아무것도 바꾸지 않음), 유한 값은 위 범위로 clamp합니다. 필터는 밴드마다 RBJ 2차 섹션(44100 Hz, double)이며 체인은 프리앰프 → 밴드 0..count−1 직렬입니다.
+非有限值、未知 `type`、`reserved ≠ 0`、頻帶數超出範圍皆拒絕（不做任何變更），有限值則 clamp 到上述範圍。濾波器在每個頻帶為 RBJ 二階段（44100 Hz，double），鏈為前級 → 頻帶 0..count−1 串聯。
 
-**반환** — `1` = 성공 / `0` = 실패: `ST_STATUS_INVALID_ARGUMENT` / `ST_STATUS_NOT_FOUND`(음원 없음) / `ST_STATUS_UNAVAILABLE`(Exa 백엔드).
+**回傳值** — `1` = 成功 / `0` = 失敗：`ST_STATUS_INVALID_ARGUMENT` / `ST_STATUS_NOT_FOUND`（無音源） / `ST_STATUS_UNAVAILABLE`（Exa 後端）。
 
 </details>
 
 <details>
-<summary><code>st_off_source_get_parametric_eq</code> — 음원 EQ를 파라메트릭 밴드 목록으로 읽는다</summary>
+<summary><code>st_off_source_get_parametric_eq</code> — 以參數頻帶清單讀取音源 EQ</summary>
 
 ```c
 int st_off_source_get_parametric_eq(STOFF_Context* context, STSourceId source, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outEnabled);
 ```
 
-**용도** — 현재 음원 EQ를 clamp된 실효값의 밴드 목록으로 돌려줍니다. 9밴드 setter로 건 설정도 PEAKING 밴드 9개로 읽힙니다.
+**用途** — 以 clamp 後有效值的頻帶清單回傳目前的音源 EQ。以 9 頻帶 setter 設定的內容也會讀成 9 個 PEAKING 頻帶。
 
-**언제·어떻게** — 크기를 모르면 `outBands = NULL`로 먼저 불러 밴드 수를 받습니다. `ST_PARAMETRIC_EQ_MAX_BANDS`개 용량을 주면 항상 들어갑니다. EQ가 없으면 0밴드·꺼짐입니다. 출력 규약은 실시간 `st_rt_render_get_parametric_eq`와 같습니다. 스레드: `[control]`.
+**呼叫方式** — 不知道大小時，先以 `outBands = NULL` 呼叫取得頻帶數。給予 `ST_PARAMETRIC_EQ_MAX_BANDS` 個容量則一定放得下。無 EQ 時為 0 頻帶、關閉。輸出約定與即時 `st_rt_render_get_parametric_eq` 相同。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `outBands` | 밴드를 받을 배열. `NULL`이면 크기 질의(밴드는 쓰지 않음) |
-| `bandCapacity` | `outBands`의 원소 수(`≥ 0`) |
-| `outBandCount` | 밴드 수. `NULL`이면 건너뜀 |
-| `outPreampDb` | 프리앰프(dB). `NULL`이면 건너뜀 |
-| `outEnabled` | 켜짐 여부. `NULL`이면 건너뜀 |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `outBands` | 接收頻帶的陣列。`NULL` 則為大小查詢（不寫入頻帶） |
+| `bandCapacity` | `outBands` 的元素數（`≥ 0`） |
+| `outBandCount` | 頻帶數。`NULL` 則略過 |
+| `outPreampDb` | 前級（dB）。`NULL` 則略過 |
+| `outEnabled` | 是否開啟。`NULL` 則略過 |
 
-`STParametricEqBand` 필드는 `st_off_source_set_parametric_eq` 항목 참고.
+`STParametricEqBand` 欄位請參考 `st_off_source_set_parametric_eq` 條目。
 
-**반환** — `1` = 성공(크기 질의 포함) / `0` = 실패: `bandCapacity < 0`이면 `ST_STATUS_INVALID_ARGUMENT`, 용량이 밴드 수보다 작으면 `ST_STATUS_BUFFER_TOO_SMALL`(밴드 수·프리앰프·켜짐은 씀), 없는 음원 `ST_STATUS_NOT_FOUND`, Exa 백엔드 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — `1` = 成功（包含大小查詢） / `0` = 失敗：`bandCapacity < 0` 為 `ST_STATUS_INVALID_ARGUMENT`，容量小於頻帶數為 `ST_STATUS_BUFFER_TOO_SMALL`（仍寫入頻帶數、前級、開啟狀態），音源不存在為 `ST_STATUS_NOT_FOUND`，Exa 後端為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_source_set_path_volume</code> — 음원의 경로 종류별 볼륨을 정한다</summary>
+<summary><code>st_off_source_set_path_volume</code> — 設定音源各路徑種類的音量</summary>
 
 ```c
 int st_off_source_set_path_volume(STOFF_Context* context, STSourceId source, int volumeKind, float volume);
 ```
 
-**용도** — 한 음원의 직접음·반사·회절·잔향 기여를 따로 키우거나 줄입니다. 물리 결과를 유지하면서 믹스 관점의 조정이 필요할 때 씁니다. 지원 여부는 `ST_CAP_SOURCE_PATH_VOLUME`.
+**用途** — 個別增減單一音源的直達音、反射、繞射、殘響貢獻。用於保留物理結果的同時，需要從混音角度調整時。是否支援見 `ST_CAP_SOURCE_PATH_VOLUME`。
 
-**언제·어떻게** — 기본은 네 종류 모두 1.0입니다. 값은 **압력 도메인** 선형 배율입니다. 스레드: `[control]` — 씬 읽기 락만 잡습니다.
+**呼叫方式** — 預設四種皆為 1.0。值為 **壓力域** 線性倍率。執行緒：`[control]` — 只取得場景讀取鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `source` | 음원 핸들 |
-| `volumeKind` | `STSourceVolumeKind` — `ST_SOURCE_VOLUME_DIRECT`(0, 투과 포함) / `ST_SOURCE_VOLUME_REFLECTION`(1) / `ST_SOURCE_VOLUME_DIFFRACTION`(2) / `ST_SOURCE_VOLUME_REVERB`(3, 이 음원이 리스너 공유 잔향 탱크를 구동하는 양만 조정) |
-| `volume` | 선형 압력 배율. 유한하고 `≥ 0`(기본 1.0) |
+| `context` | 情境控制代碼 |
+| `source` | 音源控制代碼 |
+| `volumeKind` | `STSourceVolumeKind` — `ST_SOURCE_VOLUME_DIRECT`（0，包含透射） / `ST_SOURCE_VOLUME_REFLECTION`(1) / `ST_SOURCE_VOLUME_DIFFRACTION`(2) / `ST_SOURCE_VOLUME_REVERB`（3，只調整此音源驅動聆聽者共用殘響槽的量） |
+| `volume` | 線性壓力倍率。有限且 `≥ 0`（預設 1.0） |
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음, 범위 밖 `volumeKind`, 비유한·음수 `volume`, 없는 음원.
+**回傳值** — `1` = 成功 / `0` = 無情境、`volumeKind` 超出範圍、非有限或負的 `volume`、音源不存在。
 
 </details>
 
 <details>
-<summary><code>st_off_set_path_type_enabled</code> — 경로 종류를 전역으로 켜고 끈다</summary>
+<summary><code>st_off_set_path_type_enabled</code> — 全域開關路徑種類</summary>
 
 ```c
 void st_off_set_path_type_enabled(STOFF_Context* context, int pathType, int enabled);
 ```
 
-**용도** — 직접음·투과·반사·회절·잔향 중 특정 경로 종류를 계산에서 빼서, 각 성분이 결과에 무엇을 기여하는지 분리해 들어 보거나 비용을 줄입니다.
+**用途** — 將直達音、透射、反射、繞射、殘響中的特定路徑種類排除於計算之外，以分別聆聽各成分對結果的貢獻，或降低成本。
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 다섯 종류 모두 켜짐입니다. `st_off_set_acoustic_feature_enabled`와 조합하면 "거리 감쇠 + 패닝만 남긴" 기준선을 설정만으로 만들 수 있습니다. 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_ir_compute` 之前呼叫。預設五種皆開啟。與 `st_off_set_acoustic_feature_enabled` 組合，只靠設定即可做出「只保留距離衰減 + 聲像」的基準線。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 | `pathType` | `0` = Direct / `1` = Transmission / `2` = Reflection / `3` = Diffraction / `4` = Reverb |
-| `enabled` | `0` = 끔 / 그 밖 = 켬 |
+| `enabled` | `0` = 關閉 / 其他 = 開啟 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_set_acoustic_feature_enabled</code> — 개별 음향 기능을 켜고 끈다</summary>
+<summary><code>st_off_set_acoustic_feature_enabled</code> — 開關個別聲學功能</summary>
 
 ```c
 int st_off_set_acoustic_feature_enabled(STOFF_Context* context, int feature, int enabled);
 ```
 
-**용도** — 공기 흡수·전파 지연·직접음 차폐를 하나씩 끄고 켜서 청취 A/B 비교를 합니다. 실시간 `st_rt_set_acoustic_feature_enabled`와 같은 계약입니다.
+**用途** — 逐一開關空氣吸收、傳播延遲、直達音遮蔽，進行聆聽 A/B 比較。與即時 `st_rt_set_acoustic_feature_enabled` 契約相同。
 
-**언제·어떻게** — 기본은 세 기능 모두 켜짐(물리 그대로)입니다. IR 정책 설정이라 호출하면 IR 캐시가 무효화되므로, 렌더 전에 `st_off_ir_compute`를 다시 부릅니다. 반사·회절·잔향을 끄고(`st_off_set_path_type_enabled`) 세 기능을 모두 끄면 거리 감쇠 + 패닝만 남습니다. 스레드: `[control]`.
+**呼叫方式** — 預設三種功能皆開啟（照物理原樣）。這是 IR 策略設定，呼叫後 IR 快取會失效，因此渲染前請重新呼叫 `st_off_ir_compute`。關閉反射、繞射、殘響（`st_off_set_path_type_enabled`）並關閉三種功能，則只剩距離衰減 + 聲像。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION`(0, 대기 감쇠·고역 손실) / `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY`(1, 경로 길이 기반 전파 지연) / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION`(2, 직접음 가시성 검사) |
-| `enabled` | `0` = 끔 / 그 밖 = 켬 |
+| `context` | 情境控制代碼 |
+| `feature` | `ST_ACOUSTIC_FEATURE_AIR_ABSORPTION`（0，大氣衰減、高頻損失） / `ST_ACOUSTIC_FEATURE_PROPAGATION_DELAY`（1，基於路徑長度的傳播延遲） / `ST_ACOUSTIC_FEATURE_DIRECT_OCCLUSION`（2，直達音可見性檢查） |
+| `enabled` | `0` = 關閉 / 其他 = 開啟 |
 
-**반환** — `1` = 성공 / `0` = 범위 밖 `feature`이거나 실패.
+**回傳值** — `1` = 成功 / `0` = `feature` 超出範圍或失敗。
 
 </details>
 
 <details>
-<summary><code>st_off_is_acoustic_feature_enabled</code> — 음향 기능의 켜짐 여부를 읽는다</summary>
+<summary><code>st_off_is_acoustic_feature_enabled</code> — 讀取聲學功能是否開啟</summary>
 
 ```c
 int st_off_is_acoustic_feature_enabled(const STOFF_Context* context, int feature);
 ```
 
-**용도** — `st_off_set_acoustic_feature_enabled`로 지정한 상태를 확인합니다.
+**用途** — 確認以 `st_off_set_acoustic_feature_enabled` 指定的狀態。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽습니다.
+**呼叫方式** — 隨時可呼叫。執行緒：`[control]` — 不取鎖讀取引擎狀態。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 | `feature` | `ST_ACOUSTIC_FEATURE_*`(0~2) |
 
-**반환** — `1` = 켜짐 / `0` = 꺼짐 / `-1` = 컨텍스트 없음.
+**回傳值** — `1` = 開啟 / `0` = 關閉 / `-1` = 無情境。
 
 </details>
 
 <details>
-<summary><code>st_off_set_late_coupling</code> — late 잔향 결합 감쇠 파라미터를 개별로 정한다</summary>
+<summary><code>st_off_set_late_coupling</code> — 個別設定 late 殘響耦合衰減參數</summary>
 
 ```c
 int st_off_set_late_coupling(STOFF_Context* context, float floorDb, float visibleLow, float visibleHigh, float sendNormalizeTrim, int rainDirectionWalk);
 ```
 
-**용도** — 리스너가 음원의 확산장에 얼마나 결합돼 있는지(가시몫)에 따라 late 잔향 주입을 감쇠합니다. 잔향 탱크는 완전 혼합된 단일 공간이라 기본적으로 어디서나 같은 크기로 들리는데, ㄷ자·ㅁ자처럼 모퉁이 너머로 갈라진 공간에서 "멀어졌는데 잔향이 그대로이거나 오히려 커지는" 문제를 고치기 위한 옵션입니다.
+**用途** — 依聆聽者與音源擴散場的耦合程度（可見比例）衰減 late 殘響注入。殘響槽是完全混合的單一空間，預設在任何位置聽起來大小都相同；此選項用於修正 ㄈ 字形、口字形等在轉角後分隔的空間中「走遠了殘響卻不變甚至變大」的問題。
 
-**언제·어떻게** — 보통은 `st_off_set_late_coupling_preset`으로 충분하고, 세밀한 조정이 필요할 때 이 함수를 씁니다. 결합 감쇠·send 평탄화·rain 방향 워크는 함께 켜도록 설계된 묶음입니다 — 평탄화 없이 결합만 켜면 멀어질수록 잔향 주입이 오히려 커질 수 있고, rain 워크가 없으면 갈라진 공간 건너편의 late 방향 표본이 부족해집니다. 음원과 같은 공간(가시몫이 `visibleHigh` 이상)은 정확히 0 dB입니다. 파라미터 구성은 아직 확정되지 않아 바뀔 수 있습니다. IR 정책이라 바뀐 값은 다음 `st_off_ir_compute`부터 반영됩니다. 실시간 `st_rt_set_late_coupling`과 같은 계약입니다. 스레드: `[control]`.
+**呼叫方式** — 通常 `st_off_set_late_coupling_preset` 就足夠，需要細部調整時才使用此函式。耦合衰減、send 平坦化、rain 方向漫步是設計為一起開啟的組合 — 只開耦合而不平坦化，越遠殘響注入反而可能越大；沒有 rain 漫步，分隔空間另一側的 late 方向樣本會不足。與音源同一空間（可見比例在 `visibleHigh` 以上）時正好為 0 dB。參數組成尚未定案，可能變更。這是 IR 策略，變更的值從下一次 `st_off_ir_compute` 起反映。與即時 `st_rt_set_late_coupling` 契約相同。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `floorDb` | 완전 차단 시 감쇠 깊이(dB). `0` = 결합 감쇠 끔. 기본 9 |
-| `visibleLow` | 가시몫이 이보다 작으면 완전 차단으로 보고 바닥 감쇠를 줍니다. `0` → 기본 0.05 |
-| `visibleHigh` | 가시몫이 이보다 크면 같은 공간으로 보고 정확히 0 dB. `0` → 기본 0.60 |
-| `sendNormalizeTrim` | send 총합 평탄화 트림. `0` = 평탄화 안 함. 기본 0.75 |
-| `rainDirectionWalk` | `0` = 끔 / 그 밖 = 켬(기본). 체인이 끝난 뒤에도 late 방향 표본을 계속 모읍니다(에너지는 나르지 않음) |
+| `context` | 情境控制代碼 |
+| `floorDb` | 完全阻斷時的衰減深度（dB）。`0` = 關閉耦合衰減。預設 9 |
+| `visibleLow` | 可見比例小於此值時視為完全阻斷，套用底部衰減。`0` → 預設 0.05 |
+| `visibleHigh` | 可見比例大於此值時視為同一空間，正好 0 dB。`0` → 預設 0.60 |
+| `sendNormalizeTrim` | send 總和平坦化修整。`0` = 不平坦化。預設 0.75 |
+| `rainDirectionWalk` | `0` = 關閉 / 其他 = 開啟（預設）。鏈結束後仍持續收集 late 方向樣本（不搬運能量） |
 
-**반환** — `1` = 성공 / `0` = 범위 밖 값이거나 실패.
+**回傳值** — `1` = 成功 / `0` = 值超出範圍或失敗。
 
 </details>
 
 <details>
-<summary><code>st_off_get_late_coupling</code> — late 잔향 결합 감쇠 파라미터를 읽는다</summary>
+<summary><code>st_off_get_late_coupling</code> — 讀取 late 殘響耦合衰減參數</summary>
 
 ```c
 int st_off_get_late_coupling(const STOFF_Context* context, float* outFloorDb, float* outVisibleLow, float* outVisibleHigh, float* outSendNormalizeTrim, int* outRainDirectionWalk);
 ```
 
-**용도** — 현재 적용 중인 late 결합 감쇠 설정(개별 setter 또는 프리셋으로 건 값)을 확인합니다.
+**用途** — 確認目前套用中的 late 耦合衰減設定（以個別 setter 或預設組設定的值）。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 필요 없는 출력은 `NULL`로 둡니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽습니다.
+**呼叫方式** — 隨時可呼叫。不需要的輸出設為 `NULL`。執行緒：`[control]` — 不取鎖讀取引擎狀態。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `outFloorDb` | 바닥 감쇠 깊이(dB). `NULL` 허용 |
-| `outVisibleLow` | 완전 차단 무릎. `NULL` 허용 |
-| `outVisibleHigh` | 같은 공간 무릎. `NULL` 허용 |
-| `outSendNormalizeTrim` | send 평탄화 트림. `NULL` 허용 |
-| `outRainDirectionWalk` | rain 방향 워크 켜짐 여부. `NULL` 허용 |
+| `context` | 情境控制代碼 |
+| `outFloorDb` | 底部衰減深度（dB）。允許 `NULL` |
+| `outVisibleLow` | 完全阻斷拐點。允許 `NULL` |
+| `outVisibleHigh` | 同一空間拐點。允許 `NULL` |
+| `outSendNormalizeTrim` | send 平坦化修整。允許 `NULL` |
+| `outRainDirectionWalk` | rain 方向漫步是否開啟。允許 `NULL` |
 
-각 값의 뜻은 `st_off_set_late_coupling` 항목 참고.
+各值的意義請參考 `st_off_set_late_coupling` 條目。
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음.
+**回傳值** — `1` = 成功 / `0` = 無情境。
 
 </details>
 
 <details>
-<summary><code>st_off_set_late_coupling_preset</code> — late 잔향 결합 감쇠를 권장 프리셋으로 정한다</summary>
+<summary><code>st_off_set_late_coupling_preset</code> — 以建議預設組設定 late 殘響耦合衰減</summary>
 
 ```c
 int st_off_set_late_coupling_preset(STOFF_Context* context, int preset);
 ```
 
-**용도** — 바닥 감쇠 깊이만 고르고 나머지(무릎 두 점·평탄화 트림·rain 워크)는 권장값으로 채우는 한 번 설정입니다.
+**用途** — 只選擇底部衰減深度，其餘（兩個拐點、平坦化修整、rain 漫步）以建議值填入的一次性設定。
 
-**언제·어떻게** — 프리셋 선택은 주로 청감 문제입니다 — 단일 방에서는 가시몫이 무릎 위라 감쇠가 개입하지 않고, 어느 프리셋이든 음원과 같은 공간은 정확히 0 dB입니다. 개별 조정이 필요하면 `st_off_set_late_coupling`을 씁니다. IR 정책이라 바뀐 값은 다음 `st_off_ir_compute`부터 반영됩니다. 스레드: `[control]`.
+**呼叫方式** — 預設組的選擇主要是聽感問題 — 在單一房間中可見比例位於拐點之上，衰減不會介入，任何預設組在與音源同一空間時都正好為 0 dB。需要個別調整時使用 `st_off_set_late_coupling`。這是 IR 策略，變更的值從下一次 `st_off_ir_compute` 起反映。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `preset` | `ST_LATE_COUPLING_OFF`(0, 결합 감쇠·평탄화·rain 워크 전부 끔) / `ST_LATE_COUPLING_SUBTLE`(1, 바닥 6 dB) / `ST_LATE_COUPLING_DEFAULT`(2, 바닥 9 dB, 엔진 기본) / `ST_LATE_COUPLING_STRONG`(3, 바닥 12 dB) |
+| `context` | 情境控制代碼 |
+| `preset` | `ST_LATE_COUPLING_OFF`（0，耦合衰減、平坦化、rain 漫步全部關閉） / `ST_LATE_COUPLING_SUBTLE`（1，底部 6 dB） / `ST_LATE_COUPLING_DEFAULT`（2，底部 9 dB，引擎預設） / `ST_LATE_COUPLING_STRONG`（3，底部 12 dB） |
 
-**반환** — `1` = 성공 / `0` = 범위 밖 `preset`이거나 실패.
+**回傳值** — `1` = 成功 / `0` = `preset` 超出範圍或失敗。
 
 </details>
 
 <details>
-<summary><code>st_off_set_physical_distance_attenuation</code> — 거리 감쇠 기준 거리와 최소 거리를 정한다</summary>
+<summary><code>st_off_set_physical_distance_attenuation</code> — 設定距離衰減的參考距離與最小距離</summary>
 
 ```c
 void st_off_set_physical_distance_attenuation(STOFF_Context* context, float referenceDistanceMeters, float minDistanceMeters);
 ```
 
-**용도** — 물리적 구면 확산(압력 1/R) 거리 감쇠의 기준점과 근거리 한계를 정합니다. 엔진의 유일한 거리 감쇠 법칙이며, 압력 게인은 `reference / max(R, min)`입니다.
+**用途** — 設定物理球面擴散（壓力 1/R）距離衰減的參考點與近距離極限。這是引擎唯一的距離衰減法則，壓力增益為 `reference / max(R, min)`。
 
-**언제·어떻게** — 기본은 기준 1.0 m · 최소 1.0 m입니다(최소 거리를 기준 거리보다 작게 두면 기준보다 가까울 때 근거리 증폭이 생깁니다). 두 값은 `sceneRatio`와 무관하게 **호스트가 미터로** 줍니다 — 비교 대상인 경로 길이가 이미 미터로 환산돼 있기 때문입니다. IR 캐시를 무효화하므로 렌더 전에 `st_off_ir_compute`를 다시 부릅니다. 스레드: `[control]`.
+**呼叫方式** — 預設為參考 1.0 m · 最小 1.0 m（若最小距離小於參考距離，比參考更近時會產生近距離增幅）。兩個值與 `sceneRatio` 無關，**由主機以公尺** 給定 — 因為作為比較對象的路徑長度已換算為公尺。會使 IR 快取失效，因此渲染前請重新呼叫 `st_off_ir_compute`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `referenceDistanceMeters` | 게인이 1이 되는 기준 거리(m). 기본 1.0 |
-| `minDistanceMeters` | 이보다 가까운 거리는 이 값으로 봅니다(m). 기본 1.0 |
+| `context` | 情境控制代碼 |
+| `referenceDistanceMeters` | 增益為 1 的參考距離（m）。預設 1.0 |
+| `minDistanceMeters` | 比此值更近的距離視為此值（m）。預設 1.0 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_set_atmosphere</code> — 대기 조건(온도·습도·기압)을 정한다</summary>
+<summary><code>st_off_set_atmosphere</code> — 設定大氣條件（溫度、濕度、氣壓）</summary>
 
 ```c
 void st_off_set_atmosphere(STOFF_Context* context, float temperatureC, float relativeHumidityPercent, float pressureKPa);
 ```
 
-**용도** — 공기 흡수(고역 손실)와 음속을 결정하는 대기 상태를 지정합니다. 음속은 고정 상수가 아니라 이 값에서 런타임에 유도되므로 전파 지연도 함께 바뀝니다.
+**用途** — 指定決定空氣吸收（高頻損失）與音速的大氣狀態。音速不是固定常數，而是在執行期間由此值推導，因此傳播延遲也會一併改變。
 
-**언제·어떻게** — 기본은 20.0 °C · 50.0 %RH · 101.325 kPa입니다. IR 캐시를 무효화하므로 렌더 전에 `st_off_ir_compute`를 다시 부릅니다. 스레드: `[control]`.
+**呼叫方式** — 預設為 20.0 °C · 50.0 %RH · 101.325 kPa。會使 IR 快取失效，因此渲染前請重新呼叫 `st_off_ir_compute`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `temperatureC` | 기온(°C). 기본 20.0 |
-| `relativeHumidityPercent` | 상대 습도(%). 기본 50.0 |
-| `pressureKPa` | 기압(kPa). 기본 101.325 |
+| `context` | 情境控制代碼 |
+| `temperatureC` | 氣溫（°C）。預設 20.0 |
+| `relativeHumidityPercent` | 相對濕度（%）。預設 50.0 |
+| `pressureKPa` | 氣壓（kPa）。預設 101.325 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_set_doppler_gain_mode</code> — 움직이는 음원의 방사 이득 모드를 고른다</summary>
+<summary><code>st_off_set_doppler_gain_mode</code> — 選擇移動音源的輻射增益模式</summary>
 
 ```c
 int st_off_set_doppler_gain_mode(STOFF_Context* context, int mode);
 ```
 
-**용도** — 음원이 움직일 때 진행 방향 쪽 방사가 커지고 반대쪽이 작아지는 이득을 IR에 반영할지 정합니다. 가변 지연에 의한 도플러 피치와는 별개의 스위치입니다. 지원 여부는 `ST_CAP_DOPPLER_GAIN_MODE`.
+**用途** — 決定音源移動時，前進方向輻射變大、反方向變小的增益是否反映到 IR。與可變延遲造成的都卜勒音高是不同的開關。是否支援見 `ST_CAP_DOPPLER_GAIN_MODE`。
 
-**언제·어떻게** — 기본은 `ST_DOPPLER_GAIN_MOVING_MONOPOLE`입니다. 음원 속도는 `STSourceDesc.velocity*`로 주며, 정지 음원의 이득은 1입니다. IR 캐시를 무효화하므로 렌더 전에 `st_off_ir_compute`를 다시 부릅니다. 스레드: `[control]`.
+**呼叫方式** — 預設為 `ST_DOPPLER_GAIN_MOVING_MONOPOLE`。音源速度以 `STSourceDesc.velocity*` 給定，靜止音源的增益為 1。會使 IR 快取失效，因此渲染前請重新呼叫 `st_off_ir_compute`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `mode` | `STDopplerGainMode` — `ST_DOPPLER_GAIN_OFF`(0) / `ST_DOPPLER_GAIN_MOVING_MONOPOLE`(1, 기본: 움직이는 단극자 근사 — 압력 D², 에너지 D⁴, D = 1/(1−Mr), 방사 경로 방향마다 따로 계산) |
+| `context` | 情境控制代碼 |
+| `mode` | `STDopplerGainMode` — `ST_DOPPLER_GAIN_OFF`(0) / `ST_DOPPLER_GAIN_MOVING_MONOPOLE`（1，預設：移動單極子近似 — 壓力 D²，能量 D⁴，D = 1/(1−Mr)，依各輻射路徑方向分別計算） |
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음 또는 범위 밖 `mode`.
+**回傳值** — `1` = 成功 / `0` = 無情境或 `mode` 超出範圍。
 
 </details>
 
 <details>
-<summary><code>st_off_get_doppler_gain_mode</code> — 도플러 방사 이득 모드를 읽는다</summary>
+<summary><code>st_off_get_doppler_gain_mode</code> — 讀取都卜勒輻射增益模式</summary>
 
 ```c
 int st_off_get_doppler_gain_mode(const STOFF_Context* context);
 ```
 
-**용도** — `st_off_set_doppler_gain_mode`로 지정한 값을 확인합니다.
+**用途** — 確認以 `st_off_set_doppler_gain_mode` 指定的值。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[control]` — 락 없이 엔진 상태를 읽습니다.
+**呼叫方式** — 隨時可呼叫。執行緒：`[control]` — 不取鎖讀取引擎狀態。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — `STDopplerGainMode` 값(`0` = OFF / `1` = MOVING_MONOPOLE). 컨텍스트가 없으면 `-1`.
+**回傳值** — `STDopplerGainMode` 值（`0` = OFF / `1` = MOVING_MONOPOLE）。無情境時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_off_set_early_late_band_energy_targets</code> — early·late 밴드별 에너지 배율을 정한다</summary>
+<summary><code>st_off_set_early_late_band_energy_targets</code> — 設定 early、late 各頻帶能量倍率</summary>
 
 ```c
 int st_off_set_early_late_band_energy_targets(STOFF_Context* context, const float earlyBandEnergy[ST_FREQUENCY_BANDS], const float lateBandEnergy[ST_FREQUENCY_BANDS]);
 ```
 
-**용도** — 초기음(early)과 후기 잔향(late)의 스펙트럼을 서로 독립적으로 밴드별 조정합니다. 측정값에 맞추거나 잔향 음색만 따로 다듬을 때 씁니다. 실시간 `st_rt_set_early_late_band_energy_targets`의 오프라인 대응입니다. 지원 여부는 `ST_CAP_EARLY_LATE_BAND_ENERGY`.
+**用途** — 彼此獨立地依頻帶調整早期音（early）與後期殘響（late）的頻譜。用於對齊量測值，或單獨修飾殘響音色。是即時 `st_rt_set_early_late_band_energy_targets` 的離線對應。是否支援見 `ST_CAP_EARLY_LATE_BAND_ENERGY`。
 
-**언제·어떻게** — 두 배열을 한 번에 교체합니다. early 배율은 exact·초기 탭에만, late 배율은 잔향 send·탱크 구동에만 적용되며 서로 곱하지 않습니다. 기본은 모두 1.0(중립)입니다. IR 캐시를 무효화하므로 렌더 전에 `st_off_ir_compute`를 다시 부릅니다. 스레드: `[control]`.
+**呼叫方式** — 一次替換兩個陣列。early 倍率只套用於 exact 與早期 tap，late 倍率只套用於殘響 send 與殘響槽驅動，兩者不相乘。預設皆為 1.0（中性）。會使 IR 快取失效，因此渲染前請重新呼叫 `st_off_ir_compute`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `earlyBandEnergy` | 초기음 밴드별 **에너지 도메인** 배율(63 ~ 16k Hz 9개). 비유한 값은 1.0으로, 나머지는 `[0, 16]`으로 정규화 |
-| `lateBandEnergy` | 후기 잔향 밴드별 에너지 배율. 규칙은 위와 같음 |
+| `context` | 情境控制代碼 |
+| `earlyBandEnergy` | 早期音各頻帶的 **能量域** 倍率（63 ~ 16k Hz 共 9 個）。非有限值正規化為 1.0，其餘正規化到 `[0, 16]` |
+| `lateBandEnergy` | 後期殘響各頻帶能量倍率。規則同上 |
 
-**반환** — `1` = 성공 / `0` = 컨텍스트 없음 또는 배열이 `NULL`.
+**回傳值** — `1` = 成功 / `0` = 無情境或陣列為 `NULL`。
 
 </details>
 
 <details>
-<summary><code>st_off_set_max_depth</code> — 전역 최대 반사 깊이를 정한다</summary>
+<summary><code>st_off_set_max_depth</code> — 設定全域最大反射深度</summary>
 
 ```c
 void st_off_set_max_depth(STOFF_Context* context, int depth);
 ```
 
-**용도** — 반사 경로 탐색의 전역 차수 상한을 정해 계산 비용과 초기 반사 밀도를 조절합니다.
+**用途** — 設定反射路徑搜尋的全域階數上限，以調節計算成本與早期反射密度。
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 8입니다(음원별 상한은 `st_off_source_set_depth`, 기본 4). 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_ir_compute` 之前呼叫。預設為 8（各音源上限為 `st_off_source_set_depth`，預設 4）。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `depth` | 전역 최대 반사 깊이(기본 8) |
+| `context` | 情境控制代碼 |
+| `depth` | 全域最大反射深度（預設 8） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_set_transmission_max_depth</code> — 투과 경로의 최대 깊이를 정한다</summary>
+<summary><code>st_off_set_transmission_max_depth</code> — 設定透射路徑的最大深度</summary>
 
 ```c
 void st_off_set_transmission_max_depth(STOFF_Context* context, int depth);
 ```
 
-**용도** — 직접음이 벽을 투과할 때 몇 개의 면까지 통과를 추적할지 상한을 정합니다.
+**用途** — 設定直達音透射牆面時最多追蹤穿過幾個面的上限。
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 64입니다. 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_ir_compute` 之前呼叫。預設為 64。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `depth` | 투과 최대 깊이(기본 64) |
+| `context` | 情境控制代碼 |
+| `depth` | 透射最大深度（預設 64） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_ray_count</code> — 리스너 가이드 레이 격자 크기를 정한다</summary>
+<summary><code>st_off_listener_set_ray_count</code> — 設定聆聽者導引射線格點大小</summary>
 
 ```c
 void st_off_listener_set_ray_count(STOFF_Context* context, int width, int height);
 ```
 
-**용도** — 리스너에서 쏘는 가이드(probe) 레이 수를 정합니다(N = `width × height`). 반사·회절 경로 탐색과 공간 통계의 해상도를 계산 비용과 맞바꿉니다.
+**用途** — 設定從聆聽者發射的導引（probe）射線數（N = `width × height`）。以計算成本換取反射、繞射路徑搜尋與空間統計的解析度。
 
-**언제·어떻게** — `st_off_ir_compute` 전에 부릅니다. 기본은 16 × 16입니다. 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_ir_compute` 之前呼叫。預設為 16 × 16。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `width` | 격자 가로 레이 수(기본 16) |
-| `height` | 격자 세로 레이 수(기본 16) |
+| `context` | 情境控制代碼 |
+| `width` | 格點水平射線數（預設 16） |
+| `height` | 格點垂直射線數（預設 16） |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_listener_set_ray_sampling_method</code> — 리스너 가이드 레이의 방향 분포를 고른다</summary>
+<summary><code>st_off_listener_set_ray_sampling_method</code> — 選擇聆聽者導引射線的方向分佈</summary>
 
 ```c
 int st_off_listener_set_ray_sampling_method(STOFF_Context* context, int method);
 ```
 
-**용도** — 리스너 가이드 레이를 구면에 어떻게 배치할지 정하는 setter입니다. 현재는 피보나치 구면 분포만 선택할 수 있으며, 다른 값은 번호 호환을 위해 열거형에만 남아 있습니다. 피보나치 분포는 시드를 쓰지 않는 결정적 분포입니다.
+**用途** — 決定聆聽者導引射線如何配置在球面上的 setter。目前只能選擇費波那契球面分佈，其他值僅為編號相容而保留於列舉中。費波那契分佈是不使用種子的確定性分佈。
 
-**언제·어떻게** — 기본값이 이미 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`라 보통 부를 필요가 없습니다. 지원 여부는 `ST_CAP_RAY_SAMPLING_METHODS`. 스레드: `[control]`.
+**呼叫方式** — 預設值已是 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`，通常不需要呼叫。是否支援見 `ST_CAP_RAY_SAMPLING_METHODS`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `method` | `STRaySamplingMethod`. 받아들이는 값은 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)뿐 — `LEGACY_GRID`(0) / `EQUAL_AREA_GRID`(2) / `SOBOL_SPHERE`(3) / `ICOSAHEDRAL`(4)는 거절 |
+| `context` | 情境控制代碼 |
+| `method` | `STRaySamplingMethod`。只接受 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1) — `LEGACY_GRID`(0) / `EQUAL_AREA_GRID`(2) / `SOBOL_SPHERE`(3) / `ICOSAHEDRAL`(4) 皆拒絕 |
 
-**반환** — `1` = 성공 / `0` = 그 밖의 값(`ST_STATUS_INVALID_ARGUMENT`, 상태 불변) 또는 컨텍스트 없음.
+**回傳值** — `1` = 成功 / `0` = 其他值（`ST_STATUS_INVALID_ARGUMENT`，狀態不變）或無情境。
 
 </details>
 
 <details>
-<summary><code>st_off_set_source_ray_sampling_method</code> — 음원 수송 레이의 방향 분포를 고른다</summary>
+<summary><code>st_off_set_source_ray_sampling_method</code> — 選擇音源傳輸射線的方向分佈</summary>
 
 ```c
 int st_off_set_source_ray_sampling_method(STOFF_Context* context, int method);
 ```
 
-**용도** — 음원 수송 레이의 구면 배치를 정하는 setter입니다. `st_off_listener_set_ray_sampling_method`와 마찬가지로 피보나치 구면 분포만 선택할 수 있습니다.
+**用途** — 決定音源傳輸射線球面配置的 setter。與 `st_off_listener_set_ray_sampling_method` 相同，只能選擇費波那契球面分佈。
 
-**언제·어떻게** — 기본값이 이미 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`입니다. 스레드: `[control]`.
+**呼叫方式** — 預設值已是 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
-| `method` | `STRaySamplingMethod`. `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)만 허용, 나머지는 거절 |
+| `context` | 情境控制代碼 |
+| `method` | `STRaySamplingMethod`。只允許 `ST_RAY_SAMPLING_FIBONACCI_SPHERE`(1)，其餘拒絕 |
 
-**반환** — `1` = 성공 / `0` = 그 밖의 값(`ST_STATUS_INVALID_ARGUMENT`, 상태 불변) 또는 컨텍스트 없음.
+**回傳值** — `1` = 成功 / `0` = 其他值（`ST_STATUS_INVALID_ARGUMENT`，狀態不變）或無情境。
 
 </details>
 
 <details>
-<summary><code>st_off_build</code> — 씬 가속구조를 전체 빌드한다</summary>
+<summary><code>st_off_build</code> — 完整建置場景加速結構</summary>
 
 ```c
 void st_off_build(STOFF_Context* context);
 ```
 
-**용도** — 등록한 메시·오브젝트로 정적+동적 가속구조를 모두 짓습니다. 전파와 `st_off_scene_raycast`는 이 구조를 씁니다.
+**用途** — 以已註冊的網格、物件建置靜態+動態加速結構。傳播與 `st_off_scene_raycast` 使用此結構。
 
-**언제·어떻게** — 메시·오브젝트를 추가하거나 지운 뒤, 정적 오브젝트를 옮긴 뒤, 그리고 `st_off_ir_compute` 전에 부릅니다. 빌드 전에는 레이 질의가 모두 미스입니다. 가속구조 종류는 `st_off_scene_set_accel`이 정합니다. 스레드: `[control, blocking]` — 씬 크기에 비례하는 긴 배타 구간입니다.
+**呼叫方式** — 在新增或刪除網格、物件後，移動靜態物件後，以及 `st_off_ir_compute` 之前呼叫。建置前所有射線查詢皆為未命中。加速結構種類由 `st_off_scene_set_accel` 決定。執行緒：`[control, blocking]` — 與場景大小成正比的較長獨佔區間。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_build_dynamic</code> — 동적 오브젝트의 TLAS만 갱신한다</summary>
+<summary><code>st_off_build_dynamic</code> — 只更新動態物件的 TLAS</summary>
 
 ```c
 void st_off_build_dynamic(STOFF_Context* context);
 ```
 
-**용도** — 동적 오브젝트의 변환만 바뀌었을 때 전체 빌드 없이 동적 TLAS를 refit해 빠르게 반영합니다.
+**用途** — 只有動態物件的變換改變時，不做完整建置，而是 refit 動態 TLAS 以快速反映。
 
-**언제·어떻게** — `st_off_object_set_transform` / `_q`로 동적 오브젝트를 옮긴 뒤, `st_off_ir_compute` 전에 부릅니다. 메시·오브젝트를 추가·삭제했거나 정적 오브젝트가 바뀌었다면 `st_off_build`를 씁니다. 스레드: `[control]`.
+**呼叫方式** — 以 `st_off_object_set_transform` / `_q` 移動動態物件後、`st_off_ir_compute` 之前呼叫。若新增或刪除了網格、物件，或靜態物件有變更，請使用 `st_off_build`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 컨텍스트 핸들 |
+| `context` | 情境控制代碼 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 </details>
 
 <details>
-<summary><strong>오프라인(`st_off_*`) — IR 계산·렌더, 배치, 디버그</strong> — 49개</summary>
+<summary><strong>離線(`st_off_*`) — IR 計算·渲染、批次、除錯</strong> — 49 個</summary>
 
 <details>
-<summary><code>st_off_render_parse_autoeq_parametric</code> — AutoEq ParametricEQ.txt 텍스트를 파라메트릭 EQ 밴드 배열로 파싱한다</summary>
+<summary><code>st_off_render_parse_autoeq_parametric</code> — 將 AutoEq ParametricEQ.txt 文字剖析為參數 EQ 頻帶陣列</summary>
 
 ```c
 int32_t st_off_render_parse_autoeq_parametric(const char* utf8Text, STParametricEqBand* outBands, int32_t bandCapacity, int32_t* outBandCount, float* outPreampDb, int32_t* outErrorLine, char* outErrorMessage, int32_t errorMessageCapacity);
 ```
 
-**용도** — AutoEq가 배포하는 `ParametricEQ.txt`(Equalizer APO 문법의 부분집합)를 읽어 `STParametricEqBand` 배열과 프리앰프 값으로 바꿉니다. 결과를 `st_off_source_set_parametric_eq`에 그대로 넣을 수 있어, 헤드폰 보정 곡선 같은 외부 EQ 파일을 호스트가 직접 파싱하지 않고 소스 EQ로 걸 수 있습니다. 실시간 `st_rt_render_parse_autoeq_parametric`과 같은 구현·같은 계약입니다.
+**用途** — 讀取 AutoEq 發佈的 `ParametricEQ.txt`（Equalizer APO 語法的子集），轉換為 `STParametricEqBand` 陣列與前級值。結果可直接傳入 `st_off_source_set_parametric_eq`，因此主機不必自行剖析耳機校正曲線等外部 EQ 檔，即可作為音源 EQ 套用。與即時 `st_rt_render_parse_autoeq_parametric` 實作相同、契約相同。
 
-**언제·어떻게** — 컨텍스트가 필요 없으므로 언제든 부를 수 있습니다. 성공하면 결과를 켜짐(`enabled` = 1)으로 `st_off_source_set_parametric_eq`에 넘깁니다. 지원 여부는 `st_off_get_capability_word(1)`의 `ST_CAP1_SOURCE_PARAMETRIC_EQ`로 확인합니다(이 파서는 그 비트에 포함되며 별도 비트가 없습니다). 스레드: `[any]` — 전역 상태도 할당도 없어 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**呼叫方式** — 不需要情境，隨時可呼叫。成功後將結果以開啟（`enabled` = 1）傳給 `st_off_source_set_parametric_eq`。是否支援以 `st_off_get_capability_word(1)` 的 `ST_CAP1_SOURCE_PARAMETRIC_EQ` 確認（此剖析器包含在該位元中，沒有獨立位元）。執行緒：`[any]` — 無全域狀態也無配置，可在任何執行緒無阻塞呼叫。
 
-받는 문법(대소문자 무시):
+接受的語法（不分大小寫）：
 
-- `Preamp: <수> [dB]` — 여러 줄이면 dB로 더합니다.
-- `Filter[ <번호>]: ON|OFF <종류> Fc <수> [Hz] [Gain <수> [dB]] [Q <수>]` — 종류는 `PK`·`PEQ`·`MODAL` / `LSC`·`LS` / `HSC`·`HS` / `LP`·`LPQ` / `HP`·`HPQ` / `NO`. Q를 생략하면 셸프·LP·HP는 0.7071이고, `PK`·`NO`는 Q가 필수입니다. Gain은 PK·셸프에 필수입니다. `OFF` 필터는 `enabled` = 0 밴드로 들어가 밴드 수에 셉니다.
-- 빈 줄과 `#` 뒤(줄 끝 주석)는 무시하고, UTF-8 BOM·CRLF를 받습니다. 수는 로캘과 무관하게 읽습니다.
+- `Preamp: <數值> [dB]` — 多行時以 dB 相加。
+- `Filter[ <編號>]: ON|OFF <種類> Fc <數值> [Hz] [Gain <數值> [dB]] [Q <數值>]` — 種類為 `PK`·`PEQ`·`MODAL` / `LSC`·`LS` / `HSC`·`HS` / `LP`·`LPQ` / `HP`·`HPQ` / `NO`。省略 Q 時擱架、LP、HP 為 0.7071，`PK`·`NO` 必須指定 Q。PK 與擱架必須指定 Gain。`OFF` 濾波器以 `enabled` = 0 的頻帶加入並計入頻帶數。
+- 忽略空行與 `#` 之後（行尾註解），接受 UTF-8 BOM 與 CRLF。數值的讀取與地區設定無關。
 
-거절하는 것: 그 밖의 명령(`Channel`·`Device`·`GraphicEQ`·`Include` 등), `BP`·`AP`·`IIR`, 셸프 기울기 형식(`LS 6dB`), `BW Oct`, 범위 밖 값(Fc [20, 20000] Hz · Gain ±24 dB · Q [0.1, 30], 셸프는 Q [0.1, 3] · 프리앰프 최종합 [−48, +12] dB), 주석 밖의 비 ASCII 문자, 지수 표기. 파서는 clamp하지 않고 거절합니다(setter는 같은 범위로 clamp합니다).
+拒絕的內容：其他命令（`Channel`·`Device`·`GraphicEQ`·`Include` 等）、`BP`·`AP`·`IIR`、擱架斜率格式（`LS 6dB`）、`BW Oct`、超出範圍的值（Fc [20, 20000] Hz · Gain ±24 dB · Q [0.1, 30]，擱架為 Q [0.1, 3] · 前級最終總和 [−48, +12] dB）、註解外的非 ASCII 字元、指數表示法。剖析器不 clamp 而是拒絕（setter 以相同範圍 clamp）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `utf8Text` | NUL 종료 UTF-8 텍스트(파일 내용 전체). 필수 |
-| `outBands` | 밴드를 받을 호출자 배열. `bandCapacity`가 0보다 크면 필수 |
-| `bandCapacity` | `outBands` 원소 수. 0 이상. 최대 밴드 수는 `ST_PARAMETRIC_EQ_MAX_BANDS`(16) |
-| `outBandCount` | 파싱된 밴드 수를 받는다. 필수(NULL 불가) |
-| `outPreampDb` | 프리앰프(dB)를 받는다. 필수(NULL 불가) |
-| `outErrorLine` | 실패한 줄 번호(1부터, 줄과 무관한 오류는 0). NULL 허용 |
-| `outErrorMessage` | 실패 사유(NUL 종료 영문). NULL 허용 |
-| `errorMessageCapacity` | `outErrorMessage` 바이트 수. 이 길이에 맞춰 자른다 |
+| `utf8Text` | NUL 結尾的 UTF-8 文字（整個檔案內容）。必填 |
+| `outBands` | 接收頻帶的呼叫端陣列。`bandCapacity` 大於 0 時必填 |
+| `bandCapacity` | `outBands` 元素數。0 以上。最大頻帶數為 `ST_PARAMETRIC_EQ_MAX_BANDS`(16) |
+| `outBandCount` | 接收剖析出的頻帶數。必填（不可 NULL） |
+| `outPreampDb` | 接收前級（dB）。必填（不可 NULL） |
+| `outErrorLine` | 失敗的行號（從 1 起，與行無關的錯誤為 0）。允許 NULL |
+| `outErrorMessage` | 失敗原因（NUL 結尾英文）。允許 NULL |
+| `errorMessageCapacity` | `outErrorMessage` 位元組數。依此長度截斷 |
 
-**구조체** `STParametricEqBand` (32바이트, 버전 스탬프 없는 배열 원소)
+**結構體** `STParametricEqBand`（32 位元組，無版本戳記的陣列元素）
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `type` | `STParametricEqType` — `ST_PARAMETRIC_EQ_PEAKING`(0) / `LOW_SHELF`(1) / `HIGH_SHELF`(2) / `LOW_PASS`(3) / `HIGH_PASS`(4) / `NOTCH`(5) |
-| `enabled` | 0 = 항등(건너뜀), 그 밖 = 켬 |
-| `frequencyHz` | 중심(PEAKING·NOTCH) 또는 코너(셸프 중점·LP·HP) 주파수 |
-| `gainDb` | PEAKING·LOW_SHELF·HIGH_SHELF만 사용 |
-| `q` | Q 값 |
-| `reserved[3]` | 0. 파서는 0으로 채운다 |
+| `enabled` | 0 = 恆等（略過），其他 = 開啟 |
+| `frequencyHz` | 中心（PEAKING、NOTCH）或轉角（擱架中點、LP、HP）頻率 |
+| `gainDb` | 僅 PEAKING、LOW_SHELF、HIGH_SHELF 使用 |
+| `q` | Q 值 |
+| `reserved[3]` | 0。剖析器以 0 填入 |
 
-**반환** — `STAutoEqParseStatus`. `ST_AUTOEQ_PARSE_OK`(0)이면 `outBands[0..*outBandCount)`와 `*outPreampDb`를 씁니다. 실패하면 `*outBandCount` = 0 · `*outPreampDb` = 0이고 오류 줄·메시지를 씁니다: `ST_AUTOEQ_PARSE_INVALID_ARGUMENT`(1, 필수 포인터 NULL·용량 음수 등) / `SYNTAX`(2, 줄 형식 오류) / `UNSUPPORTED`(3, 지원하지 않는 명령·필터·형식) / `OUT_OF_RANGE`(4, 범위 밖 값) / `TOO_MANY_BANDS`(5, `ST_PARAMETRIC_EQ_MAX_BANDS` 또는 `bandCapacity` 초과) / `EMPTY`(6, Preamp·Filter 줄이 하나도 없음). 컨텍스트가 없으므로 last_status는 남지 않습니다.
+**回傳值** — `STAutoEqParseStatus`。`ST_AUTOEQ_PARSE_OK`(0) 時寫入 `outBands[0..*outBandCount)` 與 `*outPreampDb`。失敗時 `*outBandCount` = 0 · `*outPreampDb` = 0，並寫入錯誤行與訊息：`ST_AUTOEQ_PARSE_INVALID_ARGUMENT`（1，必填指標為 NULL、容量為負等） / `SYNTAX`（2，行格式錯誤） / `UNSUPPORTED`（3，不支援的命令、濾波器、格式） / `OUT_OF_RANGE`（4，超出範圍的值） / `TOO_MANY_BANDS`（5，超過 `ST_PARAMETRIC_EQ_MAX_BANDS` 或 `bandCapacity`） / `EMPTY`（6，沒有任何 Preamp、Filter 行）。因無情境，不會留下 last_status。
 
 </details>
 
 <details>
-<summary><code>st_off_render_set_spatializer</code> — 컨텍스트의 공간화기(HRTF 종류)를 고르고 HRIR 데이터셋을 로드한다</summary>
+<summary><code>st_off_render_set_spatializer</code> — 選擇情境的空間化器（HRTF 種類）並載入 HRIR 資料集</summary>
 
 ```c
 int st_off_render_set_spatializer(STOFF_Context* context, int type);
 ```
 
-**용도** — 오프라인 컨텍스트의 공간화 구현(패닝 / 내장 MIT KEMAR / SADIE II D2)을 고르고, 필요한 HRIR 데이터셋을 로드합니다. 실시간 `st_rt_render_set_spatializer`와 같은 값 집합을 받습니다.
+**用途** — 選擇離線情境的空間化實作（聲像 / 內建 MIT KEMAR / SADIE II D2），並載入所需的 HRIR 資料集。接受與即時 `st_rt_render_set_spatializer` 相同的值集合。
 
-**언제·어떻게** — 바이노럴 IR·오디션 렌더는 요청 구조체(`STOfflineBinauralIRRequestOptions.hrtfType`)로 요청마다 공간화기를 고르므로, 그 렌더만 쓴다면 이 함수를 따로 부를 필요는 없습니다. SADIE D2는 외부 자산 파일 `SADIE_D2_44K_16bit_256tap.hrtfbin`이 있어야 합니다 — 엔진은 환경변수 `SIMPLEST_SADIE_D2_HRTF_PATH`, 현재 작업 폴더, 실행 파일 폴더, DLL 폴더(각각 그 폴더와 상위 8단계의 `Assets/HRTF/`·`SimpleST/Assets/HRTF/`·`Resources/HRTF/`) 순서로 찾습니다. 배포에서는 DLL 옆(또는 상위)의 `Resources/HRTF/`에 두는 것이 가장 간단합니다. 스레드: `[control, blocking]` — HRIR 데이터셋을 로드하는 긴 구간이 있으므로 지연에 민감한 스레드에서 부르지 않습니다.
+**呼叫方式** — 雙耳 IR 與試聽渲染以請求結構體（`STOfflineBinauralIRRequestOptions.hrtfType`）逐請求選擇空間化器，若只使用這些渲染則不必另外呼叫此函式。SADIE D2 需要外部資產檔 `SADIE_D2_44K_16bit_256tap.hrtfbin` — 引擎依環境變數 `SOUNDTRACING_SADIE_D2_HRTF_PATH`、目前工作資料夾、執行檔資料夾、DLL 資料夾（各自為該資料夾及上層 8 層的 `Assets/HRTF/`·`SoundTracing/Assets/HRTF/`·`Resources/HRTF/`）的順序尋找。發佈時放在 DLL 旁（或上層）的 `Resources/HRTF/` 最簡單。執行緒：`[control, blocking]` — 有載入 HRIR 資料集的較長區間，不要在對延遲敏感的執行緒上呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `type` | `STSpatializerType` — `ST_SPATIALIZER_PANNING`(0, HRIR 데이터 불필요) / `ST_SPATIALIZER_MIT_KEMAR`(1, DLL 내장) / `ST_SPATIALIZER_SADIE_D2_KEMAR`(2, 외부 자산 필요). 그 밖의 값은 거절 |
+| `context` | 離線情境控制代碼 |
+| `type` | `STSpatializerType` — `ST_SPATIALIZER_PANNING`（0，不需 HRIR 資料） / `ST_SPATIALIZER_MIT_KEMAR`（1，DLL 內建） / `ST_SPATIALIZER_SADIE_D2_KEMAR`（2，需要外部資產）。其他值拒絕 |
 
-**반환** — `1` = 적용 / `0` = 실패. 컨텍스트가 NULL이거나 `type`이 범위 밖이면 0. SADIE D2를 골랐는데 자산 파일이 없으면 0과 `ST_STATUS_UNAVAILABLE`("SADIE D2 HRTF asset not found ...")를 남깁니다.
+**回傳值** — `1` = 已套用 / `0` = 失敗。情境為 NULL 或 `type` 超出範圍時為 0。選擇 SADIE D2 但缺少資產檔時，回傳 0 並留下 `ST_STATUS_UNAVAILABLE`（"SADIE D2 HRTF asset not found ..."）。
 
 </details>
 
 <details>
-<summary><code>st_off_render_set_early_spatial_mode</code> — 바이노럴·오디션 렌더의 초기 반사 렌더 경로(exact 객체 / HOA3 bed)를 고른다</summary>
+<summary><code>st_off_render_set_early_spatial_mode</code> — 選擇雙耳、試聽渲染的早期反射渲染路徑（exact 物件 / HOA3 bed）</summary>
 
 ```c
 int st_off_render_set_early_spatial_mode(STOFF_Context* context, int mode);
 ```
 
-**용도** — 바이노럴 IR과 오디션 렌더가 초기 반사를 어느 경로로 낼지 고릅니다. `ST_EARLY_SPATIAL_OBJECTS`(기본)는 모든 초기 경로를 exact 객체로 합성하는 정본이고, `ST_EARLY_SPATIAL_BED`는 실시간 헤드폰 기본 경로(예산 안 exact 객체 + 나머지 초기 반사·1차 산란은 HOA3 bed → 바이노럴 디코드)로 렌더합니다. BED로 렌더한 결과는 "그 소스 하나만 있는 정지 장면의 동기 실시간 출력"과 같으므로, 게임에서 실제로 들릴 소리를 오프라인으로 미리 들어 보거나 비교할 때 씁니다.
+**用途** — 選擇雙耳 IR 與試聽渲染以哪種路徑輸出早期反射。`ST_EARLY_SPATIAL_OBJECTS`（預設）是將所有早期路徑合成為 exact 物件的標準版本，`ST_EARLY_SPATIAL_BED` 則以即時耳機預設路徑（預算內 exact 物件 + 其餘早期反射與一次散射送入 HOA3 bed → 雙耳解碼）渲染。以 BED 渲染的結果等同「僅有該音源的靜止場景之同步即時輸出」，因此用於離線預聽或比較遊戲中實際會聽到的聲音。
 
-**언제·어떻게** — 모드와 계산·렌더는 다음 순서로 연결됩니다.
+**呼叫方式** — 模式與計算、渲染依下列順序銜接。
 
-1. 이 함수로 모드를 고릅니다. IR 캐시는 비우지 않습니다.
-2. `st_off_ir_compute` — BED이면 리스너마다 전파는 한 번 하고 변환을 두 번 해 exact 정본과 bed 변형을 함께 캐시합니다(변환 시간과 IR 메모리만 늘고 전파 비용은 같습니다). OBJECTS이면 변환도 한 번입니다.
-3. `st_off_ir_render_binaural` / `st_off_ir_render_audition_pair`는 **렌더 시점의 모드**를 따릅니다. BED로 계산한 캐시는 두 변형을 모두 가지므로 다시 계산하지 않고 모드를 오가며 둘 다 렌더할 수 있습니다. 변형이 없는 캐시(OBJECTS로 계산한 캐시 등)를 BED로 렌더하면 0과 `ST_STATUS_UNAVAILABLE`이 돌아오며, 이때는 모드를 BED로 둔 채 다시 compute합니다. 결과 info의 `earlySpatialMode`가 실제로 쓴 모드입니다.
+1. 以此函式選擇模式。不清空 IR 快取。
+2. `st_off_ir_compute` — 若為 BED，每個聆聽者傳播一次、轉換兩次，同時快取 exact 標準版與 bed 變體（只增加轉換時間與 IR 記憶體，傳播成本不變）。若為 OBJECTS，轉換也只有一次。
+3. `st_off_ir_render_binaural` / `st_off_ir_render_audition_pair` 依 **渲染時的模式**。以 BED 計算的快取兩種變體皆有，因此不必重新計算即可切換模式渲染兩者。以 BED 渲染沒有變體的快取（如以 OBJECTS 計算的快取）時回傳 0 與 `ST_STATUS_UNAVAILABLE`，此時將模式維持為 BED 後重新 compute。結果 info 的 `earlySpatialMode` 是實際使用的模式。
 
-압력 IR(솔로·혼합·배치)과 원시 IR 조회는 모드와 무관하게 항상 exact 정본입니다. IR 아카이브는 BED로 계산한 캐시면 두 변형을 함께 저장하고, 아카이브를 적재해도 컨텍스트의 모드는 바뀌지 않습니다. BED 렌더는 IR을 설치한 뒤 무음 워밍업(16384프레임 ≈ 0.37 s, 출력에서 버림)으로 경로 페이드·게인 램프를 정착시킨 다음 입력을 넣으므로 그만큼 렌더 시간이 늘어납니다. 소스 여러 개를 함께 튼 실시간 출력은 병합 bed·send를 소스끼리 공유하므로 쌍별 결과의 합과 미세하게 다릅니다. 두 모드 모두 late 확산장을 리스너 주변 1차 산란의 도착 방향 분포로 가중합니다(압력 IR은 공간화를 하지 않으므로 영향이 없습니다).
+壓力 IR（獨奏、混合、批次）與原始 IR 查詢不論模式，永遠是 exact 標準版。IR 封存檔若為以 BED 計算的快取，會同時儲存兩種變體，載入封存檔也不會改變情境的模式。BED 渲染在安裝 IR 後以靜音暖機（16384 幀 ≈ 0.37 s，從輸出中捨棄）使路徑淡變與增益斜坡穩定後才送入輸入，因此渲染時間會相應增加。同時播放多個音源的即時輸出會在音源間共用合併的 bed 與 send，因此與逐對結果的總和略有差異。兩種模式都以聆聽者周圍一次散射的到達方向分佈加權 late 擴散場（壓力 IR 不做空間化，因此不受影響）。
 
-지원 여부는 `st_off_get_capability_word(1)`의 `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE`로 확인합니다. 스레드: `[control]` — 잡 뮤텍스를 잡으므로 진행 중인 compute·렌더가 끝날 때까지 블록될 수 있습니다.
+是否支援以 `st_off_get_capability_word(1)` 的 `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE` 確認。執行緒：`[control]` — 會取得工作互斥鎖，因此可能阻塞至進行中的 compute 與渲染結束為止。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `mode` | `STEarlySpatialMode` — `ST_EARLY_SPATIAL_OBJECTS`(0, 기본, exact 정본) / `ST_EARLY_SPATIAL_BED`(1, 실시간 bed 경로). 그 밖의 값은 거절 |
+| `context` | 離線情境控制代碼 |
+| `mode` | `STEarlySpatialMode` — `ST_EARLY_SPATIAL_OBJECTS`（0，預設，exact 標準版） / `ST_EARLY_SPATIAL_BED`（1，即時 bed 路徑）。其他值拒絕 |
 
-**반환** — `1` = 성공 / `0` = 실패. 그 밖의 값이면 `ST_STATUS_INVALID_ARGUMENT`, `ST_BACKEND_EXA` 컨텍스트에서 BED를 고르면 `ST_STATUS_UNAVAILABLE`(OBJECTS는 언제나 됩니다).
+**回傳值** — `1` = 成功 / `0` = 失敗。其他值為 `ST_STATUS_INVALID_ARGUMENT`，在 `ST_BACKEND_EXA` 情境中選擇 BED 為 `ST_STATUS_UNAVAILABLE`（OBJECTS 永遠可用）。
 
 </details>
 
 <details>
-<summary><code>st_off_render_get_early_spatial_mode</code> — 현재 early 공간 모드를 읽는다</summary>
+<summary><code>st_off_render_get_early_spatial_mode</code> — 讀取目前的 early 空間模式</summary>
 
 ```c
 int st_off_render_get_early_spatial_mode(const STOFF_Context* context);
 ```
 
-**용도** — `st_off_render_set_early_spatial_mode`로 고른 현재 모드를 돌려줍니다. 기본값은 `ST_EARLY_SPATIAL_OBJECTS`(0)로, 실시간 기본값(BED)과 다릅니다.
+**用途** — 回傳以 `st_off_render_set_early_spatial_mode` 選擇的目前模式。預設值為 `ST_EARLY_SPATIAL_OBJECTS`(0)，與即時預設值（BED）不同。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 실제 렌더에 쓰인 모드는 결과 info(`STOfflineBinauralIRInfo.earlySpatialMode`, `STOFF_AuditionInfo.earlySpatialMode`)로도 확인할 수 있습니다. 스레드: `[any]` — atomic 읽기라 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**呼叫方式** — 隨時可呼叫。實際渲染使用的模式也可從結果 info（`STOfflineBinauralIRInfo.earlySpatialMode`、`STOFF_AuditionInfo.earlySpatialMode`）確認。執行緒：`[any]` — atomic 讀取，可在任何執行緒無阻塞呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | 離線情境控制代碼 |
 
-**반환** — 현재 모드(`ST_EARLY_SPATIAL_OBJECTS`(0) / `ST_EARLY_SPATIAL_BED`(1)). `context`가 NULL이면 `-1`.
+**回傳值** — 目前模式（`ST_EARLY_SPATIAL_OBJECTS`(0) / `ST_EARLY_SPATIAL_BED`(1)）。`context` 為 NULL 時為 `-1`。
 
 </details>
 
 <details>
-<summary><code>st_off_render_set_max_delay_seconds</code> — 오프라인 렌더가 쓰는 지연 링 길이(초)를 정한다</summary>
+<summary><code>st_off_render_set_max_delay_seconds</code> — 設定離線渲染使用的延遲環長度（秒）</summary>
 
 ```c
 int st_off_render_set_max_delay_seconds(STOFF_Context* context, float seconds);
 ```
 
-**용도** — 압력·바이노럴·오디션·배치 렌더가 쓰는 지연 링의 길이를 정합니다. 지연이 링 한계를 넘는 exact 경로는 렌더에서 빠지고(late는 FDN이 덮습니다), 따라서 기본 4 s보다 늦게 도착하는 경로가 필요한 큰 공간이나 긴 IR에서는 이 값을 늘립니다.
+**用途** — 設定壓力、雙耳、試聽、批次渲染使用的延遲環長度。延遲超過環上限的 exact 路徑會從渲染中排除（late 由 FDN 涵蓋），因此在需要晚於預設 4 s 到達之路徑的大空間或長 IR 中，請增加此值。
 
-**언제·어떻게** — IR 캐시와 무관한 렌더 설정이라 다시 compute하지 않아도 다음 렌더부터 적용됩니다. 링 메모리는 렌더하는 소스마다 9밴드 × 링 길이입니다. IR 아카이브는 저장할 때의 값을 기록하고, 적재한 컨텍스트는 그 값을 씁니다(적재 뒤 다시 바꿀 수 있습니다). 지원 여부는 `st_off_get_capability_word(1)`의 `ST_CAP1_OFFLINE_MAX_DELAY`로 확인합니다. 스레드: `[control, blocking]` — 잡 뮤텍스를 잡고 지연 링을 재할당합니다.
+**呼叫方式** — 這是與 IR 快取無關的渲染設定，不必重新 compute，從下一次渲染起套用。環記憶體為每個渲染音源 9 頻帶 × 環長度。IR 封存檔會記錄儲存時的值，載入的情境使用該值（載入後可再變更）。是否支援以 `st_off_get_capability_word(1)` 的 `ST_CAP1_OFFLINE_MAX_DELAY` 確認。執行緒：`[control, blocking]` — 取得工作互斥鎖並重新配置延遲環。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `seconds` | 링 길이(초). 기본 4.0 s(실시간 기본 2.0 s와 다름). 범위는 실시간 `st_rt_render_set_max_delay_seconds`와 같은 약 0.012 s ~ 60 s. 범위 밖·비유한 값은 거절 |
+| `context` | 離線情境控制代碼 |
+| `seconds` | 環長度（秒）。預設 4.0 s（與即時預設 2.0 s 不同）。範圍與即時 `st_rt_render_set_max_delay_seconds` 相同，約 0.012 s ~ 60 s。超出範圍或非有限值拒絕 |
 
-**반환** — `1` = 성공 / `0` = 실패. 범위 밖·비유한 값이면 `ST_STATUS_INVALID_ARGUMENT`, 링 길이를 바꾸지 못하는 백엔드면 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — `1` = 成功 / `0` = 失敗。超出範圍或非有限值為 `ST_STATUS_INVALID_ARGUMENT`，無法變更環長度的後端為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_render_get_max_delay_seconds</code> — 현재 렌더 지연 링 길이(초)를 읽는다</summary>
+<summary><code>st_off_render_get_max_delay_seconds</code> — 讀取目前的渲染延遲環長度（秒）</summary>
 
 ```c
 float st_off_render_get_max_delay_seconds(const STOFF_Context* context);
 ```
 
-**용도** — `st_off_render_set_max_delay_seconds`로 정한(또는 아카이브에서 적재한) 현재 지연 링 길이를 돌려줍니다.
+**用途** — 回傳以 `st_off_render_set_max_delay_seconds` 設定（或從封存檔載入）的目前延遲環長度。
 
-**언제·어떻게** — 렌더 길이보다 늦게 도착하는 경로가 잘리지 않는지 확인할 때 씁니다. 스레드: `[control]`.
+**呼叫方式** — 用於確認晚於渲染長度到達的路徑是否被截斷。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | 離線情境控制代碼 |
 
-**반환** — 현재 값(초, 기본 4.0). `context`가 NULL이면 `0`.
+**回傳值** — 目前值（秒，預設 4.0）。`context` 為 NULL 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_off_debug_set_collect_visual_paths</code> — 다음 계산에서 시각화용 경로를 어떤 종류까지 수집할지 정한다</summary>
+<summary><code>st_off_debug_set_collect_visual_paths</code> — 設定下一次計算中收集哪些種類的視覺化路徑</summary>
 
 ```c
 int st_off_debug_set_collect_visual_paths(STOFF_Context* context, uint32_t mask);
 ```
 
-**용도** — 전파 경로를 3D 뷰에 겹쳐 그리기 위한 시각화 경로 수집을 켜고, 수집할 경로 종류를 마스크로 고릅니다. 기본은 0(수집 안 함)이라 디버그 시각화가 필요할 때만 비용을 냅니다.
+**用途** — 開啟視覺化路徑收集，以將傳播路徑疊加繪製於 3D 檢視，並以遮罩選擇要收集的路徑種類。預設為 0（不收集），只在需要除錯視覺化時才產生成本。
 
-**언제·어떻게** — 시각화 스냅샷은 `st_off_ir_compute`가 발행하므로 compute **전에** 마스크를 정합니다. 계산 뒤 `st_off_debug_get_snapshot_info` → `st_off_debug_copy_visual_paths` 순서로 읽습니다. 실패한 walk까지 보려면 `st_off_debug_set_collect_failed_walks`를 함께 켭니다. 지원 여부는 `ST_CAP_PATH_COLLECTION_MASK`로 확인합니다. 스레드: `[control]`.
+**呼叫方式** — 視覺化快照由 `st_off_ir_compute` 發佈，因此須在 compute **之前** 設定遮罩。計算後依 `st_off_debug_get_snapshot_info` → `st_off_debug_copy_visual_paths` 的順序讀取。若要連失敗的 walk 一起查看，請同時開啟 `st_off_debug_set_collect_failed_walks`。是否支援以 `ST_CAP_PATH_COLLECTION_MASK` 確認。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `mask` | `STPathCollectionFlag` 비트 OR — `ST_PATH_COLLECTION_GUIDE_RAY`(1) / `ST_PATH_COLLECTION_SOURCE_TRANSPORT_RAY`(2) / `ST_PATH_COLLECTION_DIRECT_TRANSMISSION`(4) / `ST_PATH_COLLECTION_REFLECTION_DIFFRACTION`(8, 반사 구간을 포함하는 회절 경로가 있어 두 종류가 한 비트를 공유) / `ST_PATH_COLLECTION_ALL`. 0 = 수집 안 함 |
+| `context` | 離線情境控制代碼 |
+| `mask` | `STPathCollectionFlag` 位元 OR — `ST_PATH_COLLECTION_GUIDE_RAY`(1) / `ST_PATH_COLLECTION_SOURCE_TRANSPORT_RAY`(2) / `ST_PATH_COLLECTION_DIRECT_TRANSMISSION`(4) / `ST_PATH_COLLECTION_REFLECTION_DIFFRACTION`（8，因存在包含反射區段的繞射路徑，兩種共用一個位元） / `ST_PATH_COLLECTION_ALL`。0 = 不收集 |
 
-**반환** — `1` = 적용 / `0` = 실패(`context` NULL 또는 정의되지 않은 비트).
+**回傳值** — `1` = 已套用 / `0` = 失敗（`context` 為 NULL 或未定義的位元）。
 
 </details>
 
 <details>
-<summary><code>st_off_debug_set_collect_failed_walks</code> — 시각화 수집에 중도 실패한 walk도 포함할지 정한다</summary>
+<summary><code>st_off_debug_set_collect_failed_walks</code> — 設定視覺化收集是否包含中途失敗的 walk</summary>
 
 ```c
 void st_off_debug_set_collect_failed_walks(STOFF_Context* context, int enabled);
 ```
 
-**용도** — 기본적으로 시각화 스냅샷에는 완주한 경로만 의미 있게 쓰입니다. 이 옵션을 켜면 도중에 실패한 walk도 기록해, 경로가 왜 생기지 않는지 디버깅할 수 있습니다. 실패한 walk는 `STVisualPathRecord.valid` = 0으로 표시됩니다.
+**用途** — 預設情況下，視覺化快照中只有走完的路徑才有意義。開啟此選項後也會記錄中途失敗的 walk，以便除錯為何路徑沒有產生。失敗的 walk 以 `STVisualPathRecord.valid` = 0 標示。
 
-**언제·어떻게** — `st_off_debug_set_collect_visual_paths`와 함께 compute 전에 설정합니다. 실패 walk를 받으려면 `st_off_debug_copy_visual_paths`를 `ST_VISUAL_PATH_COPY_ALL`로 부릅니다(`VALID_ONLY`는 완주 경로만 복사합니다). 기본은 꺼짐입니다. 스레드: `[control]`.
+**呼叫方式** — 與 `st_off_debug_set_collect_visual_paths` 一起在 compute 之前設定。若要取得失敗的 walk，以 `ST_VISUAL_PATH_COPY_ALL` 呼叫 `st_off_debug_copy_visual_paths`（`VALID_ONLY` 只複製走完的路徑）。預設為關閉。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `enabled` | 0 = 끔(기본) / 그 밖 = 켬 |
+| `context` | 離線情境控制代碼 |
+| `enabled` | 0 = 關閉（預設） / 其他 = 開啟 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_compute</code> — 전파와 IR 변환을 한 번 돌려 canonical IR 캐시를 만든다</summary>
+<summary><code>st_off_ir_compute</code> — 執行一次傳播與 IR 轉換，建立 canonical IR 快取</summary>
 
 ```c
 int st_off_ir_compute(STOFF_Context* context);
 ```
 
-**용도** — 오프라인 IR 생성의 출발점입니다. 등록된 리스너마다 전파(기하)와 IR 변환을 한 번 돌려, 리스너 × 소스 쌍마다 **canonical 원시 IR**을 캐시에 만듭니다. 원시 IR은 시간 영역 샘플이 아니라 파라미터 형태(에너지 영역 초기 탭, late 잔향 송출 탭, 1차 산란 셀, late 잔향 기술자)라서 IR 길이와 무관하게 한 번만 계산됩니다. 이후의 모든 결과는 이 같은 세대에서 파생됩니다.
+**用途** — 離線 IR 生成的起點。對每個已註冊的聆聽者執行一次傳播（幾何）與 IR 轉換，為每組聆聽者 × 音源在快取中建立 **canonical 原始 IR**。原始 IR 不是時域樣本，而是參數形式（能量域早期 tap、late 殘響送出 tap、一次散射單元、late 殘響描述子），因此與 IR 長度無關，只計算一次。之後所有結果都衍生自這同一世代。
 
-- 원시 IR 조회: `st_off_ir_get_raw_descriptor`, `st_off_ir_copy_raw_*` — 탭·셀·기술자를 그대로 복사
-- 압력 IR: `st_off_ir_render_pressure`(쌍 하나) / `st_off_ir_render_pressure_mixed`(소스 여러 개 합) — 광대역 모노 또는 9밴드 분리
-- 바이노럴 IR: `st_off_ir_render_binaural` — 스테레오(L/R)
-- 오디션: `st_off_ir_render_audition_pair` — 드라이 신호를 고정 RIR 컨볼루션과 엔진 렌더 단계로 각각 렌더
+- 原始 IR 查詢：`st_off_ir_get_raw_descriptor`、`st_off_ir_copy_raw_*` — 原樣複製 tap、單元、描述子
+- 壓力 IR：`st_off_ir_render_pressure`（單一配對） / `st_off_ir_render_pressure_mixed`（多個音源之和） — 寬頻單聲道或 9 頻帶分離
+- 雙耳 IR：`st_off_ir_render_binaural` — 立體聲（L/R）
+- 試聽：`st_off_ir_render_audition_pair` — 將乾訊號分別以固定 RIR 摺積與引擎渲染階段渲染
 
-렌더 함수는 캐시를 소비만 하므로 길이·출력 모드·HRTF를 바꿔 여러 번 렌더해도 다시 계산하지 않습니다.
+渲染函式只消費快取，因此即使變更長度、輸出模式、HRTF 多次渲染也不會重新計算。
 
-**언제·어떻게** — 장면(재질·메시·오브젝트)·소스·리스너·전파 옵션을 설정하고 `st_off_build`로 가속구조를 지은 뒤 부릅니다. 장면·소스·리스너나 IR 정책(대기, 거리 감쇠, Doppler gain mode, 에너지 타깃 등)을 바꾸면 다시 compute해야 결과에 반영됩니다. 반면 렌더 전용 설정(소스 EQ, early 공간 모드 전환, 지연 링 길이)은 캐시를 유지한 채 다음 렌더부터 적용됩니다. early 공간 모드가 `ST_EARLY_SPATIAL_BED`이면 쌍마다 bed 변형도 함께 만듭니다(`st_off_render_set_early_spatial_mode` 참고). 시각화 경로 수집이 켜져 있으면 같은 세대의 시각화 스냅샷도 발행합니다.
+**呼叫方式** — 設定場景（材質、網格、物件）、音源、聆聽者、傳播選項，並以 `st_off_build` 建置加速結構後呼叫。變更場景、音源、聆聽者或 IR 策略（大氣、距離衰減、Doppler gain mode、能量目標等）後，須重新 compute 才會反映到結果。反之，渲染專用設定（音源 EQ、early 空間模式切換、延遲環長度）會保留快取，從下一次渲染起套用。early 空間模式為 `ST_EARLY_SPATIAL_BED` 時，每組配對也會一併建立 bed 變體（參考 `st_off_render_set_early_spatial_mode`）。若開啟視覺化路徑收集，也會發佈同一世代的視覺化快照。
 
-성공하면 캐시 세대(`st_off_ir_get_cache_generation`)가 바뀌고 모든 결과 info에 그 세대가 실립니다. 계산이 실패하거나 취소되면 새 캐시는 발행되지 않고 이전 캐시가 그대로 남습니다. 진행률은 다른 스레드에서 `st_off_ir_get_progress`로 읽고, 취소는 `st_off_ir_request_cancel`로 겁니다. `st_off_ir_archive_load_pair`로 아카이브를 적재한 render-only 컨텍스트에서는 거절됩니다. `maxComputeThreads`가 1보다 크면 병렬 구간은 컨텍스트의 계산 풀 워커에서 돕니다. 여러 컨텍스트를 병렬로 계산하려면 배치 API(`st_off_batch_*`)를 씁니다.
+成功時快取世代（`st_off_ir_get_cache_generation`）會改變，所有結果 info 都帶有該世代。計算失敗或被取消時不發佈新快取，先前的快取原樣保留。進度從其他執行緒以 `st_off_ir_get_progress` 讀取，取消以 `st_off_ir_request_cancel` 發出。在以 `st_off_ir_archive_load_pair` 載入封存檔的 render-only 情境中會被拒絕。`maxComputeThreads` 大於 1 時，平行區段在情境的計算集區工作執行緒上執行。要平行計算多個情境，請使用批次 API（`st_off_batch_*`）。
 
-스레드: `[control, runs-here]` — 전파·변환 파이프라인 전체가 **호출 스레드에서 실제로 돌고** 끝날 때까지 돌아오지 않습니다. 이 컨텍스트의 다른 잡(렌더·조회)과는 잡 뮤텍스로 직렬화됩니다.
+執行緒：`[control, runs-here]` — 整個傳播與轉換管線 **實際在呼叫執行緒上執行**，結束前不會返回。與此情境的其他工作（渲染、查詢）以工作互斥鎖序列化。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | 離線情境控制代碼 |
 
-**반환** — `1` = 성공(캐시 발행) / `0` = 실패. 계산 실패·취소·render-only 컨텍스트는 `ST_STATUS_INITIALIZATION_FAILED`("canonical IR computation failed or was canceled").
+**回傳值** — `1` = 成功（已發佈快取） / `0` = 失敗。計算失敗、取消、render-only 情境為 `ST_STATUS_INITIALIZATION_FAILED`（"canonical IR computation failed or was canceled"）。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_archive_save</code> — 현재 canonical IR 캐시 전체를 버전 있는 아카이브 파일로 저장한다</summary>
+<summary><code>st_off_ir_archive_save</code> — 將目前整個 canonical IR 快取儲存為帶版本的封存檔</summary>
 
 ```c
 int st_off_ir_archive_save(STOFF_Context* context, const char* utf8Path);
 ```
 
-**용도** — 계산한 canonical IR 캐시를 파일로 남겨, 나중에 장면·가속구조·전파·IR 변환 없이 같은 결과를 다시 렌더할 수 있게 합니다. 무거운 계산은 한 번만 하고, 렌더(길이·출력 모드·HRTF 변경)는 별도 프로세스나 별도 시점에 하고 싶을 때 씁니다.
+**用途** — 將計算出的 canonical IR 快取保存為檔案，日後不需場景、加速結構、傳播、IR 轉換即可重新渲染相同結果。用於重度計算只做一次，而渲染（變更長度、輸出模式、HRTF）想在其他處理程序或其他時間點進行時。
 
-**언제·어떻게** — `st_off_ir_compute`가 성공해 캐시가 있을 때 부릅니다. DSP는 돌지 않습니다. 임시 파일에 쓰고 검증한 뒤 대상 경로로 발행하며, **이미 있는 파일은 덮어쓰지 않습니다**(그 경우 실패). early 공간 모드 BED로 계산한 캐시면 bed 변형도 함께 저장하고, 현재 렌더 지연 링 길이(`st_off_render_get_max_delay_seconds`)도 기록합니다. 시각화 스냅샷은 저장되지 않습니다. 적재는 `st_off_ir_archive_load_pair`로 합니다. 형식·엔진 버전이 같아야 적재할 수 있고, 호스트는 추가로 아카이브를 만든 DLL과 같은 바이너리(해시)인지 맞춰야 합니다. `ST_BACKEND_ST` 컨텍스트에서만 됩니다. 스레드: `[control, runs-here]` — 직렬화·파일 쓰기가 호출 스레드에서 돕니다.
+**呼叫方式** — 在 `st_off_ir_compute` 成功、快取存在時呼叫。不執行 DSP。寫入暫存檔並驗證後發佈到目標路徑，**不覆寫已存在的檔案**（此時失敗）。若為以 early 空間模式 BED 計算的快取，也會一併儲存 bed 變體，並記錄目前的渲染延遲環長度（`st_off_render_get_max_delay_seconds`）。視覺化快照不會儲存。載入以 `st_off_ir_archive_load_pair` 進行。格式與引擎版本須相同才能載入，主機另須確認是否與建立封存檔的 DLL 為同一二進位檔（雜湊）。僅在 `ST_BACKEND_ST` 情境中可用。執行緒：`[control, runs-here]` — 序列化與檔案寫入在呼叫執行緒上執行。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `utf8Path` | 저장할 파일 경로(UTF-8, NUL 종료). 비어 있으면 거절. 이미 있는 파일이면 실패 |
+| `context` | 離線情境控制代碼 |
+| `utf8Path` | 要儲存的檔案路徑（UTF-8，NUL 結尾）。為空則拒絕。檔案已存在則失敗 |
 
-**반환** — `1` = 성공 / `0` = 실패. 경로가 NULL·빈 문자열이거나 ST 백엔드가 아니면 `ST_STATUS_INVALID_ARGUMENT`, 완전한 canonical 캐시가 없거나 저장에 실패하면 `ST_STATUS_UNAVAILABLE`. 실패해도 대상 경로의 기존 파일은 그대로입니다.
+**回傳值** — `1` = 成功 / `0` = 失敗。路徑為 NULL 或空字串，或非 ST 後端時為 `ST_STATUS_INVALID_ARGUMENT`；沒有完整的 canonical 快取或儲存失敗時為 `ST_STATUS_UNAVAILABLE`。即使失敗，目標路徑的既有檔案也保持原樣。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_archive_load_pair</code> — 아카이브에서 리스너·소스 쌍 하나를 적재해 렌더 전용 컨텍스트로 만든다</summary>
+<summary><code>st_off_ir_archive_load_pair</code> — 從封存檔載入一組聆聽者·音源配對，成為渲染專用情境</summary>
 
 ```c
 int st_off_ir_archive_load_pair(STOFF_Context* context, const char* utf8Path, STListenerId listener, STSourceId source);
 ```
 
-**용도** — `st_off_ir_archive_save`로 저장한 아카이브에서 기록된 쌍 하나를 꺼내, 장면·BVH·전파·IR 변환 없이 바로 렌더할 수 있게 설치합니다. 계산 비용 없이 저장된 IR을 다시 듣거나 다른 길이·출력 모드로 렌더할 때 씁니다.
+**用途** — 從以 `st_off_ir_archive_save` 儲存的封存檔中取出一組已記錄的配對並安裝，不需場景、BVH、傳播、IR 轉換即可直接渲染。用於不花計算成本重聽已儲存的 IR，或以其他長度、輸出模式渲染。
 
-**언제·어떻게** — 새로 만든 오프라인 컨텍스트에 부르는 것이 전형입니다. 쌍은 새 콜드 렌더러에 설치되고, 그 뒤 컨텍스트는 **render-only**가 됩니다: `st_off_ir_compute`는 거절되고 렌더가 암묵적으로 다시 계산하지 않습니다. `st_off_ir_clear_cache`나 `st_off_trim_memory`(`ST_OFFLINE_TRIM_IR_CACHE`)를 부른 뒤에도 render-only이며, 다시 렌더하려면 다시 적재합니다. 기존 렌더·조회 함수(`st_off_ir_render_*`, `st_off_ir_get_raw_descriptor`, `st_off_ir_copy_raw_*`)는 **아카이브에 기록된 ID**를 그대로 받습니다. 렌더 지연 링 길이는 아카이브에 기록된 값으로 바뀌고(적재 뒤 다시 바꿀 수 있음), early 공간 모드는 바뀌지 않습니다. 시각화 스냅샷은 복원되지 않습니다. 형식·엔진 버전이 같아야 하고, 호스트는 만든 DLL과 같은 바이너리인지도 맞춰야 합니다. `ST_BACKEND_ST` 컨텍스트에서만 됩니다. 스레드: `[control, runs-here]` — 파일 읽기와 설치가 호출 스레드에서 돕니다.
+**呼叫方式** — 典型用法是在新建立的離線情境上呼叫。配對會安裝到新的冷渲染器，之後情境成為 **render-only**：`st_off_ir_compute` 會被拒絕，渲染也不會隱含地重新計算。呼叫 `st_off_ir_clear_cache` 或 `st_off_trim_memory`（`ST_OFFLINE_TRIM_IR_CACHE`）後仍為 render-only，要再次渲染須重新載入。既有的渲染與查詢函式（`st_off_ir_render_*`、`st_off_ir_get_raw_descriptor`、`st_off_ir_copy_raw_*`）原樣接受 **封存檔中記錄的 ID**。渲染延遲環長度改為封存檔記錄的值（載入後可再變更），early 空間模式不變。視覺化快照不會還原。格式與引擎版本須相同，主機也須確認與建立時的 DLL 為同一二進位檔。僅在 `ST_BACKEND_ST` 情境中可用。執行緒：`[control, runs-here]` — 檔案讀取與安裝在呼叫執行緒上執行。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `utf8Path` | 아카이브 파일 경로(UTF-8, NUL 종료). 비어 있으면 거절 |
-| `listener` | 적재할 쌍의 리스너 ID(아카이브에 기록된 값) |
-| `source` | 적재할 쌍의 소스 ID(아카이브에 기록된 값) |
+| `context` | 離線情境控制代碼 |
+| `utf8Path` | 封存檔路徑（UTF-8，NUL 結尾）。為空則拒絕 |
+| `listener` | 要載入配對的聆聽者 ID（封存檔中記錄的值） |
+| `source` | 要載入配對的音源 ID（封存檔中記錄的值） |
 
-**반환** — `1` = 성공 / `0` = 실패. 경로가 NULL·빈 문자열이거나 ST 백엔드가 아니면 `ST_STATUS_INVALID_ARGUMENT`, 쌍이 아카이브에 없거나 형식·버전이 맞지 않거나 적재가 취소되면 `ST_STATUS_UNAVAILABLE`. 실패해도 그 전에 발행된 캐시는 그대로입니다.
+**回傳值** — `1` = 成功 / `0` = 失敗。路徑為 NULL 或空字串，或非 ST 後端時為 `ST_STATUS_INVALID_ARGUMENT`；配對不在封存檔中、格式或版本不符、載入被取消時為 `ST_STATUS_UNAVAILABLE`。即使失敗，先前發佈的快取也保持原樣。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_clear_cache</code> — canonical IR 캐시를 비운다</summary>
+<summary><code>st_off_ir_clear_cache</code> — 清空 canonical IR 快取</summary>
 
 ```c
 void st_off_ir_clear_cache(STOFF_Context* context);
 ```
 
-**용도** — 발행된 오프라인 조회 산출물(canonical 원시 IR, 아카이브 기록, 시각화 스냅샷)을 비웁니다. 장면·엔진 옵션·전파 작업 버퍼는 남깁니다(작업 버퍼까지 반납하려면 `st_off_trim_memory`).
+**用途** — 清空已發佈的離線查詢產物（canonical 原始 IR、封存檔記錄、視覺化快照）。保留場景、引擎選項、傳播工作緩衝區（若連工作緩衝區也要釋放，請用 `st_off_trim_memory`）。
 
-**언제·어떻게** — 큰 캐시를 다 쓴 뒤 메모리를 돌려받거나, 옛 결과를 실수로 렌더하지 않게 할 때 부릅니다. 비운 뒤에는 `st_off_ir_compute`를 다시 불러야 렌더·조회가 됩니다(그 전에는 `ST_STATUS_UNAVAILABLE`). 아카이브로 적재한 render-only 컨텍스트는 비운 뒤 다시 적재해야 합니다. `st_off_trim_memory(context, ST_OFFLINE_TRIM_IR_CACHE)`와 같습니다. 스레드: `[control]` — 잡 뮤텍스를 잡으므로 진행 중인 compute·렌더가 끝날 때까지 기다릴 수 있습니다.
+**呼叫方式** — 用完大型快取後要收回記憶體，或避免誤渲染舊結果時呼叫。清空後須重新呼叫 `st_off_ir_compute` 才能渲染與查詢（在此之前為 `ST_STATUS_UNAVAILABLE`）。以封存檔載入的 render-only 情境清空後須重新載入。與 `st_off_trim_memory(context, ST_OFFLINE_TRIM_IR_CACHE)` 相同。執行緒：`[control]` — 會取得工作互斥鎖，因此可能等待進行中的 compute 與渲染結束。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | 離線情境控制代碼 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_trim_memory</code> — 장면·설정은 남기고 IR 캐시·작업 버퍼·렌더 상태 메모리를 반납한다</summary>
+<summary><code>st_off_trim_memory</code> — 保留場景與設定，釋放 IR 快取、工作緩衝區、渲染狀態記憶體</summary>
 
 ```c
 int st_off_trim_memory(STOFF_Context* context, uint32_t flags);
 ```
 
-**용도** — 컨텍스트를 놀리는 동안(배치 재사용 풀 등) 쥐고 있는 메모리를 줄입니다. 장면·BVH·재질·소스·리스너·옵션은 남기므로 컨텍스트를 다시 만들 필요가 없고, 다음 compute·렌더는 버퍼를 다시 잡으며 결과는 반납하지 않은 컨텍스트·새 컨텍스트와 비트 동일합니다.
+**用途** — 在情境閒置期間（批次重用集區等）減少其持有的記憶體。保留場景、BVH、材質、音源、聆聽者、選項，因此不必重新建立情境，下一次 compute 與渲染會重新取得緩衝區，結果與未釋放的情境或新情境位元相同。
 
-**언제·어떻게** — `ST_OFFLINE_TRIM_IR_CACHE`를 고르면 `st_off_ir_clear_cache`와 같아서 다음 렌더 전에 compute가 필요하고(아카이브로 적재한 render-only 컨텍스트는 다시 적재), 고르지 않으면 캐시된 IR을 그대로 렌더할 수 있습니다. 배치에 등록한 컨텍스트는 그 작업의 완료 레코드를 `st_off_batch_poll`로 받은 뒤에 부릅니다. 지원 여부는 `ST_CAP_OFFLINE_TRIM_MEMORY`로 확인합니다. `ST_BACKEND_EXA` 컨텍스트는 백엔드 작업 버퍼를 비우지 않습니다(IR 캐시·실행 프레임은 비웁니다). 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**呼叫方式** — 選擇 `ST_OFFLINE_TRIM_IR_CACHE` 時與 `st_off_ir_clear_cache` 相同，下一次渲染前需要 compute（以封存檔載入的 render-only 情境須重新載入）；不選擇時可直接渲染已快取的 IR。已註冊到批次的情境，須在以 `st_off_batch_poll` 收到該工作的完成記錄後再呼叫。是否支援以 `ST_CAP_OFFLINE_TRIM_MEMORY` 確認。`ST_BACKEND_EXA` 情境不清空後端工作緩衝區（會清空 IR 快取與執行框架）。執行緒：`[control]` — 取得工作互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `flags` | `ST_OFFLINE_TRIM_*` 비트 OR. 0이면 아무것도 하지 않음 |
+| `context` | 離線情境控制代碼 |
+| `flags` | `ST_OFFLINE_TRIM_*` 位元 OR。0 則不做任何事 |
 
-`flags` 비트:
+`flags` 位元：
 
-| 비트 | 비우는 것 |
+| 位元 | 清空的內容 |
 |---|---|
-| `ST_OFFLINE_TRIM_IR_CACHE` (1) | `st_off_ir_clear_cache`와 같음 — canonical 원시 IR·아카이브 기록·시각화 스냅샷. 다음 렌더 전에 compute 필요 |
-| `ST_OFFLINE_TRIM_PROPAGATION_SCRATCH` (2) | 전파기·IR 변환기·실행 프레임이 다음 compute를 위해 쥔 최대 크기 작업 버퍼. 크기는 레이 수·반사 차수를 따른다(예: 소스 64×32 ×3, 리스너 64×64, 깊이 4에서 약 23 MB). 캐시된 IR은 그대로 렌더된다 |
-| `ST_OFFLINE_TRIM_RENDER_STATE` (4) | 다음 렌더가 처음부터 다시 만드는 렌더 상태(소스 렌더 상태·경로 상태, 오프라인 렌더 계획) |
-| `ST_OFFLINE_TRIM_ALL` | 셋 다 |
+| `ST_OFFLINE_TRIM_IR_CACHE` (1) | 與 `st_off_ir_clear_cache` 相同 — canonical 原始 IR、封存檔記錄、視覺化快照。下一次渲染前需要 compute |
+| `ST_OFFLINE_TRIM_PROPAGATION_SCRATCH` (2) | 傳播器、IR 轉換器、執行框架為下一次 compute 持有的最大尺寸工作緩衝區。大小取決於射線數與反射階數（例：音源 64×32 ×3、聆聽者 64×64、深度 4 時約 23 MB）。已快取的 IR 仍可原樣渲染 |
+| `ST_OFFLINE_TRIM_RENDER_STATE` (4) | 下一次渲染會從頭重建的渲染狀態（音源渲染狀態、路徑狀態、離線渲染計畫） |
+| `ST_OFFLINE_TRIM_ALL` | 以上三者 |
 
-**반환** — `1` = 성공(`flags` = 0이면 아무것도 하지 않고 1) / `0` = `context` NULL 또는 정의되지 않은 비트(`ST_STATUS_INVALID_ARGUMENT`, 아무것도 비우지 않음).
+**回傳值** — `1` = 成功（`flags` = 0 時不做任何事並回傳 1） / `0` = `context` 為 NULL 或未定義的位元（`ST_STATUS_INVALID_ARGUMENT`，不清空任何內容）。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_get_progress</code> — 진행 중인 계산·렌더의 진행률(0~1)을 읽는다</summary>
+<summary><code>st_off_ir_get_progress</code> — 讀取進行中計算·渲染的進度（0~1）</summary>
 
 ```c
 float st_off_ir_get_progress(const STOFF_Context* context);
 ```
 
-**용도** — `st_off_ir_compute`가 호출 스레드를 붙잡고 도는 동안 **다른 스레드에서** 진행률을 읽기 위한 함수입니다. `st_off_ir_request_cancel`과 함께, 계산 중에 다른 스레드에서 부르도록 의도된 유일한 쌍입니다.
+**用途** — 在 `st_off_ir_compute` 佔住呼叫執行緒執行期間，**從其他執行緒** 讀取進度的函式。與 `st_off_ir_request_cancel` 一起，是唯一設計為在計算中從其他執行緒呼叫的一對。
 
-**언제·어떻게** — UI 스레드 등에서 주기적으로 폴링합니다. 진행률은 **1.0에서 시작합니다** — 할 일의 총량이 0이면 "할 일 없음 = 완료"로 1.0을 돌려주므로, 0.0을 기대하는 폴링 루프는 계산이 시작되기 전에 완료로 오판할 수 있습니다. 완료 판정은 `st_off_ir_compute`의 반환으로 하고, 진행률은 표시용으로만 씁니다. 스레드: `[any]` — lock-free atomic 읽기라 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**呼叫方式** — 從 UI 執行緒等定期輪詢。進度 **從 1.0 開始** — 工作總量為 0 時以「無工作 = 完成」回傳 1.0，因此期待 0.0 的輪詢迴圈可能在計算開始前就誤判為完成。完成判定以 `st_off_ir_compute` 的回傳值為準，進度僅供顯示。執行緒：`[any]` — lock-free atomic 讀取，可在任何執行緒無阻塞呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | 離線情境控制代碼 |
 
-**반환** — 진행률 `[0, 1]`(완료한 작업량 ÷ 총량, 총량 0이면 1.0). `context`가 NULL이면 `0`.
+**回傳值** — 進度 `[0, 1]`（已完成工作量 ÷ 總量，總量為 0 時為 1.0）。`context` 為 NULL 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_request_cancel</code> — 진행 중인 계산·렌더를 중단시킨다</summary>
+<summary><code>st_off_ir_request_cancel</code> — 中斷進行中的計算·渲染</summary>
 
 ```c
 void st_off_ir_request_cancel(STOFF_Context* context);
 ```
 
-**용도** — 오래 걸리는 `st_off_ir_compute`나 렌더를 **다른 스레드에서** 중단시킵니다. `st_off_ir_get_progress`와 함께 lock-free로 부를 수 있는 유일한 쌍입니다.
+**用途** — **從其他執行緒** 中斷耗時的 `st_off_ir_compute` 或渲染。與 `st_off_ir_get_progress` 是唯一可 lock-free 呼叫的一對。
 
-**언제·어떻게** — 계산·렌더가 도는 동안 다른 스레드에서 부릅니다. 부른 시점에 이미 진행 중인 잡만 중단되며, 그 뒤에 새로 시작하는 compute·렌더에는 영향이 없습니다(미리 걸어 둘 수 없습니다). 취소된 compute는 0을 돌려주고 새 캐시를 발행하지 않으므로 이전 캐시가 그대로 남습니다. 취소된 렌더는 0과 `ST_STATUS_UNAVAILABLE`을 돌려줍니다. 배치 작업 전체를 멈추려면 `st_off_batch_cancel`을 씁니다. 스레드: `[any]` — lock-free atomic이라 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**呼叫方式** — 在計算或渲染執行期間從其他執行緒呼叫。只中斷呼叫時已在進行中的工作，之後新開始的 compute 與渲染不受影響（無法預先設定）。被取消的 compute 回傳 0 且不發佈新快取，因此先前的快取原樣保留。被取消的渲染回傳 0 與 `ST_STATUS_UNAVAILABLE`。要停止整個批次工作，請使用 `st_off_batch_cancel`。執行緒：`[any]` — lock-free atomic，可在任何執行緒無阻塞呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | 離線情境控制代碼 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_get_cache_generation</code> — 현재 canonical IR 캐시의 세대 번호를 읽는다</summary>
+<summary><code>st_off_ir_get_cache_generation</code> — 讀取目前 canonical IR 快取的世代編號</summary>
 
 ```c
 uint64_t st_off_ir_get_cache_generation(const STOFF_Context* context);
 ```
 
-**용도** — 캐시가 마지막으로 발행된 세대를 돌려줍니다. 원시 IR 기술자와 모든 렌더 결과 info(`cacheGeneration` 필드)에도 같은 번호가 실리므로, 여러 번 조회·렌더한 결과가 **같은 계산에서 나왔는지** 호스트가 확인할 수 있습니다.
+**用途** — 回傳快取最後發佈的世代。原始 IR 描述子與所有渲染結果 info（`cacheGeneration` 欄位）也帶有相同編號，因此主機可確認多次查詢、渲染的結果 **是否來自同一次計算**。
 
-**언제·어떻게** — compute 전에는 0입니다. compute가 성공할 때마다 바뀝니다. 탭 복사·렌더 결과의 `cacheGeneration`과 비교해, 그 사이에 다른 스레드가 다시 계산하지 않았는지 검사하는 데 씁니다. 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**呼叫方式** — compute 之前為 0。每次 compute 成功時改變。用於與 tap 複製、渲染結果的 `cacheGeneration` 比較，檢查期間是否有其他執行緒重新計算。執行緒：`[control]` — 取得工作互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
+| `context` | 離線情境控制代碼 |
 
-**반환** — 현재 세대 번호. 캐시가 없거나(compute 전) `context`가 NULL이면 `0`.
+**回傳值** — 目前世代編號。無快取（compute 之前）或 `context` 為 NULL 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_get_raw_descriptor</code> — 리스너·소스 쌍의 원시 IR 요약(개수·세대·late 잔향 기술자·수송 에너지)을 읽는다</summary>
+<summary><code>st_off_ir_get_raw_descriptor</code> — 讀取聆聽者·音源配對的原始 IR 摘要（數量、世代、late 殘響描述子、傳輸能量）</summary>
 
 ```c
 int st_off_ir_get_raw_descriptor(STOFF_Context* context, STListenerId listener, STSourceId source, STRawIRDescriptor* outDescriptor);
 ```
 
-**용도** — canonical 캐시에 있는 쌍 하나의 원시 IR 머리 정보를 돌려줍니다. 탭·셀·연속성 ID 개수(복사 버퍼 크기), 음속·샘플레이트, 캐시 세대, late 잔향 기술자(T60·평균 자유 행로·실내 부피 등), 소스 수송 에너지 수지를 한 번에 얻습니다. 엔진의 렌더를 거치지 않고 기하·통계 데이터를 직접 분석하거나 자체 렌더러에 넣을 때 출발점입니다.
+**用途** — 回傳 canonical 快取中一組配對的原始 IR 標頭資訊。一次取得 tap、單元、連續性 ID 的數量（複製緩衝區大小）、音速與取樣率、快取世代、late 殘響描述子（T60、平均自由路徑、室內體積等）、音源傳輸能量收支。是不經引擎渲染、直接分析幾何與統計資料，或送入自製渲染器時的起點。
 
-**언제·어떻게** — `st_off_ir_compute` 뒤(또는 아카이브 적재 뒤)에 부릅니다. 반환된 개수로 버퍼를 잡고 `st_off_ir_copy_raw_early_taps` / `st_off_ir_copy_raw_diffuse_rain_cells` / `st_off_ir_copy_raw_reverb_send_taps` / `st_off_ir_copy_raw_continuity_ids`로 내용을 복사합니다. 원시 IR은 early 공간 모드와 무관하게 항상 exact 정본입니다. 지원 여부는 `ST_CAP_OFFLINE_RAW_IR`로 확인합니다. 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**呼叫方式** — 在 `st_off_ir_compute` 之後（或載入封存檔之後）呼叫。以回傳的數量取得緩衝區，再以 `st_off_ir_copy_raw_early_taps` / `st_off_ir_copy_raw_diffuse_rain_cells` / `st_off_ir_copy_raw_reverb_send_taps` / `st_off_ir_copy_raw_continuity_ids` 複製內容。原始 IR 不論 early 空間模式，永遠是 exact 標準版。是否支援以 `ST_CAP_OFFLINE_RAW_IR` 確認。執行緒：`[control]` — 取得工作互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `outDescriptor` | 결과를 받을 구조체. 호출자가 `structSize` = `sizeof(STRawIRDescriptor)`, `apiVersion` = `st_off_get_api_version()`을 채운다 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `source` | 音源控制代碼 |
+| `outDescriptor` | 接收結果的結構體。呼叫端填入 `structSize` = `sizeof(STRawIRDescriptor)`、`apiVersion` = `st_off_get_api_version()` |
 
-**구조체** `STRawIRDescriptor`
+**結構體** `STRawIRDescriptor`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize`, `apiVersion` | 호출자가 채우는 버전 스탬프 |
-| `cacheGeneration` | 이 결과가 속한 캐시 세대 |
-| `listenerId`, `sourceId` | 쌍의 ID |
-| `sampleRate` | 샘플레이트(44100 Hz 고정) |
-| `soundSpeedMetersPerSecond` | 이 계산에 쓴 음속(m/s). 대기 설정에서 유도된 값 |
-| `earlyTapCount` | 원시 초기 탭 수(`st_off_ir_copy_raw_early_taps`의 필요 개수). 기하 경로만 센다 |
-| `reverbSendTapCount` | late 잔향 송출 탭 수(`st_off_ir_copy_raw_reverb_send_taps`의 필요 개수) |
-| `continuityIdCount` | 연속성 ID 총수(`st_off_ir_copy_raw_continuity_ids`의 필요 개수) |
-| `sourceTransportEnergy` | `STRawIRSourceTransportEnergy` — 소스 수송 에너지 수지(아래 표) |
-| `lateReverb` | `STRawIRReverbDescriptor` — late 잔향장 기술자(아래 표) |
-| `diffuseRainCellCount` | 1차 산란 셀 수(`st_off_ir_copy_raw_diffuse_rain_cells`의 필요 개수). 지원 여부는 `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN` |
-| `reserved[5]` | 예약 |
+| `structSize`, `apiVersion` | 由呼叫端填入的版本戳記 |
+| `cacheGeneration` | 此結果所屬的快取世代 |
+| `listenerId`, `sourceId` | 配對的 ID |
+| `sampleRate` | 取樣率（固定 44100 Hz） |
+| `soundSpeedMetersPerSecond` | 此計算使用的音速（m/s）。由大氣設定推導的值 |
+| `earlyTapCount` | 原始早期 tap 數（`st_off_ir_copy_raw_early_taps` 所需數量）。只計幾何路徑 |
+| `reverbSendTapCount` | late 殘響送出 tap 數（`st_off_ir_copy_raw_reverb_send_taps` 所需數量） |
+| `continuityIdCount` | 連續性 ID 總數（`st_off_ir_copy_raw_continuity_ids` 所需數量） |
+| `sourceTransportEnergy` | `STRawIRSourceTransportEnergy` — 音源傳輸能量收支（見下表） |
+| `lateReverb` | `STRawIRReverbDescriptor` — late 殘響場描述子（見下表） |
+| `diffuseRainCellCount` | 一次散射單元數（`st_off_ir_copy_raw_diffuse_rain_cells` 所需數量）。是否支援見 `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN` |
+| `reserved[5]` | 保留 |
 
-**구조체** `STRawIRSourceTransportEnergy` — 9밴드 배열은 모두 에너지 영역입니다.
+**結構體** `STRawIRSourceTransportEnergy` — 9 頻帶陣列皆為能量域。
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `valid` | 1 = 값이 유효 / 0 = 없음 |
-| `emitted[9]` | 소스 수송이 방출한 에너지 |
-| `diffuseReleased[9]` | 확산 에너지로 풀려나 late 잔향 송출로 간 에너지 |
-| `escapedCoherent[9]` | 결맞은 채로 빠져나간 에너지 |
-| `depthRemainder[9]` | 반사 깊이 한도에서 남은 에너지 |
-| `boundaryAndAirLoss[9]` | 경계(흡수)·공기 흡수로 잃은 에너지 |
+| `valid` | 1 = 值有效 / 0 = 無 |
+| `emitted[9]` | 音源傳輸放出的能量 |
+| `diffuseReleased[9]` | 釋放為擴散能量並進入 late 殘響送出的能量 |
+| `escapedCoherent[9]` | 以相干狀態逸出的能量 |
+| `depthRemainder[9]` | 在反射深度上限時剩餘的能量 |
+| `boundaryAndAirLoss[9]` | 因邊界（吸收）與空氣吸收損失的能量 |
 
-**구조체** `STRawIRReverbDescriptor` — 반사율·공기 항은 에너지 영역, `diffuseFieldPressureGain`·`level`·`dryInputGain`은 압력 영역 선형 배율입니다.
+**結構體** `STRawIRReverbDescriptor` — 反射率與空氣項為能量域，`diffuseFieldPressureGain`·`level`·`dryInputGain` 為壓力域線性倍率。
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `valid` | 1 = 값이 유효 / 0 = 없음 |
-| `avgReflection[9]` | 평균 반사율(에너지) |
-| `airEnergyGainPerMeanFreePath[9]` | 평균 자유 행로 하나를 지날 때의 공기 흡수 에너지 이득 |
-| `eyringT60Seconds[9]` | Eyring 잔향 시간 T60(초) |
-| `diffuseFieldPressureGain[9]` | 확산장 압력 이득(압력 영역) |
-| `roomVolumeMetersCubed` | 추정 실내 부피(m³) |
-| `meanFreePath` | 평균 자유 행로(m) |
-| `meanFreeFlightTimeSeconds` | 평균 자유 비행 시간(초) |
-| `boundaryHitRatio` | 경계 적중 비율(무차원) |
-| `reserved[2]` | 예약 |
-| `level` | late 레벨(압력 영역) |
-| `dryInputGain` | 드라이 입력 이득(압력 영역) |
+| `valid` | 1 = 值有效 / 0 = 無 |
+| `avgReflection[9]` | 平均反射率（能量） |
+| `airEnergyGainPerMeanFreePath[9]` | 通過一個平均自由路徑時的空氣吸收能量增益 |
+| `eyringT60Seconds[9]` | Eyring 殘響時間 T60（秒） |
+| `diffuseFieldPressureGain[9]` | 擴散場壓力增益（壓力域） |
+| `roomVolumeMetersCubed` | 估計室內體積（m³） |
+| `meanFreePath` | 平均自由路徑（m） |
+| `meanFreeFlightTimeSeconds` | 平均自由飛行時間（秒） |
+| `boundaryHitRatio` | 邊界命中比例（無因次） |
+| `reserved[2]` | 保留 |
+| `level` | late 電平（壓力域） |
+| `dryInputGain` | 乾輸入增益（壓力域） |
 
-길이·부피 출력은 `sceneRatio`를 반영한 실제 미터 단위입니다.
+長度與體積輸出為已反映 `sceneRatio` 的實際公尺單位。
 
-**반환** — `1` = 성공 / `0` = 실패. `outDescriptor`가 NULL이거나 스탬프가 틀리면 `ST_STATUS_INVALID_ARGUMENT`, 캐시가 없거나 그 쌍이 없으면 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — `1` = 成功 / `0` = 失敗。`outDescriptor` 為 NULL 或戳記錯誤時為 `ST_STATUS_INVALID_ARGUMENT`，無快取或無該配對時為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_copy_raw_early_taps</code> — 쌍의 원시 초기 탭(직접·투과·반사·회절 경로)을 복사한다</summary>
+<summary><code>st_off_ir_copy_raw_early_taps</code> — 複製配對的原始早期 tap（直接、透射、反射、繞射路徑）</summary>
 
 ```c
 int st_off_ir_copy_raw_early_taps(STOFF_Context* context, STListenerId listener, STSourceId source, STRawIRTap* outTaps, int tapCapacity);
 ```
 
-**용도** — 기하 경로 하나하나를 에너지 영역 탭으로 내보냅니다(경로 종류, 지연, 9밴드 에너지 이득, 도래 방향, 경로 길이, Doppler 기울기, 경로 ID). 직접음 도착 시각·ITDG·경로 수 같은 기하 지표를 계산하거나 자체 렌더러를 구동할 때 씁니다. 압력이 필요하면 각 밴드 에너지에 `sqrt`를 **한 번** 적용합니다.
+**用途** — 將每條幾何路徑以能量域 tap 輸出（路徑種類、延遲、9 頻帶能量增益、到達方向、路徑長度、Doppler 斜率、路徑 ID）。用於計算直達音到達時間、ITDG、路徑數等幾何指標，或驅動自製渲染器。需要壓力時，對各頻帶能量套用 **一次** `sqrt`。
 
-**언제·어떻게** — 원시 초기 탭은 **기하 경로만**입니다. 압력 IR 렌더에 들어가는 1차 산란(diffuse rain) 셀은 1 ms 셀로 모은 통계 성분이라 여기에 포함되지 않으며(`earlyTapCount`와 연속성 ID도 마찬가지), 따로 `st_off_ir_copy_raw_diffuse_rain_cells`로 받습니다. 그래서 기하 지표가 그 셀에 흔들리지 않습니다. 크기 질의: `outTaps` = NULL, `tapCapacity` = 0으로 부르면 필요한 개수를 돌려줍니다(`STRawIRDescriptor.earlyTapCount`와 같음). 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**呼叫方式** — 原始早期 tap **只有幾何路徑**。送入壓力 IR 渲染的一次散射（diffuse rain）單元是以 1 ms 單元彙整的統計成分，不包含於此（`earlyTapCount` 與連續性 ID 亦同），須另以 `st_off_ir_copy_raw_diffuse_rain_cells` 取得。因此幾何指標不會受這些單元影響。大小查詢：以 `outTaps` = NULL、`tapCapacity` = 0 呼叫則回傳所需數量（與 `STRawIRDescriptor.earlyTapCount` 相同）。執行緒：`[control]` — 取得工作互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `outTaps` | 탭을 받을 호출자 배열. NULL이면 크기 질의(이때 `tapCapacity`는 0이어야 함) |
-| `tapCapacity` | `outTaps` 원소 수. 0 이상 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `source` | 音源控制代碼 |
+| `outTaps` | 接收 tap 的呼叫端陣列。NULL 則為大小查詢（此時 `tapCapacity` 須為 0） |
+| `tapCapacity` | `outTaps` 元素數。0 以上 |
 
-**구조체** `STRawIRTap` (에너지 영역)
+**結構體** `STRawIRTap`（能量域）
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
 | `pathType` | 0 = Direct / 1 = Transmission / 2 = Reflection / 3 = Diffraction |
-| `depth` | 상호작용 차수 |
-| `delaySeconds` | 도착 지연(초) |
-| `delaySamples` | 도착 지연(44.1 kHz 샘플, 소수 포함) |
-| `bandEnergyGain[9]` | 9밴드 에너지 이득. 압력은 `sqrt`로 얻는다 |
-| `dirFromListener[3]` | 리스너에서 본 도래 방향 |
-| `matchDirFromListener[3]` | 경로 대응(연속성 매칭)에만 쓰는 리스너 쪽 방향(월드 좌표) |
-| `matchDirFromSource[3]` | 경로 대응(연속성 매칭)에만 쓰는 소스 쪽 방향(월드 좌표) |
-| `pathLengthMeters` | 경로 길이(m, `sceneRatio` 반영) |
-| `relativeSpeed` | 상대 속도(m/s) — `delayChangePerSample` × 음속 |
-| `delayChangePerSample` | 샘플당 지연 변화(Doppler 기울기) |
-| `pathId` | 64비트 토폴로지 기반 경로 ID(같은 경로를 계산 사이에 대응시키는 키) |
-| `interactionSignature` | 같은 `pathId`를 공유하는 물리적 분기를 가르는 상호작용·재질 판별자 |
-| `continuityOffset` | 이 탭의 연속성 ID가 `st_off_ir_copy_raw_continuity_ids` 배열에서 시작하는 인덱스 |
-| `continuityCount` | 이 탭의 연속성 ID 수. 유일한 경로는 0(`pathId`가 곧 그 ID) |
+| `depth` | 交互作用階數 |
+| `delaySeconds` | 到達延遲（秒） |
+| `delaySamples` | 到達延遲（44.1 kHz 樣本，含小數） |
+| `bandEnergyGain[9]` | 9 頻帶能量增益。壓力以 `sqrt` 取得 |
+| `dirFromListener[3]` | 從聆聽者看的到達方向 |
+| `matchDirFromListener[3]` | 僅用於路徑對應（連續性比對）的聆聽者側方向（世界座標） |
+| `matchDirFromSource[3]` | 僅用於路徑對應（連續性比對）的音源側方向（世界座標） |
+| `pathLengthMeters` | 路徑長度（m，已反映 `sceneRatio`） |
+| `relativeSpeed` | 相對速度（m/s） — `delayChangePerSample` × 音速 |
+| `delayChangePerSample` | 每樣本延遲變化（Doppler 斜率） |
+| `pathId` | 64 位元基於拓撲的路徑 ID（在不同計算間對應同一路徑的鍵） |
+| `interactionSignature` | 區分共用同一 `pathId` 之物理分支的交互作用·材質判別值 |
+| `continuityOffset` | 此 tap 的連續性 ID 在 `st_off_ir_copy_raw_continuity_ids` 陣列中的起始索引 |
+| `continuityCount` | 此 tap 的連續性 ID 數。唯一路徑為 0（`pathId` 即該 ID） |
 
-**반환** — 복사한(또는 필요한) 탭 수. 실패는 `0`: 용량 음수·`outTaps` NULL인데 용량 0 아님은 `ST_STATUS_INVALID_ARGUMENT`, 용량 부족은 `ST_STATUS_BUFFER_TOO_SMALL`, 캐시·쌍이 없으면 `ST_STATUS_UNAVAILABLE`. 탭이 하나도 없는 정상 결과도 0이므로 구분은 `st_off_get_last_status`로 합니다.
+**回傳值** — 已複製（或所需）的 tap 數。失敗為 `0`：容量為負、`outTaps` 為 NULL 但容量非 0 時為 `ST_STATUS_INVALID_ARGUMENT`，容量不足為 `ST_STATUS_BUFFER_TOO_SMALL`，無快取或配對時為 `ST_STATUS_UNAVAILABLE`。沒有任何 tap 的正常結果也是 0，因此以 `st_off_get_last_status` 區分。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_copy_raw_diffuse_rain_cells</code> — 쌍의 1차 산란(diffuse rain) 셀을 복사한다</summary>
+<summary><code>st_off_ir_copy_raw_diffuse_rain_cells</code> — 複製配對的一次散射（diffuse rain）單元</summary>
 
 ```c
 int st_off_ir_copy_raw_diffuse_rain_cells(STOFF_Context* context, STListenerId listener, STSourceId source, STRawIRDiffuseRainCell* outCells, int cellCapacity);
 ```
 
-**용도** — 산란점에서 리스너로 바로 가는 산란 에너지를 직접음 이후 1 ms 셀로 모은 통계 성분을 내보냅니다. 압력·바이노럴 렌더는 이 셀을 late 스템으로 렌더합니다(기하 경로가 아니므로 `st_off_ir_copy_raw_early_taps`에는 없습니다). 렌더 IR을 원시 성분으로 분해하거나 자체 렌더러에서 1차 산란을 재현할 때 씁니다.
+**用途** — 輸出從散射點直接到達聆聽者的散射能量，以直達音之後的 1 ms 單元彙整而成的統計成分。壓力與雙耳渲染將這些單元渲染為 late stem（並非幾何路徑，因此不在 `st_off_ir_copy_raw_early_taps` 中）。用於將渲染 IR 分解為原始成分，或在自製渲染器中重現一次散射。
 
-**언제·어떻게** — 계약은 다른 원시 복사와 같습니다: `outCells` = NULL, `cellCapacity` = 0이면 필요한 개수(`STRawIRDescriptor.diffuseRainCellCount`와 같음)를 돌려줍니다. 산란이 없으면 0입니다. 렌더 압력 = `polarity` × √(에너지)입니다. 지원 여부는 `st_off_get_capability_word(1)`의 `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN`으로 확인합니다. 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**呼叫方式** — 約定與其他原始複製相同：`outCells` = NULL、`cellCapacity` = 0 時回傳所需數量（與 `STRawIRDescriptor.diffuseRainCellCount` 相同）。無散射時為 0。渲染壓力 = `polarity` × √(能量)。是否支援以 `st_off_get_capability_word(1)` 的 `ST_CAP1_OFFLINE_RAW_DIFFUSE_RAIN` 確認。執行緒：`[control]` — 取得工作互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `outCells` | 셀을 받을 호출자 배열. NULL이면 크기 질의(이때 `cellCapacity`는 0이어야 함) |
-| `cellCapacity` | `outCells` 원소 수. 0 이상 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `source` | 音源控制代碼 |
+| `outCells` | 接收單元的呼叫端陣列。NULL 則為大小查詢（此時 `cellCapacity` 須為 0） |
+| `cellCapacity` | `outCells` 元素數。0 以上 |
 
-**구조체** `STRawIRDiffuseRainCell` (에너지 영역)
+**結構體** `STRawIRDiffuseRainCell`（能量域）
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `pathId` | 셀 번호만으로 정해지는 결정적 ID(같은 셀은 같은 ID) |
-| `cellIndex` | 직접음 이후 1 ms 셀 번호(0부터) |
-| `polarity` | 렌더 압력 부호 +1 / −1(셀마다 결정적) |
-| `delaySeconds` | 셀 안의 에너지 가중 도착 시각(초) |
-| `delaySamples` | 같은 값(44.1 kHz 샘플) |
-| `bandEnergyGain[9]` | 9밴드 에너지 이득 |
-| `dirFromListener[3]` | 에너지 가중 도래 방향(리스너 로컬) |
-| `delayChangePerSample` | 샘플당 지연 변화 |
-| `reserved[4]` | 예약 |
+| `pathId` | 僅由單元編號決定的確定性 ID（同一單元為同一 ID） |
+| `cellIndex` | 直達音之後的 1 ms 單元編號（從 0 起） |
+| `polarity` | 渲染壓力符號 +1 / −1（每個單元確定性決定） |
+| `delaySeconds` | 單元內以能量加權的到達時間（秒） |
+| `delaySamples` | 同一值（44.1 kHz 樣本） |
+| `bandEnergyGain[9]` | 9 頻帶能量增益 |
+| `dirFromListener[3]` | 以能量加權的到達方向（聆聽者區域座標） |
+| `delayChangePerSample` | 每樣本延遲變化 |
+| `reserved[4]` | 保留 |
 
-**반환** — 복사한(또는 필요한) 셀 수. 실패는 `0`: 인자 오류는 `ST_STATUS_INVALID_ARGUMENT`, 용량 부족은 `ST_STATUS_BUFFER_TOO_SMALL`, 캐시·쌍이 없으면 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — 已複製（或所需）的單元數。失敗為 `0`：引數錯誤為 `ST_STATUS_INVALID_ARGUMENT`，容量不足為 `ST_STATUS_BUFFER_TOO_SMALL`，無快取或配對時為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_copy_raw_reverb_send_taps</code> — 쌍의 late 잔향 송출 탭(확산 에너지 사건)을 복사한다</summary>
+<summary><code>st_off_ir_copy_raw_reverb_send_taps</code> — 複製配對的 late 殘響送出 tap（擴散能量事件）</summary>
 
 ```c
 int st_off_ir_copy_raw_reverb_send_taps(STOFF_Context* context, STListenerId listener, STSourceId source, STRawIRReverbSendTap* outTaps, int tapCapacity);
 ```
 
-**용도** — 소스 수송에서 얻은 통계적 확산 에너지 사건(late 잔향 탱크를 여기하는 송출 탭)을 내보냅니다. 엔진 렌더에서는 이 탭들이 압력으로 실현돼 FDN에 들어갑니다. exact 초기 경로(직접·투과·반사·회절)는 FDN에 들어가지 않고 별도 경로로 렌더됩니다. late 잔향의 시간·스펙트럼 입력을 분석하거나 자체 잔향기에 넣을 때 씁니다.
+**用途** — 輸出從音源傳輸取得的統計擴散能量事件（激發 late 殘響槽的送出 tap）。在引擎渲染中，這些 tap 會實現為壓力送入 FDN。exact 早期路徑（直接、透射、反射、繞射）不進入 FDN，而以獨立路徑渲染。用於分析 late 殘響的時間與頻譜輸入，或送入自製殘響器。
 
-**언제·어떻게** — `outTaps` = NULL, `tapCapacity` = 0이면 필요한 개수(`STRawIRDescriptor.reverbSendTapCount`와 같음)를 돌려줍니다. 렌더 요청의 `reverbSendMask`가 이 탭 중 어느 것이 탱크를 여기할지 고릅니다. 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**呼叫方式** — `outTaps` = NULL、`tapCapacity` = 0 時回傳所需數量（與 `STRawIRDescriptor.reverbSendTapCount` 相同）。渲染請求的 `reverbSendMask` 決定這些 tap 中哪些會激發殘響槽。執行緒：`[control]` — 取得工作互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `outTaps` | 탭을 받을 호출자 배열. NULL이면 크기 질의(이때 `tapCapacity`는 0이어야 함) |
-| `tapCapacity` | `outTaps` 원소 수. 0 이상 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `source` | 音源控制代碼 |
+| `outTaps` | 接收 tap 的呼叫端陣列。NULL 則為大小查詢（此時 `tapCapacity` 須為 0） |
+| `tapCapacity` | `outTaps` 元素數。0 以上 |
 
-**구조체** `STRawIRReverbSendTap` (에너지 영역)
+**結構體** `STRawIRReverbSendTap`（能量域）
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `sourcePathType` | 소스 쪽 경로 계열 라우팅 태그(현재 소스 수송은 Reflection) |
-| `role` | `STReverbSendRole` — 현재 값은 `ST_REVERB_SEND_OBSERVED_SCATTER`(0) 하나 |
-| `depth` | 안정적인 수송 시간 빈 순번 |
-| `reserved0` | 예약 |
-| `delaySeconds` | 지연(초) |
-| `delaySamples` | 지연(44.1 kHz 샘플) |
-| `bandEnergy[9]` | 9밴드 에너지 |
-| `matchDirFromSource[3]` | 소스 쪽 방향 |
-| `pathLengthMeters` | 경로 길이(m, `sceneRatio` 반영) |
-| `relativeSpeed` | 상대 속도(m/s) |
-| `delayChangePerSample` | 샘플당 지연 변화 |
-| `pathId` | 64비트 경로 ID |
+| `sourcePathType` | 音源側路徑系列的路由標籤（目前音源傳輸為 Reflection） |
+| `role` | `STReverbSendRole` — 目前值只有 `ST_REVERB_SEND_OBSERVED_SCATTER`(0) 一個 |
+| `depth` | 穩定的傳輸時間 bin 序號 |
+| `reserved0` | 保留 |
+| `delaySeconds` | 延遲（秒） |
+| `delaySamples` | 延遲（44.1 kHz 樣本） |
+| `bandEnergy[9]` | 9 頻帶能量 |
+| `matchDirFromSource[3]` | 音源側方向 |
+| `pathLengthMeters` | 路徑長度（m，已反映 `sceneRatio`） |
+| `relativeSpeed` | 相對速度（m/s） |
+| `delayChangePerSample` | 每樣本延遲變化 |
+| `pathId` | 64 位元路徑 ID |
 
-**반환** — 복사한(또는 필요한) 탭 수. 실패는 `0`: 인자 오류는 `ST_STATUS_INVALID_ARGUMENT`, 용량 부족은 `ST_STATUS_BUFFER_TOO_SMALL`, 캐시·쌍이 없으면 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — 已複製（或所需）的 tap 數。失敗為 `0`：引數錯誤為 `ST_STATUS_INVALID_ARGUMENT`，容量不足為 `ST_STATUS_BUFFER_TOO_SMALL`，無快取或配對時為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_copy_raw_continuity_ids</code> — 원시 초기 탭들의 연속성 경로 ID 배열을 복사한다</summary>
+<summary><code>st_off_ir_copy_raw_continuity_ids</code> — 複製原始早期 tap 的連續性路徑 ID 陣列</summary>
 
 ```c
 int st_off_ir_copy_raw_continuity_ids(STOFF_Context* context, STListenerId listener, STSourceId source, uint64_t* outPathIds, int idCapacity);
 ```
 
-**용도** — 하나의 탭으로 합쳐진 경로가 여러 토폴로지 경로 ID를 가질 때, 같은 경로로 판정된 그 ID들(별칭)을 하나의 평탄한 배열로 내보냅니다. 탭 `i`의 ID는 `outPathIds[taps[i].continuityOffset .. + taps[i].continuityCount)`입니다. 유일한 경로의 탭은 범위가 비어 있습니다(`pathId`가 곧 그 ID). 계산 결과 사이에서 경로 대응을 호스트가 직접 맺을 때, 대표 `pathId`가 바뀌어도 같은 경로임을 알아보는 데 씁니다.
+**用途** — 合併為一個 tap 的路徑擁有多個拓撲路徑 ID 時，將判定為同一路徑的這些 ID（別名）輸出為一個扁平陣列。tap `i` 的 ID 為 `outPathIds[taps[i].continuityOffset .. + taps[i].continuityCount)`。唯一路徑的 tap 範圍為空（`pathId` 即該 ID）。用於主機自行在計算結果之間建立路徑對應時，即使代表 `pathId` 改變也能辨認為同一路徑。
 
-**언제·어떻게** — `st_off_ir_copy_raw_early_taps`와 같은 캐시 세대에서 함께 복사합니다(1차 산란 셀은 포함되지 않습니다). `outPathIds` = NULL, `idCapacity` = 0이면 필요한 개수(`STRawIRDescriptor.continuityIdCount`와 같음)를 돌려줍니다. 스레드: `[control]` — 잡 뮤텍스를 잡습니다.
+**呼叫方式** — 與 `st_off_ir_copy_raw_early_taps` 在同一快取世代中一起複製（不包含一次散射單元）。`outPathIds` = NULL、`idCapacity` = 0 時回傳所需數量（與 `STRawIRDescriptor.continuityIdCount` 相同）。執行緒：`[control]` — 取得工作互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `outPathIds` | 64비트 경로 ID를 받을 호출자 배열. NULL이면 크기 질의(이때 `idCapacity`는 0이어야 함) |
-| `idCapacity` | `outPathIds` 원소 수. 0 이상 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `source` | 音源控制代碼 |
+| `outPathIds` | 接收 64 位元路徑 ID 的呼叫端陣列。NULL 則為大小查詢（此時 `idCapacity` 須為 0） |
+| `idCapacity` | `outPathIds` 元素數。0 以上 |
 
-**반환** — 복사한(또는 필요한) ID 수. 실패는 `0`: 인자 오류는 `ST_STATUS_INVALID_ARGUMENT`, 용량 부족은 `ST_STATUS_BUFFER_TOO_SMALL`, 캐시·쌍이 없으면 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — 已複製（或所需）的 ID 數。失敗為 `0`：引數錯誤為 `ST_STATUS_INVALID_ARGUMENT`，容量不足為 `ST_STATUS_BUFFER_TOO_SMALL`，無快取或配對時為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_init_pressure_request</code> — 압력 IR 요청 구조체를 기본값으로 채운다</summary>
+<summary><code>st_off_ir_init_pressure_request</code> — 以預設值填入壓力 IR 請求結構體</summary>
 
 ```c
 void st_off_ir_init_pressure_request(STOfflinePressureIRRequestOptions* outOptions);
 ```
 
-**용도** — `STOfflinePressureIRRequestOptions`의 버전 스탬프와 기본값을 한 번에 채웁니다. 압력 IR 렌더(`st_off_ir_render_pressure`, `st_off_ir_render_pressure_mixed`, `st_off_batch_add_pressure_render*`)에 넘기기 전에 항상 이 함수로 초기화한 뒤 필요한 필드만 바꿉니다.
+**用途** — 一次填入 `STOfflinePressureIRRequestOptions` 的版本戳記與預設值。傳給壓力 IR 渲染（`st_off_ir_render_pressure`、`st_off_ir_render_pressure_mixed`、`st_off_batch_add_pressure_render*`）之前，務必先以此函式初始化，再只變更需要的欄位。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 스레드: `[any]` — 호출자 구조체만 채우므로 어느 스레드에서나 블록 없이 부를 수 있습니다.
+**呼叫方式** — 隨時可呼叫。執行緒：`[any]` — 只填入呼叫端結構體，可在任何執行緒無阻塞呼叫。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `outOptions` | 채울 구조체. NULL이면 아무것도 하지 않음 |
+| `outOptions` | 要填入的結構體。NULL 則不做任何事 |
 
-**구조체** `STOfflinePressureIRRequestOptions`
+**結構體** `STOfflinePressureIRRequestOptions`
 
-| 필드 | 기본값 | 설명 |
+| 欄位 | 預設值 | 說明 |
 |---|---|---|
-| `structSize` | `sizeof(STOfflinePressureIRRequestOptions)` | 버전 스탬프 |
-| `apiVersion` | `st_off_get_api_version()` 값 | 버전 스탬프 |
-| `outputMode` | `ST_PRESSURE_IR_BROADBAND_MONO`(0) | `STPressureIROutput` — `ST_PRESSURE_IR_BROADBAND_MONO`(0, 광대역 모노 1채널) / `ST_PRESSURE_IR_SEPARATE_BANDS`(1, 9밴드 분리). 같은 요청에서 모노 = 9밴드의 합이 성립한다 |
-| `outputMask` | `ST_OFFLINE_OUTPUT_FULL` | 결과에 넣을 성분. `ST_OFFLINE_OUTPUT_DIRECT`(1) / `TRANSMISSION`(2) / `REFLECTION`(4) / `DIFFRACTION`(8) / `LATE_REVERB`(16)의 OR. 묶음 `ST_OFFLINE_OUTPUT_EARLY_ALL`(초기 4종), `ST_OFFLINE_OUTPUT_FULL`(전부). `LATE_REVERB`는 late 잔향과 1차 산란 셀을 함께 싣는다. `FULL` 밖의 비트는 거절 |
-| `reverbSendMask` | `ST_OFFLINE_REVERB_SEND_ALL` | late 잔향 탱크를 여기할 송출 탭을 초기 경로 4비트(`ST_OFFLINE_OUTPUT_DIRECT`·`TRANSMISSION`·`REFLECTION`·`DIFFRACTION`)로 고른다. `ST_OFFLINE_REVERB_SEND_ALL` = `ST_OFFLINE_OUTPUT_EARLY_ALL`. `EARLY_ALL` 밖의 비트는 거절 |
-| `renderMethod` | 0 | 렌더러 선택자. 압력 IR 렌더러는 하나이며 0·1·2(`ST_PRESSURE_IR_RENDER_SIMULATE` / `SYNTHESIZE_EXACT` / `SIMULATE2`, 레거시 별칭)는 모두 같은 렌더로 가서 결과가 바이트 동일하다. 새 코드는 0. 그 밖의 값은 거절 |
-| `reserved[9]` | 0 | 예약 |
+| `structSize` | `sizeof(STOfflinePressureIRRequestOptions)` | 版本戳記 |
+| `apiVersion` | `st_off_get_api_version()` 的值 | 版本戳記 |
+| `outputMode` | `ST_PRESSURE_IR_BROADBAND_MONO`(0) | `STPressureIROutput` — `ST_PRESSURE_IR_BROADBAND_MONO`（0，寬頻單聲道 1 聲道） / `ST_PRESSURE_IR_SEPARATE_BANDS`（1，9 頻帶分離）。在同一請求中，單聲道 = 9 頻帶之和成立 |
+| `outputMask` | `ST_OFFLINE_OUTPUT_FULL` | 放入結果的成分。`ST_OFFLINE_OUTPUT_DIRECT`(1) / `TRANSMISSION`(2) / `REFLECTION`(4) / `DIFFRACTION`(8) / `LATE_REVERB`(16) 的 OR。組合 `ST_OFFLINE_OUTPUT_EARLY_ALL`（早期 4 種）、`ST_OFFLINE_OUTPUT_FULL`（全部）。`LATE_REVERB` 會同時放入 late 殘響與一次散射單元。`FULL` 以外的位元拒絕 |
+| `reverbSendMask` | `ST_OFFLINE_REVERB_SEND_ALL` | 以早期路徑 4 位元（`ST_OFFLINE_OUTPUT_DIRECT`·`TRANSMISSION`·`REFLECTION`·`DIFFRACTION`）選擇激發 late 殘響槽的送出 tap。`ST_OFFLINE_REVERB_SEND_ALL` = `ST_OFFLINE_OUTPUT_EARLY_ALL`。`EARLY_ALL` 以外的位元拒絕 |
+| `renderMethod` | 0 | 渲染器選擇子。壓力 IR 渲染器只有一個，0·1·2（`ST_PRESSURE_IR_RENDER_SIMULATE` / `SYNTHESIZE_EXACT` / `SIMULATE2`，舊版別名）都走同一渲染，結果位元組相同。新程式碼用 0。其他值拒絕 |
+| `reserved[9]` | 0 | 保留 |
 
-`outputMask`는 들리는(반환되는) 성분을, `reverbSendMask`는 어떤 송출 탭이 late 탱크를 여기할지를 정합니다. 예를 들어 `outputMask` = `ST_OFFLINE_OUTPUT_LATE_REVERB`만 두면 초기 경로를 뺀 late 스템만 얻습니다.
+`outputMask` 決定可聽見（被回傳）的成分，`reverbSendMask` 決定哪些送出 tap 激發 late 殘響槽。例如只設 `outputMask` = `ST_OFFLINE_OUTPUT_LATE_REVERB`，即可得到去除早期路徑的 late stem。
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_get_pressure_band_centers</code> — 9밴드 압력 IR의 밴드 중심 주파수(Hz)를 복사한다</summary>
+<summary><code>st_off_ir_get_pressure_band_centers</code> — 複製 9 頻帶壓力 IR 的頻帶中心頻率（Hz）</summary>
 
 ```c
 int st_off_ir_get_pressure_band_centers(float* outHz, int capacity);
 ```
 
-**용도** — `ST_PRESSURE_IR_SEPARATE_BANDS` 결과의 밴드 `b`가 어느 주파수 대역인지 알려 줍니다. 엔진 밴드는 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz의 9개(`ST_FREQUENCY_BANDS`)입니다.
+**用途** — 告知 `ST_PRESSURE_IR_SEPARATE_BANDS` 結果的頻帶 `b` 屬於哪個頻率範圍。引擎頻帶為 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz 共 9 個（`ST_FREQUENCY_BANDS`）。
 
-**언제·어떻게** — 컨텍스트 없이 언제든 부를 수 있습니다. 밴드 분리 IR을 저장하거나 그래프로 그릴 때 라벨로 씁니다. 지원 여부는 `ST_CAP_OFFLINE_PRESSURE_BAND_METADATA`로 확인합니다. 스레드: `[any]` — 컴파일 상수를 복사합니다.
+**呼叫方式** — 不需情境，隨時可呼叫。用作儲存或繪製頻帶分離 IR 時的標籤。是否支援以 `ST_CAP_OFFLINE_PRESSURE_BAND_METADATA` 確認。執行緒：`[any]` — 複製編譯期常數。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `outHz` | 중심 주파수를 받을 배열. NULL이면 크기 질의(이때 `capacity`는 0) |
-| `capacity` | `outHz` 원소 수. 9 이상이어야 한다 |
+| `outHz` | 接收中心頻率的陣列。NULL 則為大小查詢（此時 `capacity` 為 0） |
+| `capacity` | `outHz` 元素數。須為 9 以上 |
 
-**반환** — 밴드 수 `9`(복사 성공 또는 크기 질의). `capacity`가 9보다 작거나, `outHz` NULL인데 `capacity`가 0이 아니면 `0`.
+**回傳值** — 頻帶數 `9`（複製成功或大小查詢）。`capacity` 小於 9，或 `outHz` 為 NULL 但 `capacity` 非 0 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_render_pressure</code> — 리스너·소스 쌍 하나의 압력 IR(광대역 모노 또는 9밴드)을 렌더한다</summary>
+<summary><code>st_off_ir_render_pressure</code> — 渲染一組聆聽者·音源配對的壓力 IR（寬頻單聲道或 9 頻帶）</summary>
 
 ```c
 int st_off_ir_render_pressure(STOFF_Context* context, STListenerId listener, STSourceId source, double seconds, const STOfflinePressureIRRequestOptions* options, float* outValues, int capacityValues, STOfflinePressureIRInfo* outInfo);
 ```
 
-**용도** — canonical 캐시의 쌍 하나를 시간 영역 압력 임펄스 응답(RIR)으로 렌더합니다. exact 초기 경로와 송출 탭을 임펄스로 합성하고 late 잔향은 FDN으로 렌더합니다. 음향 분석(T60·C80·EDT 등)이나 측정값과의 비교, 외부 컨볼루션 리버브용 IR 추출에 씁니다. 공간화하지 않은 압력 신호이며 early 공간 모드와 무관하게 항상 exact 정본입니다.
+**用途** — 將 canonical 快取中的一組配對渲染為時域壓力脈衝響應（RIR）。以脈衝合成 exact 早期路徑與送出 tap，late 殘響以 FDN 渲染。用於聲學分析（T60、C80、EDT 等）、與量測值比較，或擷取外部摺積殘響用的 IR。這是未空間化的壓力訊號，不論 early 空間模式，永遠是 exact 標準版。
 
-**언제·어떻게** — `st_off_ir_compute` 뒤에 부릅니다. 결과는 호출자 소유 버퍼에 한 번에 씁니다.
+**呼叫方式** — 在 `st_off_ir_compute` 之後呼叫。結果一次寫入呼叫端擁有的緩衝區。
 
-1. 크기 질의: `outValues` = NULL, `capacityValues` = 0으로 부르면 필요한 값 개수를 돌려주고, 쌍이 유효하면 `outInfo`도 채웁니다.
-2. 그 크기로 버퍼를 잡고 다시 부릅니다.
+1. 大小查詢：以 `outValues` = NULL、`capacityValues` = 0 呼叫則回傳所需的值數量，配對有效時也會填入 `outInfo`。
+2. 以該大小取得緩衝區後再次呼叫。
 
-샘플레이트는 44100 Hz 고정입니다. 길이는 `floor(seconds × 44100)` 프레임이고, 값 개수는 모노면 프레임 수, 밴드 분리면 9 × 프레임 수입니다. 밴드 분리 배치는 `values[band × bandStride + sample]`(`bandStride` = `frameCount`)입니다. 출력은 **정규화하지 않은** 절대 레벨이며 정규화 옵션은 없습니다. 지연 링 한계(`st_off_render_set_max_delay_seconds`, 기본 4 s)보다 늦게 도착하는 exact 경로는 빠집니다. 소스 EQ가 걸려 있으면 같은 필터가 적용됩니다. 같은 요청을 반복 렌더하면 비트 동일합니다. 다른 스레드에서 `st_off_ir_request_cancel`로 중단할 수 있습니다. 지원 여부는 `ST_CAP_OFFLINE_PRESSURE_IR`로 확인합니다. 스레드: `[control, blocking]` — 렌더가 호출 스레드에서 돌고, 이 컨텍스트의 다른 잡과 직렬화됩니다.
+取樣率固定為 44100 Hz。長度為 `floor(seconds × 44100)` 幀，值數量在單聲道時為幀數，頻帶分離時為 9 × 幀數。頻帶分離的佈局為 `values[band × bandStride + sample]`（`bandStride` = `frameCount`）。輸出為 **未正規化** 的絕對電平，且沒有正規化選項。晚於延遲環上限（`st_off_render_set_max_delay_seconds`，預設 4 s）到達的 exact 路徑會被排除。若有套用音源 EQ，也會套用同一濾波器。重複渲染相同請求的結果位元相同。可從其他執行緒以 `st_off_ir_request_cancel` 中斷。是否支援以 `ST_CAP_OFFLINE_PRESSURE_IR` 確認。執行緒：`[control, blocking]` — 渲染在呼叫執行緒上執行，並與此情境的其他工作序列化。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `seconds` | IR 길이(초). 유한한 양수, 최소 1프레임 |
-| `options` | `st_off_ir_init_pressure_request`로 초기화한 요청. NULL 불가. 필드는 그 항목 참고 |
-| `outValues` | 결과를 받을 호출자 버퍼(float). NULL이면 크기 질의 |
-| `capacityValues` | `outValues`의 float 개수. 크기 질의면 0 |
-| `outInfo` | 결과 메타데이터. NULL 허용. 넘기면 호출자가 `structSize` = `sizeof(STOfflinePressureIRInfo)`, `apiVersion`을 채운다 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `source` | 音源控制代碼 |
+| `seconds` | IR 長度（秒）。有限正數，最少 1 幀 |
+| `options` | 以 `st_off_ir_init_pressure_request` 初始化的請求。不可為 NULL。欄位請參考該條目 |
+| `outValues` | 接收結果的呼叫端緩衝區（float）。NULL 則為大小查詢 |
+| `capacityValues` | `outValues` 的 float 數量。大小查詢時為 0 |
+| `outInfo` | 結果中繼資料。允許 NULL。傳入時由呼叫端填入 `structSize` = `sizeof(STOfflinePressureIRInfo)`、`apiVersion` |
 
-**구조체** `STOfflinePressureIRInfo`
+**結構體** `STOfflinePressureIRInfo`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize`, `apiVersion` | 호출자가 채우는 버전 스탬프 |
-| `cacheGeneration` | 렌더에 쓴 캐시 세대 |
-| `listenerId` | 리스너 ID |
-| `sourceId` | 소스 ID. 혼합 렌더는 `-1` |
+| `structSize`, `apiVersion` | 由呼叫端填入的版本戳記 |
+| `cacheGeneration` | 渲染所用的快取世代 |
+| `listenerId` | 聆聽者 ID |
+| `sourceId` | 音源 ID。混合渲染為 `-1` |
 | `sampleRate` | 44100 |
-| `frameCount` | 프레임 수 |
-| `bandCount` | 1(광대역 모노) 또는 9(밴드 분리) |
-| `bandStride` | 밴드 간 간격 = `frameCount` |
-| `valueCount` | 전체 float 개수 = `frameCount × bandCount` |
-| `outputMode` | 실제로 쓴 `STPressureIROutput` |
-| `reverbSendTapCount` | 렌더에 들어간 송출 탭 수(혼합 렌더는 소스별 합) |
-| `outputMask`, `reverbSendMask` | 실제로 쓴 마스크 |
-| `sourceCount` | 렌더에 들어간 소스 수. 솔로 렌더는 1 |
-| `reserved[9]` | 예약 |
+| `frameCount` | 幀數 |
+| `bandCount` | 1（寬頻單聲道）或 9（頻帶分離） |
+| `bandStride` | 頻帶間隔 = `frameCount` |
+| `valueCount` | 總 float 數量 = `frameCount × bandCount` |
+| `outputMode` | 實際使用的 `STPressureIROutput` |
+| `reverbSendTapCount` | 送入渲染的送出 tap 數（混合渲染為各音源之和） |
+| `outputMask`, `reverbSendMask` | 實際使用的遮罩 |
+| `sourceCount` | 送入渲染的音源數。獨奏渲染為 1 |
+| `reserved[9]` | 保留 |
 
-**반환** — 쓴(또는 필요한) float 개수. 실패는 `0`: 캐시가 없으면 `ST_STATUS_UNAVAILABLE`, 요청·길이·마스크·스탬프가 잘못됐거나 크기 질의에서 쌍이 없으면 `ST_STATUS_INVALID_ARGUMENT`, 버퍼가 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`, 렌더 실패·취소는 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — 已寫入（或所需）的 float 數量。失敗為 `0`：無快取為 `ST_STATUS_UNAVAILABLE`，請求、長度、遮罩、戳記錯誤或大小查詢時無該配對為 `ST_STATUS_INVALID_ARGUMENT`，緩衝區不足為 `ST_STATUS_BUFFER_TOO_SMALL`，渲染失敗或取消為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_render_pressure_mixed</code> — 리스너 하나와 소스 여러 개를 한 번에 실어 합쳐진 압력 IR 하나를 렌더한다</summary>
+<summary><code>st_off_ir_render_pressure_mixed</code> — 一次放入一個聆聽者與多個音源，渲染一個合併的壓力 IR</summary>
 
 ```c
 int st_off_ir_render_pressure_mixed(STOFF_Context* context, STListenerId listener, const STSourceId* sources, int32_t sourceCount, double seconds, const STOfflinePressureIRRequestOptions* options, float* outValues, int capacityValues, STOfflinePressureIRInfo* outInfo);
 ```
 
-**용도** — 같은 리스너에 대한 여러 소스의 RIR을 따로 렌더해 더하는 대신, 한 임펄스 렌더에 모두 실어 RIR 하나를 냅니다. 결과는 소스별 `st_off_ir_render_pressure` 결과의 합과 같습니다: exact 탭은 요청 순서대로 같은 출력에 누적되고, 송출은 리스너 쪽에 진폭(부호 포함) 그대로 누적돼 FDN이 한 번만 돕니다. FDN이 선형·시불변이라 late도 솔로 합처럼 결맞게 더해지면서 FDN 비용은 한 번입니다. 여러 음원이 동시에 울리는 장면의 RIR이 필요할 때 씁니다.
+**用途** — 不必分別渲染同一聆聽者的多個音源 RIR 再相加，而是全部放入一次脈衝渲染，輸出一個 RIR。結果等同各音源 `st_off_ir_render_pressure` 結果之和：exact tap 依請求順序累加到同一輸出，送出則以振幅（含符號）原樣累加到聆聽者側，FDN 只執行一次。由於 FDN 是線性非時變的，late 也像獨奏之和一樣相干地相加，而 FDN 成本只有一次。用於需要多個音源同時發聲之場景的 RIR 時。
 
-**언제·어떻게** — `st_off_ir_compute` 뒤에 부릅니다. 버퍼·크기 질의 규약, 길이·샘플레이트·정규화 없음은 `st_off_ir_render_pressure`와 같습니다. 그 리스너의 소스 일부만 넣어도 됩니다. 부동소수 합산 순서만 솔로 합과 달라 비트 동일은 아니며, 합산 순서는 `sources` 배열 순서입니다(소스 등록 순서와 무관). 같은 요청의 반복 렌더는 비트 동일하고, `sourceCount` = 1이면 솔로 렌더와 비트 동일합니다. 원시 IR 조회는 여전히 소스별입니다. 지원 여부는 `ST_CAP_OFFLINE_PRESSURE_RENDER_MIXED`로 확인합니다. 스레드: `[control, blocking]` — 렌더가 호출 스레드에서 돕니다.
+**呼叫方式** — 在 `st_off_ir_compute` 之後呼叫。緩衝區與大小查詢約定、長度、取樣率、無正規化皆與 `st_off_ir_render_pressure` 相同。只放入該聆聽者的部分音源也可以。只有浮點加總順序與獨奏之和不同，因此並非位元相同，加總順序為 `sources` 陣列順序（與音源註冊順序無關）。重複渲染相同請求為位元相同，`sourceCount` = 1 時與獨奏渲染位元相同。原始 IR 查詢仍是逐音源。是否支援以 `ST_CAP_OFFLINE_PRESSURE_RENDER_MIXED` 確認。執行緒：`[control, blocking]` — 渲染在呼叫執行緒上執行。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `sources` | 소스 핸들 배열. 중복 없음, 전부 그 리스너의 canonical 쌍이어야 함 |
-| `sourceCount` | 소스 수. `1` 이상 `ST_OFFLINE_PRESSURE_MIXED_MAX_SOURCES`(1024) 이하 |
-| `seconds` | IR 길이(초). 유한한 양수, 최소 1프레임 |
-| `options` | `st_off_ir_init_pressure_request`로 초기화한 요청 |
-| `outValues` | 결과 버퍼. NULL이면 크기 질의 |
-| `capacityValues` | `outValues`의 float 개수. 크기 질의면 0 |
-| `outInfo` | 결과 메타데이터(`STOfflinePressureIRInfo`, 필드는 `st_off_ir_render_pressure` 항목 참고). NULL 허용. `sourceId` = -1, `sourceCount` = 소스 수, `reverbSendTapCount` = 소스별 합 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `sources` | 音源控制代碼陣列。不可重複，必須全部是該聆聽者的 canonical 配對 |
+| `sourceCount` | 音源數。`1` 以上 `ST_OFFLINE_PRESSURE_MIXED_MAX_SOURCES`(1024) 以下 |
+| `seconds` | IR 長度（秒）。有限正數，最少 1 幀 |
+| `options` | 以 `st_off_ir_init_pressure_request` 初始化的請求 |
+| `outValues` | 結果緩衝區。NULL 則為大小查詢 |
+| `capacityValues` | `outValues` 的 float 數量。大小查詢時為 0 |
+| `outInfo` | 結果中繼資料（`STOfflinePressureIRInfo`，欄位請參考 `st_off_ir_render_pressure` 條目）。允許 NULL。`sourceId` = -1、`sourceCount` = 音源數、`reverbSendTapCount` = 各音源之和 |
 
-**반환** — 쓴(또는 필요한) float 개수. 실패는 `0`: 캐시가 없으면 `ST_STATUS_UNAVAILABLE`, 중복·미등록 소스·잘못된 요청은 `ST_STATUS_INVALID_ARGUMENT`, 버퍼가 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`, 렌더 실패·취소는 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — 已寫入（或所需）的 float 數量。失敗為 `0`：無快取為 `ST_STATUS_UNAVAILABLE`，重複、未註冊音源、錯誤請求為 `ST_STATUS_INVALID_ARGUMENT`，緩衝區不足為 `ST_STATUS_BUFFER_TOO_SMALL`，渲染失敗或取消為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_init_binaural_request</code> — 바이노럴 IR 요청 구조체를 기본값으로 채운다</summary>
+<summary><code>st_off_ir_init_binaural_request</code> — 以預設值填入雙耳 IR 請求結構體</summary>
 
 ```c
 void st_off_ir_init_binaural_request(STOfflineBinauralIRRequestOptions* outOptions);
 ```
 
-**용도** — `STOfflineBinauralIRRequestOptions`의 버전 스탬프와 기본값을 채웁니다. `st_off_ir_render_binaural`과 `st_off_ir_render_audition_pair`에 넘기기 전에 항상 이 함수로 초기화합니다.
+**用途** — 填入 `STOfflineBinauralIRRequestOptions` 的版本戳記與預設值。傳給 `st_off_ir_render_binaural` 與 `st_off_ir_render_audition_pair` 之前，務必以此函式初始化。
 
-**언제·어떻게** — 기본 `hrtfType`은 SADIE D2라 외부 자산 파일이 있어야 합니다(`st_off_render_set_spatializer` 항목의 탐색 순서 참고). 자산 없이 쓰려면 `hrtfType`을 `ST_SPATIALIZER_MIT_KEMAR`(1, 내장) 또는 `ST_SPATIALIZER_PANNING`(0)으로 바꿉니다. 스레드: `[any]` — 호출자 구조체만 채웁니다.
+**呼叫方式** — 預設 `hrtfType` 為 SADIE D2，需要外部資產檔（搜尋順序請參考 `st_off_render_set_spatializer` 條目）。若要在無資產的情況下使用，將 `hrtfType` 改為 `ST_SPATIALIZER_MIT_KEMAR`（1，內建）或 `ST_SPATIALIZER_PANNING`(0)。執行緒：`[any]` — 只填入呼叫端結構體。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `outOptions` | 채울 구조체. NULL이면 아무것도 하지 않음 |
+| `outOptions` | 要填入的結構體。NULL 則不做任何事 |
 
-**구조체** `STOfflineBinauralIRRequestOptions`
+**結構體** `STOfflineBinauralIRRequestOptions`
 
-| 필드 | 기본값 | 설명 |
+| 欄位 | 預設值 | 說明 |
 |---|---|---|
-| `structSize` | `sizeof(STOfflineBinauralIRRequestOptions)` | 버전 스탬프 |
-| `apiVersion` | `st_off_get_api_version()` 값 | 버전 스탬프 |
-| `outputMask` | `ST_OFFLINE_OUTPUT_FULL` | 결과에 넣을 성분(`ST_OFFLINE_OUTPUT_*`, `st_off_ir_init_pressure_request` 항목과 같은 뜻) |
-| `reverbSendMask` | `ST_OFFLINE_REVERB_SEND_ALL` | late 탱크를 여기할 송출 탭(초기 경로 4비트) |
+| `structSize` | `sizeof(STOfflineBinauralIRRequestOptions)` | 版本戳記 |
+| `apiVersion` | `st_off_get_api_version()` 的值 | 版本戳記 |
+| `outputMask` | `ST_OFFLINE_OUTPUT_FULL` | 放入結果的成分（`ST_OFFLINE_OUTPUT_*`，意義與 `st_off_ir_init_pressure_request` 條目相同） |
+| `reverbSendMask` | `ST_OFFLINE_REVERB_SEND_ALL` | 激發 late 殘響槽的送出 tap（早期路徑 4 位元） |
 | `hrtfType` | `ST_SPATIALIZER_SADIE_D2_KEMAR`(2) | `STSpatializerType` — `PANNING`(0) / `MIT_KEMAR`(1) / `SADIE_D2_KEMAR`(2) |
-| `reserved[10]` | 0 | 예약 |
+| `reserved[10]` | 0 | 保留 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_render_binaural</code> — 리스너·소스 쌍 하나의 바이노럴(스테레오 L/R) IR을 렌더한다</summary>
+<summary><code>st_off_ir_render_binaural</code> — 渲染一組聆聽者·音源配對的雙耳（立體聲 L/R）IR</summary>
 
 ```c
 int st_off_ir_render_binaural(STOFF_Context* context, STListenerId listener, STSourceId source, double seconds, const STOfflineBinauralIRRequestOptions* options, float* outInterleavedLR, int capacityFrames, STOfflineBinauralIRInfo* outInfo);
 ```
 
-**용도** — canonical 캐시의 쌍 하나를 HRTF로 공간화한 2채널 임펄스 응답으로 렌더합니다. 헤드폰 청취용 BRIR을 얻거나 외부 컨볼버에 넣을 때 씁니다. 초기 반사 경로는 렌더 시점의 early 공간 모드를 따릅니다(`st_off_render_set_early_spatial_mode`).
+**用途** — 將 canonical 快取中的一組配對渲染為以 HRTF 空間化的 2 聲道脈衝響應。用於取得耳機聆聽用的 BRIR，或送入外部摺積器。早期反射路徑依渲染時的 early 空間模式（`st_off_render_set_early_spatial_mode`）。
 
-**언제·어떻게** — `st_off_ir_compute` 뒤에 부르며, 크기 질의는 압력 IR과 같은 방식입니다(`outInterleavedLR` = NULL, `capacityFrames` = 0 → 필요한 프레임 수와 `outInfo`). `capacityFrames`는 float 개수가 아니라 **스테레오 프레임 수**이고, 버퍼는 L/R 인터리브(`[L0, R0, L1, R1, …]`)로 프레임 수 × 2개의 float를 담아야 합니다. 길이는 `floor(seconds × 44100)` 프레임, 샘플레이트는 44100 Hz 고정입니다. 리미터와 정규화는 언제나 꺼져 있습니다(정규화 옵션 없음). OBJECTS 모드에서는 경로 페이드와 Doppler도 고정으로 꺼지고, BED 모드는 동기 실시간 bed 경로라 경로 페이드·Doppler·게인 램프가 실시간 기본값으로 켜진 채 정상 상태에서 렌더됩니다(정지 장면에서는 결과에 영향이 없습니다). SADIE D2 자산이 없으면 크기 질의부터 실패합니다. 지원 여부는 `ST_CAP_OFFLINE_BINAURAL_IR`로 확인합니다. 스레드: `[control, blocking]` — 렌더가 호출 스레드에서 돕니다.
+**呼叫方式** — 在 `st_off_ir_compute` 之後呼叫，大小查詢方式與壓力 IR 相同（`outInterleavedLR` = NULL、`capacityFrames` = 0 → 所需幀數與 `outInfo`）。`capacityFrames` 不是 float 數量而是 **立體聲幀數**，緩衝區以 L/R 交錯（`[L0, R0, L1, R1, …]`）存放幀數 × 2 個 float。長度為 `floor(seconds × 44100)` 幀，取樣率固定為 44100 Hz。限幅器與正規化永遠關閉（無正規化選項）。OBJECTS 模式下路徑淡變與 Doppler 也固定關閉；BED 模式是同步即時 bed 路徑，路徑淡變、Doppler、增益斜坡以即時預設值開啟，在穩態下渲染（靜止場景中對結果無影響）。缺少 SADIE D2 資產時，從大小查詢起即失敗。是否支援以 `ST_CAP_OFFLINE_BINAURAL_IR` 確認。執行緒：`[control, blocking]` — 渲染在呼叫執行緒上執行。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `seconds` | IR 길이(초). 유한한 양수, 최소 1프레임 |
-| `options` | `st_off_ir_init_binaural_request`로 초기화한 요청. NULL 불가 |
-| `outInterleavedLR` | L/R 인터리브 결과 버퍼. NULL이면 크기 질의 |
-| `capacityFrames` | 버퍼의 **스테레오 프레임** 수. 크기 질의면 0 |
-| `outInfo` | 결과 메타데이터. NULL 허용. 넘기면 호출자가 `structSize` = `sizeof(STOfflineBinauralIRInfo)`, `apiVersion`을 채운다 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `source` | 音源控制代碼 |
+| `seconds` | IR 長度（秒）。有限正數，最少 1 幀 |
+| `options` | 以 `st_off_ir_init_binaural_request` 初始化的請求。不可為 NULL |
+| `outInterleavedLR` | L/R 交錯結果緩衝區。NULL 則為大小查詢 |
+| `capacityFrames` | 緩衝區的 **立體聲幀** 數。大小查詢時為 0 |
+| `outInfo` | 結果中繼資料。允許 NULL。傳入時由呼叫端填入 `structSize` = `sizeof(STOfflineBinauralIRInfo)`、`apiVersion` |
 
-**구조체** `STOfflineBinauralIRInfo`
+**結構體** `STOfflineBinauralIRInfo`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize`, `apiVersion` | 호출자가 채우는 버전 스탬프 |
-| `cacheGeneration` | 렌더에 쓴 캐시 세대 |
-| `listenerId`, `sourceId` | 쌍의 ID |
+| `structSize`, `apiVersion` | 由呼叫端填入的版本戳記 |
+| `cacheGeneration` | 渲染所用的快取世代 |
+| `listenerId`, `sourceId` | 配對的 ID |
 | `sampleRate` | 44100 |
-| `frameCount` | 스테레오 프레임 수 |
-| `channelCount` | 2 고정 |
-| `valueCount` | float 개수 = `frameCount × 2` |
-| `reverbSendTapCount` | 렌더에 들어간 송출 탭 수 |
-| `outputMask`, `reverbSendMask` | 실제로 쓴 마스크 |
-| `hrtfType` | 실제로 쓴 `STSpatializerType` |
-| `earlySpatialMode` | 실제로 쓴 `STEarlySpatialMode`(지원 여부 `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE`) |
-| `reserved[9]` | 예약 |
+| `frameCount` | 立體聲幀數 |
+| `channelCount` | 固定 2 |
+| `valueCount` | float 數量 = `frameCount × 2` |
+| `reverbSendTapCount` | 送入渲染的送出 tap 數 |
+| `outputMask`, `reverbSendMask` | 實際使用的遮罩 |
+| `hrtfType` | 實際使用的 `STSpatializerType` |
+| `earlySpatialMode` | 實際使用的 `STEarlySpatialMode`（是否支援見 `ST_CAP1_OFFLINE_EARLY_SPATIAL_MODE`） |
+| `reserved[9]` | 保留 |
 
-**반환** — 쓴(또는 필요한) 스테레오 프레임 수. 실패는 `0`: 캐시가 없거나 SADIE D2 자산이 없거나 BED 모드인데 캐시에 bed 변형이 없으면 `ST_STATUS_UNAVAILABLE`, 요청·스탬프가 잘못됐거나 크기 질의에서 쌍이 없으면 `ST_STATUS_INVALID_ARGUMENT`, 버퍼가 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`, 렌더 실패·취소는 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — 已寫入（或所需）的立體聲幀數。失敗為 `0`：無快取、缺少 SADIE D2 資產，或 BED 模式但快取中無 bed 變體時為 `ST_STATUS_UNAVAILABLE`，請求或戳記錯誤或大小查詢時無該配對為 `ST_STATUS_INVALID_ARGUMENT`，緩衝區不足為 `ST_STATUS_BUFFER_TOO_SMALL`，渲染失敗或取消為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_ir_render_audition_pair</code> — 드라이 신호를 고정 RIR 컨볼루션과 엔진 렌더 단계로 각각 렌더해 한 쌍으로 돌려준다</summary>
+<summary><code>st_off_ir_render_audition_pair</code> — 將乾訊號分別以固定 RIR 摺積與引擎渲染階段渲染，成對回傳</summary>
 
 ```c
 int st_off_ir_render_audition_pair(STOFF_Context* context, STListenerId listener, STSourceId source, double irSeconds, const STOfflineBinauralIRRequestOptions* options, const float* dryMono, int dryFrames, float* outConvolvedLR, float* outStageLR, int capacityFrames, STOFF_AuditionInfo* outInfo);
 ```
 
-**용도** — 같은 canonical 쌍에서 두 가지 청취 결과를 만듭니다: (1) 바이노럴 IR을 고정 RIR로 렌더해 드라이 신호와 컨볼루션한 결과, (2) 같은 쌍을 엔진의 렌더 단계(실시간 렌더와 공유하는 단계)에 두고 드라이 신호를 직접 통과시킨 결과. 두 결과를 나란히 들어 보거나 비교해, 추출한 IR이 엔진이 실제로 내는 소리를 얼마나 대표하는지 확인할 때 씁니다.
+**用途** — 從同一 canonical 配對產生兩種聆聽結果：(1) 將雙耳 IR 渲染為固定 RIR 並與乾訊號摺積的結果，(2) 將同一配對放入引擎的渲染階段（與即時渲染共用的階段），讓乾訊號直接通過的結果。用於並排聆聽或比較兩個結果，確認擷取出的 IR 有多能代表引擎實際發出的聲音。
 
-**언제·어떻게** — `st_off_ir_compute` 뒤에 부릅니다. 두 출력 버퍼는 모두 L/R 인터리브 스테레오 프레임이고, 둘 다 넘기거나 둘 다 NULL이어야 합니다. 둘 다 NULL이면 `capacityFrames`는 0이어야 하고 `dryMono`도 NULL이어도 되며, `dryFrames`로 크기만 계산하는 메타데이터 질의가 됩니다. 출력 길이는 `dryFrames + irFrames − 1` 프레임(`irFrames` = `floor(irSeconds × 44100)`)이고, 각 버퍼는 그 프레임 수 × 2개의 float를 담아야 합니다. 공간화기·마스크·early 공간 모드·리미터/정규화 꺼짐 규칙은 `st_off_ir_render_binaural`과 같습니다. 스레드: `[control, blocking]` — 렌더가 호출 스레드에서 돕니다.
+**呼叫方式** — 在 `st_off_ir_compute` 之後呼叫。兩個輸出緩衝區皆為 L/R 交錯的立體聲幀，必須同時傳入或同時為 NULL。皆為 NULL 時 `capacityFrames` 須為 0，`dryMono` 也可為 NULL，成為只以 `dryFrames` 計算大小的中繼資料查詢。輸出長度為 `dryFrames + irFrames − 1` 幀（`irFrames` = `floor(irSeconds × 44100)`），各緩衝區須存放該幀數 × 2 個 float。空間化器、遮罩、early 空間模式、限幅器/正規化關閉的規則與 `st_off_ir_render_binaural` 相同。執行緒：`[control, blocking]` — 渲染在呼叫執行緒上執行。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `irSeconds` | 컨볼루션에 쓸 IR 길이(초). 유한한 양수, 최소 1프레임 |
-| `options` | `st_off_ir_init_binaural_request`로 초기화한 요청(`STOfflineBinauralIRRequestOptions`, 필드는 그 항목 참고) |
-| `dryMono` | 44.1 kHz 모노 드라이 신호. 렌더할 때 필수, 크기 질의면 NULL 허용 |
-| `dryFrames` | 드라이 신호 프레임 수. 1 이상(크기 질의에도 필요) |
-| `outConvolvedLR` | 고정 RIR 컨볼루션 결과(L/R 인터리브). `outStageLR`와 함께 NULL이면 크기 질의 |
-| `outStageLR` | 엔진 렌더 단계 결과(L/R 인터리브) |
-| `capacityFrames` | 각 버퍼의 스테레오 프레임 수. 크기 질의면 0 |
-| `outInfo` | 결과 메타데이터. NULL 허용. 넘기면 호출자가 `structSize` = `sizeof(STOFF_AuditionInfo)`, `apiVersion`을 채운다 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `source` | 音源控制代碼 |
+| `irSeconds` | 摺積所用的 IR 長度（秒）。有限正數，最少 1 幀 |
+| `options` | 以 `st_off_ir_init_binaural_request` 初始化的請求（`STOfflineBinauralIRRequestOptions`，欄位請參考該條目） |
+| `dryMono` | 44.1 kHz 單聲道乾訊號。渲染時必填，大小查詢時允許 NULL |
+| `dryFrames` | 乾訊號幀數。1 以上（大小查詢也需要） |
+| `outConvolvedLR` | 固定 RIR 摺積結果（L/R 交錯）。與 `outStageLR` 同為 NULL 時為大小查詢 |
+| `outStageLR` | 引擎渲染階段結果（L/R 交錯） |
+| `capacityFrames` | 各緩衝區的立體聲幀數。大小查詢時為 0 |
+| `outInfo` | 結果中繼資料。允許 NULL。傳入時由呼叫端填入 `structSize` = `sizeof(STOFF_AuditionInfo)`、`apiVersion` |
 
-**구조체** `STOFF_AuditionInfo`
+**結構體** `STOFF_AuditionInfo`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize`, `apiVersion` | 호출자가 채우는 버전 스탬프 |
-| `cacheGeneration` | 렌더에 쓴 캐시 세대 |
-| `listenerId`, `sourceId` | 쌍의 ID |
+| `structSize`, `apiVersion` | 由呼叫端填入的版本戳記 |
+| `cacheGeneration` | 渲染所用的快取世代 |
+| `listenerId`, `sourceId` | 配對的 ID |
 | `sampleRate` | 44100 |
-| `frameCount` | 출력 스테레오 프레임 수 = `dryFrameCount + irFrameCount − 1` |
-| `dryFrameCount` | 드라이 신호 프레임 수 |
-| `irFrameCount` | IR 프레임 수 |
-| `earlySpatialMode` | 실제로 쓴 `STEarlySpatialMode` |
-| `reserved[7]` | 예약 |
+| `frameCount` | 輸出立體聲幀數 = `dryFrameCount + irFrameCount − 1` |
+| `dryFrameCount` | 乾訊號幀數 |
+| `irFrameCount` | IR 幀數 |
+| `earlySpatialMode` | 實際使用的 `STEarlySpatialMode` |
+| `reserved[7]` | 保留 |
 
-**반환** — 출력 스테레오 프레임 수. 실패는 `0`: 캐시가 없거나 SADIE D2 자산이 없거나 BED 모드인데 bed 변형이 없으면 `ST_STATUS_UNAVAILABLE`, 버퍼 한쪽만 NULL·`dryFrames` 0 이하·잘못된 요청은 `ST_STATUS_INVALID_ARGUMENT`, 버퍼가 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`, 렌더 실패·취소는 `ST_STATUS_UNAVAILABLE`.
+**回傳值** — 輸出立體聲幀數。失敗為 `0`：無快取、缺少 SADIE D2 資產，或 BED 模式但無 bed 變體時為 `ST_STATUS_UNAVAILABLE`，只有一側緩衝區為 NULL、`dryFrames` 為 0 以下、錯誤請求為 `ST_STATUS_INVALID_ARGUMENT`，緩衝區不足為 `ST_STATUS_BUFFER_TOO_SMALL`，渲染失敗或取消為 `ST_STATUS_UNAVAILABLE`。
 
 </details>
 
 <details>
-<summary><code>st_off_debug_get_snapshot_info</code> — 리스너의 마지막 계산 세대에 대한 진단 스냅샷 요약(경로 수·시각화 버퍼 크기)을 읽는다</summary>
+<summary><code>st_off_debug_get_snapshot_info</code> — 讀取聆聽者最後計算世代的診斷快照摘要（路徑數、視覺化緩衝區大小）</summary>
 
 ```c
 int st_off_debug_get_snapshot_info(STOFF_Context* context, STListenerId listener, STPropagationSnapshotInfo* outInfo);
 ```
 
-**용도** — 마지막 `st_off_ir_compute`가 그 리스너에 대해 발행한 진단 스냅샷의 요약을 돌려줍니다. 전체·반사·회절 경로 수와 회절 분류 카운터, 시각화 경로·점 개수가 모두 **한 세대에서 온 값**임이 `frameGeneration`으로 보장됩니다. 경로 수 확인과 `st_off_debug_copy_visual_paths` 버퍼 크기 결정에 씁니다.
+**用途** — 回傳最後一次 `st_off_ir_compute` 為該聆聽者發佈之診斷快照的摘要。`frameGeneration` 保證全部、反射、繞射路徑數與繞射分類計數器、視覺化路徑與點數皆 **來自同一世代**。用於確認路徑數與決定 `st_off_debug_copy_visual_paths` 的緩衝區大小。
 
-**언제·어떻게** — 스냅샷은 `st_off_ir_compute`가 발행하므로 그 전에는 0을 돌려줍니다. 시각화 경로·점을 받으려면 compute 전에 `st_off_debug_set_collect_visual_paths`로 수집을 켜 둡니다. 돌려받은 `frameGeneration`을 `st_off_debug_copy_visual_paths`에 그대로 넘기면 같은 세대를 복사하는지 검사할 수 있습니다. 스레드: `[control]` — 잡·시각화 뮤텍스를 잡습니다.
+**呼叫方式** — 快照由 `st_off_ir_compute` 發佈，因此在此之前回傳 0。若要取得視覺化路徑與點，須在 compute 之前以 `st_off_debug_set_collect_visual_paths` 開啟收集。將取得的 `frameGeneration` 原樣傳給 `st_off_debug_copy_visual_paths`，即可檢查是否複製同一世代。執行緒：`[control]` — 取得工作與視覺化互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `outInfo` | 결과 구조체. 호출자가 `structSize` = `sizeof(STPropagationSnapshotInfo)`, `apiVersion`을 채운다 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `outInfo` | 結果結構體。呼叫端填入 `structSize` = `sizeof(STPropagationSnapshotInfo)`、`apiVersion` |
 
-**구조체** `STPropagationSnapshotInfo`
+**結構體** `STPropagationSnapshotInfo`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize`, `apiVersion` | 호출자가 채우는 버전 스탬프 |
-| `frameGeneration` | 이 스냅샷의 세대(오프라인은 IR 캐시 세대) |
-| `collectionMask` | 이 세대를 수집할 때의 `STPathCollectionFlag` 마스크 |
-| `reserved0` | 예약 |
-| `visualPathCount` | 전체 시각화 경로 레코드 수(실패 walk 포함, `ST_VISUAL_PATH_COPY_ALL`의 필요 개수) |
-| `validVisualPathCount` | 완주 경로 레코드 수(`ST_VISUAL_PATH_COPY_VALID_ONLY`의 필요 개수) |
-| `visualPointCount` | 전체 시각화 점 수 |
-| `validVisualPointCount` | 완주 경로의 점 수 |
-| `totalPathCount` | 전체 경로 수 |
-| `reflectionPathCount` | 반사 경로 수 |
-| `diffractionPathCount` | 회절 경로 수 |
-| `sourceSideOnlyPaths` | 소스 쪽 엣지에서만 회절한 경로 수 |
-| `unclassifiedPaths` | 분류되지 않은 회절 경로 수 |
-| `sourceSideEvents` | 소스 쪽 회절 사건 수 |
-| `terminalOnlyPaths` | 리스너 쪽 말단 엣지에서만 회절한 경로 수 |
-| `sourceAndTerminalPaths` | 양쪽 모두에서 회절한 경로 수 |
-| `terminalEvents` | 리스너 쪽 말단 회절 사건 수 |
-| `reserved[4]` | 예약 |
+| `structSize`, `apiVersion` | 由呼叫端填入的版本戳記 |
+| `frameGeneration` | 此快照的世代（離線為 IR 快取世代） |
+| `collectionMask` | 收集此世代時的 `STPathCollectionFlag` 遮罩 |
+| `reserved0` | 保留 |
+| `visualPathCount` | 全部視覺化路徑記錄數（含失敗 walk，`ST_VISUAL_PATH_COPY_ALL` 所需數量） |
+| `validVisualPathCount` | 走完路徑記錄數（`ST_VISUAL_PATH_COPY_VALID_ONLY` 所需數量） |
+| `visualPointCount` | 全部視覺化點數 |
+| `validVisualPointCount` | 走完路徑的點數 |
+| `totalPathCount` | 全部路徑數 |
+| `reflectionPathCount` | 反射路徑數 |
+| `diffractionPathCount` | 繞射路徑數 |
+| `sourceSideOnlyPaths` | 僅在音源側邊緣繞射的路徑數 |
+| `unclassifiedPaths` | 未分類的繞射路徑數 |
+| `sourceSideEvents` | 音源側繞射事件數 |
+| `terminalOnlyPaths` | 僅在聆聽者側末端邊緣繞射的路徑數 |
+| `sourceAndTerminalPaths` | 兩側皆繞射的路徑數 |
+| `terminalEvents` | 聆聽者側末端繞射事件數 |
+| `reserved[4]` | 保留 |
 
-완주 경로와 그 점은 각 배열의 앞부분(prefix)을 차지합니다.
+走完的路徑及其點佔據各陣列的前段（prefix）。
 
-**반환** — `1` = 성공 / `0` = 실패 또는 스냅샷 없음(compute 전, 그 리스너 없음, `outInfo` NULL·스탬프 불일치).
+**回傳值** — `1` = 成功 / `0` = 失敗或無快照（compute 之前、無該聆聽者、`outInfo` 為 NULL 或戳記不符）。
 
 </details>
 
 <details>
-<summary><code>st_off_debug_copy_visual_paths</code> — 시각화 경로 레코드와 점을 호출자 버퍼로 복사한다</summary>
+<summary><code>st_off_debug_copy_visual_paths</code> — 將視覺化路徑記錄與點複製到呼叫端緩衝區</summary>
 
 ```c
 int st_off_debug_copy_visual_paths(STOFF_Context* context, STListenerId listener, uint64_t frameGeneration, int copyMode, STVisualPathRecord* outPaths, uint32_t pathCapacity, STVisualPoint* outPoints, uint32_t pointCapacity);
 ```
 
-**용도** — 마지막 계산 세대의 시각화 경로(소스 → 상호작용 지점 → 리스너, 가이드 레이는 리스너 → 적중점)를 레코드 배열과 점 배열로 복사해 3D 뷰에 그릴 수 있게 합니다. 정점 좌표는 씬 단위 그대로라 호스트 씬에 바로 겹쳐 그릴 수 있습니다.
+**用途** — 將最後計算世代的視覺化路徑（音源 → 交互作用點 → 聆聽者，導引射線為聆聽者 → 命中點）複製為記錄陣列與點陣列，以便繪製於 3D 檢視。頂點座標維持場景單位，可直接疊加繪製於主機場景。
 
-**언제·어떻게** — `st_off_debug_get_snapshot_info`로 개수를 얻어 버퍼를 잡은 뒤 부릅니다. 크기 질의 모드는 없습니다 — 용량이 필요한 개수보다 작으면 실패합니다. `frameGeneration`에 `st_off_debug_get_snapshot_info`가 돌려준 값을 넣으면, 그 사이 새 세대가 발행됐을 때 실패합니다. 0을 넣으면 세대 검사 없이 현재 스냅샷을 복사합니다. 레코드 `i`의 점은 `outPoints[pointOffset .. pointOffset + pointCount)`입니다. 스레드: `[control]` — 잡·시각화 뮤텍스를 잡습니다.
+**呼叫方式** — 以 `st_off_debug_get_snapshot_info` 取得數量並配置緩衝區後呼叫。沒有大小查詢模式 — 容量小於所需數量則失敗。在 `frameGeneration` 傳入 `st_off_debug_get_snapshot_info` 回傳的值，則期間若發佈了新世代會失敗。傳入 0 則不檢查世代，複製目前快照。記錄 `i` 的點為 `outPoints[pointOffset .. pointOffset + pointCount)`。執行緒：`[control]` — 取得工作與視覺化互斥鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `listener` | 리스너 핸들 |
-| `frameGeneration` | 기대하는 세대(`st_off_debug_get_snapshot_info`의 값). 0 = 검사 없이 현재 스냅샷 |
-| `copyMode` | `STVisualPathCopyMode` — `ST_VISUAL_PATH_COPY_VALID_ONLY`(0, 완주 경로만) / `ST_VISUAL_PATH_COPY_ALL`(1, 실패 walk 포함). 그 밖의 값은 거절 |
-| `outPaths` | 경로 레코드 버퍼. 복사할 경로가 있으면 NULL 불가 |
-| `pathCapacity` | `outPaths` 원소 수. 모드에 맞는 경로 수 이상 |
-| `outPoints` | 점 버퍼. 복사할 점이 있으면 NULL 불가 |
-| `pointCapacity` | `outPoints` 원소 수. 모드에 맞는 점 수 이상 |
+| `context` | 離線情境控制代碼 |
+| `listener` | 聆聽者控制代碼 |
+| `frameGeneration` | 預期的世代（`st_off_debug_get_snapshot_info` 的值）。0 = 不檢查，使用目前快照 |
+| `copyMode` | `STVisualPathCopyMode` — `ST_VISUAL_PATH_COPY_VALID_ONLY`（0，只有走完的路徑） / `ST_VISUAL_PATH_COPY_ALL`（1，含失敗 walk）。其他值拒絕 |
+| `outPaths` | 路徑記錄緩衝區。有要複製的路徑時不可為 NULL |
+| `pathCapacity` | `outPaths` 元素數。須不少於模式對應的路徑數 |
+| `outPoints` | 點緩衝區。有要複製的點時不可為 NULL |
+| `pointCapacity` | `outPoints` 元素數。須不少於模式對應的點數 |
 
-**구조체** `STVisualPathRecord`
+**結構體** `STVisualPathRecord`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `pointOffset`, `pointCount` | 이 경로의 점이 점 배열에서 차지하는 구간(순서 있는 경로) |
-| `depth` | 상호작용 차수 |
-| `pathKind` | `STPathKind` — `ST_PATH_GUIDE_RAY`(0) / `ST_PATH_DIRECT`(1, 투과 포함) / `ST_PATH_REFLECTION`(2) / `ST_PATH_DIFFRACTION_S`(4, 소스 쪽 엣지) / `ST_PATH_DIFFRACTION_L`(8, 리스너 쪽 말단 엣지) / `ST_PATH_DIFFRACTION_SL`(12) / `ST_PATH_SOURCE_TRANSPORT_RAY`(16). `ST_PATH_DIFFRACTION_UNKNOWN`(3)은 정상적으로는 나오지 않는다 |
-| `soundSourceIndex` | 소스 인덱스. 가이드 레이는 -1 |
-| `valid` | 1 = 완주 / 0 = 중도 실패 walk |
-| `totalLengthMeters` | 경로 전체 길이(m, `sceneRatio` 반영) |
-| `reserved0` | 예약 |
+| `pointOffset`, `pointCount` | 此路徑的點在點陣列中佔據的區間（有序路徑） |
+| `depth` | 交互作用階數 |
+| `pathKind` | `STPathKind` — `ST_PATH_GUIDE_RAY`(0) / `ST_PATH_DIRECT`（1，包含透射） / `ST_PATH_REFLECTION`(2) / `ST_PATH_DIFFRACTION_S`（4，音源側邊緣） / `ST_PATH_DIFFRACTION_L`（8，聆聽者側末端邊緣） / `ST_PATH_DIFFRACTION_SL`(12) / `ST_PATH_SOURCE_TRANSPORT_RAY`(16)。`ST_PATH_DIFFRACTION_UNKNOWN`(3) 正常情況下不會出現 |
+| `soundSourceIndex` | 音源索引。導引射線為 -1 |
+| `valid` | 1 = 走完 / 0 = 中途失敗的 walk |
+| `totalLengthMeters` | 路徑總長（m，已反映 `sceneRatio`） |
+| `reserved0` | 保留 |
 
-**구조체** `STVisualPoint`
+**結構體** `STVisualPoint`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `x`, `y`, `z` | 정점 좌표(씬 단위 그대로) |
-| `flags` | `STVisualPointFlag` — `ST_VISUAL_POINT_NONE`(0) / `ST_VISUAL_POINT_DIFFRACTION`(1, 회절 지점) |
+| `x`, `y`, `z` | 頂點座標（維持場景單位） |
+| `flags` | `STVisualPointFlag` — `ST_VISUAL_POINT_NONE`(0) / `ST_VISUAL_POINT_DIFFRACTION`（1，繞射點） |
 
-**반환** — `1` = 성공 / `0` = 실패. `copyMode`가 잘못됐거나 필요한 버퍼가 NULL이면 `ST_STATUS_INVALID_ARGUMENT`, 스냅샷이 없거나 세대가 바뀌었으면 `ST_STATUS_UNAVAILABLE`, 용량이 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`.
+**回傳值** — `1` = 成功 / `0` = 失敗。`copyMode` 錯誤或所需緩衝區為 NULL 時為 `ST_STATUS_INVALID_ARGUMENT`，無快照或世代已變更時為 `ST_STATUS_UNAVAILABLE`，容量不足為 `ST_STATUS_BUFFER_TOO_SMALL`。
 
 </details>
 
 <details>
-<summary><code>st_off_debug_copy_mesh_accel_nodes</code> — 메시 BLAS의 노드 박스를 시각화용으로 복사한다</summary>
+<summary><code>st_off_debug_copy_mesh_accel_nodes</code> — 複製網格 BLAS 的節點方塊供視覺化</summary>
 
 ```c
 int st_off_debug_copy_mesh_accel_nodes(STOFF_Context* context, STMeshId mesh, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 전파가 쓰는 메시 가속구조(BLAS)의 노드 경계 상자를 읽기 전용으로 복사합니다. 가속구조가 메시를 어떻게 나눴는지 디버그 시각화할 때 씁니다. 실시간 `st_rt_debug_copy_mesh_accel_nodes`와 같은 계약이며, 오프라인 컨텍스트도 실시간과 같은 경계 설정으로 BLAS를 지으므로 같은 가속구조 종류면 결과가 같습니다.
+**用途** — 以唯讀方式複製傳播所用網格加速結構（BLAS）的節點包圍盒。用於除錯視覺化加速結構如何分割網格。與即時 `st_rt_debug_copy_mesh_accel_nodes` 契約相同，離線情境也以與即時相同的邊界設定建置 BLAS，因此相同加速結構種類的結果相同。
 
-**언제·어떻게** — 메시를 만든 뒤 언제든 부를 수 있습니다. BLAS는 메시 생성 시점의 `st_off_scene_set_accel` 값으로 지어집니다. 노드는 깊이 우선 **전위** 순서이고 루트가 `[0]`(depth 0)이며, 각 노드의 부모는 배열 앞쪽에서 가장 가까운 depth − 1 노드입니다. 좌표는 `st_off_mesh_create`에 넘긴 정점 프레임(메시 로컬)이라 인스턴스로 그리려면 호스트가 오브젝트 변환을 곱합니다. 큰 메시는 수천 노드라 보통 `maxDepth`로 윗단만 봅니다. 버퍼가 모자라면 전위 순서의 앞부분(맨 왼쪽 가지부터)만 쓰이므로, 윗단을 원하면 `maxDepth`로 자릅니다. 지원 여부는 `ST_CAP_ACCEL_DEBUG_NODES`로 확인합니다. 스레드: `[control]` — 씬 read 락만 잡습니다.
+**呼叫方式** — 建立網格後隨時可呼叫。BLAS 以網格建立時的 `st_off_scene_set_accel` 值建置。節點為深度優先 **前序** 順序，根為 `[0]`（depth 0），各節點的父節點是陣列前方最近的 depth − 1 節點。座標為傳給 `st_off_mesh_create` 的頂點框架（網格區域座標），要以實例繪製時由主機乘上物件變換。大型網格有數千個節點，通常以 `maxDepth` 只看上層。緩衝區不足時只寫入前序順序的前段（從最左分支開始），因此若要上層，請以 `maxDepth` 截斷。是否支援以 `ST_CAP_ACCEL_DEBUG_NODES` 確認。執行緒：`[control]` — 只取得場景 read 鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `mesh` | 메시 핸들 |
-| `maxDepth` | 음수 = 전 깊이. 0 이상이면 depth가 `maxDepth` 이하인 노드만 센다·쓴다 |
-| `outNodes` | 노드 버퍼. NULL이면 크기 질의(`nodeCapacity` 무시) |
-| `nodeCapacity` | `outNodes` 원소 수. 앞에서부터 min(전체, `nodeCapacity`)개를 쓴다 |
+| `context` | 離線情境控制代碼 |
+| `mesh` | 網格控制代碼 |
+| `maxDepth` | 負數 = 全部深度。0 以上時只計算、寫入 depth 在 `maxDepth` 以下的節點 |
+| `outNodes` | 節點緩衝區。NULL 則為大小查詢（忽略 `nodeCapacity`） |
+| `nodeCapacity` | `outNodes` 元素數。從前端起寫入 min(全部, `nodeCapacity`) 個 |
 
-**구조체** `STAccelNode` (32바이트, 버전 스탬프 없는 배열 원소)
+**結構體** `STAccelNode`（32 位元組，無版本戳記的陣列元素）
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `boundsMin[3]`, `boundsMax[3]` | 노드 경계 상자(그 가속구조가 지어진 프레임, `sceneRatio` 변환 없음) |
-| `depth` | 깊이. 루트 = 0 |
-| `primitiveCount` | 리프: 담긴 프리미티브 수(0 이상) / 내부 노드: -1 |
+| `boundsMin[3]`, `boundsMax[3]` | 節點包圍盒（該加速結構建置時的框架，無 `sceneRatio` 轉換） |
+| `depth` | 深度。根 = 0 |
+| `primitiveCount` | 葉節點：包含的圖元數（0 以上） / 內部節點：-1 |
 
-가속구조 종류별 의미: BVH 계열(0 BinnedSAH, 2 TinyBVH, 3 LBVH, 4 LBVH_Simd)은 빌드된 이진 트리이고, 4/8-wide 순회 표현은 이 트리를 접은 것이라 그 박스들은 이 목록의 부분집합입니다. KD(1 HybridKD)는 루트 박스를 분할 평면으로 잘라 유도한 박스라 형제 박스가 겹치지 않고 부모를 정확히 나누며, 빈 리프(`primitiveCount` 0)가 있고 여러 리프에 걸친 삼각형은 리프마다 셉니다.
+各加速結構種類的意義：BVH 系列（0 BinnedSAH、2 TinyBVH、3 LBVH、4 LBVH_Simd）是建置出的二元樹，4/8-wide 走訪表示是摺疊此樹而成，因此其方塊是此清單的子集。KD（1 HybridKD）是以分割平面切割根方塊所推導的方塊，兄弟方塊不重疊且精確分割父節點，存在空葉節點（`primitiveCount` 0），跨多個葉節點的三角形在每個葉節點都會計數。
 
-**반환** — `maxDepth` 안의 **전체** 노드 수(0 이상) / `-1` = 실패(`context` NULL, 없는 메시는 `ST_STATUS_NOT_FOUND`). 잘린 복사는 전체 수를 그대로 돌려주고 `ST_STATUS_BUFFER_TOO_SMALL`을 남깁니다.
+**回傳值** — `maxDepth` 內的 **全部** 節點數（0 以上） / `-1` = 失敗（`context` 為 NULL，網格不存在為 `ST_STATUS_NOT_FOUND`）。截斷的複製仍回傳全部數量，並留下 `ST_STATUS_BUFFER_TOO_SMALL`。
 
 </details>
 
 <details>
-<summary><code>st_off_debug_copy_scene_accel_nodes</code> — 씬 TLAS(오브젝트 인스턴스 가속구조)의 노드 박스를 복사한다</summary>
+<summary><code>st_off_debug_copy_scene_accel_nodes</code> — 複製場景 TLAS（物件實例加速結構）的節點方塊</summary>
 
 ```c
 int st_off_debug_copy_scene_accel_nodes(STOFF_Context* context, int layer, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 오브젝트 인스턴스 위에 지은 씬 가속구조(TLAS)의 노드 경계 상자를 복사합니다. 씬 전체의 공간 분할을 시각화할 때 씁니다. 실시간 `st_rt_debug_copy_scene_accel_nodes`와 같은 계약입니다.
+**用途** — 複製建置於物件實例之上的場景加速結構（TLAS）的節點包圍盒。用於視覺化整個場景的空間分割。與即時 `st_rt_debug_copy_scene_accel_nodes` 契約相同。
 
-**언제·어떻게** — 정적 TLAS는 `st_off_build`가 발행한 것이며, 다음 빌드 전까지는 지난 발행본 그대로입니다(스테이징된 정적 변경은 보이지 않습니다). 동적 TLAS는 동적 오브젝트 재구축이 다시 발행합니다. 좌표는 씬(월드) 프레임이고, TLAS 리프의 프리미티브는 삼각형이 아니라 오브젝트 인스턴스입니다. 노드 순서·`maxDepth`·크기 질의·잘림 규약과 `STAccelNode` 필드는 `st_off_debug_copy_mesh_accel_nodes` 항목과 같습니다. 지원 여부는 `ST_CAP_ACCEL_DEBUG_NODES`. 스레드: `[control]` — 씬 read 락만 잡습니다.
+**呼叫方式** — 靜態 TLAS 是 `st_off_build` 發佈的版本，在下一次建置前維持上次發佈的內容（看不到已暫存的靜態變更）。動態 TLAS 由動態物件重建重新發佈。座標為場景（世界）框架，TLAS 葉節點的圖元不是三角形而是物件實例。節點順序、`maxDepth`、大小查詢、截斷約定與 `STAccelNode` 欄位皆與 `st_off_debug_copy_mesh_accel_nodes` 條目相同。是否支援見 `ST_CAP_ACCEL_DEBUG_NODES`。執行緒：`[control]` — 只取得場景 read 鎖。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `context` | 오프라인 컨텍스트 핸들 |
-| `layer` | `STAccelLayer` — `ST_ACCEL_LAYER_STATIC`(0, `st_off_build`가 발행한 정적 TLAS) / `ST_ACCEL_LAYER_DYNAMIC`(1, 동적 오브젝트 TLAS) |
-| `maxDepth` | 음수 = 전 깊이. 0 이상이면 그 깊이까지만 |
-| `outNodes` | 노드 버퍼. NULL이면 크기 질의 |
-| `nodeCapacity` | `outNodes` 원소 수 |
+| `context` | 離線情境控制代碼 |
+| `layer` | `STAccelLayer` — `ST_ACCEL_LAYER_STATIC`（0，`st_off_build` 發佈的靜態 TLAS） / `ST_ACCEL_LAYER_DYNAMIC`（1，動態物件 TLAS） |
+| `maxDepth` | 負數 = 全部深度。0 以上時只到該深度 |
+| `outNodes` | 節點緩衝區。NULL 則為大小查詢 |
+| `nodeCapacity` | `outNodes` 元素數 |
 
-**반환** — `maxDepth` 안의 전체 노드 수(0 이상). 그 TLAS가 아직 없으면(빌드 전, 해당 종류 오브젝트 없음) 오류가 아니라 `0`. `-1` = 실패(`context` NULL, `layer` 범위 밖은 `ST_STATUS_INVALID_ARGUMENT`).
+**回傳值** — `maxDepth` 內的全部節點數（0 以上）。該 TLAS 尚不存在時（建置前、無該種類物件）不是錯誤而是 `0`。`-1` = 失敗（`context` 為 NULL，`layer` 超出範圍為 `ST_STATUS_INVALID_ARGUMENT`）。
 
 </details>
 
 <details>
-<summary><code>st_off_debug_build_mesh_accel_nodes</code> — 컨텍스트 없이 메시 하나의 BLAS를 지어 노드 박스를 돌려준다</summary>
+<summary><code>st_off_debug_build_mesh_accel_nodes</code> — 不需情境，建置單一網格的 BLAS 並回傳節點方塊</summary>
 
 ```c
 int st_off_debug_build_mesh_accel_nodes(const STMesh* mesh, int accelKind, int maxDepth, STAccelNode* outNodes, uint32_t nodeCapacity);
 ```
 
-**용도** — 씬이나 컨텍스트를 만들기 전에, 메시 하나에 대해 가속구조가 어떻게 지어질지 미리 볼 수 있게 합니다(호스트 에디터 미리보기 등). 메시 생성과 같은 입력 검증·같은 빌드 경로라 같은 `accelKind`면 컨텍스트가 짓는 BLAS와 같은 트리입니다. 실시간 `st_rt_debug_build_mesh_accel_nodes`와 결과가 같습니다.
+**用途** — 在建立場景或情境之前，預覽單一網格的加速結構會如何建置（主機編輯器預覽等）。與網格建立使用相同的輸入驗證與建置路徑，因此相同 `accelKind` 時與情境建置的 BLAS 為同一棵樹。與即時 `st_rt_debug_build_mesh_accel_nodes` 結果相同。
 
-**언제·어떻게** — 매 호출이 BLAS를 새로 짓습니다(메시 크기에 비례). 결과는 호스트가 캐시합니다. 노드 순서·`maxDepth`·크기 질의·잘림 규약과 `STAccelNode` 필드는 `st_off_debug_copy_mesh_accel_nodes` 항목과 같습니다. 스레드: `[any]` — 전역 상태가 없어 어느 스레드에서나 부를 수 있습니다(빌드 비용만큼 시간이 걸립니다).
+**呼叫方式** — 每次呼叫都重新建置 BLAS（與網格大小成正比）。結果由主機快取。節點順序、`maxDepth`、大小查詢、截斷約定與 `STAccelNode` 欄位皆與 `st_off_debug_copy_mesh_accel_nodes` 條目相同。執行緒：`[any]` — 無全域狀態，可在任何執行緒呼叫（耗時等同建置成本）。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `mesh` | 삼각형 메시(아래 구조체). NULL 불가 |
-| `accelKind` | `st_off_scene_set_accel`의 kind — 0 BinnedSAH / 1 HybridKD / 2 TinyBVH / 3 LBVH / 4 LBVH_Simd. `-1` = 엔진 기본(TinyBVH) |
-| `maxDepth` | 음수 = 전 깊이. 0 이상이면 그 깊이까지만 |
-| `outNodes` | 노드 버퍼. NULL이면 크기 질의 |
-| `nodeCapacity` | `outNodes` 원소 수 |
+| `mesh` | 三角形網格（見下方結構體）。不可為 NULL |
+| `accelKind` | `st_off_scene_set_accel` 的 kind — 0 BinnedSAH / 1 HybridKD / 2 TinyBVH / 3 LBVH / 4 LBVH_Simd。`-1` = 引擎預設（TinyBVH） |
+| `maxDepth` | 負數 = 全部深度。0 以上時只到該深度 |
+| `outNodes` | 節點緩衝區。NULL 則為大小查詢 |
+| `nodeCapacity` | `outNodes` 元素數 |
 
-**구조체** `STMesh`
+**結構體** `STMesh`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `numVertices` | 정점 수 |
-| `vertices` | xyz 인터리브 float 배열(`numVertices × 3`개) |
-| `numTriangles` | 삼각형 수 |
-| `triangles` | 정점 인덱스 배열(`numTriangles × 3`개) |
+| `numVertices` | 頂點數 |
+| `vertices` | xyz 交錯 float 陣列（`numVertices × 3` 個） |
+| `numTriangles` | 三角形數 |
+| `triangles` | 頂點索引陣列（`numTriangles × 3` 個） |
 
-**반환** — `maxDepth` 안의 전체 노드 수(0 이상) / `-1` = 실패(mesh·배열 NULL, 개수 0 이하, 비유한 정점, 범위 밖 인덱스, 잘못된 kind, 할당 실패). 컨텍스트가 없으므로 last_status는 남지 않습니다.
+**回傳值** — `maxDepth` 內的全部節點數（0 以上） / `-1` = 失敗（mesh 或陣列為 NULL、數量 0 以下、非有限頂點、索引超出範圍、錯誤的 kind、配置失敗）。因無情境，不會留下 last_status。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_create</code> — 여러 컨텍스트의 계산·압력 IR 렌더를 병렬 실행할 배치 객체를 만든다</summary>
+<summary><code>st_off_batch_create</code> — 建立平行執行多個情境之計算·壓力 IR 渲染的批次物件</summary>
 
 ```c
 STOFF_Batch* st_off_batch_create(int32_t workerCount);
 ```
 
-**용도** — 오프라인 배치 런타임의 시작점입니다. 컨텍스트마다 장면·소스·리스너·옵션을 평소처럼 설정해 둔 뒤 그 컨텍스트들과 압력 IR 렌더 요청을 배치에 한 번 등록하면, 엔진이 자체 **배치 워커** 스레드로 작업마다 `st_off_ir_compute`와 등록된 압력 렌더를 차례로 돌리고 끝난 작업을 폴링으로 돌려줍니다. 많은 장면·위치의 RIR을 대량 생성할 때 호스트가 스레드 풀을 직접 짜지 않아도 됩니다. 결과는 같은 컨텍스트에서 호출 스레드로 `st_off_ir_compute` → `st_off_ir_render_pressure`를 돌린 것과 비트 동일합니다.
+**用途** — 離線批次執行環境的起點。為每個情境照常設定場景、音源、聆聽者、選項後，將這些情境與壓力 IR 渲染請求一次註冊到批次，引擎便以自有的 **批次工作執行緒** 對每個工作依序執行 `st_off_ir_compute` 與已註冊的壓力渲染，並以輪詢回傳已完成的工作。大量產生多個場景、位置的 RIR 時，主機不必自行撰寫執行緒集區。結果與在同一情境中以呼叫執行緒執行 `st_off_ir_compute` → `st_off_ir_render_pressure` 位元相同。
 
-**언제·어떻게** — 수명 주기는 다음과 같습니다.
+**呼叫方式** — 生命週期如下。
 
-1. `st_off_batch_create` — 배치 객체 생성(이때는 스레드를 만들지 않음)
-2. `st_off_batch_add_job` — 컨텍스트 하나 = 작업 하나로 등록
-3. `st_off_batch_add_pressure_render` / `st_off_batch_add_pressure_render_mixed` — 작업마다 렌더 요청 등록
-4. `st_off_batch_start` — 배치 워커를 띄우고 즉시 반환(배치당 한 번)
-5. `st_off_batch_poll`(완료 레코드 수신) · `st_off_batch_wait` · `st_off_batch_remaining` — 진행 관찰
-6. `st_off_batch_fetch_pressure` — 완료된 작업의 결과 복사
-7. `st_off_batch_release_job` — 다 받은 작업의 결과 메모리 반납
-8. `st_off_batch_destroy` — 남은 작업 취소, 워커 join, 해제
+1. `st_off_batch_create` — 建立批次物件（此時不建立執行緒）
+2. `st_off_batch_add_job` — 以一個情境 = 一個工作註冊
+3. `st_off_batch_add_pressure_render` / `st_off_batch_add_pressure_render_mixed` — 為每個工作註冊渲染請求
+4. `st_off_batch_start` — 啟動批次工作執行緒並立即返回（每個批次一次）
+5. `st_off_batch_poll`（接收完成記錄） · `st_off_batch_wait` · `st_off_batch_remaining` — 觀察進度
+6. `st_off_batch_fetch_pressure` — 複製已完成工作的結果
+7. `st_off_batch_release_job` — 釋放已全部取得之工作的結果記憶體
+8. `st_off_batch_destroy` — 取消剩餘工作、join 工作執行緒、釋放
 
-배치는 압력 IR만 다룹니다(바이노럴·오디션 렌더는 컨텍스트 함수로 직접 부릅니다). 배치 워커는 컨텍스트 내부 계산 풀 워커와 별개이며 `STThreadType`에 속하지 않습니다. 지원 여부는 `ST_CAP_OFFLINE_BATCH`로 확인합니다. 스레드: `[any]` — 배치 워커는 start에서 만듭니다.
+批次只處理壓力 IR（雙耳與試聽渲染以情境函式直接呼叫）。批次工作執行緒與情境內部的計算集區工作執行緒不同，不屬於 `STThreadType`。是否支援以 `ST_CAP_OFFLINE_BATCH` 確認。執行緒：`[any]` — 批次工作執行緒在 start 時建立。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `workerCount` | 배치 워커 수. 0 이하 = 하드웨어 스레드 수. 실제로 띄우는 수는 작업 수를 넘지 않는다 |
+| `workerCount` | 批次工作執行緒數。0 以下 = 硬體執行緒數。實際啟動的數量不超過工作數 |
 
-**반환** — 배치 핸들. 할당 실패면 NULL.
+**回傳值** — 批次控制代碼。配置失敗則為 NULL。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_destroy</code> — 배치를 취소·정리하고 해제한다</summary>
+<summary><code>st_off_batch_destroy</code> — 取消·清理並釋放批次</summary>
 
 ```c
 void st_off_batch_destroy(STOFF_Batch* batch);
 ```
 
-**용도** — 남은 작업을 취소하고 배치 워커를 모두 join한 뒤 배치와 보관 중인 결과를 해제합니다.
+**用途** — 取消剩餘工作，join 所有批次工作執行緒後，釋放批次與保存中的結果。
 
-**언제·어떻게** — 결과를 다 받은 뒤, 또는 중단하고 싶을 때 부릅니다. 돌아온 뒤에는 배치가 등록된 컨텍스트를 더 참조하지 않습니다. 실행 중인 작업이 취소에 반응해 멈출 때까지 기다리므로 블록됩니다. 스레드: `[any, blocking]` — 어느 스레드에서나 부를 수 있지만 워커 join까지 블록됩니다.
+**呼叫方式** — 在取得所有結果後，或想中斷時呼叫。返回後批次不再參照已註冊的情境。會等待執行中的工作回應取消而停止，因此會阻塞。執行緒：`[any, blocking]` — 可在任何執行緒呼叫，但會阻塞至工作執行緒 join 完成。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들. NULL이면 아무것도 하지 않음 |
+| `batch` | 批次控制代碼。NULL 則不做任何事 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_get_last_status</code> — 배치 자체의 마지막 호출 상태 코드를 읽는다</summary>
+<summary><code>st_off_batch_get_last_status</code> — 讀取批次本身最後一次呼叫的狀態碼</summary>
 
 ```c
 int st_off_batch_get_last_status(const STOFF_Batch* batch);
 ```
 
-**용도** — 배치 함수(`add_*`, `start`, `fetch_pressure`, `release_job` 등)가 실패했을 때 원인을 `STStatus`로 돌려줍니다. 작업별 실패(계산·렌더 실패)는 여기가 아니라 `st_off_batch_get_job_error`로 읽습니다.
+**用途** — 批次函式（`add_*`、`start`、`fetch_pressure`、`release_job` 等）失敗時以 `STStatus` 回傳原因。各工作的失敗（計算、渲染失敗）不在此處，而是以 `st_off_batch_get_job_error` 讀取。
 
-**언제·어떻게** — 배치 함수가 실패 값(-1 / 0)을 돌려준 직후에 부릅니다. 성공한 호출은 `ST_STATUS_OK`로 지웁니다. 스레드: `[any]`.
+**呼叫方式** — 在批次函式回傳失敗值（-1 / 0）後立即呼叫。成功的呼叫會以 `ST_STATUS_OK` 清除。執行緒：`[any]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
+| `batch` | 批次控制代碼 |
 
-**반환** — `STStatus` 값(`ST_STATUS_OK`, `ST_STATUS_INVALID_ARGUMENT`, `ST_STATUS_UNAVAILABLE`, `ST_STATUS_BUFFER_TOO_SMALL` 등). `batch`가 NULL이면 `ST_STATUS_INVALID_ARGUMENT`.
+**回傳值** — `STStatus` 值（`ST_STATUS_OK`、`ST_STATUS_INVALID_ARGUMENT`、`ST_STATUS_UNAVAILABLE`、`ST_STATUS_BUFFER_TOO_SMALL` 等）。`batch` 為 NULL 時為 `ST_STATUS_INVALID_ARGUMENT`。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_get_last_error</code> — 배치 자체의 마지막 오류 메시지를 복사한다</summary>
+<summary><code>st_off_batch_get_last_error</code> — 複製批次本身的最後錯誤訊息</summary>
 
 ```c
 int st_off_batch_get_last_error(const STOFF_Batch* batch, char* outMessage, int32_t capacity);
 ```
 
-**용도** — `st_off_batch_get_last_status`와 짝인 사람이 읽을 수 있는 오류 메시지(영문)를 돌려줍니다.
+**用途** — 回傳與 `st_off_batch_get_last_status` 成對、人類可讀的錯誤訊息（英文）。
 
-**언제·어떻게** — 배치 함수가 실패한 직후 로그용으로 부릅니다. 오류가 없으면 빈 문자열입니다. 스레드: `[any]`.
+**呼叫方式** — 在批次函式失敗後立即呼叫以供記錄。無錯誤時為空字串。執行緒：`[any]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들. NULL이면 빈 문자열을 복사 |
-| `outMessage` | 메시지를 받을 버퍼. NUL 종료, `capacity`에 맞춰 자른다 |
-| `capacity` | `outMessage` 바이트 수. 1 이상 |
+| `batch` | 批次控制代碼。NULL 則複製空字串 |
+| `outMessage` | 接收訊息的緩衝區。NUL 結尾，依 `capacity` 截斷 |
+| `capacity` | `outMessage` 位元組數。1 以上 |
 
-**반환** — `1` = 복사함 / `0` = `outMessage`가 NULL이거나 `capacity`가 0 이하.
+**回傳值** — `1` = 已複製 / `0` = `outMessage` 為 NULL 或 `capacity` 為 0 以下。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_worker_count</code> — 배치에 설정된 배치 워커 수를 읽는다</summary>
+<summary><code>st_off_batch_worker_count</code> — 讀取批次設定的批次工作執行緒數</summary>
 
 ```c
 int32_t st_off_batch_worker_count(const STOFF_Batch* batch);
 ```
 
-**용도** — `st_off_batch_create`에 넘긴 값을 해석한 워커 수(0 이하를 넘겼으면 하드웨어 스레드 수)를 돌려줍니다.
+**用途** — 回傳解讀傳給 `st_off_batch_create` 之值後的工作執行緒數（若傳入 0 以下則為硬體執行緒數）。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. `st_off_batch_start`는 이 값과 작업 수 중 작은 쪽만큼 워커를 띄웁니다. 완료 레코드의 `workerIndex`는 0부터 이 값 미만입니다. 스레드: `[any]`.
+**呼叫方式** — 隨時可呼叫。`st_off_batch_start` 啟動此值與工作數中較小者的工作執行緒。完成記錄的 `workerIndex` 從 0 起、小於此值。執行緒：`[any]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
+| `batch` | 批次控制代碼 |
 
-**반환** — 워커 수. `batch`가 NULL이면 `0`.
+**回傳值** — 工作執行緒數。`batch` 為 NULL 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_add_job</code> — 컨텍스트 하나를 배치 작업으로 등록한다</summary>
+<summary><code>st_off_batch_add_job</code> — 將一個情境註冊為批次工作</summary>
 
 ```c
 int32_t st_off_batch_add_job(STOFF_Batch* batch, STOFF_Context* context);
 ```
 
-**용도** — 장면·소스·리스너·옵션을 다 설정한 오프라인 컨텍스트를 작업 하나로 등록합니다. 작업은 배치 워커 하나에서 `st_off_ir_compute`를 돌린 뒤 그 작업에 등록된 압력 렌더를 등록 순서대로 실행합니다.
+**用途** — 將已設定好場景、音源、聆聽者、選項的離線情境註冊為一個工作。工作在一個批次工作執行緒上執行 `st_off_ir_compute` 後，依註冊順序執行該工作已註冊的壓力渲染。
 
-**언제·어떻게** — `st_off_batch_start` **전에만** 받습니다. 한 배치 안에서 같은 컨텍스트를 두 작업에 등록하지 않습니다. 컨텍스트 포인터는 **빌린 것**입니다: 등록부터 그 작업의 완료 레코드를 `st_off_batch_poll`로 받을 때까지 그 컨텍스트를 파괴하거나 다른 API를 부르면 안 됩니다. 완료 레코드를 받은 뒤에는 배치가 그 컨텍스트를 다시 참조하지 않으므로 배치가 살아 있어도 호스트가 다시 소유합니다 — 원시 IR 조회, 장면·소스 수정, 파괴, 다른 배치 재등록이 모두 되며, 그 작업의 결과는 배치가 따로 보관하므로 `st_off_batch_fetch_pressure`는 그대로 됩니다. 이 동작은 `ST_CAP_OFFLINE_BATCH_CONTEXT_RETURN`으로 확인하며, 이 비트가 없는 라이브러리에서는 배치를 파괴할 때까지 등록한 컨텍스트에 손대지 않습니다. 스레드: `[control]`.
+**呼叫方式** — `st_off_batch_start` **之前才** 接受。同一批次中不要將同一情境註冊到兩個工作。情境指標是 **借用的**：從註冊起到以 `st_off_batch_poll` 收到該工作的完成記錄為止，不可銷毀該情境或呼叫其他 API。收到完成記錄後批次不再參照該情境，因此即使批次仍存在，主機也重新取得所有權 — 原始 IR 查詢、修改場景與音源、銷毀、重新註冊到其他批次皆可，該工作的結果由批次另行保存，因此 `st_off_batch_fetch_pressure` 照常可用。此行為以 `ST_CAP_OFFLINE_BATCH_CONTEXT_RETURN` 確認，在沒有此位元的程式庫中，銷毀批次前不要動已註冊的情境。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
-| `context` | 등록할 오프라인 컨텍스트(빌려줌) |
+| `batch` | 批次控制代碼 |
+| `context` | 要註冊的離線情境（借出） |
 
-**반환** — 작업 인덱스(0부터, 등록 순서). 실패는 `-1`: `context`가 유효하지 않거나 이미 start한 배치면 배치 상태에 `ST_STATUS_INVALID_ARGUMENT`.
+**回傳值** — 工作索引（從 0 起，註冊順序）。失敗為 `-1`：`context` 無效或批次已 start 時，批次狀態為 `ST_STATUS_INVALID_ARGUMENT`。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_add_pressure_render</code> — 작업에 리스너·소스 쌍 하나의 압력 IR 렌더 요청을 추가한다</summary>
+<summary><code>st_off_batch_add_pressure_render</code> — 為工作新增一組聆聽者·音源配對的壓力 IR 渲染請求</summary>
 
 ```c
 int32_t st_off_batch_add_pressure_render(STOFF_Batch* batch, int32_t jobIndex, STListenerId listener, STSourceId source, double seconds, const STOfflinePressureIRRequestOptions* options);
 ```
 
-**용도** — `st_off_ir_render_pressure`의 배치판입니다. 작업이 compute를 끝낸 뒤 이 요청을 렌더하고, 결과를 배치가 보관했다가 `st_off_batch_fetch_pressure`로 내줍니다.
+**用途** — `st_off_ir_render_pressure` 的批次版本。工作完成 compute 後渲染此請求，結果由批次保存，再以 `st_off_batch_fetch_pressure` 提供。
 
-**언제·어떻게** — `st_off_batch_start` 전에 부릅니다. 한 작업에 여러 요청을 넣을 수 있고 등록 순서대로 실행됩니다. 요청 하나가 실패하면 그 작업은 실패로 끝나고 뒤의 렌더는 실행되지 않습니다. 쌍 존재 여부는 렌더 시점에 검사하므로 미등록 쌍은 작업 실패(`st_off_batch_get_job_error`)로 나타납니다. 요청 필드·길이·정규화 없음 등 결과의 뜻은 `st_off_ir_render_pressure`와 같습니다. 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_batch_start` 之前呼叫。一個工作可放入多個請求，依註冊順序執行。一個請求失敗則該工作以失敗結束，之後的渲染不會執行。配對是否存在在渲染時檢查，因此未註冊的配對會以工作失敗（`st_off_batch_get_job_error`）呈現。請求欄位、長度、無正規化等結果的意義與 `st_off_ir_render_pressure` 相同。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
-| `jobIndex` | `st_off_batch_add_job`이 돌려준 작업 인덱스 |
-| `listener` | 리스너 핸들 |
-| `source` | 소스 핸들 |
-| `seconds` | IR 길이(초). 유한한 양수 |
-| `options` | `st_off_ir_init_pressure_request`로 초기화한 요청(`STOfflinePressureIRRequestOptions`, 필드는 그 항목 참고). 등록 시점에 복사 |
+| `batch` | 批次控制代碼 |
+| `jobIndex` | `st_off_batch_add_job` 回傳的工作索引 |
+| `listener` | 聆聽者控制代碼 |
+| `source` | 音源控制代碼 |
+| `seconds` | IR 長度（秒）。有限正數 |
+| `options` | 以 `st_off_ir_init_pressure_request` 初始化的請求（`STOfflinePressureIRRequestOptions`，欄位請參考該條目）。於註冊時複製 |
 
-**반환** — 그 작업 안의 렌더 인덱스(0부터, 등록 순서). 실패는 `-1`: 잘못된 요청, 없는 작업 인덱스, 이미 start한 배치면 배치 상태에 `ST_STATUS_INVALID_ARGUMENT`.
+**回傳值** — 該工作內的渲染索引（從 0 起，註冊順序）。失敗為 `-1`：錯誤請求、不存在的工作索引、批次已 start 時，批次狀態為 `ST_STATUS_INVALID_ARGUMENT`。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_add_pressure_render_mixed</code> — 작업에 리스너 하나·소스 여러 개의 혼합 압력 IR 렌더 요청을 추가한다</summary>
+<summary><code>st_off_batch_add_pressure_render_mixed</code> — 為工作新增一個聆聽者·多個音源的混合壓力 IR 渲染請求</summary>
 
 ```c
 int32_t st_off_batch_add_pressure_render_mixed(STOFF_Batch* batch, int32_t jobIndex, STListenerId listener, const STSourceId* sources, int32_t sourceCount, double seconds, const STOfflinePressureIRRequestOptions* options);
 ```
 
-**용도** — `st_off_ir_render_pressure_mixed`의 배치판입니다. 같은 작업의 솔로 렌더와 **같은 렌더 인덱스 공간**을 쓰며, 결과는 `st_off_batch_fetch_pressure`로 받습니다(`info.sourceId` = -1, `info.sourceCount` = 소스 수).
+**用途** — `st_off_ir_render_pressure_mixed` 的批次版本。與同一工作的獨奏渲染使用 **相同的渲染索引空間**，結果以 `st_off_batch_fetch_pressure` 取得（`info.sourceId` = -1、`info.sourceCount` = 音源數）。
 
-**언제·어떻게** — `st_off_batch_start` 전에 부릅니다. 소스 목록은 등록 시점에 복사하므로 호출 뒤 배열을 재사용해도 됩니다. 핸들 유효성·중복은 등록 시점에 검사하고, 쌍 존재 여부는 작업이 compute를 끝낸 뒤 렌더 시점에 검사하므로 미등록 쌍은 작업 실패(`st_off_batch_get_job_error`)로 나타납니다. 지원 여부는 `ST_CAP_OFFLINE_PRESSURE_RENDER_MIXED`. 스레드: `[control]`.
+**呼叫方式** — 在 `st_off_batch_start` 之前呼叫。音源清單於註冊時複製，因此呼叫後可重用陣列。控制代碼有效性與重複於註冊時檢查，配對是否存在則在工作完成 compute 後的渲染時檢查，因此未註冊的配對會以工作失敗（`st_off_batch_get_job_error`）呈現。是否支援見 `ST_CAP_OFFLINE_PRESSURE_RENDER_MIXED`。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
-| `jobIndex` | 작업 인덱스 |
-| `listener` | 리스너 핸들 |
-| `sources` | 소스 핸들 배열. 중복 없음 |
-| `sourceCount` | 소스 수. `1` 이상 `ST_OFFLINE_PRESSURE_MIXED_MAX_SOURCES`(1024) 이하 |
-| `seconds` | IR 길이(초). 유한한 양수 |
-| `options` | `st_off_ir_init_pressure_request`로 초기화한 요청 |
+| `batch` | 批次控制代碼 |
+| `jobIndex` | 工作索引 |
+| `listener` | 聆聽者控制代碼 |
+| `sources` | 音源控制代碼陣列。不可重複 |
+| `sourceCount` | 音源數。`1` 以上 `ST_OFFLINE_PRESSURE_MIXED_MAX_SOURCES`(1024) 以下 |
+| `seconds` | IR 長度（秒）。有限正數 |
+| `options` | 以 `st_off_ir_init_pressure_request` 初始化的請求 |
 
-**반환** — 그 작업 안의 렌더 인덱스. 실패는 `-1`: 잘못된 요청·소스 수 범위 밖·유효하지 않거나 중복된 핸들·없는 작업 인덱스·이미 start한 배치면 배치 상태에 `ST_STATUS_INVALID_ARGUMENT`.
+**回傳值** — 該工作內的渲染索引。失敗為 `-1`：錯誤請求、音源數超出範圍、無效或重複的控制代碼、不存在的工作索引、批次已 start 時，批次狀態為 `ST_STATUS_INVALID_ARGUMENT`。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_start</code> — 배치 워커를 띄워 등록된 작업 실행을 시작한다</summary>
+<summary><code>st_off_batch_start</code> — 啟動批次工作執行緒，開始執行已註冊的工作</summary>
 
 ```c
 int st_off_batch_start(STOFF_Batch* batch);
 ```
 
-**용도** — 등록을 마감하고 배치 워커를 띄웁니다. 워커는 작업을 하나씩 가져가 compute와 렌더를 돌립니다.
+**用途** — 結束註冊並啟動批次工作執行緒。工作執行緒逐一取得工作並執行 compute 與渲染。
 
-**언제·어떻게** — 작업과 렌더 요청을 모두 등록한 뒤 한 번만 부릅니다. 즉시 돌아오며, 이후 진행은 `st_off_batch_poll` / `st_off_batch_wait` / `st_off_batch_remaining`으로 관찰합니다. start 뒤에는 `add_*`가 거절됩니다. 배치는 다시 start할 수 없으므로 새 일감은 새 배치로 등록합니다. 스레드: `[control]`.
+**呼叫方式** — 註冊完所有工作與渲染請求後只呼叫一次。立即返回，之後的進度以 `st_off_batch_poll` / `st_off_batch_wait` / `st_off_batch_remaining` 觀察。start 之後 `add_*` 會被拒絕。批次不能再次 start，因此新工作請註冊到新的批次。執行緒：`[control]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
+| `batch` | 批次控制代碼 |
 
-**반환** — `1` = 시작 / `0` = 실패(작업이 없거나 이미 start함 → 배치 상태에 `ST_STATUS_INVALID_ARGUMENT`).
+**回傳值** — `1` = 已開始 / `0` = 失敗（無工作或已 start → 批次狀態為 `ST_STATUS_INVALID_ARGUMENT`）。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_poll</code> — 끝난 작업의 완료 레코드를 꺼낸다</summary>
+<summary><code>st_off_batch_poll</code> — 取出已結束工作的完成記錄</summary>
 
 ```c
 int32_t st_off_batch_poll(STOFF_Batch* batch, STOfflineBatchCompletion* outCompletions, int32_t capacity);
 ```
 
-**용도** — 작업이 하나 끝날 때마다 생기는 완료 레코드를 최대 `capacity`개 꺼내(큐에서 비우며) 복사합니다. 완료 레코드를 받는 것이 그 작업 결과를 fetch하고 컨텍스트를 돌려받는 조건입니다.
+**用途** — 每當一個工作結束就會產生完成記錄，此函式最多取出 `capacity` 筆（從佇列中清除）並複製。收到完成記錄是 fetch 該工作結果並取回情境的條件。
 
-**언제·어떻게** — start 뒤 아무 스레드에서나 주기적으로 부르거나, `st_off_batch_wait` 뒤에 한꺼번에 비웁니다. 작업마다 레코드는 정확히 한 번 나옵니다. 레코드를 받은 작업에 대해 `st_off_batch_fetch_pressure` → `st_off_batch_release_job`을 부릅니다. 스레드: `[any]`.
+**呼叫方式** — start 之後可在任何執行緒定期呼叫，或在 `st_off_batch_wait` 之後一次清空。每個工作的記錄恰好出現一次。對已收到記錄的工作呼叫 `st_off_batch_fetch_pressure` → `st_off_batch_release_job`。執行緒：`[any]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
-| `outCompletions` | 레코드를 받을 배열. 엔진이 각 레코드의 `structSize`·`apiVersion`을 채운다 |
-| `capacity` | `outCompletions` 원소 수. 1 이상 |
+| `batch` | 批次控制代碼 |
+| `outCompletions` | 接收記錄的陣列。由引擎填入各記錄的 `structSize`·`apiVersion` |
+| `capacity` | `outCompletions` 元素數。1 以上 |
 
-**구조체** `STOfflineBatchCompletion`
+**結構體** `STOfflineBatchCompletion`
 
-| 필드 | 설명 |
+| 欄位 | 說明 |
 |---|---|
-| `structSize`, `apiVersion` | 엔진이 채우는 버전 스탬프 |
-| `jobIndex` | 끝난 작업의 인덱스 |
-| `status` | 0 = 성공 / 1 = compute·렌더 실패(메시지는 `st_off_batch_get_job_error`) / 2 = 취소 |
-| `renderCount` | 성공한 압력 렌더 수 |
-| `workerIndex` | 그 작업을 돈 배치 워커 번호 |
-| `computeMicros` | 그 작업의 compute 경과 시간(µs) |
-| `renderMicros` | 그 작업의 렌더 경과 시간(µs) |
-| `reserved[8]` | 예약 |
+| `structSize`, `apiVersion` | 由引擎填入的版本戳記 |
+| `jobIndex` | 已結束工作的索引 |
+| `status` | 0 = 成功 / 1 = compute 或渲染失敗（訊息見 `st_off_batch_get_job_error`） / 2 = 取消 |
+| `renderCount` | 成功的壓力渲染數 |
+| `workerIndex` | 執行該工作的批次工作執行緒編號 |
+| `computeMicros` | 該工作的 compute 經過時間（µs） |
+| `renderMicros` | 該工作的渲染經過時間（µs） |
+| `reserved[8]` | 保留 |
 
-**반환** — 복사한 레코드 수(0 이상). 새 완료가 없거나 `batch`·`outCompletions`가 NULL이거나 `capacity`가 0 이하면 `0`.
+**回傳值** — 已複製的記錄數（0 以上）。無新完成、`batch` 或 `outCompletions` 為 NULL，或 `capacity` 為 0 以下時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_wait</code> — 모든 작업이 끝날 때까지(또는 시간 초과까지) 기다린다</summary>
+<summary><code>st_off_batch_wait</code> — 等待至所有工作結束（或逾時）</summary>
 
 ```c
 int st_off_batch_wait(STOFF_Batch* batch, int32_t timeoutMs);
 ```
 
-**용도** — 폴링 루프 대신 배치 전체의 완료를 블록해서 기다립니다.
+**用途** — 以阻塞方式等待整個批次完成，取代輪詢迴圈。
 
-**언제·어떻게** — start 뒤에 부릅니다. 기다림이 끝나도 완료 레코드는 큐에 남아 있으므로 이어서 `st_off_batch_poll`로 비웁니다(레코드를 받아야 fetch·컨텍스트 반환이 됩니다). 스레드: `[any, blocking]` — 어느 스레드에서나 부를 수 있지만 완료 또는 시간 초과까지 블록됩니다.
+**呼叫方式** — 在 start 之後呼叫。等待結束後完成記錄仍留在佇列中，因此接著以 `st_off_batch_poll` 清空（收到記錄後才能 fetch 與取回情境）。執行緒：`[any, blocking]` — 可在任何執行緒呼叫，但會阻塞至完成或逾時。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
-| `timeoutMs` | 최대 대기 시간(ms). 음수 = 무한 대기 |
+| `batch` | 批次控制代碼 |
+| `timeoutMs` | 最大等待時間（ms）。負數 = 無限等待 |
 
-**반환** — `1` = 모든 작업 완료 / `0` = 시간 초과 또는 `batch` NULL.
+**回傳值** — `1` = 所有工作完成 / `0` = 逾時或 `batch` 為 NULL。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_remaining</code> — 아직 끝나지 않은 작업 수를 읽는다</summary>
+<summary><code>st_off_batch_remaining</code> — 讀取尚未結束的工作數</summary>
 
 ```c
 int32_t st_off_batch_remaining(const STOFF_Batch* batch);
 ```
 
-**용도** — 진행 표시나 완료 판정에 쓰는 남은 작업 수를 돌려줍니다.
+**用途** — 回傳用於進度顯示或完成判定的剩餘工作數。
 
-**언제·어떻게** — 언제든 부를 수 있습니다. 끝난(성공·실패·취소) 작업은 빠집니다. 스레드: `[any]`.
+**呼叫方式** — 隨時可呼叫。已結束（成功、失敗、取消）的工作不計入。執行緒：`[any]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
+| `batch` | 批次控制代碼 |
 
-**반환** — 끝나지 않은 작업 수. `batch`가 NULL이면 `0`.
+**回傳值** — 未結束的工作數。`batch` 為 NULL 時為 `0`。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_cancel</code> — 남은 작업을 취소하고 실행 중인 작업에 취소를 건다</summary>
+<summary><code>st_off_batch_cancel</code> — 取消剩餘工作，並對執行中的工作發出取消</summary>
 
 ```c
 void st_off_batch_cancel(STOFF_Batch* batch);
 ```
 
-**용도** — 배치 전체를 중단합니다. 아직 시작하지 않은 작업은 취소(`status` 2)로 끝나고, 실행 중인 작업의 컨텍스트에는 `st_off_ir_request_cancel`과 같은 취소가 걸립니다.
+**用途** — 中斷整個批次。尚未開始的工作以取消（`status` 2）結束，執行中工作的情境則被發出與 `st_off_ir_request_cancel` 相同的取消。
 
-**언제·어떻게** — 어느 스레드에서나 부를 수 있고 기다리지 않고 돌아옵니다. 실행 중이던 작업은 중단 시점에 따라 실패(`status` 1) 또는 취소(`status` 2)로 끝납니다. 이후에도 모든 작업의 완료 레코드가 나오므로 `st_off_batch_poll`로 받은 뒤 컨텍스트를 돌려받습니다. 중단 전에 끝난 작업의 결과는 그대로 fetch할 수 있습니다. 스레드: `[any]`.
+**呼叫方式** — 可在任何執行緒呼叫，不等待即返回。執行中的工作依中斷時間點以失敗（`status` 1）或取消（`status` 2）結束。之後仍會產生所有工作的完成記錄，因此以 `st_off_batch_poll` 接收後取回情境。中斷前已結束之工作的結果仍可照常 fetch。執行緒：`[any]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들. NULL이면 아무것도 하지 않음 |
+| `batch` | 批次控制代碼。NULL 則不做任何事 |
 
-**반환** — 없음.
+**回傳值** — 無。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_fetch_pressure</code> — 완료된 작업의 압력 IR 렌더 결과를 호출자 버퍼로 복사한다</summary>
+<summary><code>st_off_batch_fetch_pressure</code> — 將已完成工作的壓力 IR 渲染結果複製到呼叫端緩衝區</summary>
 
 ```c
 int32_t st_off_batch_fetch_pressure(STOFF_Batch* batch, int32_t jobIndex, int32_t renderIndex, float* outValues, int32_t capacityValues, STOfflinePressureIRInfo* outInfo);
 ```
 
-**용도** — 배치가 보관 중인 렌더 결과(값 배열과 메타데이터)를 꺼냅니다. 배치는 결과를 컨텍스트와 별도로 보관하므로 컨텍스트를 바꾸거나 파괴한 뒤에도 꺼낼 수 있습니다.
+**用途** — 取出批次保存中的渲染結果（值陣列與中繼資料）。批次與情境分開保存結果，因此變更或銷毀情境後仍可取出。
 
-**언제·어떻게** — 그 작업의 완료 레코드를 `st_off_batch_poll`로 받은 뒤에 부릅니다. `outValues` = NULL이면 값 개수와 `outInfo`만 돌려주므로, 먼저 크기를 얻고 버퍼를 잡아 다시 부릅니다. 값 배치(모노 / `values[band × bandStride + sample]`)와 info 필드는 `st_off_ir_render_pressure`와 같습니다. 다 받은 작업은 `st_off_batch_release_job`으로 반납합니다. 스레드: `[any]`.
+**呼叫方式** — 在以 `st_off_batch_poll` 收到該工作的完成記錄後呼叫。`outValues` = NULL 時只回傳值數量與 `outInfo`，因此先取得大小、配置緩衝區後再次呼叫。值的佈局（單聲道 / `values[band × bandStride + sample]`）與 info 欄位皆與 `st_off_ir_render_pressure` 相同。已全部取得的工作以 `st_off_batch_release_job` 釋放。執行緒：`[any]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
-| `jobIndex` | 작업 인덱스 |
-| `renderIndex` | 그 작업의 렌더 인덱스(`add_pressure_render*`의 반환값) |
-| `outValues` | 결과 버퍼. NULL이면 개수·info만 |
-| `capacityValues` | `outValues`의 float 개수 |
-| `outInfo` | 결과 메타데이터(`STOfflinePressureIRInfo`, 필드는 `st_off_ir_render_pressure` 항목 참고). NULL 허용. 넘기면 호출자가 `structSize`·`apiVersion`을 채운다 |
+| `batch` | 批次控制代碼 |
+| `jobIndex` | 工作索引 |
+| `renderIndex` | 該工作的渲染索引（`add_pressure_render*` 的回傳值） |
+| `outValues` | 結果緩衝區。NULL 則只取數量與 info |
+| `capacityValues` | `outValues` 的 float 數量 |
+| `outInfo` | 結果中繼資料（`STOfflinePressureIRInfo`，欄位請參考 `st_off_ir_render_pressure` 條目）。允許 NULL。傳入時由呼叫端填入 `structSize`·`apiVersion` |
 
-**반환** — 값 개수(복사했거나 필요한 float 수). 실패는 `0`: 렌더가 끝나지 않았거나 실패했거나 이미 반납됐으면 `ST_STATUS_UNAVAILABLE`, 버퍼가 모자라면 `ST_STATUS_BUFFER_TOO_SMALL`, `outInfo` 스탬프가 틀리면 `ST_STATUS_INVALID_ARGUMENT`(모두 배치 상태에 남음).
+**回傳值** — 值數量（已複製或所需的 float 數）。失敗為 `0`：渲染尚未結束、已失敗或已釋放時為 `ST_STATUS_UNAVAILABLE`，緩衝區不足為 `ST_STATUS_BUFFER_TOO_SMALL`，`outInfo` 戳記錯誤為 `ST_STATUS_INVALID_ARGUMENT`（皆記錄於批次狀態）。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_release_job</code> — 완료된 작업의 결과 메모리를 반납한다</summary>
+<summary><code>st_off_batch_release_job</code> — 釋放已完成工作的結果記憶體</summary>
 
 ```c
 int st_off_batch_release_job(STOFF_Batch* batch, int32_t jobIndex);
 ```
 
-**용도** — 다 받은 작업의 렌더 결과를 배치에서 지워 메모리를 돌려받습니다. 큰 배치에서 결과를 받는 즉시 반납하면 최대 메모리 사용량이 줄어듭니다.
+**用途** — 從批次中刪除已全部取得之工作的渲染結果以收回記憶體。在大型批次中一取得結果就立即釋放，可降低最大記憶體用量。
 
-**언제·어떻게** — 그 작업의 결과를 `st_off_batch_fetch_pressure`로 다 받은 뒤 부릅니다. 반납한 작업의 결과는 더 fetch할 수 없습니다. 스레드: `[any]`.
+**呼叫方式** — 以 `st_off_batch_fetch_pressure` 取得該工作所有結果後呼叫。已釋放工作的結果無法再 fetch。執行緒：`[any]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
-| `jobIndex` | 작업 인덱스 |
+| `batch` | 批次控制代碼 |
+| `jobIndex` | 工作索引 |
 
-**반환** — `1` = 반납 / `0` = 작업이 아직 끝나지 않음(배치 상태에 `ST_STATUS_UNAVAILABLE`) 또는 `batch` NULL.
+**回傳值** — `1` = 已釋放 / `0` = 工作尚未結束（批次狀態為 `ST_STATUS_UNAVAILABLE`）或 `batch` 為 NULL。
 
 </details>
 
 <details>
-<summary><code>st_off_batch_get_job_error</code> — 작업별 실패 메시지를 복사한다</summary>
+<summary><code>st_off_batch_get_job_error</code> — 複製各工作的失敗訊息</summary>
 
 ```c
 int st_off_batch_get_job_error(const STOFF_Batch* batch, int32_t jobIndex, char* outMessage, int32_t capacity);
 ```
 
-**용도** — 완료 레코드의 `status`가 1(실패) 또는 2(취소)인 작업의 사유(영문)를 돌려줍니다. 예: compute 실패·취소, 미등록 쌍 등으로 인한 렌더 실패.
+**用途** — 回傳完成記錄 `status` 為 1（失敗）或 2（取消）之工作的原因（英文）。例：compute 失敗或取消、因未註冊配對等造成的渲染失敗。
 
-**언제·어떻게** — 완료 레코드를 받은 뒤 부릅니다. 배치 함수 호출 자체의 오류는 `st_off_batch_get_last_status` / `st_off_batch_get_last_error`로 읽습니다. 스레드: `[any]`.
+**呼叫方式** — 收到完成記錄後呼叫。批次函式呼叫本身的錯誤以 `st_off_batch_get_last_status` / `st_off_batch_get_last_error` 讀取。執行緒：`[any]`。
 
-| 파라미터 | 설명 |
+| 參數 | 說明 |
 |---|---|
-| `batch` | 배치 핸들 |
-| `jobIndex` | 작업 인덱스 |
-| `outMessage` | 메시지를 받을 버퍼. NUL 종료, `capacity`에 맞춰 자른다 |
-| `capacity` | `outMessage` 바이트 수. 1 이상 |
+| `batch` | 批次控制代碼 |
+| `jobIndex` | 工作索引 |
+| `outMessage` | 接收訊息的緩衝區。NUL 結尾，依 `capacity` 截斷 |
+| `capacity` | `outMessage` 位元組數。1 以上 |
 
-**반환** — `1` = 메시지가 있음(복사함) / `0` = 메시지 없음(성공한 작업 등) 또는 인자 오류.
+**回傳值** — `1` = 有訊息（已複製） / `0` = 無訊息（成功的工作等）或引數錯誤。
 
 </details>
 
@@ -7690,8 +7686,8 @@ UE · Unity · FMOD · Wwise 外掛全部使用 BUFFERED。
 ## 平台備註
 
 - **Android**: API 28 以上。將各 ABI 的 `.so` 放入應用程式的程式庫資料夾。
-- **iOS**: 單一靜態程式庫（`libsimplest_static.a`）同時包含即時與離線。依 device / simulator 分別連結。
-- **Web**: `SimpleSTRealtime.mjs/.wasm` 是 pthreads 建置，頁面與 Worker 回應需要 `Cross-Origin-Opener-Policy: same-origin`、
+- **iOS**: 單一靜態程式庫（`libsoundtracing_static.a`）同時包含即時與離線。依 device / simulator 分別連結。
+- **Web**: `SoundTracingRealtime.mjs/.wasm` 是 pthreads 建置，頁面與 Worker 回應需要 `Cross-Origin-Opener-Policy: same-origin`、
   `Cross-Origin-Embedder-Policy: require-corp`。`[control]` 呼叫只在一個 Worker 中進行（主執行緒上的阻塞呼叫會因
   `Atomics.wait` 限制而失敗），音訊透過共用環形緩衝區與 AudioWorklet 交換。若需要 TypeScript facade，請使用 [Web SDK](./web.md)。
 - **主機取樣率**: 引擎內部為 44.1 kHz，指定 `hostSampleRate` 後由引擎轉換輸入與輸出。

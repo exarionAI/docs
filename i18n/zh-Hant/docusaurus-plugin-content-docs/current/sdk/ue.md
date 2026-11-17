@@ -15,7 +15,7 @@ Actor Component 連接引擎。
 | Engine | Unreal Engine 5.6（已於 5.7 驗證） |
 | Plugin | `Plugins/SoundTracing`（`SoundTracing` 執行階段 + `SoundTracingEditor` 模組，相依 Niagara） |
 | 支援平台 | Win64、Mac、Linux、Android、IOS |
-| 引擎二進位檔 | `ThirdParty/SimpleST/Binaries/<Plat>/<Config>/` — 只有 UE Debug 使用 SDK Debug，其餘使用 Release |
+| 引擎二進位檔 | `ThirdParty/SoundTracing/Binaries/<Plat>/<Config>/` — 只有 UE Debug 使用 SDK Debug，其餘使用 Release |
 
 ## 安裝
 
@@ -30,8 +30,8 @@ YourProject/
    └─ SoundTracing/
       ├─ Content/           Niagara 路徑視覺化、Material Preset Library
       ├─ Source/            SoundTracing · SoundTracingEditor
-      └─ ThirdParty/SimpleST/
-         ├─ Include/SimpleST/ABI/
+      └─ ThirdParty/SoundTracing/
+         ├─ Include/SoundTracing/ABI/
          ├─ Binaries/<Plat>/<Config>/
          └─ Resources/HRTF/
 ```
@@ -48,9 +48,9 @@ YourProject/
 
 | | Native | FMOD | Wwise |
 |---|---|---|---|
-| Sound-Tracing SDK 上下文與渲染 | SoundTracing（UE Audio Mixer Spatialization + Submix） | `SimpleSTFmod`（Source/Listener DSP） | `SimpleSTWwise`（Sound-tracing Renderer） |
+| Sound-Tracing SDK 上下文與渲染 | SoundTracing（UE Audio Mixer Spatialization + Submix） | `SoundTracingFmod`（Source/Listener DSP） | `SoundTracingWwise`（Sound-tracing Renderer） |
 | 聆聽者 | UE 聆聽者 / `ListenerComponent` | FMOD 聆聽者 | Wwise 聆聽者 |
-| 引擎 DLL 位置 | `ThirdParty/SimpleST/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
+| 引擎 DLL 位置 | `ThirdParty/SoundTracing/Binaries` | `FMODStudio/Binaries/<Plat>/` | `WwiseSoundEngine/ThirdParty/<toolset>/<Config>/bin` |
 
 在 FMOD 與 Wwise 模式下，`ListenerComponent` 的輸出設定（HRTF、輸出模式）與 Source Settings 資產
 不會被使用 — 由中介軟體外掛的參數承擔這個角色。
@@ -61,14 +61,14 @@ YourProject/
 
 ### FMOD 模式安裝
 
-FMOD 發布檔（`SimpleST-fmod-release.zip`）中的 `Unreal/SoundTracing` 是 **FMOD 版**。
-`ThirdParty/SimpleSTFmod/<Plat>/` 中含有 `SimpleSTFmod`、`SimpleSTRealtime`、HRTF。
+FMOD 發布檔（`SoundTracing-fmod-release.zip`）中的 `Unreal/SoundTracing` 是 **FMOD 版**。
+`ThirdParty/SoundTracingFmod/<Plat>/` 中含有 `SoundTracingFmod`、`SoundTracingRealtime`、HRTF。
 
 1. 將 FMOD for Unreal 放入專案的 `Plugins/FMODStudio`。
 2. 將 `Unreal/SoundTracing` 放入專案的 `Plugins/` 並建置。建置時 SoundTracing 會將上述檔案複製到
-   `Plugins/FMODStudio/Binaries/<Plat>/`，並在 `Config/DefaultEngine.ini` 加入 `+PluginFiles=SimpleSTFmod`
+   `Plugins/FMODStudio/Binaries/<Plat>/`，並在 `Config/DefaultEngine.ini` 加入 `+PluginFiles=SoundTracingFmod`
    （= Project Settings › FMOD Studio › Plugin Files）。已有相同檔案時略過。Win64、Mac。
-3. 之後在 FMOD Studio 中於主匯流排放入 SimpleST Listener，在 3D 事件的主軌放入
+3. 之後在 FMOD Studio 中於主匯流排放入 Sound-tracing Listener，在 3D 事件的主軌放入
 Sound-Tracing SDK Source — [FMOD 外掛](./fmod.md)。
 
 ### Wwise 模式安裝
@@ -83,7 +83,7 @@ Wwise 外掛與其他 Wwise 外掛一樣由 Audiokinetic Launcher 安裝。
 ![Launcher 的 Modify Wwise in Project](/img/wwise/launcher-modify-project.png)
 
 SoundTracing 在模組啟動時取得外掛，設定 `sceneRatio = 0.01`（Wwise Unreal 單位 = cm），
-並以 `SimpleSTWwise_SetWorldAxes(UNREAL)` 通知 Unreal 軸（+Z 向上）。這是因為 Wwise for Unreal 2024.1+
+並以 `SoundTracingWwise_SetWorldAxes(UNREAL)` 通知 Unreal 軸（+Z 向上）。這是因為 Wwise for Unreal 2024.1+
 傳遞位置時不做軸轉換 — [Wwise 外掛](./wwise.md)。
 
 ![UE Wwise 安裝結果](/img/wwise/ue-install.png)
@@ -243,18 +243,18 @@ reflection、absorption、transmission、scattering 的工作，請限制在另�
 以 `SetSoundTracingEnabled(bool)` / `IsSoundTracingEnabled()` 整體開啟或關閉 sound tracing。關閉期間，
 即使聆聽者或音源移動也不會喚醒傳播 lane，也不會收集視覺化路徑，因此不會殘留最後的路徑。
 在 FMOD 與 Wwise 模式中，會將此開關傳給中介軟體外掛
-（`SimpleSTFmod_SetSoundTracingEnabled` / `SimpleSTWwise_SetSoundTracingEnabled`）。引擎沒有傳播暫停功能，因此
+（`SoundTracingFmod_SetSoundTracingEnabled` / `SoundTracingWwise_SetSoundTracingEnabled`）。引擎沒有傳播暫停功能，因此
 只要還有音源，lane 就會依自身週期持續運轉。
 
 ## 平台連結契約
 
 | UE 平台 | SDK 路徑（`Binaries/` 之下） | 連結 |
 |---|---|---|
-| Win64 | `Win64/<Config>/SimpleSTRealtime.dll` | 執行期 export 綁定 |
-| Mac | `Mac/<Config>/libSimpleSTRealtime.dylib` | Universal，執行期綁定 |
-| Linux | `Linux/<Config>/libSimpleSTRealtime.so` | x86_64，執行期綁定 |
-| Android | `Android/<ABI>/<Config>/libSimpleSTRealtime.so` | 以 UPL 複製到 APK 各 ABI 資料夾。HRTF 從 UFS 解出 |
-| IOS | `IOS/device` 或 `IOS/simulator` 之下的 `<Config>/libsimplest_static.a` | 靜態連結，直接函式指標綁定 |
+| Win64 | `Win64/<Config>/SoundTracingRealtime.dll` | 執行期 export 綁定 |
+| Mac | `Mac/<Config>/libSoundTracingRealtime.dylib` | Universal，執行期綁定 |
+| Linux | `Linux/<Config>/libSoundTracingRealtime.so` | x86_64，執行期綁定 |
+| Android | `Android/<ABI>/<Config>/libSoundTracingRealtime.so` | 以 UPL 複製到 APK 各 ABI 資料夾。HRTF 從 UFS 解出 |
+| IOS | `IOS/device` 或 `IOS/simulator` 之下的 `<Config>/libsoundtracing_static.a` | 靜態連結，直接函式指標綁定 |
 
 只有 UE Debug 使用 SDK Debug，Development/DebugGame/Shipping 使用 Release。
 缺少時會在 UBT 階段出錯。在中介軟體外掛以靜態連結的 iOS 與 Web 上，FMOD/Wwise
@@ -265,13 +265,13 @@ reflection、absorption、transmission、scattering 的工作，請限制在另�
 | 症狀 | 檢查項目 |
 |---|---|
 | plugin 不在選擇清單中 | plugin enable、module compile、target platform 的 Audio 設定 |
-| native library 載入失敗 | `ThirdParty/SimpleST/Binaries` 中各 target 的 binary、Config（Debug/Release）是否相符 |
+| native library 載入失敗 | `ThirdParty/SoundTracing/Binaries` 中各 target 的 binary、Config（Debug/Release）是否相符 |
 | 整合模式與預期不同 | `.uproject` 中 Wwise/FMODStudio 外掛的啟用狀態、`SOUNDTRACING_UNREAL_INTEGRATION` |
 | FMOD/Wwise 模式下聲音沒有空間化 | FMOD Studio / Wwise 專案端的 Sound-Tracing SDK DSP 設定、執行階段 READY 狀態（Output Log） |
 | source 沒有空間化（Native） | Audio Component 是否連接了 SoundTracing Source Settings 資產 |
 | geometry 沒有反映 | Object Component 的 immediate parent 是否為支援的 mesh component、`Acoustic Mobility` |
 | 渲染區塊超時（音訊中斷） | `Early Reflections = Hybrid`、提高 `Reflection Update Interval`、降低 Quality Preset |
-| 短音效聽起來小或延遲（FMOD/Wwise 模式） | 是否設定了 `SIMPLESTFMOD_WARM_SOURCES=0` |
+| 短音效聽起來小或延遲（FMOD/Wwise 模式） | 是否設定了 `SOUNDTRACINGFMOD_WARM_SOURCES=0` |
 | 部分音源以 dry 播放（Native） | Output Log 中的 `ST_STATUS_BUDGET_EXCEEDED` — 減少音源或提高 `Max Sources` |
 | 啟用 EQ 後聲音沒有變化 | 是否為 Native 模式（FMOD/Wwise 模式使用中介軟體 EQ）、Output Log 中的 EQ 不支援警告 |
 | 在 FMOD/Wwise 模式中關閉 sound tracing 仍沒有變化 | 外掛是否為 export `*_SetSoundTracingEnabled` 的版本（沒有時 Output Log 會出現警告） |

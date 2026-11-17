@@ -14,7 +14,7 @@ Unity의 컴포넌트 패턴, 매니저 스크립트와 스크립터블 오브�
 | 항목 | 값 |
 |---|---|
 | Unity | 2022.3 LTS 이상 (Unity 6 검증) |
-| 패키지 | `SoundTrace-SimpleST-release.unitypackage`(기본·Wwise용) / `SoundTrace-SimpleST-FMOD-release.unitypackage`(FMOD 에디션) → `Assets/SoundTrace` |
+| 패키지 | `SoundTracing-Unity-release.unitypackage`(기본·Wwise용) / `SoundTracing-Unity-FMOD-release.unitypackage`(FMOD 에디션) → `Assets/SoundTrace` |
 | 플랫폼 | Windows x64 · macOS Universal · Linux x86_64 · Android(ARMv7/ARM64/x86_64, API 28+) · iOS 15+ |
 | WebGL | 미지원 — Unity WebGL은 오디오 필터(`OnAudioFilterRead`)를 지원하지 않습니다. 웹은 C SDK의 WASM 빌드인 [Web SDK](./web.md)를 쓰십시오 |
 
@@ -28,35 +28,35 @@ FMOD는 FMOD 에디션 패키지를 넣으면 끝나고, Wwise 플러그인은 A
 
 ## FMOD와 함께 쓰기
 
-프로젝트에 Sound-Tracing SDK FMOD 플러그인(`SimpleSTFmod`)이 있으면 SoundTrace는 자동으로 **FMOD 통합**으로
-동작합니다. 공간 음향 렌더는 FMOD Studio의 SimpleST Source / Listener DSP가 하고, SoundTrace는
+프로젝트에 Sound-Tracing SDK FMOD 플러그인(`SoundTracingFmod`)이 있으면 SoundTrace는 자동으로 **FMOD 통합**으로
+동작합니다. 공간 음향 렌더는 FMOD Studio의 Sound-tracing Source / Listener DSP가 하고, SoundTrace는
 `SoundTraceManager` + `SoundTraceObject`로 지오메트리·재질만 플러그인 컨텍스트에 올립니다.
 `SoundTraceListener` / `SoundTraceSource`는 경고를 남기고 꺼집니다.
 
 ![FMOD 에디션 패키지 가져오기](/img/fmod/unity-fmod-edition-import.png)
 
 1. FMOD for Unity 2.04를 프로젝트에 넣습니다(`Assets/Plugins/FMOD`. tgz로 설치했다면 `Packages/`로 embed).
-2. **FMOD 에디션** 패키지 `SoundTrace-SimpleST-FMOD-release.unitypackage`를 Project 창에 드래그 앤 드롭합니다.
-   별도 메뉴는 없습니다. 패키지의 `Runtime/Plugins/FMOD`에 `SimpleSTFmod`(Windows x64·macOS)가 들어 있고,
+2. **FMOD 에디션** 패키지 `SoundTracing-Unity-FMOD-release.unitypackage`를 Project 창에 드래그 앤 드롭합니다.
+   별도 메뉴는 없습니다. 패키지의 `Runtime/Plugins/FMOD`에 `SoundTracingFmod`(Windows x64·macOS)가 들어 있고,
    에디터가 로드될 때 SoundTrace가 이를 FMOD 플러그인 폴더에 복사하고 FMOD Settings › Dynamic Plugins에
    등록합니다. FMOD를 나중에 넣어도 다음 로드 때 같은 일을 합니다.
-3. FMOD Studio에서 마스터 버스에 **SimpleST Listener**, 3D 이벤트 마스터 트랙에 FMOD Spatializer 대신
-   **SimpleST Source**를 넣습니다 — [FMOD 플러그인](./fmod.md).
+3. FMOD Studio에서 마스터 버스에 **Sound-tracing Listener**, 3D 이벤트 마스터 트랙에 FMOD Spatializer 대신
+   **Sound-tracing Source**를 넣습니다 — [FMOD 플러그인](./fmod.md).
 4. 씬에는 `SoundTraceManager`와 지오메트리용 `SoundTraceObject`, FMOD `StudioListener`를 둡니다.
 
-엔진 인스턴스는 하나입니다. SimpleSTFmod가 SoundTrace가 P/Invoke하는 같은 `SimpleSTRealtime`을
+엔진 인스턴스는 하나입니다. SoundTracingFmod가 SoundTrace가 P/Invoke하는 같은 `SoundTracingRealtime`을
 로드하고, 모든 제어 호출은 플러그인의 컨트롤 스레드에서 실행됩니다.
 
 ## Wwise와 함께 쓰기
 
-Wwise Unity 통합의 DSP 폴더에 `SimpleSTWwise`가 있으면 **Wwise 통합**으로 동작합니다(FMOD가
+Wwise Unity 통합의 DSP 폴더에 `SoundTracingWwise`가 있으면 **Wwise 통합**으로 동작합니다(FMOD가
 함께 있으면 FMOD 우선).
 
 SoundTrace는 기본 패키지를 쓰고, Wwise 플러그인은 다른 Wwise 플러그인처럼 Audiokinetic Launcher가 넣습니다.
 
 ![런처에 설치된 Sound-tracing](/img/wwise/launcher-bundle.png)
 
-1. 기본 패키지 `SoundTrace-SimpleST-release.unitypackage`를 Project 창에 드래그 앤 드롭합니다.
+1. 기본 패키지 `SoundTracing-Unity-release.unitypackage`를 Project 창에 드래그 앤 드롭합니다.
 2. Audiokinetic Launcher 스토어에서 획득한 **Sound-Tracing SDK for Wwise**(플러그인 이름 `Sound-tracing`)를
    Wwise에 설치합니다.
 3. Launcher › **Unity › Integrate(또는 Modify) Wwise in Project**를 실행합니다. 런처가 Wwise SDK에 설치된

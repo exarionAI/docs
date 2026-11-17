@@ -1,13 +1,13 @@
 ---
 title: FMOD
-description: Sound-Tracing SDK for FMOD(SimpleSTFmod) — FMOD Studio / FMOD Engine용 DSP 플러그인의 구조, 설치, Studio 저작, 원샷과 웜 음원 풀, 게임 쪽 C API, UE·Unity 통합, EQ.
+description: Sound-Tracing SDK for FMOD(SoundTracingFmod) — FMOD Studio / FMOD Engine용 DSP 플러그인의 구조, 설치, Studio 저작, 원샷과 웜 음원 풀, 게임 쪽 C API, UE·Unity 통합, EQ.
 ---
 
 # Sound-Tracing SDK for FMOD
 
-**Sound-Tracing SDK for FMOD**(바이너리 이름 `SimpleSTFmod`)는 Sound-Tracing SDK를
-FMOD Studio / FMOD Engine에서 쓰기 위한 DSP 플러그인입니다. 저작툴에서 이벤트에 꽂아 쓰는 **SimpleST Source**와 마스터 버스에 하나 두는
-**SimpleST Listener** 두 DSP, 그리고 게임 엔진이 지오메트리를 올리는 C API로 구성됩니다.
+**Sound-Tracing SDK for FMOD**(바이너리 이름 `SoundTracingFmod`)는 Sound-Tracing SDK를
+FMOD Studio / FMOD Engine에서 쓰기 위한 DSP 플러그인입니다. 저작툴에서 이벤트에 꽂아 쓰는 **Sound-tracing Source**와 마스터 버스에 하나 두는
+**Sound-tracing Listener** 두 DSP, 그리고 게임 엔진이 지오메트리를 올리는 C API로 구성됩니다.
 
 | 항목 | 값 |
 |---|---|
@@ -17,11 +17,11 @@ FMOD Studio / FMOD Engine에서 쓰기 위한 DSP 플러그인입니다. 저작�
 
 ## 구조
 
-![SimpleSTFmod 구조](/img/fmod/structure.png)
+![SoundTracingFmod 구조](/img/fmod/structure.png)
 
 - 엔진은 "음원 N개 입력 → 리스너 믹스 1개 출력" 구조라 Source는 밀어넣고 무음, 버스의 Listener가 한 번에 렌더합니다.
-- 플러그인이 `SimpleSTRealtime`을 **자기 폴더에서** 동적 바인딩하고, 게임 쪽은 플러그인이 export하는
-  `SimpleSTFmod_GetRealtimeProc`으로 **같은 모듈**의 `st_rt_*`를 받습니다 — 엔진 인스턴스는 하나입니다.
+- 플러그인이 `SoundTracingRealtime`을 **자기 폴더에서** 동적 바인딩하고, 게임 쪽은 플러그인이 export하는
+  `SoundTracingFmod_GetRealtimeProc`으로 **같은 모듈**의 `st_rt_*`를 받습니다 — 엔진 인스턴스는 하나입니다.
 - 렌더러는 "지금 process가 돌고 있는 Listener"가 매 블록 선출됩니다. Studio가 만드는 미리보기용 더미
   인스턴스가 라이브 Listener를 가로채지 않으며, 렌더러가 250 ms 동안 멈추면 다른 Listener가 넘겨받고
   아무도 없으면 Source들은 dry로 돌아갑니다.
@@ -39,13 +39,13 @@ FMOD Studio / FMOD Engine에서 쓰기 위한 DSP 플러그인입니다. 저작�
 
 1. **버전 맞추기**: Studio 2.03.x → SDK 110 빌드, Studio 2.04.x → SDK 204 빌드. 204 플러그인은
    Studio 2.03에서 뜨지 않습니다.
-2. 배포 `plugins/` 폴더 내용(`SimpleSTFmod.dll` · `SimpleSTFmod.plugin.js` · `SimpleSTRealtime.dll` ·
+2. 배포 `plugins/` 폴더 내용(`SoundTracingFmod.dll` · `SoundTracingFmod.plugin.js` · `SoundTracingRealtime.dll` ·
    `Resources/HRTF/`)을 **Studio 프로젝트의 `Plugins/`**(버전관리에 유리) 또는 사용자 플러그인 폴더에
    복사하고 Studio를 재시작합니다.
    - Windows: `%localappdata%/FMOD Studio/Plugins`
-   - macOS: `~/Library/Preferences/FMOD Studio/Plugins/SimpleST`
-3. Studio 로그의 `No FMOD symbols found in dynamic library '.../SimpleSTRealtime.dll'`은 무해합니다
-   (Studio가 폴더의 모든 DLL을 플러그인 후보로 열어 봅니다. 엔진 DLL은 SimpleSTFmod가 직접 로드합니다).
+   - macOS: `~/Library/Preferences/FMOD Studio/Plugins/SoundTracing`
+3. Studio 로그의 `No FMOD symbols found in dynamic library '.../SoundTracingRealtime.dll'`은 무해합니다
+   (Studio가 폴더의 모든 DLL을 플러그인 후보로 열어 봅니다. 엔진 DLL은 SoundTracingFmod가 직접 로드합니다).
 
 HRTF 리소스가 없으면 엔진 내장 MIT KEMAR로 폴백합니다.
 
@@ -53,45 +53,45 @@ HRTF 리소스가 없으면 엔진 내장 MIT KEMAR로 폴백합니다.
 
 | 플랫폼 | 링크 | 산출물 |
 |---|---|---|
-| win / mac / linux | 동적 | `SimpleSTFmod.{dll,dylib,so}` + 옆에 `SimpleSTRealtime.*` + `Resources/HRTF` |
-| android | 동적 | `<abi>/plugins/libSimpleSTFmod.so` + `libSimpleSTRealtime.so` (앱 라이브러리 폴더) |
-| ios | 정적 | `SimpleSTFmod.xcframework` (엔진 오브젝트 포함) |
-| web | 정적 | `libSimpleSTFmod.a` (엔진 포함) — FMOD HTML5 pthreads 빌드 + `-pthread`로 링크 |
+| win / mac / linux | 동적 | `SoundTracingFmod.{dll,dylib,so}` + 옆에 `SoundTracingRealtime.*` + `Resources/HRTF` |
+| android | 동적 | `<abi>/plugins/libSoundTracingFmod.so` + `libSoundTracingRealtime.so` (앱 라이브러리 폴더) |
+| ios | 정적 | `SoundTracingFmod.xcframework` (엔진 오브젝트 포함) |
+| web | 정적 | `libSoundTracingFmod.a` (엔진 포함) — FMOD HTML5 pthreads 빌드 + `-pthread`로 링크 |
 
 동적 플랫폼은 FMOD가 플러그인을 로드하면 플러그인이 엔진을 옆에서 찾습니다. 정적 플랫폼(iOS/Web)은
 뱅크 로드 전에 직접 등록합니다.
 
 ```cpp
-studioSystem->registerPlugin(FMOD_SimpleST_Source_GetDSPDescription());
-studioSystem->registerPlugin(FMOD_SimpleST_Listener_GetDSPDescription());
+studioSystem->registerPlugin(FMOD_SoundTracing_Source_GetDSPDescription());
+studioSystem->registerPlugin(FMOD_SoundTracing_Listener_GetDSPDescription());
 ```
 
 ## FMOD Studio에서 쓰기
 
-![마스터 버스의 SimpleST Listener](/img/fmod/studio-master-bus-listener.png)
+![마스터 버스의 Sound-tracing Listener](/img/fmod/studio-master-bus-listener.png)
 
-1. 마스터 버스에 **Exarion › SimpleST Listener**를 추가합니다(프로젝트당 1개. 동시에 2개가 돌면 하나만
+1. 마스터 버스에 **Exarion › Sound-tracing Listener**를 추가합니다(프로젝트당 1개. 동시에 2개가 돌면 하나만
    렌더하고 나머지는 통과).
-2. 3D 이벤트의 마스터 트랙에서 **FMOD Spatializer를 지우거나 bypass**하고 **Exarion › SimpleST Source**를
+2. 3D 이벤트의 마스터 트랙에서 **FMOD Spatializer를 지우거나 bypass**하고 **Exarion › Sound-tracing Source**를
    추가합니다(안 지우면 이중 공간화).
 3. Studio 안에는 게임 씬이 없으므로 저작툴에서 돌 때는 **8 × 3 × 10 m 오디션 룸**이 자동으로 깔립니다
-   (`SIMPLESTFMOD_AUDITION_ROOM="W,H,D"`로 크기 변경, `"0"`이면 끔). 미리보기에서 음원을 방 밖으로
+   (`SOUNDTRACINGFMOD_AUDITION_ROOM="W,H,D"`로 크기 변경, `"0"`이면 끔). 미리보기에서 음원을 방 밖으로
    옮기면 벽 차폐를 들을 수 있습니다.
 
-![3D 이벤트의 SimpleST Source](/img/fmod/studio-event-source.png)
+![3D 이벤트의 Sound-tracing Source](/img/fmod/studio-event-source.png)
 
 ### DSP 파라미터
 
-![SimpleST Source 덱 UI](/img/fmod/studio-source-params.png)
+![Sound-tracing Source 덱 UI](/img/fmod/studio-source-params.png)
 
 | DSP | 파라미터 | 의미 |
 |---|---|---|
-| SimpleST Source | Gain / Direct / Reflections / Diffraction / Reverb Send (dB) | 입력 레벨, 경로별 볼륨(Sound-Tracing SDK path volume) |
+| Sound-tracing Source | Gain / Direct / Reflections / Diffraction / Reverb Send (dB) | 입력 레벨, 경로별 볼륨(Sound-Tracing SDK path volume) |
 | | Directivity (0 ~ 1) | 0 전지향 ~ 1 카디오이드(이벤트 forward 기준) |
 | | Stationary | 움직이지 않는 이미터 힌트(생성 시 적용) |
 | | Bypass | Sound-Tracing SDK를 거치지 않고 dry 통과 |
 | | 3D Attributes / Overall Gain / Atten Range | FMOD 특수 data 파라미터(자동) |
-| SimpleST Listener | Wet Level / Dry Level (dB) | Sound-Tracing SDK 렌더 / 버스의 다른 오디오 레벨 |
+| Sound-tracing Listener | Wet Level / Dry Level (dB) | Sound-Tracing SDK 렌더 / 버스의 다른 오디오 레벨 |
 | | HRTF | 켜면 바이노럴(헤드폰), 끄면 스테레오 패닝 |
 | 둘 다 (EQ 블록) | EQ / EQ Preamp (dB) | 4밴드 EQ 켬·프리앰프 — [EQ](#eq) |
 | | EQn Type / EQn Freq (Hz) / EQn Gain (dB) / EQn Q (n = 1 ~ 4) | 밴드별 필터 종류·주파수·게인·Q |
@@ -121,47 +121,47 @@ Listener를 **bypass**하면 Source들이 dry 통과로 돌아갑니다(A/B 비�
 | 보이스 시작 → 첫 소리 | 92 ms | 69 ms |
 | 350 ms 보이스의 들리는 길이 | 275 ms | 350 ms |
 
-환경 변수 `SIMPLESTFMOD_WARM_SOURCES=0`이면 예전처럼 보이스마다 새 음원을 만듭니다(비교용).
+환경 변수 `SOUNDTRACINGFMOD_WARM_SOURCES=0`이면 예전처럼 보이스마다 새 음원을 만듭니다(비교용).
 
 ## 게임 쪽 C API
 
-`include/SimpleSTFmod/SimpleSTFmod.h` — 플러그인 라이브러리가 export합니다. **FMOD가 로드한 그 모듈**에서
+`include/SoundTracingFmod/SoundTracingFmod.h` — 플러그인 라이브러리가 export합니다. **FMOD가 로드한 그 모듈**에서
 바인딩합니다. 모든 호출은 게임 스레드에서 하고, Sound-Tracing SDK `[control]` 호출은 반드시
-`SimpleSTFmod_InvokeOnControlThread` 안에서 합니다.
+`SoundTracingFmod_InvokeOnControlThread` 안에서 합니다.
 
 ```c
-SimpleSTFmod_Config cfg; SimpleSTFmod_InitConfig(&cfg);
-cfg.renderMode = SIMPLESTFMOD_RENDER_BUFFERED;   // 기본. IN_CALLBACK = FMOD 믹서 콜백 안에서 렌더
+SoundTracingFmod_Config cfg; SoundTracingFmod_InitConfig(&cfg);
+cfg.renderMode = SOUNDTRACINGFMOD_RENDER_BUFFERED;   // 기본. IN_CALLBACK = FMOD 믹서 콜백 안에서 렌더
 cfg.sceneRatio = 0.f;                            // 0 = 1.0 (FMOD UE/Unity 통합 단위는 미터)
 cfg.maxSources = 0;                              // 0 = 엔진 플랫폼 기본(데스크톱 128, Android/iOS 48, 웹 32)
-SimpleSTFmod_Configure(&cfg);                    // 런타임 시작 전(첫 Sound-Tracing SDK DSP 생성 전)
+SoundTracingFmod_Configure(&cfg);                    // 런타임 시작 전(첫 Sound-Tracing SDK DSP 생성 전)
 
-SimpleSTFmod_Status st = { sizeof st };
-SimpleSTFmod_GetStatus(SIMPLESTFMOD_SYSTEM_LATEST, &st);   // state READY, boundSources, latency, defaultMaterialId
+SoundTracingFmod_Status st = { sizeof st };
+SoundTracingFmod_GetStatus(SOUNDTRACINGFMOD_SYSTEM_LATEST, &st);   // state READY, boundSources, latency, defaultMaterialId
 
 typedef STMeshId (*mesh_create_fn)(STRT_Context*, const STMesh*, STMaterialId, const int32_t*);
-mesh_create_fn meshCreate = (mesh_create_fn)SimpleSTFmod_GetRealtimeProc("st_rt_mesh_create");
+mesh_create_fn meshCreate = (mesh_create_fn)SoundTracingFmod_GetRealtimeProc("st_rt_mesh_create");
 
-SimpleSTFmod_InvokeOnControlThread(SIMPLESTFMOD_SYSTEM_LATEST,
+SoundTracingFmod_InvokeOnControlThread(SOUNDTRACINGFMOD_SYSTEM_LATEST,
     [](STRT_Context* ctx, void* user) {
         /* st_rt_mesh_create / st_rt_object_create_q / st_rt_build ... */
     }, user, /*wait=*/1);
 ```
 
 - 시스템 인덱스 = `FMOD_DSP_STATE::systemobject`(프로세스에서 먼저 만든 FMOD::System이 0).
-  에디터 통합은 System을 여러 개 만들므로 `SIMPLESTFMOD_SYSTEM_LATEST(-1)` = 가장 최근 런타임.
+  에디터 통합은 System을 여러 개 만들므로 `SOUNDTRACINGFMOD_SYSTEM_LATEST(-1)` = 가장 최근 런타임.
 - 좌표계는 FMOD와 Sound-Tracing SDK가 같습니다(왼손, +Y up, +Z forward). FMOD UE 통합의 `(UE.Y, UE.Z, UE.X)/100`
   변환이 SoundTracing UE 플러그인의 변환과 동일합니다.
 - 플러그인 컨텍스트에는 기본 재질 라이브러리가 먼저 등록되어 있습니다. `defaultMaterialId`부터 preset
   index를 더해 쓰십시오.
-- **음원 상한**: `SimpleSTFmod_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
+- **음원 상한**: `SoundTracingFmod_Config.maxSources`는 엔진 음원 수 상한입니다(0 = 플랫폼
   기본). 넘으면 엔진이 음원 생성을 거절하고 그 보이스는 dry로 재생됩니다. 구조체 끝에 덧붙인 필드라 이전의 짧은
   구조체를 넘기는 호스트도 동작합니다.
 
 ### 사운드 트레이싱 켜고 끄기
 
 ```c
-SimpleSTFmod_SetSoundTracingEnabled(SIMPLESTFMOD_SYSTEM_LATEST, 0);   // 끄기. 1 = 켜기(기본)
+SoundTracingFmod_SetSoundTracingEnabled(SOUNDTRACINGFMOD_SYSTEM_LATEST, 0);   // 끄기. 1 = 켜기(기본)
 ```
 
 게임 쪽 A/B 스위치입니다. 런타임 하나(`systemIndex < 0` = 가장 최근)에 적용되며
@@ -181,8 +181,8 @@ UE SoundTracing의 `SetSoundTracingEnabled`가 FMOD 모드에서 이 함수를 �
 
 - **Unreal Engine**: 배포물의 `Unreal/SoundTracing`(FMOD 에디션)을 프로젝트 `Plugins/`에 넣고 빌드하면
   빌드가 플러그인·엔진·HRTF를 `Plugins/FMODStudio/Binaries/<Plat>/`에 넣고 `DefaultEngine.ini`에
-  `+PluginFiles=SimpleSTFmod`를 추가합니다. SoundTracing 플러그인은 FMOD 모드로 빌드되어 지오메트리만 올립니다 — [Unreal Engine SDK](./ue.md).
-- **Unity**: FMOD 에디션 패키지(`SoundTrace-SimpleST-FMOD-release.unitypackage`)를 드래그 앤 드롭하면, 에디터가
+  `+PluginFiles=SoundTracingFmod`를 추가합니다. SoundTracing 플러그인은 FMOD 모드로 빌드되어 지오메트리만 올립니다 — [Unreal Engine SDK](./ue.md).
+- **Unity**: FMOD 에디션 패키지(`SoundTracing-Unity-FMOD-release.unitypackage`)를 드래그 앤 드롭하면, 에디터가
   로드될 때 SoundTrace가 DLL/bundle을 FMOD 플러그인 폴더에 복사하고 Dynamic Plugins에 등록합니다 —
   [Unity SDK](./unity.md#fmod와-함께-쓰기).
 
@@ -214,14 +214,14 @@ UE SoundTracing의 `SetSoundTracingEnabled`가 FMOD 모드에서 이 함수를 �
 
 | 변수 | 의미 |
 |---|---|
-| `SIMPLESTFMOD_LOG_FILE` | 로그 파일 경로 |
-| `SIMPLESTFMOD_LOG_STDERR` | stderr 로그 |
-| `SIMPLESTFMOD_RUNTIME_LIBRARY` | SimpleSTRealtime 경로 강제 |
-| `SIMPLESTFMOD_AUDITION_ROOM` | `"W,H,D"` 오디션 룸(m), `"0"` 끔 |
-| `SIMPLESTFMOD_WARM_SOURCES` | `"0"`이면 웜 음원 풀을 끄고 보이스마다 새 엔진 음원(비교용) |
+| `SOUNDTRACINGFMOD_LOG_FILE` | 로그 파일 경로 |
+| `SOUNDTRACINGFMOD_LOG_STDERR` | stderr 로그 |
+| `SOUNDTRACINGFMOD_RUNTIME_LIBRARY` | SoundTracingRealtime 경로 강제 |
+| `SOUNDTRACINGFMOD_AUDITION_ROOM` | `"W,H,D"` 오디션 룸(m), `"0"` 끔 |
+| `SOUNDTRACINGFMOD_WARM_SOURCES` | `"0"`이면 웜 음원 풀을 끄고 보이스마다 새 엔진 음원(비교용) |
 
 Windows에서는 항상 `OutputDebugString`으로도 나갑니다. 컨트롤 스레드가 렌더러 상태가 바뀔 때마다
-`SimpleST Listener rendering` / `no SimpleST Listener rendering`을 남깁니다.
+`Sound-tracing Listener rendering` / `no Sound-tracing Listener rendering`을 남깁니다.
 
 ## EQ
 
@@ -239,8 +239,8 @@ Sound-Tracing SDK의 파라메트릭 EQ를 두 자리에서 겁니다.
 
 | DSP | 거는 곳 |
 |---|---|
-| SimpleST Source | **소스 EQ** — 엔진에 들어가는 이벤트 신호 |
-| SimpleST Listener | **출력 EQ** — 렌더된 믹스, Wet Level 앞 |
+| Sound-tracing Source | **소스 EQ** — 엔진에 들어가는 이벤트 신호 |
+| Sound-tracing Listener | **출력 EQ** — 렌더된 믹스, Wet Level 앞 |
 
 - `EQ`는 켬/끔, `EQ Preamp`는 밴드 앞 게인(−48 ~ +12 dB, 부스트할 때 음수로 여유를 둡니다)입니다.
 - `EQn Type`(n = 1 ~ 4)은 Off · Peaking · Low Shelf · High Shelf · High Cut · Low Cut · Notch의 정수 파라미터(0 = Off)이고,

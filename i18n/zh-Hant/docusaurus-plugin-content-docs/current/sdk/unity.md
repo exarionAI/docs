@@ -14,7 +14,7 @@ Sound-Tracing SDK for Unity 是將 sound tracing 引擎 DLL 針對 Unity 使用�
 | 項目 | 值 |
 |---|---|
 | Unity | 2022.3 LTS 以上（已於 Unity 6 驗證） |
-| 套件 | `SoundTrace-SimpleST-release.unitypackage`（基本版，用於 Wwise）/ `SoundTrace-SimpleST-FMOD-release.unitypackage`（FMOD 版）→ `Assets/SoundTrace` |
+| 套件 | `SoundTracing-Unity-release.unitypackage`（基本版，用於 Wwise）/ `SoundTracing-Unity-FMOD-release.unitypackage`（FMOD 版）→ `Assets/SoundTrace` |
 | 平台 | Windows x64 · macOS Universal · Linux x86_64 · Android（ARMv7/ARM64/x86_64，API 28+）· iOS 15+ |
 | WebGL | 不支援 — Unity WebGL 不支援音訊濾波器（`OnAudioFilterRead`）。Web 請使用 C SDK 的 WASM 建置 [Web SDK](./web.md) |
 
@@ -28,35 +28,35 @@ FMOD 只要匯入 FMOD 版套件即可，Wwise 外掛則由 Audiokinetic Launche
 
 ## 與 FMOD 搭配使用
 
-若專案中有 Sound-Tracing SDK FMOD 外掛（`SimpleSTFmod`），SoundTrace 會自動以 **FMOD 整合** 運作。
-空間聲學渲染由 FMOD Studio 的 SimpleST Source / Listener DSP 負責，SoundTrace 只以
+若專案中有 Sound-Tracing SDK FMOD 外掛（`SoundTracingFmod`），SoundTrace 會自動以 **FMOD 整合** 運作。
+空間聲學渲染由 FMOD Studio 的 Sound-tracing Source / Listener DSP 負責，SoundTrace 只以
 `SoundTraceManager` + `SoundTraceObject` 將幾何體與材質上傳到外掛上下文。
 `SoundTraceListener` / `SoundTraceSource` 會留下警告並停用。
 
 ![匯入 FMOD 版套件](/img/fmod/unity-fmod-edition-import.png)
 
 1. 將 FMOD for Unity 2.04 放入專案（`Assets/Plugins/FMOD`；若以 tgz 安裝，則 embed 到 `Packages/`）。
-2. 將 **FMOD 版**套件 `SoundTrace-SimpleST-FMOD-release.unitypackage` 拖放到 Project 視窗。
-   沒有另外的選單。套件的 `Runtime/Plugins/FMOD` 含有 `SimpleSTFmod`（Windows x64、macOS），
+2. 將 **FMOD 版**套件 `SoundTracing-Unity-FMOD-release.unitypackage` 拖放到 Project 視窗。
+   沒有另外的選單。套件的 `Runtime/Plugins/FMOD` 含有 `SoundTracingFmod`（Windows x64、macOS），
    編輯器載入時 SoundTrace 會將它複製到 FMOD 外掛資料夾，並註冊到 FMOD Settings › Dynamic Plugins。
    即使之後才放入 FMOD，下次載入時也會執行相同的動作。
-3. 在 FMOD Studio 中於主匯流排放入 **SimpleST Listener**，在 3D 事件的主軌以 **SimpleST Source**
+3. 在 FMOD Studio 中於主匯流排放入 **Sound-tracing Listener**，在 3D 事件的主軌以 **Sound-tracing Source**
    取代 FMOD Spatializer — [FMOD 外掛](./fmod.md)。
 4. 場景中放置 `SoundTraceManager`、幾何體用的 `SoundTraceObject`，以及 FMOD `StudioListener`。
 
-引擎實例只有一個。SimpleSTFmod 載入與 SoundTrace P/Invoke 相同的 `SimpleSTRealtime`，
+引擎實例只有一個。SoundTracingFmod 載入與 SoundTrace P/Invoke 相同的 `SoundTracingRealtime`，
 所有控制呼叫都在外掛的控制執行緒上執行。
 
 ## 與 Wwise 搭配使用
 
-若 Wwise Unity 整合的 DSP 資料夾中有 `SimpleSTWwise`，則以 **Wwise 整合** 運作
+若 Wwise Unity 整合的 DSP 資料夾中有 `SoundTracingWwise`，則以 **Wwise 整合** 運作
 （若同時有 FMOD，FMOD 優先）。
 
 SoundTrace 使用基本套件，Wwise 外掛則與其他 Wwise 外掛一樣由 Audiokinetic Launcher 安裝。
 
 ![Launcher 中已安裝的 Sound-tracing](/img/wwise/launcher-bundle.png)
 
-1. 將基本套件 `SoundTrace-SimpleST-release.unitypackage` 拖放到 Project 視窗。
+1. 將基本套件 `SoundTracing-Unity-release.unitypackage` 拖放到 Project 視窗。
 2. 將從 Audiokinetic Launcher 商店取得的 **Sound-Tracing SDK for Wwise**（外掛名稱 `Sound-tracing`）
    安裝到 Wwise。
 3. 執行 Launcher › **Unity › Integrate（或 Modify）Wwise in Project**。Launcher 會將 Wwise SDK 中已安裝的
